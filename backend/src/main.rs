@@ -482,6 +482,8 @@ fn main() {
             commands::mysql::mysql_query,
             commands::mysql::mysql_execute,
             commands::kubernetes::kubernetes_get_execute,
+            commands::blocks::execute_block,
+            commands::blocks::cancel_block_execution,
             shared_state::get_shared_state_document,
             shared_state::push_optimistic_update,
             shared_state::update_shared_state_document,

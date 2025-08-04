@@ -1,9 +1,13 @@
 pub(crate) mod clickhouse;
+pub(crate) mod context_blocks;
 pub(crate) mod editor;
+pub(crate) mod handler;
+pub(crate) mod handlers;
 pub(crate) mod http;
 pub(crate) mod mysql;
 pub(crate) mod postgres;
 pub(crate) mod prometheus;
+pub(crate) mod registry;
 pub(crate) mod script;
 pub(crate) mod sqlite;
 pub(crate) mod terminal;

@@ -72,6 +72,9 @@ pub(crate) struct AtuinState {
     // I'd like to store the output of all executions in a local sqlite next, but
     // to start lets just store the latest value
     pub runbook_output_variables: Arc<RwLock<HashMap<String, HashMap<String, String>>>>,
+
+    // Map of block execution id -> execution handle for cancellation
+    pub block_executions: Arc<RwLock<HashMap<Uuid, crate::runtime::blocks::handler::ExecutionHandle>>>,
 }
 
 impl AtuinState {
@@ -88,6 +91,7 @@ impl AtuinState {
             template_state: Default::default(),
             runbooks_api_token: Default::default(),
             runbook_output_variables: Default::default(),
+            block_executions: Default::default(),
             dev_prefix,
             app_path,
         }
@@ -153,9 +157,15 @@ impl AtuinState {
                 match event {
                     WorkflowEvent::BlockStarted { id } => {
                         println!("block {id} started");
+                        app_clone
+                            .emit("block-started", id)
+                            .expect("Failed to emit block started event");
                     }
                     WorkflowEvent::BlockFinished { id } => {
                         println!("block {id} finished");
+                        app_clone
+                            .emit("block-finished", id)
+                            .expect("Failed to emit block finished event");
                     }
                     WorkflowEvent::WorkflowStarted { id } => {
                         println!("workflow {id} started");
