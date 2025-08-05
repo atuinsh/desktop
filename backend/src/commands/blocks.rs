@@ -1,102 +1,15 @@
 use tauri::{ipc::Channel, AppHandle, Manager, State};
 use uuid::Uuid;
 
-use crate::runtime::blocks::handler::{BlockOutput, ExecutionContext};
+use crate::runtime::blocks::handler::BlockOutput;
 use crate::runtime::blocks::registry::BlockRegistry;
-use crate::runtime::blocks::script::Script;
-use crate::runtime::blocks::terminal::Terminal;
 use crate::runtime::blocks::Block;
 use crate::runtime::workflow::context_builder::ContextBuilder;
 use crate::state::AtuinState;
 
 /// Convert editor document block to runtime Block enum
 fn document_to_block(block_data: &serde_json::Value) -> Result<Block, String> {
-    let block_type = block_data
-        .get("type")
-        .and_then(|v| v.as_str())
-        .ok_or("Block has no type")?;
-
-    let block_id = block_data
-        .get("id")
-        .and_then(|v| v.as_str())
-        .ok_or("Block has no id")?;
-
-    let props = block_data
-        .get("props")
-        .and_then(|p| p.as_object())
-        .ok_or("Block has no props")?;
-
-    let id = Uuid::parse_str(block_id).map_err(|e| e.to_string())?;
-
-    match block_type {
-        "script" => {
-            let script = Script::builder()
-                .id(id)
-                .name(
-                    props
-                        .get("name")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("Script")
-                        .to_string(),
-                )
-                .code(
-                    props
-                        .get("code")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("")
-                        .to_string(),
-                )
-                .interpreter(
-                    props
-                        .get("interpreter")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("bash")
-                        .to_string(),
-                )
-                .output_variable(
-                    props
-                        .get("outputVariable")
-                        .and_then(|v| v.as_str())
-                        .map(|s| s.to_string()),
-                )
-                .output_visible(
-                    props
-                        .get("outputVisible")
-                        .and_then(|v| v.as_bool())
-                        .unwrap_or(true),
-                )
-                .build();
-            Ok(Block::Script(script))
-        }
-        "terminal" => {
-            let terminal = Terminal::builder()
-                .id(id)
-                .name(
-                    props
-                        .get("name")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("Terminal")
-                        .to_string(),
-                )
-                .code(
-                    props
-                        .get("code")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("")
-                        .to_string(),
-                )
-                .output_visible(
-                    props
-                        .get("outputVisible")
-                        .and_then(|v| v.as_bool())
-                        .unwrap_or(true),
-                )
-                .build();
-            Ok(Block::Terminal(terminal))
-        }
-        // Add other block types as needed
-        _ => Err(format!("Unsupported block type: {}", block_type)),
-    }
+    Block::from_document(block_data)
 }
 
 #[tauri::command]
