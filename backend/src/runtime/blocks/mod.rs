@@ -1,4 +1,5 @@
 pub(crate) mod clickhouse;
+pub(crate) mod context;
 pub(crate) mod context_blocks;
 pub(crate) mod editor;
 pub(crate) mod handler;

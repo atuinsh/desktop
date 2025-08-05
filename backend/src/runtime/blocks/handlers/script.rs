@@ -318,34 +318,424 @@ impl ScriptHandler {
 mod tests {
     use super::*;
     use crate::runtime::blocks::script::Script;
+    use std::collections::HashMap;
+    use tokio::time::{timeout, Duration};
 
-    #[tokio::test]
-    async fn test_script_execution() {
-        let (tx, _rx) = broadcast::channel(16);
-        let handler = ScriptHandler;
-
-        let script = Script::builder()
+    fn create_test_script(code: &str, interpreter: &str) -> Script {
+        Script::builder()
             .id(Uuid::new_v4())
             .name("Test Script")
-            .code("echo 'Hello, World!'")
+            .code(code)
+            .interpreter(interpreter)
+            .output_variable(None)
+            .build()
+    }
+
+    fn create_test_context() -> ExecutionContext {
+        ExecutionContext {
+            runbook_id: Uuid::new_v4(),
+            cwd: std::env::temp_dir().to_string_lossy().to_string(),
+            env: HashMap::new(),
+            variables: HashMap::new(),
+            ssh_host: None,
+            document: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn test_handler_block_type() {
+        let handler = ScriptHandler;
+        assert_eq!(handler.block_type(), "script");
+    }
+
+    #[test]
+    fn test_output_variable_extraction() {
+        let handler = ScriptHandler;
+        
+        let script_with_output = Script::builder()
+            .id(Uuid::new_v4())
+            .name("Test")
+            .code("echo test")
+            .interpreter("bash")
+            .output_variable(Some("result".to_string()))
+            .build();
+            
+        let script_without_output = Script::builder()
+            .id(Uuid::new_v4())
+            .name("Test")
+            .code("echo test")
             .interpreter("bash")
             .output_variable(None)
             .build();
 
-        let context = ExecutionContext::default();
+        assert_eq!(handler.output_variable(&script_with_output), Some("result".to_string()));
+        assert_eq!(handler.output_variable(&script_without_output), None);
+    }
 
-        // Note: AppHandle not available in tests, so this test would need to be adjusted
-        // let handle = handler.execute(script, context, tx, None, app_handle).await.unwrap();
+    #[tokio::test]
+    async fn test_successful_script_execution() {
+        let (_tx, _rx) = broadcast::channel::<WorkflowEvent>(16);
+        
+        // Test simple echo command
+        let (exit_code, output) = ScriptHandler::run_script(
+            &create_test_script("echo 'Hello, World!'", "bash"),
+            create_test_context(),
+            CancellationToken::new(),
+            _tx,
+            None,
+        ).await;
 
-        // Wait a bit for execution
-        // tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+        assert!(exit_code.is_ok());
+        assert_eq!(exit_code.unwrap(), 0);
+        assert!(output.contains("Hello, World!"));
+    }
 
-        // let status = handle.status.read().await;
-        // match &*status {
-        //     ExecutionStatus::Success(output) => {
-        //         // Test would check output here
-        //     }
-        //     _ => panic!("Expected success status"),
-        // }
+    #[tokio::test]
+    async fn test_failed_script_execution() {
+        let (_tx, _rx) = broadcast::channel::<WorkflowEvent>(16);
+        
+        // Test command that should fail
+        let (exit_code, _output) = ScriptHandler::run_script(
+            &create_test_script("exit 1", "bash"),
+            create_test_context(),
+            CancellationToken::new(),
+            _tx,
+            None,
+        ).await;
+
+        assert!(exit_code.is_ok());
+        assert_eq!(exit_code.unwrap(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_command_not_found() {
+        let (_tx, _rx) = broadcast::channel::<WorkflowEvent>(16);
+        
+        // Test non-existent command
+        let (exit_code, _output) = ScriptHandler::run_script(
+            &create_test_script("nonexistent_command_12345", "bash"),
+            create_test_context(),
+            CancellationToken::new(),
+            _tx,
+            None,
+        ).await;
+
+        // Should fail with non-zero exit code
+        assert!(exit_code.is_ok());
+        assert_ne!(exit_code.unwrap(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_variable_substitution() {
+        let (_tx, _rx) = broadcast::channel::<WorkflowEvent>(16);
+        
+        let mut context = create_test_context();
+        context.variables.insert("TEST_VAR".to_string(), "test_value".to_string());
+        context.variables.insert("ANOTHER_VAR".to_string(), "another_value".to_string());
+        
+        // Test both ${VAR} and $VAR syntax
+        let (exit_code, output) = ScriptHandler::run_script(
+            &create_test_script("echo '${TEST_VAR} and $ANOTHER_VAR'", "bash"),
+            context,
+            CancellationToken::new(),
+            _tx,
+            None,
+        ).await;
+
+        assert!(exit_code.is_ok());
+        assert_eq!(exit_code.unwrap(), 0);
+        assert!(output.contains("test_value"));
+        assert!(output.contains("another_value"));
+    }
+
+    #[tokio::test]
+    async fn test_variable_substitution_missing_vars() {
+        let (_tx, _rx) = broadcast::channel::<WorkflowEvent>(16);
+        
+        // No variables in context, should leave placeholders as-is
+        let (exit_code, output) = ScriptHandler::run_script(
+            &create_test_script("echo '${MISSING_VAR}'", "bash"),
+            create_test_context(),
+            CancellationToken::new(),
+            _tx,
+            None,
+        ).await;
+
+        assert!(exit_code.is_ok());
+        assert_eq!(exit_code.unwrap(), 0);
+        assert!(output.contains("${MISSING_VAR}"));
+    }
+
+    #[tokio::test]
+    async fn test_environment_variables() {
+        let (_tx, _rx) = broadcast::channel::<WorkflowEvent>(16);
+        
+        let mut context = create_test_context();
+        context.env.insert("TEST_ENV_VAR".to_string(), "env_value".to_string());
+        
+        let (exit_code, output) = ScriptHandler::run_script(
+            &create_test_script("echo $TEST_ENV_VAR", "bash"),
+            context,
+            CancellationToken::new(),
+            _tx,
+            None,
+        ).await;
+
+        assert!(exit_code.is_ok());
+        assert_eq!(exit_code.unwrap(), 0);
+        assert!(output.contains("env_value"));
+    }
+
+    #[tokio::test]
+    async fn test_working_directory() {
+        let (_tx, _rx) = broadcast::channel::<WorkflowEvent>(16);
+        
+        let mut context = create_test_context();
+        context.cwd = "/tmp".to_string();
+        
+        let (exit_code, output) = ScriptHandler::run_script(
+            &create_test_script("pwd", "bash"),
+            context,
+            CancellationToken::new(),
+            _tx,
+            None,
+        ).await;
+
+        assert!(exit_code.is_ok());
+        assert_eq!(exit_code.unwrap(), 0);
+        assert!(output.trim().ends_with("tmp"));
+    }
+
+    #[tokio::test]
+    async fn test_different_interpreters() {
+        let (_tx, _rx) = broadcast::channel::<WorkflowEvent>(16);
+        let context = create_test_context();
+        
+        // Test bash
+        let (exit_code, _output) = ScriptHandler::run_script(
+            &create_test_script("echo 'bash test'", "bash"),
+            context.clone(),
+            CancellationToken::new(),
+            _tx.clone(),
+            None,
+        ).await;
+        assert!(exit_code.is_ok());
+        assert_eq!(exit_code.unwrap(), 0);
+        
+        // Test sh
+        let (exit_code, _output) = ScriptHandler::run_script(
+            &create_test_script("echo 'sh test'", "sh"),
+            context.clone(),
+            CancellationToken::new(),
+            _tx.clone(),
+            None,
+        ).await;
+        assert!(exit_code.is_ok());
+        assert_eq!(exit_code.unwrap(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_multiline_script() {
+        let (_tx, _rx) = broadcast::channel::<WorkflowEvent>(16);
+        
+        let multiline_script = "echo \"Line 1\"\necho \"Line 2\"\necho \"Line 3\"";
+        
+        let (exit_code, output) = ScriptHandler::run_script(
+            &create_test_script(multiline_script, "bash"),
+            create_test_context(),
+            CancellationToken::new(),
+            _tx,
+            None,
+        ).await;
+
+        assert!(exit_code.is_ok());
+        assert_eq!(exit_code.unwrap(), 0);
+        assert!(output.contains("Line 1"));
+        assert!(output.contains("Line 2"));
+        assert!(output.contains("Line 3"));
+    }
+
+    #[tokio::test]
+    async fn test_script_with_stderr() {
+        let (_tx, _rx) = broadcast::channel::<WorkflowEvent>(16);
+        
+        // Script that writes to both stdout and stderr
+        let (exit_code, _output) = ScriptHandler::run_script(
+            &create_test_script("echo 'stdout'; echo 'stderr' >&2", "bash"),
+            create_test_context(),
+            CancellationToken::new(),
+            _tx,
+            None,
+        ).await;
+
+        assert!(exit_code.is_ok());
+        assert_eq!(exit_code.unwrap(), 0);
+        // Note: stderr is handled separately in the actual implementation
+    }
+
+    #[tokio::test]
+    async fn test_cancellation_token_creation() {
+        let token = CancellationToken::new();
+        
+        // Should be able to take receiver once
+        let receiver = token.take_receiver();
+        assert!(receiver.is_some());
+        
+        // Second attempt should return None
+        let receiver2 = token.take_receiver();
+        assert!(receiver2.is_none());
+        
+        // Cancel should not panic
+        token.cancel();
+    }
+
+    #[tokio::test]
+    async fn test_script_cancellation() {
+        let (_tx, _rx) = broadcast::channel::<WorkflowEvent>(16);
+        let token = CancellationToken::new();
+        
+        // Start a long-running script
+        let script = create_test_script("sleep 10", "bash");
+        let script_future = ScriptHandler::run_script(
+            &script,
+            create_test_context(),
+            token.clone(),
+            _tx,
+            None,
+        );
+        
+        // Cancel after a short delay
+        let cancel_future = async {
+            tokio::time::sleep(Duration::from_millis(100)).await;
+            token.cancel();
+        };
+        
+        // Run both futures concurrently
+        let (result, _) = tokio::join!(script_future, cancel_future);
+        
+        // Should be cancelled (error result)
+        assert!(result.0.is_err());
+        assert!(result.0.unwrap_err().to_string().contains("cancelled"));
+    }
+
+    #[tokio::test]
+    async fn test_large_output() {
+        let (_tx, _rx) = broadcast::channel::<WorkflowEvent>(16);
+        
+        // Generate a large amount of output
+        let (exit_code, output) = ScriptHandler::run_script(
+            &create_test_script("for i in {1..100}; do echo \"Line $i\"; done", "bash"),
+            create_test_context(),
+            CancellationToken::new(),
+            _tx,
+            None,
+        ).await;
+
+        assert!(exit_code.is_ok());
+        assert_eq!(exit_code.unwrap(), 0);
+        assert!(output.contains("Line 1"));
+        assert!(output.contains("Line 100"));
+        // Should have captured all 100 lines
+        assert_eq!(output.lines().count(), 100);
+    }
+
+    #[tokio::test]
+    async fn test_script_timeout_handling() {
+        let (_tx, _rx) = broadcast::channel::<WorkflowEvent>(16);
+        
+        // Test that we can timeout a script execution
+        let script = create_test_script("sleep 5", "bash");
+        let script_future = ScriptHandler::run_script(
+            &script,
+            create_test_context(),
+            CancellationToken::new(),
+            _tx,
+            None,
+        );
+        
+        // Timeout after 1 second
+        let result = timeout(Duration::from_secs(1), script_future).await;
+        
+        // Should timeout
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_special_characters_in_script() {
+        let (_tx, _rx) = broadcast::channel::<WorkflowEvent>(16);
+        
+        // Test script with special characters
+        let script_with_special_chars = r#"echo "Special chars: !@#$%^&*()[]{}|;':\",./<>?""#;
+        
+        let (exit_code, output) = ScriptHandler::run_script(
+            &create_test_script(script_with_special_chars, "bash"),
+            create_test_context(),
+            CancellationToken::new(),
+            _tx,
+            None,
+        ).await;
+
+        assert!(exit_code.is_ok());
+        assert_eq!(exit_code.unwrap(), 0);
+        assert!(output.contains("Special chars:"));
+    }
+
+    #[tokio::test]
+    async fn test_empty_script() {
+        let (_tx, _rx) = broadcast::channel::<WorkflowEvent>(16);
+        
+        let (exit_code, output) = ScriptHandler::run_script(
+            &create_test_script("", "bash"),
+            create_test_context(),
+            CancellationToken::new(),
+            _tx,
+            None,
+        ).await;
+
+        assert!(exit_code.is_ok());
+        assert_eq!(exit_code.unwrap(), 0);
+        assert!(output.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_script_with_unicode() {
+        let (_tx, _rx) = broadcast::channel::<WorkflowEvent>(16);
+        
+        let (exit_code, output) = ScriptHandler::run_script(
+            &create_test_script("echo '测试 🚀 émojis'", "bash"),
+            create_test_context(),
+            CancellationToken::new(),
+            _tx,
+            None,
+        ).await;
+
+        assert!(exit_code.is_ok());
+        assert_eq!(exit_code.unwrap(), 0);
+        assert!(output.contains("测试"));
+        assert!(output.contains("🚀"));
+        assert!(output.contains("émojis"));
+    }
+
+    // Integration test for SSH execution (would need SSH setup to run)
+    #[tokio::test]
+    #[ignore] // Ignore by default since it requires SSH setup
+    async fn test_ssh_execution() {
+        let (_tx, _rx) = broadcast::channel::<WorkflowEvent>(16);
+        
+        let mut context = create_test_context();
+        context.ssh_host = Some("localhost".to_string());
+        
+        let (exit_code, output) = ScriptHandler::run_script(
+            &create_test_script("echo 'SSH test'", "bash"),
+            context,
+            CancellationToken::new(),
+            _tx,
+            None,
+        ).await;
+
+        // This would only pass if SSH is properly configured
+        assert!(exit_code.is_ok());
+        assert_eq!(exit_code.unwrap(), 0);
+        assert!(output.contains("SSH test"));
     }
 }

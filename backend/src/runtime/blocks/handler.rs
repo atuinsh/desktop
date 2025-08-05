@@ -1,16 +1,12 @@
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::future::Future;
-use std::pin::Pin;
 use std::sync::Arc;
 use tauri::{ipc::Channel, AppHandle};
 use tokio::sync::{broadcast, oneshot, RwLock};
 use uuid::Uuid;
 
 use crate::runtime::workflow::event::WorkflowEvent;
-
-pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ExecutionContext {
@@ -74,6 +70,7 @@ impl CancellationToken {
 #[derive(Clone)]
 pub struct ExecutionHandle {
     pub id: Uuid,
+    #[allow(dead_code)] // Used for tracking but not currently accessed
     pub block_id: Uuid,
     pub cancellation_token: CancellationToken,
     pub status: Arc<RwLock<ExecutionStatus>>,
@@ -84,7 +81,9 @@ pub struct ExecutionHandle {
 pub enum ExecutionStatus {
     Running,
     Success(String), // The output value
+    #[allow(dead_code)] // Error message is used but compiler doesn't see reads
     Failed(String),  // Error message
+    #[allow(dead_code)] // Used for cancellation but not currently constructed in tests
     Cancelled,
 }
 
@@ -108,9 +107,11 @@ pub enum BlockLifecycleEvent {
 pub trait BlockHandler: Send + Sync {
     type Block: Send + Sync;
 
+    #[allow(dead_code)] // Used for identification but not currently called
     fn block_type(&self) -> &'static str;
     
     /// Get the output variable name from the block if it has one
+    #[allow(dead_code)] // Used for output variable extraction but not currently called
     fn output_variable(&self, block: &Self::Block) -> Option<String>;
 
     async fn execute(
@@ -122,6 +123,7 @@ pub trait BlockHandler: Send + Sync {
         app_handle: AppHandle,
     ) -> Result<ExecutionHandle, Box<dyn std::error::Error + Send + Sync>>;
 
+    #[allow(dead_code)] // Used for cancellation but not currently called directly
     async fn cancel(
         &self,
         handle: &ExecutionHandle,
@@ -135,8 +137,10 @@ pub trait BlockHandler: Send + Sync {
 pub trait ContextProvider: Send + Sync {
     type Block: Send + Sync;
 
+    #[allow(dead_code)] // Used for identification but not currently called
     fn block_type(&self) -> &'static str;
 
+    #[allow(dead_code)] // Used by context builder but not currently called directly
     fn apply_context(
         &self,
         block: &Self::Block,
