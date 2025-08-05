@@ -62,6 +62,36 @@ export function useBlockBusStopSubscription(
 }
 
 /**
+ * Hook to subscribe to BlockBus finished events for a specific block
+ * 
+ * @param blockId The ID of the block to subscribe to
+ * @param handler The callback function to execute when the block finishes
+ */
+export function useBlockBusFinishedEventSubscription(
+  blockId: string, 
+  handler: (block: any) => void | Promise<void>
+) {
+  const unsubscribeRef = useRef<(() => void) | null>(null);
+
+  useEffect(() => {
+    // Clean up previous subscription if it exists
+    if (unsubscribeRef.current) {
+      unsubscribeRef.current();
+    }
+
+    // Subscribe to the finished event for this block
+    unsubscribeRef.current = BlockBus.get().subscribeBlockFinished(blockId, handler);
+
+    // Cleanup on unmount or when dependencies change
+    return () => {
+      if (unsubscribeRef.current) {
+        unsubscribeRef.current();
+      }
+    };
+  }, [blockId, handler]);
+}
+
+/**
  * Additional BlockBus hooks can be added here as needed:
  * - useBlockBusNameChangedSubscription
  * - useBlockBusDependencyChangedSubscription

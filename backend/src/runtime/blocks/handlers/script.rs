@@ -1,17 +1,19 @@
 use async_trait::async_trait;
 use std::process::Stdio;
+use std::sync::Arc;
 use tauri::{ipc::Channel, AppHandle, Manager};
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
 use tokio::sync::{broadcast, RwLock};
 use uuid::Uuid;
-use std::sync::Arc;
 
-use crate::runtime::blocks::handler::{BlockHandler, BlockOutput, BlockLifecycleEvent, CancellationToken, ExecutionContext, ExecutionHandle, ExecutionStatus};
+use crate::runtime::blocks::handler::{
+    BlockHandler, BlockLifecycleEvent, BlockOutput, CancellationToken, ExecutionContext,
+    ExecutionHandle, ExecutionStatus,
+};
 use crate::runtime::blocks::script::Script;
 use crate::runtime::workflow::event::WorkflowEvent;
 use crate::state::AtuinState;
-
 
 pub struct ScriptHandler;
 
@@ -22,7 +24,7 @@ impl BlockHandler for ScriptHandler {
     fn block_type(&self) -> &'static str {
         "script"
     }
-    
+
     fn output_variable(&self, block: &Self::Block) -> Option<String> {
         block.output_variable.clone()
     }
@@ -51,7 +53,7 @@ impl BlockHandler for ScriptHandler {
         let output_channel_clone = output_channel.clone();
         let app_handle_clone = app_handle.clone();
         let runbook_id = context.runbook_id.to_string();
-        
+
         tokio::spawn(async move {
             let (exit_code, captured_output) = Self::run_script(
                 &script_clone,
@@ -70,9 +72,11 @@ impl BlockHandler for ScriptHandler {
             };
 
             *handle_clone.status.write().await = status.clone();
-            
+
             // Store output variable if successful
-            if let (ExecutionStatus::Success(output), Some(var_name)) = (&status, &handle_clone.output_variable) {
+            if let (ExecutionStatus::Success(output), Some(var_name)) =
+                (&status, &handle_clone.output_variable)
+            {
                 if !output.is_empty() {
                     if let Some(state) = app_handle_clone.try_state::<AtuinState>() {
                         state
@@ -98,10 +102,13 @@ impl ScriptHandler {
         cancellation_token: CancellationToken,
         event_sender: broadcast::Sender<WorkflowEvent>,
         output_channel: Option<Channel<BlockOutput>>,
-    ) -> (Result<i32, Box<dyn std::error::Error + Send + Sync>>, String) {
+    ) -> (
+        Result<i32, Box<dyn std::error::Error + Send + Sync>>,
+        String,
+    ) {
         // Send start event
         let _ = event_sender.send(WorkflowEvent::BlockStarted { id: script.id });
-        
+
         // Send started lifecycle event to output channel
         if let Some(ref ch) = output_channel {
             let _ = ch.send(BlockOutput {
@@ -156,23 +163,23 @@ impl ScriptHandler {
                     let _ = ch.send(BlockOutput {
                         stdout: None,
                         stderr: None,
-                        lifecycle: Some(BlockLifecycleEvent::Error { 
-                            message: format!("Failed to spawn process: {}", e) 
+                        lifecycle: Some(BlockLifecycleEvent::Error {
+                            message: format!("Failed to spawn process: {}", e),
                         }),
                     });
                 }
-                return (Err(e.into()), String::new())
-            },
+                return (Err(e.into()), String::new());
+            }
         };
         let pid = child.id();
 
         // Capture stdout
         let captured_output = Arc::new(RwLock::new(String::new()));
-        
+
         if let Some(stdout) = child.stdout.take() {
             let channel = output_channel.clone();
             let capture = captured_output.clone();
-            
+
             tokio::spawn(async move {
                 let mut reader = BufReader::new(stdout);
                 let mut line = String::new();
@@ -260,12 +267,12 @@ impl ScriptHandler {
                                 let _ = ch.send(BlockOutput {
                                     stdout: None,
                                     stderr: None,
-                                    lifecycle: Some(BlockLifecycleEvent::Error { 
-                                        message: format!("Failed to wait for process: {}", e) 
+                                    lifecycle: Some(BlockLifecycleEvent::Error {
+                                        message: format!("Failed to wait for process: {e}")
                                     }),
                                 });
                             }
-                            return (Err(format!("Failed to wait for process: {}", e).into()), captured);
+                            return (Err(format!("Failed to wait for process: {e}").into()), captured);
                         }
                     }
                 }
@@ -283,27 +290,30 @@ impl ScriptHandler {
                         let _ = ch.send(BlockOutput {
                             stdout: None,
                             stderr: None,
-                            lifecycle: Some(BlockLifecycleEvent::Error { 
-                                message: format!("Failed to wait for process: {}", e) 
+                            lifecycle: Some(BlockLifecycleEvent::Error {
+                                message: format!("Failed to wait for process: {}", e),
                             }),
                         });
                     }
-                    return (Err(format!("Failed to wait for process: {}", e).into()), captured);
+                    return (
+                        Err(format!("Failed to wait for process: {}", e).into()),
+                        captured,
+                    );
                 }
             }
         };
 
         // Send completion event
         let _ = event_sender.send(WorkflowEvent::BlockFinished { id: script.id });
-        
+
         // Send finished lifecycle event
         if let Some(ref ch) = output_channel {
             let _ = ch.send(BlockOutput {
                 stdout: None,
                 stderr: None,
-                lifecycle: Some(BlockLifecycleEvent::Finished { 
-                    exit_code: Some(exit_code), 
-                    success: exit_code == 0 
+                lifecycle: Some(BlockLifecycleEvent::Finished {
+                    exit_code: Some(exit_code),
+                    success: exit_code == 0,
                 }),
             });
         }
@@ -351,7 +361,7 @@ mod tests {
     #[test]
     fn test_output_variable_extraction() {
         let handler = ScriptHandler;
-        
+
         let script_with_output = Script::builder()
             .id(Uuid::new_v4())
             .name("Test")
@@ -359,7 +369,7 @@ mod tests {
             .interpreter("bash")
             .output_variable(Some("result".to_string()))
             .build();
-            
+
         let script_without_output = Script::builder()
             .id(Uuid::new_v4())
             .name("Test")
@@ -368,14 +378,17 @@ mod tests {
             .output_variable(None)
             .build();
 
-        assert_eq!(handler.output_variable(&script_with_output), Some("result".to_string()));
+        assert_eq!(
+            handler.output_variable(&script_with_output),
+            Some("result".to_string())
+        );
         assert_eq!(handler.output_variable(&script_without_output), None);
     }
 
     #[tokio::test]
     async fn test_successful_script_execution() {
         let (_tx, _rx) = broadcast::channel::<WorkflowEvent>(16);
-        
+
         // Test simple echo command
         let (exit_code, output) = ScriptHandler::run_script(
             &create_test_script("echo 'Hello, World!'", "bash"),
@@ -383,7 +396,8 @@ mod tests {
             CancellationToken::new(),
             _tx,
             None,
-        ).await;
+        )
+        .await;
 
         assert!(exit_code.is_ok());
         assert_eq!(exit_code.unwrap(), 0);
@@ -393,7 +407,7 @@ mod tests {
     #[tokio::test]
     async fn test_failed_script_execution() {
         let (_tx, _rx) = broadcast::channel::<WorkflowEvent>(16);
-        
+
         // Test command that should fail
         let (exit_code, _output) = ScriptHandler::run_script(
             &create_test_script("exit 1", "bash"),
@@ -401,7 +415,8 @@ mod tests {
             CancellationToken::new(),
             _tx,
             None,
-        ).await;
+        )
+        .await;
 
         assert!(exit_code.is_ok());
         assert_eq!(exit_code.unwrap(), 1);
@@ -410,7 +425,7 @@ mod tests {
     #[tokio::test]
     async fn test_command_not_found() {
         let (_tx, _rx) = broadcast::channel::<WorkflowEvent>(16);
-        
+
         // Test non-existent command
         let (exit_code, _output) = ScriptHandler::run_script(
             &create_test_script("nonexistent_command_12345", "bash"),
@@ -418,7 +433,8 @@ mod tests {
             CancellationToken::new(),
             _tx,
             None,
-        ).await;
+        )
+        .await;
 
         // Should fail with non-zero exit code
         assert!(exit_code.is_ok());
@@ -428,11 +444,15 @@ mod tests {
     #[tokio::test]
     async fn test_variable_substitution() {
         let (_tx, _rx) = broadcast::channel::<WorkflowEvent>(16);
-        
+
         let mut context = create_test_context();
-        context.variables.insert("TEST_VAR".to_string(), "test_value".to_string());
-        context.variables.insert("ANOTHER_VAR".to_string(), "another_value".to_string());
-        
+        context
+            .variables
+            .insert("TEST_VAR".to_string(), "test_value".to_string());
+        context
+            .variables
+            .insert("ANOTHER_VAR".to_string(), "another_value".to_string());
+
         // Test both ${VAR} and $VAR syntax
         let (exit_code, output) = ScriptHandler::run_script(
             &create_test_script("echo '${TEST_VAR} and $ANOTHER_VAR'", "bash"),
@@ -440,7 +460,8 @@ mod tests {
             CancellationToken::new(),
             _tx,
             None,
-        ).await;
+        )
+        .await;
 
         assert!(exit_code.is_ok());
         assert_eq!(exit_code.unwrap(), 0);
@@ -451,7 +472,7 @@ mod tests {
     #[tokio::test]
     async fn test_variable_substitution_missing_vars() {
         let (_tx, _rx) = broadcast::channel::<WorkflowEvent>(16);
-        
+
         // No variables in context, should leave placeholders as-is
         let (exit_code, output) = ScriptHandler::run_script(
             &create_test_script("echo '${MISSING_VAR}'", "bash"),
@@ -459,7 +480,8 @@ mod tests {
             CancellationToken::new(),
             _tx,
             None,
-        ).await;
+        )
+        .await;
 
         assert!(exit_code.is_ok());
         assert_eq!(exit_code.unwrap(), 0);
@@ -469,17 +491,20 @@ mod tests {
     #[tokio::test]
     async fn test_environment_variables() {
         let (_tx, _rx) = broadcast::channel::<WorkflowEvent>(16);
-        
+
         let mut context = create_test_context();
-        context.env.insert("TEST_ENV_VAR".to_string(), "env_value".to_string());
-        
+        context
+            .env
+            .insert("TEST_ENV_VAR".to_string(), "env_value".to_string());
+
         let (exit_code, output) = ScriptHandler::run_script(
             &create_test_script("echo $TEST_ENV_VAR", "bash"),
             context,
             CancellationToken::new(),
             _tx,
             None,
-        ).await;
+        )
+        .await;
 
         assert!(exit_code.is_ok());
         assert_eq!(exit_code.unwrap(), 0);
@@ -489,17 +514,18 @@ mod tests {
     #[tokio::test]
     async fn test_working_directory() {
         let (_tx, _rx) = broadcast::channel::<WorkflowEvent>(16);
-        
+
         let mut context = create_test_context();
         context.cwd = "/tmp".to_string();
-        
+
         let (exit_code, output) = ScriptHandler::run_script(
             &create_test_script("pwd", "bash"),
             context,
             CancellationToken::new(),
             _tx,
             None,
-        ).await;
+        )
+        .await;
 
         assert!(exit_code.is_ok());
         assert_eq!(exit_code.unwrap(), 0);
@@ -510,7 +536,7 @@ mod tests {
     async fn test_different_interpreters() {
         let (_tx, _rx) = broadcast::channel::<WorkflowEvent>(16);
         let context = create_test_context();
-        
+
         // Test bash
         let (exit_code, _output) = ScriptHandler::run_script(
             &create_test_script("echo 'bash test'", "bash"),
@@ -518,10 +544,11 @@ mod tests {
             CancellationToken::new(),
             _tx.clone(),
             None,
-        ).await;
+        )
+        .await;
         assert!(exit_code.is_ok());
         assert_eq!(exit_code.unwrap(), 0);
-        
+
         // Test sh
         let (exit_code, _output) = ScriptHandler::run_script(
             &create_test_script("echo 'sh test'", "sh"),
@@ -529,7 +556,8 @@ mod tests {
             CancellationToken::new(),
             _tx.clone(),
             None,
-        ).await;
+        )
+        .await;
         assert!(exit_code.is_ok());
         assert_eq!(exit_code.unwrap(), 0);
     }
@@ -537,16 +565,17 @@ mod tests {
     #[tokio::test]
     async fn test_multiline_script() {
         let (_tx, _rx) = broadcast::channel::<WorkflowEvent>(16);
-        
+
         let multiline_script = "echo \"Line 1\"\necho \"Line 2\"\necho \"Line 3\"";
-        
+
         let (exit_code, output) = ScriptHandler::run_script(
             &create_test_script(multiline_script, "bash"),
             create_test_context(),
             CancellationToken::new(),
             _tx,
             None,
-        ).await;
+        )
+        .await;
 
         assert!(exit_code.is_ok());
         assert_eq!(exit_code.unwrap(), 0);
@@ -558,7 +587,7 @@ mod tests {
     #[tokio::test]
     async fn test_script_with_stderr() {
         let (_tx, _rx) = broadcast::channel::<WorkflowEvent>(16);
-        
+
         // Script that writes to both stdout and stderr
         let (exit_code, _output) = ScriptHandler::run_script(
             &create_test_script("echo 'stdout'; echo 'stderr' >&2", "bash"),
@@ -566,7 +595,8 @@ mod tests {
             CancellationToken::new(),
             _tx,
             None,
-        ).await;
+        )
+        .await;
 
         assert!(exit_code.is_ok());
         assert_eq!(exit_code.unwrap(), 0);
@@ -576,15 +606,15 @@ mod tests {
     #[tokio::test]
     async fn test_cancellation_token_creation() {
         let token = CancellationToken::new();
-        
+
         // Should be able to take receiver once
         let receiver = token.take_receiver();
         assert!(receiver.is_some());
-        
+
         // Second attempt should return None
         let receiver2 = token.take_receiver();
         assert!(receiver2.is_none());
-        
+
         // Cancel should not panic
         token.cancel();
     }
@@ -593,26 +623,21 @@ mod tests {
     async fn test_script_cancellation() {
         let (_tx, _rx) = broadcast::channel::<WorkflowEvent>(16);
         let token = CancellationToken::new();
-        
+
         // Start a long-running script
         let script = create_test_script("sleep 10", "bash");
-        let script_future = ScriptHandler::run_script(
-            &script,
-            create_test_context(),
-            token.clone(),
-            _tx,
-            None,
-        );
-        
+        let script_future =
+            ScriptHandler::run_script(&script, create_test_context(), token.clone(), _tx, None);
+
         // Cancel after a short delay
         let cancel_future = async {
             tokio::time::sleep(Duration::from_millis(100)).await;
             token.cancel();
         };
-        
+
         // Run both futures concurrently
         let (result, _) = tokio::join!(script_future, cancel_future);
-        
+
         // Should be cancelled (error result)
         assert!(result.0.is_err());
         assert!(result.0.unwrap_err().to_string().contains("cancelled"));
@@ -621,7 +646,7 @@ mod tests {
     #[tokio::test]
     async fn test_large_output() {
         let (_tx, _rx) = broadcast::channel::<WorkflowEvent>(16);
-        
+
         // Generate a large amount of output
         let (exit_code, output) = ScriptHandler::run_script(
             &create_test_script("for i in {1..100}; do echo \"Line $i\"; done", "bash"),
@@ -629,7 +654,8 @@ mod tests {
             CancellationToken::new(),
             _tx,
             None,
-        ).await;
+        )
+        .await;
 
         assert!(exit_code.is_ok());
         assert_eq!(exit_code.unwrap(), 0);
@@ -642,7 +668,7 @@ mod tests {
     #[tokio::test]
     async fn test_script_timeout_handling() {
         let (_tx, _rx) = broadcast::channel::<WorkflowEvent>(16);
-        
+
         // Test that we can timeout a script execution
         let script = create_test_script("sleep 5", "bash");
         let script_future = ScriptHandler::run_script(
@@ -652,10 +678,10 @@ mod tests {
             _tx,
             None,
         );
-        
+
         // Timeout after 1 second
         let result = timeout(Duration::from_secs(1), script_future).await;
-        
+
         // Should timeout
         assert!(result.is_err());
     }
@@ -663,17 +689,18 @@ mod tests {
     #[tokio::test]
     async fn test_special_characters_in_script() {
         let (_tx, _rx) = broadcast::channel::<WorkflowEvent>(16);
-        
+
         // Test script with special characters
         let script_with_special_chars = r#"echo "Special chars: !@#$%^&*()[]{}|;':\",./<>?""#;
-        
+
         let (exit_code, output) = ScriptHandler::run_script(
             &create_test_script(script_with_special_chars, "bash"),
             create_test_context(),
             CancellationToken::new(),
             _tx,
             None,
-        ).await;
+        )
+        .await;
 
         assert!(exit_code.is_ok());
         assert_eq!(exit_code.unwrap(), 0);
@@ -683,14 +710,15 @@ mod tests {
     #[tokio::test]
     async fn test_empty_script() {
         let (_tx, _rx) = broadcast::channel::<WorkflowEvent>(16);
-        
+
         let (exit_code, output) = ScriptHandler::run_script(
             &create_test_script("", "bash"),
             create_test_context(),
             CancellationToken::new(),
             _tx,
             None,
-        ).await;
+        )
+        .await;
 
         assert!(exit_code.is_ok());
         assert_eq!(exit_code.unwrap(), 0);
@@ -700,14 +728,15 @@ mod tests {
     #[tokio::test]
     async fn test_script_with_unicode() {
         let (_tx, _rx) = broadcast::channel::<WorkflowEvent>(16);
-        
+
         let (exit_code, output) = ScriptHandler::run_script(
             &create_test_script("echo '测试 🚀 émojis'", "bash"),
             create_test_context(),
             CancellationToken::new(),
             _tx,
             None,
-        ).await;
+        )
+        .await;
 
         assert!(exit_code.is_ok());
         assert_eq!(exit_code.unwrap(), 0);
@@ -721,17 +750,18 @@ mod tests {
     #[ignore] // Ignore by default since it requires SSH setup
     async fn test_ssh_execution() {
         let (_tx, _rx) = broadcast::channel::<WorkflowEvent>(16);
-        
+
         let mut context = create_test_context();
         context.ssh_host = Some("localhost".to_string());
-        
+
         let (exit_code, output) = ScriptHandler::run_script(
             &create_test_script("echo 'SSH test'", "bash"),
             context,
             CancellationToken::new(),
             _tx,
             None,
-        ).await;
+        )
+        .await;
 
         // This would only pass if SSH is properly configured
         assert!(exit_code.is_ok());

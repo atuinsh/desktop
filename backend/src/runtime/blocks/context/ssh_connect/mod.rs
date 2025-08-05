@@ -1,14 +1,14 @@
+use crate::runtime::blocks::handler::{ContextProvider, ExecutionContext};
 use serde::{Deserialize, Serialize};
 use typed_builder::TypedBuilder;
 use uuid::Uuid;
-use crate::runtime::blocks::handler::{ContextProvider, ExecutionContext};
 
 #[derive(Debug, Serialize, Deserialize, Clone, TypedBuilder)]
 #[serde(rename_all = "camelCase")]
 pub struct SshConnect {
     #[builder(setter(into))]
     pub id: Uuid,
-    
+
     #[builder(setter(into))]
     pub user_host: String,
 }
@@ -31,12 +31,12 @@ impl ContextProvider for SshConnectHandler {
         if block.user_host.is_empty() {
             return Err("SSH user_host cannot be empty".into());
         }
-        
+
         // Basic format validation (should contain @ or be just hostname)
         if !block.user_host.contains('@') && block.user_host.contains(' ') {
             return Err("Invalid SSH user_host format".into());
         }
-        
+
         context.ssh_host = Some(block.user_host.clone());
         Ok(())
     }
@@ -53,26 +53,23 @@ impl SshConnect {
 
         let user_host = block_data
             .get("userHost")
-            .or_else(|| block_data.get("user_host"))  // Support both camelCase and snake_case
+            .or_else(|| block_data.get("user_host")) // Support both camelCase and snake_case
             .and_then(|v| v.as_str())
             .ok_or("Missing userHost")?
             .to_string();
 
-        Ok(SshConnect::builder()
-            .id(id)
-            .user_host(user_host)
-            .build())
+        Ok(SshConnect::builder().id(id).user_host(user_host).build())
     }
-    
+
     /// Parse the user_host string into components
     #[allow(dead_code)] // Utility method for future use
     pub fn parse_user_host(&self) -> (Option<String>, String, Option<u16>) {
         let parts: Vec<&str> = self.user_host.split('@').collect();
-        
+
         if parts.len() == 2 {
             let user = Some(parts[0].to_string());
             let host_port = parts[1];
-            
+
             // Check for port
             if let Some(colon_pos) = host_port.rfind(':') {
                 let host = host_port[..colon_pos].to_string();
@@ -133,9 +130,12 @@ mod tests {
 
         let mut context = ExecutionContext::default();
         let result = handler.apply_context(&ssh, &mut context);
-        
+
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("SSH user_host cannot be empty"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("SSH user_host cannot be empty"));
     }
 
     #[test]
@@ -148,9 +148,12 @@ mod tests {
 
         let mut context = ExecutionContext::default();
         let result = handler.apply_context(&ssh, &mut context);
-        
+
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Invalid SSH user_host format"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Invalid SSH user_host format"));
     }
 
     #[test]
@@ -286,7 +289,7 @@ mod tests {
         let (user, host, port) = ssh.parse_user_host();
         assert_eq!(user, None);
         assert_eq!(host, "host.com");
-        assert_eq!(port, None);  // Invalid port should be None
+        assert_eq!(port, None); // Invalid port should be None
     }
 
     // Serialization tests
@@ -348,23 +351,23 @@ mod tests {
     #[test]
     fn test_multiple_ssh_contexts_override() {
         let handler = SshConnectHandler;
-        
+
         let ssh1 = SshConnect::builder()
             .id(Uuid::new_v4())
             .user_host("user1@host1.com")
             .build();
-            
+
         let ssh2 = SshConnect::builder()
             .id(Uuid::new_v4())
             .user_host("user2@host2.com")
             .build();
 
         let mut context = ExecutionContext::default();
-        
+
         // Apply first SSH connection
         handler.apply_context(&ssh1, &mut context).unwrap();
         assert_eq!(context.ssh_host, Some("user1@host1.com".to_string()));
-        
+
         // Apply second SSH connection (should override)
         handler.apply_context(&ssh2, &mut context).unwrap();
         assert_eq!(context.ssh_host, Some("user2@host2.com".to_string()));
@@ -405,7 +408,7 @@ mod tests {
 
         // SSH host should be updated
         assert_eq!(context.ssh_host, Some("user@host.com".to_string()));
-        
+
         // Other fields should be preserved
         assert_eq!(context.runbook_id, original_runbook_id);
         assert_eq!(context.cwd, original_cwd);

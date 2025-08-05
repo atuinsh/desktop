@@ -74,7 +74,8 @@ pub(crate) struct AtuinState {
     pub runbook_output_variables: Arc<RwLock<HashMap<String, HashMap<String, String>>>>,
 
     // Map of block execution id -> execution handle for cancellation
-    pub block_executions: Arc<RwLock<HashMap<Uuid, crate::runtime::blocks::handler::ExecutionHandle>>>,
+    pub block_executions:
+        Arc<RwLock<HashMap<Uuid, crate::runtime::blocks::handler::ExecutionHandle>>>,
 }
 
 impl AtuinState {

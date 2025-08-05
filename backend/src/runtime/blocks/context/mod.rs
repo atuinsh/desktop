@@ -1,13 +1,13 @@
 //! Context blocks for modifying execution context
-//! 
+//!
 //! Context blocks are special blocks that modify the execution environment
 //! for subsequent blocks in a runbook. They don't execute commands themselves,
 //! but instead set up the context (working directory, environment variables, SSH connections, etc.)
-//! 
+//!
 //! ## Adding New Context Blocks
-//! 
+//!
 //! To add a new context block:
-//! 
+//!
 //! 1. Create a new directory under `context/` (e.g., `context/my_block/`)
 //! 2. Create `mod.rs` with:
 //!    - A struct for your block data (with `TypedBuilder`, `Serialize`, `Deserialize`)
@@ -16,16 +16,16 @@
 //!    - Comprehensive tests covering edge cases
 //! 3. Add your module to this file's exports
 //! 4. Update the main `Block` enum to include your new context block
-//! 
+//!
 //! ## Example Structure
-//! 
+//!
 //! ```rust
 //! // context/my_block/mod.rs
 //! use serde::{Deserialize, Serialize};
 //! use typed_builder::TypedBuilder;
 //! use uuid::Uuid;
 //! use crate::runtime::blocks::handler::{ContextProvider, ExecutionContext};
-//! 
+//!
 //! #[derive(Debug, Serialize, Deserialize, Clone, TypedBuilder)]
 //! #[serde(rename_all = "camelCase")]
 //! pub struct MyBlock {
@@ -35,16 +35,16 @@
 //!     #[builder(setter(into))]
 //!     pub my_field: String,
 //! }
-//! 
+//!
 //! pub struct MyBlockHandler;
-//! 
+//!
 //! impl ContextProvider for MyBlockHandler {
 //!     type Block = MyBlock;
-//! 
+//!
 //!     fn block_type(&self) -> &'static str {
 //!         "my-block"
 //!     }
-//! 
+//!
 //!     fn apply_context(
 //!         &self,
 //!         block: &MyBlock,
@@ -54,7 +54,7 @@
 //!         Ok(())
 //!     }
 //! }
-//! 
+//!
 //! // Add comprehensive tests...
 //! ```
 

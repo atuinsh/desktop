@@ -1,14 +1,14 @@
+use crate::runtime::blocks::handler::{ContextProvider, ExecutionContext};
 use serde::{Deserialize, Serialize};
 use typed_builder::TypedBuilder;
 use uuid::Uuid;
-use crate::runtime::blocks::handler::{ContextProvider, ExecutionContext};
 
 #[derive(Debug, Serialize, Deserialize, Clone, TypedBuilder)]
 #[serde(rename_all = "camelCase")]
 pub struct Directory {
     #[builder(setter(into))]
     pub id: Uuid,
-    
+
     #[builder(setter(into))]
     pub path: String,
 }
@@ -47,10 +47,7 @@ impl Directory {
             .ok_or("Missing path")?
             .to_string();
 
-        Ok(Directory::builder()
-            .id(id)
-            .path(path)
-            .build())
+        Ok(Directory::builder().id(id).path(path).build())
     }
 }
 
@@ -84,10 +81,7 @@ mod tests {
     #[test]
     fn test_empty_path() {
         let handler = DirectoryHandler;
-        let dir = Directory::builder()
-            .id(Uuid::new_v4())
-            .path("")
-            .build();
+        let dir = Directory::builder().id(Uuid::new_v4()).path("").build();
 
         let mut context = ExecutionContext::default();
         handler.apply_context(&dir, &mut context).unwrap();
@@ -221,23 +215,23 @@ mod tests {
     #[test]
     fn test_multiple_directory_contexts() {
         let handler = DirectoryHandler;
-        
+
         let dir1 = Directory::builder()
             .id(Uuid::new_v4())
             .path("/first/path")
             .build();
-            
+
         let dir2 = Directory::builder()
             .id(Uuid::new_v4())
             .path("/second/path")
             .build();
 
         let mut context = ExecutionContext::default();
-        
+
         // Apply first directory
         handler.apply_context(&dir1, &mut context).unwrap();
         assert_eq!(context.cwd, "/first/path");
-        
+
         // Apply second directory (should override)
         handler.apply_context(&dir2, &mut context).unwrap();
         assert_eq!(context.cwd, "/second/path");
@@ -278,7 +272,7 @@ mod tests {
 
         // Directory should be updated
         assert_eq!(context.cwd, "/tmp/test");
-        
+
         // Other fields should be preserved
         assert_eq!(context.runbook_id, original_runbook_id);
         assert_eq!(context.env, original_env);
@@ -290,10 +284,7 @@ mod tests {
     #[test]
     fn test_builder_pattern() {
         let id = Uuid::new_v4();
-        let dir = Directory::builder()
-            .id(id)
-            .path("/test/path")
-            .build();
+        let dir = Directory::builder().id(id).path("/test/path").build();
 
         assert_eq!(dir.id, id);
         assert_eq!(dir.path, "/test/path");
@@ -304,7 +295,7 @@ mod tests {
         let id = Uuid::new_v4();
         let dir = Directory::builder()
             .id(id)
-            .path("/test/path".to_string())  // String instead of &str
+            .path("/test/path".to_string()) // String instead of &str
             .build();
 
         assert_eq!(dir.id, id);

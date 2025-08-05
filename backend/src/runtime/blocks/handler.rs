@@ -49,7 +49,7 @@ impl CancellationToken {
             receiver: Arc::new(std::sync::Mutex::new(Some(receiver))),
         }
     }
-    
+
     pub fn cancel(&self) {
         if let Ok(mut sender_guard) = self.sender.lock() {
             if let Some(sender) = sender_guard.take() {
@@ -57,7 +57,7 @@ impl CancellationToken {
             }
         }
     }
-    
+
     pub fn take_receiver(&self) -> Option<oneshot::Receiver<()>> {
         if let Ok(mut receiver_guard) = self.receiver.lock() {
             receiver_guard.take()
@@ -82,7 +82,7 @@ pub enum ExecutionStatus {
     Running,
     Success(String), // The output value
     #[allow(dead_code)] // Error message is used but compiler doesn't see reads
-    Failed(String),  // Error message
+    Failed(String), // Error message
     #[allow(dead_code)] // Used for cancellation but not currently constructed in tests
     Cancelled,
 }
@@ -95,12 +95,17 @@ pub struct BlockOutput {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", tag = "type")]
 pub enum BlockLifecycleEvent {
     Started,
-    Finished { exit_code: Option<i32>, success: bool },
+    Finished {
+        exit_code: Option<i32>,
+        success: bool,
+    },
     Cancelled,
-    Error { message: String },
+    Error {
+        message: String,
+    },
 }
 
 #[async_trait]
@@ -109,7 +114,7 @@ pub trait BlockHandler: Send + Sync {
 
     #[allow(dead_code)] // Used for identification but not currently called
     fn block_type(&self) -> &'static str;
-    
+
     /// Get the output variable name from the block if it has one
     #[allow(dead_code)] // Used for output variable extraction but not currently called
     fn output_variable(&self, block: &Self::Block) -> Option<String>;

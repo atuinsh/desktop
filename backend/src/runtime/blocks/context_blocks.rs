@@ -7,7 +7,7 @@ use uuid::Uuid;
 pub struct Directory {
     #[builder(setter(into))]
     pub id: Uuid,
-    
+
     #[builder(setter(into))]
     pub path: String,
 }
@@ -17,10 +17,10 @@ pub struct Directory {
 pub struct Environment {
     #[builder(setter(into))]
     pub id: Uuid,
-    
+
     #[builder(setter(into))]
     pub name: String,
-    
+
     #[builder(setter(into))]
     pub value: String,
 }
@@ -30,7 +30,7 @@ pub struct Environment {
 pub struct SshConnect {
     #[builder(setter(into))]
     pub id: Uuid,
-    
+
     #[builder(setter(into))]
     pub user_host: String,
 }

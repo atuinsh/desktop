@@ -1,17 +1,17 @@
+use crate::runtime::blocks::handler::{ContextProvider, ExecutionContext};
 use serde::{Deserialize, Serialize};
 use typed_builder::TypedBuilder;
 use uuid::Uuid;
-use crate::runtime::blocks::handler::{ContextProvider, ExecutionContext};
 
 #[derive(Debug, Serialize, Deserialize, Clone, TypedBuilder)]
 #[serde(rename_all = "camelCase")]
 pub struct Environment {
     #[builder(setter(into))]
     pub id: Uuid,
-    
+
     #[builder(setter(into))]
     pub name: String,
-    
+
     #[builder(setter(into))]
     pub value: String,
 }
@@ -34,12 +34,12 @@ impl ContextProvider for EnvironmentHandler {
         if block.name.is_empty() {
             return Err("Environment variable name cannot be empty".into());
         }
-        
+
         // Check for invalid characters in env var name (basic validation)
         if block.name.contains('=') || block.name.contains('\0') {
             return Err("Environment variable name contains invalid characters".into());
         }
-        
+
         context.env.insert(block.name.clone(), block.value.clone());
         Ok(())
     }
@@ -63,7 +63,7 @@ impl Environment {
         let value = block_data
             .get("value")
             .and_then(|v| v.as_str())
-            .unwrap_or("")  // Default to empty string if value is missing
+            .unwrap_or("") // Default to empty string if value is missing
             .to_string();
 
         Ok(Environment::builder()
@@ -128,9 +128,12 @@ mod tests {
 
         let mut context = ExecutionContext::default();
         let result = handler.apply_context(&env, &mut context);
-        
+
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Environment variable name cannot be empty"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Environment variable name cannot be empty"));
     }
 
     #[test]
@@ -144,9 +147,12 @@ mod tests {
 
         let mut context = ExecutionContext::default();
         let result = handler.apply_context(&env, &mut context);
-        
+
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("invalid characters"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("invalid characters"));
     }
 
     #[test]
@@ -160,9 +166,12 @@ mod tests {
 
         let mut context = ExecutionContext::default();
         let result = handler.apply_context(&env, &mut context);
-        
+
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("invalid characters"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("invalid characters"));
     }
 
     #[test]
@@ -177,7 +186,10 @@ mod tests {
         let mut context = ExecutionContext::default();
         handler.apply_context(&env, &mut context).unwrap();
 
-        assert_eq!(context.env.get("SPECIAL_VAR"), Some(&"value with spaces and symbols: !@#$%^&*()".to_string()));
+        assert_eq!(
+            context.env.get("SPECIAL_VAR"),
+            Some(&"value with spaces and symbols: !@#$%^&*()".to_string())
+        );
     }
 
     #[test]
@@ -192,7 +204,10 @@ mod tests {
         let mut context = ExecutionContext::default();
         handler.apply_context(&env, &mut context).unwrap();
 
-        assert_eq!(context.env.get("MULTILINE_VAR"), Some(&"line1\nline2\nline3".to_string()));
+        assert_eq!(
+            context.env.get("MULTILINE_VAR"),
+            Some(&"line1\nline2\nline3".to_string())
+        );
     }
 
     #[test]
@@ -207,7 +222,10 @@ mod tests {
         let mut context = ExecutionContext::default();
         handler.apply_context(&env, &mut context).unwrap();
 
-        assert_eq!(context.env.get("UNICODE_VAR"), Some(&"测试值 🚀 émojis".to_string()));
+        assert_eq!(
+            context.env.get("UNICODE_VAR"),
+            Some(&"测试值 🚀 émojis".to_string())
+        );
     }
 
     // Serialization tests
@@ -275,13 +293,13 @@ mod tests {
     #[test]
     fn test_multiple_environment_variables() {
         let handler = EnvironmentHandler;
-        
+
         let env1 = Environment::builder()
             .id(Uuid::new_v4())
             .name("VAR1")
             .value("value1")
             .build();
-            
+
         let env2 = Environment::builder()
             .id(Uuid::new_v4())
             .name("VAR2")
@@ -289,11 +307,11 @@ mod tests {
             .build();
 
         let mut context = ExecutionContext::default();
-        
+
         // Apply both environment variables
         handler.apply_context(&env1, &mut context).unwrap();
         handler.apply_context(&env2, &mut context).unwrap();
-        
+
         assert_eq!(context.env.get("VAR1"), Some(&"value1".to_string()));
         assert_eq!(context.env.get("VAR2"), Some(&"value2".to_string()));
     }
@@ -301,13 +319,13 @@ mod tests {
     #[test]
     fn test_environment_variable_override() {
         let handler = EnvironmentHandler;
-        
+
         let env1 = Environment::builder()
             .id(Uuid::new_v4())
             .name("SAME_VAR")
             .value("first_value")
             .build();
-            
+
         let env2 = Environment::builder()
             .id(Uuid::new_v4())
             .name("SAME_VAR")
@@ -315,13 +333,19 @@ mod tests {
             .build();
 
         let mut context = ExecutionContext::default();
-        
+
         // Apply first, then second (should override)
         handler.apply_context(&env1, &mut context).unwrap();
-        assert_eq!(context.env.get("SAME_VAR"), Some(&"first_value".to_string()));
-        
+        assert_eq!(
+            context.env.get("SAME_VAR"),
+            Some(&"first_value".to_string())
+        );
+
         handler.apply_context(&env2, &mut context).unwrap();
-        assert_eq!(context.env.get("SAME_VAR"), Some(&"second_value".to_string()));
+        assert_eq!(
+            context.env.get("SAME_VAR"),
+            Some(&"second_value".to_string())
+        );
     }
 
     #[test]
@@ -356,7 +380,7 @@ mod tests {
 
         // Environment should be updated
         assert_eq!(context.env.get("TEST_VAR"), Some(&"test_value".to_string()));
-        
+
         // Other fields should be preserved
         assert_eq!(context.runbook_id, original_runbook_id);
         assert_eq!(context.cwd, original_cwd);

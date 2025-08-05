@@ -19,11 +19,6 @@ import { default as BlockType } from "@/lib/workflow/blocks/block.ts";
 import { convertBlocknoteToAtuin } from "@/lib/workflow/blocks/convert.ts";
 import { DependencySpec } from "@/lib/workflow/dependency.ts";
 import BlockBus from "@/lib/workflow/block_bus.ts";
-import {
-  useBlockBusRunSubscription,
-  useBlockBusStopSubscription,
-  useBlockBusFinishedEventSubscription,
-} from "@/lib/hooks/useBlockBus.ts";
 import track_event from "@/tracking";
 import { Settings } from "@/state/settings.ts";
 import CodeEditor, { TabAutoComplete } from "@/lib/blocks/common/CodeEditor/CodeEditor.tsx";
@@ -38,7 +33,7 @@ interface BlockOutput {
   lifecycle?: BlockLifecycleEvent;
 }
 
-type BlockLifecycleEvent = 
+type BlockLifecycleEvent =
   | { type: "started" }
   | { type: "finished"; exitCode?: number; success: boolean }
   | { type: "cancelled" }
@@ -76,7 +71,7 @@ const ScriptBlock = ({
   const [executionId, setExecutionId] = useState<string | null>(null);
   // Track available shells
   const [availableShells, setAvailableShells] = useState<Record<string, boolean>>({});
-  
+
   // Terminal state
   const [terminal, setTerminal] = useState<Terminal | null>(null);
   const terminalDOMRef = useRef<HTMLDivElement>(null);
@@ -106,7 +101,7 @@ const ScriptBlock = ({
     if (hasOutputVarError) {
       return "border-1 border-red-400 shadow-[0_0_10px_rgba(239,68,68,0.4)] rounded-lg transition-all duration-300";
     }
-    
+
     if (shellMissing) {
       return "border-1 border-red-400 shadow-[0_0_10px_rgba(239,68,68,0.4)] rounded-lg transition-all duration-300";
     }
@@ -236,7 +231,7 @@ const ScriptBlock = ({
 
   const handleLifecycleEvent = useCallback((event: BlockLifecycleEvent) => {
     console.log("Lifecycle event:", event);
-    
+
     switch (event.type) {
       case "started":
         console.log("Script execution started");
@@ -266,7 +261,7 @@ const ScriptBlock = ({
     setIsRunning(true);
     setHasRun(true);
     setExecutionId(null); // Clear any previous execution ID
-    
+
     // Initialize terminal if needed
     const activeTerminal = await initializeTerminal();
 
@@ -275,9 +270,10 @@ const ScriptBlock = ({
     try {
       // Create a channel for output streaming
       const outputChannel = new Channel<BlockOutput>();
-      
+
       // Set up output handler
       outputChannel.onmessage = (output: BlockOutput) => {
+        console.log(output);
         if (output.stdout) {
           activeTerminal?.write(output.stdout);
         }
@@ -298,7 +294,7 @@ const ScriptBlock = ({
       });
 
       console.log("Execution started:", result);
-      
+
       // Extract execution ID from result (format: "Execution started with handle: <uuid>")
       const match = result.match(/handle: ([a-f0-9-]{36})/);
       if (match) {
@@ -327,23 +323,13 @@ const ScriptBlock = ({
     } catch (error) {
       console.error("Failed to cancel script execution:", error);
     }
-    
+
     setIsRunning(false);
     setExecutionId(null);
-    BlockBus.get().blockFinished(script);
   }, [script, executionId]);
 
-  // Handle backend notification when script execution finishes
-  const handleFinished = useCallback(() => {
-    console.log("Script execution finished (backend event)");
-    setIsRunning(false);
-    setExecutionId(null);
-    // Note: Don't call BlockBus.get().blockFinished(script) here to avoid duplication
-  }, []);
-
-  useBlockBusRunSubscription(script.id, handlePlay);
-  useBlockBusStopSubscription(script.id, handleStop);
-  useBlockBusFinishedEventSubscription(script.id, handleFinished);
+  // Note: Block execution is now handled entirely through the channel-based approach
+  // No need for BlockBus subscriptions since we get lifecycle events directly from the backend
 
   const handleCmdEnter: Command = useCallback(() => {
     if (!isRunning) {
@@ -381,20 +367,20 @@ const ScriptBlock = ({
             </h1>
 
             <div className="flex flex-row items-center gap-2">
-                  <Input
-                    size="sm"
-                    variant="flat"
-                    className={`max-w-[250px] ${script.outputVariable && !/^[a-zA-Z0-9_]*$/.test(script.outputVariable) ? 'border-red-400 dark:border-red-400 focus:ring-red-500' : ''}`}
-                    placeholder="Output variable"
-                    autoComplete="off"
-                    autoCapitalize="off"
-                    autoCorrect="off"
-                    spellCheck="false"
-                    value={script.outputVariable}
-                    onValueChange={(val) => setOutputVariable(val)}
-                    isInvalid={!!script.outputVariable && !/^[a-zA-Z0-9_]*$/.test(script.outputVariable)}
-                    errorMessage={"Variable names can only contain letters, numbers, and underscores"}
-                  />
+              <Input
+                size="sm"
+                variant="flat"
+                className={`max-w-[250px] ${script.outputVariable && !/^[a-zA-Z0-9_]*$/.test(script.outputVariable) ? 'border-red-400 dark:border-red-400 focus:ring-red-500' : ''}`}
+                placeholder="Output variable"
+                autoComplete="off"
+                autoCapitalize="off"
+                autoCorrect="off"
+                spellCheck="false"
+                value={script.outputVariable}
+                onValueChange={(val) => setOutputVariable(val)}
+                isInvalid={!!script.outputVariable && !/^[a-zA-Z0-9_]*$/.test(script.outputVariable)}
+                errorMessage={"Variable names can only contain letters, numbers, and underscores"}
+              />
 
               <InterpreterSelector
                 interpreter={script.interpreter}
@@ -454,9 +440,9 @@ const ScriptBlock = ({
       }
     >
       {/* Always render div for terminal attachment, but only show height when needed */}
-      <div 
-        ref={terminalDOMRef} 
-        className={`w-full ${script.outputVisible && hasRun ? 'min-h-[200px]' : 'h-0 overflow-hidden'}`} 
+      <div
+        ref={terminalDOMRef}
+        className={`w-full ${script.outputVisible && hasRun ? 'min-h-[200px]' : 'h-0 overflow-hidden'}`}
       />
     </Block>
   );

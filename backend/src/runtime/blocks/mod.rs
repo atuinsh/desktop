@@ -72,11 +72,19 @@ impl Block {
 
         match block_type {
             "script" => Ok(Block::Script(script::Script::from_document(block_data)?)),
-            "terminal" => Ok(Block::Terminal(terminal::Terminal::from_document(block_data)?)),
-            "postgres" => Ok(Block::Postgres(postgres::Postgres::from_document(block_data)?)),
+            "terminal" => Ok(Block::Terminal(terminal::Terminal::from_document(
+                block_data,
+            )?)),
+            "postgres" => Ok(Block::Postgres(postgres::Postgres::from_document(
+                block_data,
+            )?)),
             "http" => Ok(Block::Http(http::Http::from_document(block_data)?)),
-            "prometheus" => Ok(Block::Prometheus(prometheus::Prometheus::from_document(block_data)?)),
-            "clickhouse" => Ok(Block::Clickhouse(clickhouse::Clickhouse::from_document(block_data)?)),
+            "prometheus" => Ok(Block::Prometheus(prometheus::Prometheus::from_document(
+                block_data,
+            )?)),
+            "clickhouse" => Ok(Block::Clickhouse(clickhouse::Clickhouse::from_document(
+                block_data,
+            )?)),
             "mysql" => Ok(Block::Mysql(mysql::Mysql::from_document(block_data)?)),
             "sqlite" => Ok(Block::SQLite(sqlite::SQLite::from_document(block_data)?)),
             _ => Err(format!("Unsupported block type: {}", block_type)),
