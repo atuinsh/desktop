@@ -1,5 +1,5 @@
 use serde_json::Value;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use uuid::Uuid;
 
 use crate::runtime::blocks::handler::ExecutionContext;
@@ -9,6 +9,7 @@ pub struct BlockInfo {
     pub id: String,
     pub block_type: String,
     pub props: HashMap<String, String>,
+    #[allow(dead_code)] // May be useful for future hierarchical context features
     pub parent_id: Option<String>,
 }
 
@@ -24,16 +25,15 @@ impl ContextBuilder {
         // First, flatten the document and build parent relationships
         let blocks = Self::flatten_document(document)?;
 
-        // Find the target block
-        let target_block = blocks
-            .iter()
-            .find(|b| b.id == block_id)
-            .ok_or_else(|| format!("Block {} not found in document", block_id))?;
+        // Find the target block index
 
-        // Collect all ancestor blocks
-        let ancestors = Self::collect_ancestors(&target_block.id, &blocks);
+        // Find all blocks that come before the target block in document order
+        let target_index = blocks.iter().position(|b| b.id == block_id)
+            .ok_or_else(|| format!("Block {} not found in flattened document", block_id))?;
+        
+        let preceding_blocks = &blocks[..target_index];
 
-        // Build context by applying each ancestor's contribution
+        // Build context by applying each preceding block's contribution
         let mut context = ExecutionContext {
             runbook_id: Uuid::parse_str(runbook_id)?,
             cwd: std::env::current_dir()?.to_string_lossy().to_string(),
@@ -41,11 +41,13 @@ impl ContextBuilder {
             variables: HashMap::new(),
             ssh_host: None,
             document: document.to_vec(),
+            ssh_pool: None, // Will be set by the caller if needed
+            output_storage: None, // Will be set by the caller if needed
         };
 
-        // Apply context modifications from ancestors (in order from root to target)
-        for ancestor in ancestors.iter().rev() {
-            Self::apply_block_context(ancestor, &mut context)?;
+        // Apply context modifications from preceding blocks (in document order)
+        for block in preceding_blocks {
+            Self::apply_block_context(block, &mut context)?;
         }
 
         Ok(context)
@@ -102,39 +104,7 @@ impl ContextBuilder {
         Ok(())
     }
 
-    /// Collect all ancestors of a block (including the block itself)
-    fn collect_ancestors(block_id: &str, blocks: &[BlockInfo]) -> Vec<BlockInfo> {
-        let mut ancestors = Vec::new();
-        let mut current_id = Some(block_id.to_string());
-        let mut visited = std::collections::HashSet::new();
 
-        while let Some(id) = current_id {
-            // Prevent infinite loops from circular references
-            if visited.contains(&id) {
-                eprintln!(
-                    "Warning: Circular reference detected in block hierarchy at block {}",
-                    id
-                );
-                break;
-            }
-            visited.insert(id.clone());
-
-            if let Some(block) = blocks.iter().find(|b| b.id == id) {
-                ancestors.push(block.clone());
-                current_id = block.parent_id.clone();
-            } else {
-                break;
-            }
-
-            // Safety limit to prevent infinite loops
-            if ancestors.len() > 1000 {
-                eprintln!("Warning: Block hierarchy too deep (>1000 levels), stopping traversal");
-                break;
-            }
-        }
-
-        ancestors
-    }
 
     /// Apply a block's context modifications
     fn apply_block_context(
@@ -162,6 +132,16 @@ impl ContextBuilder {
                 if let Some(user_host) = block.props.get("userHost") {
                     if !user_host.is_empty() {
                         context.ssh_host = Some(user_host.clone());
+                    }
+                }
+            }
+            "host" => {
+                if let Some(hostname) = block.props.get("hostname") {
+                    let hostname = hostname.trim();
+                    if hostname.is_empty() || hostname == "localhost" {
+                        context.ssh_host = None; // Switch to local execution
+                    } else {
+                        context.ssh_host = Some(hostname.to_string()); // Switch to SSH execution
                     }
                 }
             }

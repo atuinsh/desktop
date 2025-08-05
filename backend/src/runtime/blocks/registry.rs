@@ -18,7 +18,6 @@ impl BlockRegistry {
         context: ExecutionContext,
         event_sender: broadcast::Sender<WorkflowEvent>,
         output_channel: Option<Channel<BlockOutput>>,
-        app_handle: tauri::AppHandle,
     ) -> Result<ExecutionHandle, Box<dyn std::error::Error + Send + Sync>> {
         match block {
             Block::Script(script) => {
@@ -28,7 +27,6 @@ impl BlockRegistry {
                         context,
                         event_sender,
                         output_channel,
-                        app_handle,
                     )
                     .await
             }

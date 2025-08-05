@@ -452,8 +452,9 @@ impl Session {
                 return;
             }
 
-            let mut line_buffer = String::new();
-            let mut stderr_line_buffer = String::new();
+            let mut stdout_buffer = Vec::new();
+            let mut stderr_buffer = Vec::new();
+            const BUFFER_SIZE: usize = 1024; // 1KB buffer for reasonable streaming
 
             loop {
                 tokio::select! {
@@ -471,43 +472,59 @@ impl Session {
 
                         match msg {
                             ChannelMsg::Data { data } => {
-                                if let Ok(data_str) = std::str::from_utf8(&data) {
-                                    line_buffer.push_str(data_str);
-
-                                    // Process complete lines
-                                    while let Some(pos) = line_buffer.find('\n') {
-                                        let line = line_buffer[..pos].to_string();
-                                        line_buffer = line_buffer[pos + 1..].to_string();
-
-                                        if output_stream_clone.send(line).await.is_err() {
+                                stdout_buffer.extend_from_slice(&data);
+                                
+                                // Send data in chunks when buffer gets large enough or when we hit newlines
+                                while stdout_buffer.len() >= BUFFER_SIZE || stdout_buffer.contains(&b'\n') {
+                                    let send_size = if stdout_buffer.len() >= BUFFER_SIZE {
+                                        BUFFER_SIZE
+                                    } else {
+                                        // Find the last newline to send complete lines
+                                        stdout_buffer.iter().rposition(|&b| b == b'\n')
+                                            .map(|pos| pos + 1) // Include the newline
+                                            .unwrap_or(stdout_buffer.len())
+                                    };
+                                    
+                                    let chunk = stdout_buffer.drain(..send_size).collect::<Vec<u8>>();
+                                    if let Ok(chunk_str) = std::str::from_utf8(&chunk) {
+                                        if output_stream_clone.send(chunk_str.to_string()).await.is_err() {
                                             break;
                                         }
                                     }
                                 }
                             }
                             ChannelMsg::ExtendedData { data, ext: 1 } => {
-                                // stderr
-                                if let Ok(data_str) = std::str::from_utf8(&data) {
-                                    stderr_line_buffer.push_str(data_str);
-
-                                    // Process complete lines
-                                    while let Some(pos) = stderr_line_buffer.find('\n') {
-                                        let line = stderr_line_buffer[..pos].to_string();
-                                        stderr_line_buffer = stderr_line_buffer[pos + 1..].to_string();
-
-                                        if output_stream_clone.send(line).await.is_err() {
+                                // stderr - same buffering approach
+                                stderr_buffer.extend_from_slice(&data);
+                                
+                                while stderr_buffer.len() >= BUFFER_SIZE || stderr_buffer.contains(&b'\n') {
+                                    let send_size = if stderr_buffer.len() >= BUFFER_SIZE {
+                                        BUFFER_SIZE
+                                    } else {
+                                        stderr_buffer.iter().rposition(|&b| b == b'\n')
+                                            .map(|pos| pos + 1)
+                                            .unwrap_or(stderr_buffer.len())
+                                    };
+                                    
+                                    let chunk = stderr_buffer.drain(..send_size).collect::<Vec<u8>>();
+                                    if let Ok(chunk_str) = std::str::from_utf8(&chunk) {
+                                        if output_stream_clone.send(chunk_str.to_string()).await.is_err() {
                                             break;
                                         }
                                     }
                                 }
                             }
                             ChannelMsg::ExitStatus { .. } => {
-                                // Send any remaining data
-                                if !line_buffer.is_empty() {
-                                    let _ = output_stream_clone.send(line_buffer).await;
+                                // Send any remaining buffered data
+                                if !stdout_buffer.is_empty() {
+                                    if let Ok(remaining_str) = std::str::from_utf8(&stdout_buffer) {
+                                        let _ = output_stream_clone.send(remaining_str.to_string()).await;
+                                    }
                                 }
-                                if !stderr_line_buffer.is_empty() {
-                                    let _ = output_stream_clone.send(stderr_line_buffer).await;
+                                if !stderr_buffer.is_empty() {
+                                    if let Ok(remaining_str) = std::str::from_utf8(&stderr_buffer) {
+                                        let _ = output_stream_clone.send(remaining_str.to_string()).await;
+                                    }
                                 }
                                 break;
                             }

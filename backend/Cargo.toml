@@ -53,12 +53,13 @@ keyring = { version = "3", features = [
     "windows-native",
     "sync-secret-service",
 ] }
-minijinja = { version = "2.3.1", features = [
+minijinja = { version = "2.11.0", features = [
     "unicode",
     "json",
     "urlencode",
     "loop_controls",
     "key_interning",
+    "builtins"
 ] }
 walkdir = "2.5.0"
 thiserror = "2.0.11"

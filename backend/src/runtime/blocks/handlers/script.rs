@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use std::process::Stdio;
 use std::sync::Arc;
-use tauri::{ipc::Channel, AppHandle, Manager};
+use tauri::ipc::Channel;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
 use tokio::sync::{broadcast, RwLock};
@@ -13,7 +13,9 @@ use crate::runtime::blocks::handler::{
 };
 use crate::runtime::blocks::script::Script;
 use crate::runtime::workflow::event::WorkflowEvent;
-use crate::state::AtuinState;
+
+use crate::templates::template_with_context;
+use tokio::sync::{mpsc, oneshot};
 
 pub struct ScriptHandler;
 
@@ -35,7 +37,6 @@ impl BlockHandler for ScriptHandler {
         context: ExecutionContext,
         event_sender: broadcast::Sender<WorkflowEvent>,
         output_channel: Option<Channel<BlockOutput>>,
-        app_handle: AppHandle,
     ) -> Result<ExecutionHandle, Box<dyn std::error::Error + Send + Sync>> {
         let handle = ExecutionHandle {
             id: Uuid::new_v4(),
@@ -51,8 +52,8 @@ impl BlockHandler for ScriptHandler {
         let event_sender_clone = event_sender.clone();
 
         let output_channel_clone = output_channel.clone();
-        let app_handle_clone = app_handle.clone();
         let runbook_id = context.runbook_id.to_string();
+        let output_storage = context.output_storage.clone();
 
         tokio::spawn(async move {
             let (exit_code, captured_output) = Self::run_script(
@@ -66,29 +67,26 @@ impl BlockHandler for ScriptHandler {
 
             // Determine status based on exit code
             let status = match exit_code {
-                Ok(0) => ExecutionStatus::Success(captured_output.trim().to_string()),
+                Ok(0) => {
+                    let output = captured_output.trim().to_string();
+                    
+                    // Store output variable if successful and we have an output variable
+                    if let (Some(var_name), Some(storage)) = (&handle_clone.output_variable, &output_storage) {
+                        storage
+                            .write()
+                            .await
+                            .entry(runbook_id.clone())
+                            .or_insert_with(std::collections::HashMap::new)
+                            .insert(var_name.clone(), output.clone());
+                    }
+                    
+                    ExecutionStatus::Success(output)
+                },
                 Ok(code) => ExecutionStatus::Failed(format!("Process exited with code {}", code)),
                 Err(e) => ExecutionStatus::Failed(e.to_string()),
             };
 
             *handle_clone.status.write().await = status.clone();
-
-            // Store output variable if successful
-            if let (ExecutionStatus::Success(output), Some(var_name)) =
-                (&status, &handle_clone.output_variable)
-            {
-                if !output.is_empty() {
-                    if let Some(state) = app_handle_clone.try_state::<AtuinState>() {
-                        state
-                            .runbook_output_variables
-                            .write()
-                            .await
-                            .entry(runbook_id)
-                            .or_insert_with(std::collections::HashMap::new)
-                            .insert(var_name.clone(), output.clone());
-                    }
-                }
-            }
         });
 
         Ok(handle)
@@ -96,6 +94,203 @@ impl BlockHandler for ScriptHandler {
 }
 
 impl ScriptHandler {
+    /// Parse SSH host string to extract username and hostname
+    /// Supports formats: "user@host", "host", "user@host:port"
+    fn parse_ssh_host(ssh_host: &str) -> (Option<String>, String) {
+        if let Some(at_pos) = ssh_host.find('@') {
+            let username = ssh_host[..at_pos].to_string();
+            let host_part = &ssh_host[at_pos + 1..];
+            // Remove port if present (we don't use it for the SSH pool)
+            let hostname = if let Some(colon_pos) = host_part.find(':') {
+                host_part[..colon_pos].to_string()
+            } else {
+                host_part.to_string()
+            };
+            (Some(username), hostname)
+        } else {
+            // No username specified, just hostname (possibly with port)
+            let hostname = if let Some(colon_pos) = ssh_host.find(':') {
+                ssh_host[..colon_pos].to_string()
+            } else {
+                ssh_host.to_string()
+            };
+            (None, hostname)
+        }
+    }
+
+    /// Template script code using the Minijinja template system
+    async fn template_script_code(
+        code: &str,
+        context: &ExecutionContext,
+        script_id: Uuid,
+    ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+        let block_id_str = script_id.to_string();
+        let rendered = template_with_context(
+            code,
+            &context.variables,
+            &context.document,
+            Some(&block_id_str),
+        )?;
+        Ok(rendered)
+    }
+
+    /// Execute script via SSH using the SSH pool
+    async fn execute_ssh_script(
+        script: &Script,
+        code: &str,
+        ssh_host: &str,
+        context: ExecutionContext,
+        cancellation_token: CancellationToken,
+        event_sender: broadcast::Sender<WorkflowEvent>,
+        output_channel: Option<Channel<BlockOutput>>,
+    ) -> (
+        Result<i32, Box<dyn std::error::Error + Send + Sync>>,
+        String,
+    ) {
+        // Send start event
+        let _ = event_sender.send(WorkflowEvent::BlockStarted { id: script.id });
+
+        // Send started lifecycle event to output channel
+        if let Some(ref ch) = output_channel {
+            let _ = ch.send(BlockOutput {
+                stdout: None,
+                stderr: None,
+                lifecycle: Some(BlockLifecycleEvent::Started),
+            });
+        }
+
+        // Parse SSH host to extract username and hostname
+        let (username, hostname) = Self::parse_ssh_host(ssh_host);
+
+        // Get SSH pool from context
+        let ssh_pool = match context.ssh_pool {
+            Some(pool) => pool,
+            None => {
+                let error_msg = "SSH pool not available in execution context";
+                let _ = event_sender.send(WorkflowEvent::BlockFinished { id: script.id });
+                if let Some(ref ch) = output_channel {
+                    let _ = ch.send(BlockOutput {
+                        stdout: None,
+                        stderr: None,
+                        lifecycle: Some(BlockLifecycleEvent::Error {
+                            message: error_msg.to_string(),
+                        }),
+                    });
+                }
+                return (Err(error_msg.into()), String::new());
+            }
+        };
+        
+        // Create unique channel ID for this execution
+        let channel_id = script.id.to_string();
+        
+        // Create channels for SSH communication
+        let (output_sender, mut output_receiver) = mpsc::channel::<String>(100);
+        let (result_tx, result_rx) = oneshot::channel::<()>();
+        
+        // Capture output for return value
+        let captured_output = Arc::new(RwLock::new(String::new()));
+        let captured_output_clone = captured_output.clone();
+        
+        // Start SSH execution
+        let exec_result = ssh_pool.exec(
+            &hostname,
+            username.as_deref(),
+            &script.interpreter,
+            code,
+            &channel_id,
+            output_sender,
+            result_tx,
+        ).await;
+        
+        if let Err(e) = exec_result {
+            let error_msg = format!("Failed to start SSH execution: {}", e);
+            let _ = event_sender.send(WorkflowEvent::BlockFinished { id: script.id });
+            if let Some(ref ch) = output_channel {
+                let _ = ch.send(BlockOutput {
+                    stdout: None,
+                    stderr: None,
+                    lifecycle: Some(BlockLifecycleEvent::Error {
+                        message: error_msg.clone(),
+                    }),
+                });
+            }
+            return (Err(error_msg.into()), String::new());
+        }
+        
+        // Handle output streaming and cancellation
+        let cancellation_receiver = cancellation_token.take_receiver();
+        let output_channel_clone = output_channel.clone();
+        let script_id = script.id;
+        let ssh_pool_clone = ssh_pool.clone();
+        let channel_id_clone = channel_id.clone();
+        
+        // Spawn task to handle output streaming
+        tokio::spawn(async move {
+            while let Some(line) = output_receiver.recv().await {
+                // Send to output channel
+                if let Some(ref ch) = output_channel_clone {
+                    let _ = ch.send(BlockOutput {
+                        stdout: Some(line.clone()),
+                        stderr: None,
+                        lifecycle: None,
+                    });
+                }
+                
+                // Capture for return value
+                let mut captured = captured_output_clone.write().await;
+                captured.push_str(&line);
+            }
+        });
+        
+        // Wait for completion or cancellation
+        let exit_code = if let Some(cancel_rx) = cancellation_receiver {
+            tokio::select! {
+                _ = cancel_rx => {
+                    // Cancel SSH execution
+                    let _ = ssh_pool_clone.exec_cancel(&channel_id_clone).await;
+                    let captured = captured_output.read().await.clone();
+                    
+                    // Send completion events
+                    let _ = event_sender.send(WorkflowEvent::BlockFinished { id: script_id });
+                    if let Some(ref ch) = output_channel {
+                        let _ = ch.send(BlockOutput {
+                            stdout: None,
+                            stderr: None,
+                            lifecycle: Some(BlockLifecycleEvent::Cancelled),
+                        });
+                    }
+                    return (Err("SSH script execution cancelled".into()), captured);
+                }
+                _ = result_rx => {
+                    // SSH execution completed
+                    0 // SSH pool doesn't provide exit codes yet, assume success
+                }
+            }
+        } else {
+            // No cancellation receiver, just wait for completion
+            let _ = result_rx.await;
+            0 // SSH pool doesn't provide exit codes yet, assume success
+        };
+        
+        // Send completion events
+        let _ = event_sender.send(WorkflowEvent::BlockFinished { id: script.id });
+        if let Some(ref ch) = output_channel {
+            let _ = ch.send(BlockOutput {
+                stdout: None,
+                stderr: None,
+                lifecycle: Some(BlockLifecycleEvent::Finished {
+                    exit_code: Some(exit_code),
+                    success: exit_code == 0,
+                }),
+            });
+        }
+        
+        // Return result
+        let captured = captured_output.read().await.clone();
+        (Ok(exit_code), captured)
+    }
+
     async fn run_script(
         script: &Script,
         context: ExecutionContext,
@@ -118,37 +313,33 @@ impl ScriptHandler {
             });
         }
 
-        // Template the script code with variables
-        let code = if context.variables.is_empty() {
-            script.code.clone()
-        } else {
-            // Simple variable substitution for now
-            let mut templated = script.code.clone();
-            for (key, value) in &context.variables {
-                templated = templated.replace(&format!("${{{}}}", key), value);
-                templated = templated.replace(&format!("${}", key), value);
-            }
-            templated
-        };
+        // Template the script code using Minijinja
+        let code = Self::template_script_code(&script.code, &context, script.id).await
+            .unwrap_or_else(|e| {
+                eprintln!("Template error in script {}: {}", script.id, e);
+                script.code.clone() // Fallback to original code
+            });
 
-        // Build the command
-        let mut cmd = if let Some(ssh_host) = &context.ssh_host {
-            // SSH execution
-            let mut ssh_cmd = Command::new("ssh");
-            ssh_cmd.arg(ssh_host);
-            ssh_cmd.arg(format!("{} -c", script.interpreter));
-            ssh_cmd.arg(&code);
-            ssh_cmd
-        } else {
-            // Local execution
-            let mut local_cmd = Command::new(&script.interpreter);
-            local_cmd.arg("-c");
-            local_cmd.arg(&code);
-            local_cmd.current_dir(&context.cwd);
-            local_cmd.envs(&context.env);
-            local_cmd
-        };
+        // Execute either via SSH pool or locally
+        if let Some(ssh_host) = context.ssh_host.clone() {
+            // SSH execution using the SSH pool
+            return Self::execute_ssh_script(
+                script,
+                &code,
+                &ssh_host,
+                context,
+                cancellation_token,
+                event_sender,
+                output_channel,
+            ).await;
+        }
 
+        // Local execution
+        let mut cmd = Command::new(&script.interpreter);
+        cmd.arg("-c");
+        cmd.arg(&code);
+        cmd.current_dir(&context.cwd);
+        cmd.envs(&context.env);
         cmd.stdout(Stdio::piped());
         cmd.stderr(Stdio::piped());
         cmd.stdin(Stdio::null());
@@ -349,6 +540,8 @@ mod tests {
             variables: HashMap::new(),
             ssh_host: None,
             document: Vec::new(),
+            ssh_pool: None, // Tests don't need SSH pool unless specifically testing SSH
+            output_storage: None, // Tests can add this when needed
         }
     }
 
@@ -453,9 +646,9 @@ mod tests {
             .variables
             .insert("ANOTHER_VAR".to_string(), "another_value".to_string());
 
-        // Test both ${VAR} and $VAR syntax
+        // Test Minijinja template syntax
         let (exit_code, output) = ScriptHandler::run_script(
-            &create_test_script("echo '${TEST_VAR} and $ANOTHER_VAR'", "bash"),
+            &create_test_script("echo '{{ var.TEST_VAR }} and {{ var.ANOTHER_VAR }}'", "bash"),
             context,
             CancellationToken::new(),
             _tx,
@@ -473,9 +666,9 @@ mod tests {
     async fn test_variable_substitution_missing_vars() {
         let (_tx, _rx) = broadcast::channel::<WorkflowEvent>(16);
 
-        // No variables in context, should leave placeholders as-is
+        // No variables in context, should render as empty or error gracefully
         let (exit_code, output) = ScriptHandler::run_script(
-            &create_test_script("echo '${MISSING_VAR}'", "bash"),
+            &create_test_script("echo '{{ var.MISSING_VAR | default(\"default_value\") }}'", "bash"),
             create_test_context(),
             CancellationToken::new(),
             _tx,
@@ -485,7 +678,7 @@ mod tests {
 
         assert!(exit_code.is_ok());
         assert_eq!(exit_code.unwrap(), 0);
-        assert!(output.contains("${MISSING_VAR}"));
+        assert!(output.contains("default_value"));
     }
 
     #[tokio::test]
@@ -687,6 +880,46 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_template_with_document_context() {
+        let (_tx, _rx) = broadcast::channel::<WorkflowEvent>(16);
+
+        // Create a context with document and variables
+        let mut context = create_test_context();
+        context.variables.insert("TEST_VAR".to_string(), "from_variable".to_string());
+        
+        // Add a simple document with named blocks
+        context.document = vec![
+            serde_json::json!({
+                "id": "block1",
+                "type": "paragraph",
+                "props": { "name": "first_block" },
+                "content": [{"type": "text", "text": "First block content"}]
+            }),
+            serde_json::json!({
+                "id": "block2", 
+                "type": "script",
+                "props": { "code": "echo test" },
+                "content": []
+            })
+        ];
+
+        // Test template with both variable and document context
+        let (exit_code, output) = ScriptHandler::run_script(
+            &create_test_script("echo 'Variable: {{ var.TEST_VAR }}, First block: {{ doc.named.first_block.content }}'", "bash"),
+            context,
+            CancellationToken::new(),
+            _tx,
+            None,
+        )
+        .await;
+
+        assert!(exit_code.is_ok());
+        assert_eq!(exit_code.unwrap(), 0);
+        assert!(output.contains("from_variable"));
+        assert!(output.contains("First block content"));
+    }
+
+    #[tokio::test]
     async fn test_special_characters_in_script() {
         let (_tx, _rx) = broadcast::channel::<WorkflowEvent>(16);
 
@@ -747,12 +980,12 @@ mod tests {
 
     // Integration test for SSH execution (would need SSH setup to run)
     #[tokio::test]
-    #[ignore] // Ignore by default since it requires SSH setup
-    async fn test_ssh_execution() {
+    async fn test_ssh_execution_without_pool() {
         let (_tx, _rx) = broadcast::channel::<WorkflowEvent>(16);
 
         let mut context = create_test_context();
         context.ssh_host = Some("localhost".to_string());
+        // ssh_pool is None, so this should fail gracefully
 
         let (exit_code, output) = ScriptHandler::run_script(
             &create_test_script("echo 'SSH test'", "bash"),
@@ -763,9 +996,178 @@ mod tests {
         )
         .await;
 
-        // This would only pass if SSH is properly configured
-        assert!(exit_code.is_ok());
-        assert_eq!(exit_code.unwrap(), 0);
-        assert!(output.contains("SSH test"));
+        // Should fail because SSH pool is not available
+        assert!(exit_code.is_err());
+        assert!(exit_code.unwrap_err().to_string().contains("SSH pool not available"));
+        assert!(output.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_ssh_host_parsing() {
+        // Test various SSH host formats
+        assert_eq!(
+            ScriptHandler::parse_ssh_host("user@host.com"),
+            (Some("user".to_string()), "host.com".to_string())
+        );
+        
+        assert_eq!(
+            ScriptHandler::parse_ssh_host("host.com"),
+            (None, "host.com".to_string())
+        );
+        
+        assert_eq!(
+            ScriptHandler::parse_ssh_host("user@host.com:22"),
+            (Some("user".to_string()), "host.com".to_string())
+        );
+        
+        assert_eq!(
+            ScriptHandler::parse_ssh_host("host.com:2222"),
+            (None, "host.com".to_string())
+        );
+    }
+
+    #[tokio::test]
+    async fn test_script_output_variable_storage() {
+        let (tx, _rx) = broadcast::channel::<WorkflowEvent>(16);
+        
+        // Create output storage
+        let output_storage = Arc::new(RwLock::new(HashMap::<String, HashMap<String, String>>::new()));
+        
+        // Create context with output storage
+        let mut context = create_test_context();
+        let runbook_id = context.runbook_id;
+        context.output_storage = Some(output_storage.clone());
+        
+        // Create script with output variable
+        let script = Script::builder()
+            .id(Uuid::new_v4())
+            .name("Test Script")
+            .code("echo 'test output value'")
+            .interpreter("bash")
+            .output_variable(Some("my_output".to_string()))
+            .build();
+        
+        // Execute the script using the handler
+        let handler = ScriptHandler;
+        let handle = handler.execute(
+            script,
+            context,
+            tx,
+            None,
+        ).await.unwrap();
+        
+        // Wait for execution to complete
+        loop {
+            tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+            let status = handle.status.read().await.clone();
+            match status {
+                ExecutionStatus::Success(output) => {
+                    assert_eq!(output.trim(), "test output value");
+                    break;
+                },
+                ExecutionStatus::Failed(e) => panic!("Script failed: {}", e),
+                ExecutionStatus::Cancelled => panic!("Script was cancelled"),
+                ExecutionStatus::Running => continue,
+            }
+        }
+        
+        // Verify output was stored
+        let stored_vars = output_storage.read().await;
+        let runbook_vars = stored_vars.get(&runbook_id.to_string()).expect("Runbook variables should exist");
+        assert_eq!(runbook_vars.get("my_output").expect("Output variable should be stored"), "test output value");
+    }
+
+    #[tokio::test]
+    async fn test_script_without_output_variable() {
+        let (tx, _rx) = broadcast::channel::<WorkflowEvent>(16);
+        
+        // Create output storage
+        let output_storage = Arc::new(RwLock::new(HashMap::<String, HashMap<String, String>>::new()));
+        
+        // Create context with output storage
+        let mut context = create_test_context();
+        let runbook_id = context.runbook_id;
+        context.output_storage = Some(output_storage.clone());
+        
+        // Create script WITHOUT output variable
+        let script = Script::builder()
+            .id(Uuid::new_v4())
+            .name("Test Script")
+            .code("echo 'test output'")
+            .interpreter("bash")
+            .output_variable(None)
+            .build();
+        
+        // Execute the script using the handler
+        let handler = ScriptHandler;
+        let handle = handler.execute(
+            script,
+            context,
+            tx,
+            None,
+        ).await.unwrap();
+        
+        // Wait for execution to complete
+        loop {
+            tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+            let status = handle.status.read().await.clone();
+            match status {
+                ExecutionStatus::Success(_) => break,
+                ExecutionStatus::Failed(e) => panic!("Script failed: {}", e),
+                ExecutionStatus::Cancelled => panic!("Script was cancelled"),
+                ExecutionStatus::Running => continue,
+            }
+        }
+        
+        // Verify nothing was stored
+        let stored_vars = output_storage.read().await;
+        assert!(stored_vars.get(&runbook_id.to_string()).is_none());
+    }
+
+    #[tokio::test]
+    async fn test_failed_script_no_output_storage() {
+        let (tx, _rx) = broadcast::channel::<WorkflowEvent>(16);
+        
+        // Create output storage
+        let output_storage = Arc::new(RwLock::new(HashMap::<String, HashMap<String, String>>::new()));
+        
+        // Create context with output storage
+        let mut context = create_test_context();
+        let runbook_id = context.runbook_id;
+        context.output_storage = Some(output_storage.clone());
+        
+        // Create script that will fail
+        let script = Script::builder()
+            .id(Uuid::new_v4())
+            .name("Test Script")
+            .code("exit 1")
+            .interpreter("bash")
+            .output_variable(Some("should_not_store".to_string()))
+            .build();
+        
+        // Execute the script using the handler
+        let handler = ScriptHandler;
+        let handle = handler.execute(
+            script,
+            context,
+            tx,
+            None,
+        ).await.unwrap();
+        
+        // Wait for execution to complete
+        loop {
+            tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+            let status = handle.status.read().await.clone();
+            match status {
+                ExecutionStatus::Failed(_) => break,
+                ExecutionStatus::Success(_) => panic!("Script should have failed"),
+                ExecutionStatus::Cancelled => panic!("Script was cancelled"),
+                ExecutionStatus::Running => continue,
+            }
+        }
+        
+        // Verify nothing was stored
+        let stored_vars = output_storage.read().await;
+        assert!(stored_vars.get(&runbook_id.to_string()).is_none());
     }
 }

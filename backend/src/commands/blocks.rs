@@ -22,9 +22,15 @@ pub async fn execute_block(
     output_channel: Channel<BlockOutput>,
 ) -> Result<String, String> {
     // Build execution context
-    let context = ContextBuilder::build_context(&block_id, &editor_document, &runbook_id)
+    let mut context = ContextBuilder::build_context(&block_id, &editor_document, &runbook_id)
         .await
         .map_err(|e| e.to_string())?;
+    
+    // Add SSH pool to context
+    context.ssh_pool = Some(state.ssh_pool());
+    
+    // Add output storage to context
+    context.output_storage = Some(state.runbook_output_variables.clone());
 
     // Find the block in the document
     let block_data = editor_document
@@ -47,7 +53,6 @@ pub async fn execute_block(
             context,
             event_sender,
             Some(output_channel),
-            app_handle.clone(),
         )
         .await
     {

@@ -60,6 +60,7 @@
 
 pub mod directory;
 pub mod environment;
+pub mod host;
 pub mod ssh_connect;
 
 // Re-export all context blocks and handlers for easy access
@@ -68,6 +69,8 @@ pub use directory::DirectoryHandler;
 #[allow(unused_imports)] // Available for external use
 pub use environment::EnvironmentHandler;
 #[allow(unused_imports)] // Available for external use
+pub use host::HostHandler;
+#[allow(unused_imports)] // Available for external use
 pub use ssh_connect::SshConnectHandler;
 
 // Re-export block types for external use when needed
@@ -75,5 +78,7 @@ pub use ssh_connect::SshConnectHandler;
 pub use directory::Directory;
 #[allow(unused_imports)] // Available for external use
 pub use environment::Environment;
+#[allow(unused_imports)] // Available for external use
+pub use host::Host;
 #[allow(unused_imports)] // Available for external use
 pub use ssh_connect::SshConnect;

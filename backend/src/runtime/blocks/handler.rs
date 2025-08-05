@@ -2,13 +2,13 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
-use tauri::{ipc::Channel, AppHandle};
 use tokio::sync::{broadcast, oneshot, RwLock};
+use tauri::ipc::Channel;
 use uuid::Uuid;
-
+use crate::runtime::ssh_pool::SshPoolHandle;
 use crate::runtime::workflow::event::WorkflowEvent;
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug)]
 pub struct ExecutionContext {
     pub runbook_id: Uuid,
     pub cwd: String,
@@ -16,6 +16,8 @@ pub struct ExecutionContext {
     pub variables: HashMap<String, String>,
     pub ssh_host: Option<String>,
     pub document: Vec<serde_json::Value>, // For template resolution
+    pub ssh_pool: Option<SshPoolHandle>, // For SSH execution
+    pub output_storage: Option<Arc<RwLock<HashMap<String, HashMap<String, String>>>>>, // For storing output variables
 }
 
 impl Default for ExecutionContext {
@@ -30,6 +32,8 @@ impl Default for ExecutionContext {
             variables: HashMap::new(),
             ssh_host: None,
             document: Vec::new(),
+            ssh_pool: None,
+            output_storage: None,
         }
     }
 }
@@ -125,7 +129,6 @@ pub trait BlockHandler: Send + Sync {
         context: ExecutionContext,
         event_sender: broadcast::Sender<WorkflowEvent>,
         output_channel: Option<Channel<BlockOutput>>,
-        app_handle: AppHandle,
     ) -> Result<ExecutionHandle, Box<dyn std::error::Error + Send + Sync>>;
 
     #[allow(dead_code)] // Used for cancellation but not currently called directly

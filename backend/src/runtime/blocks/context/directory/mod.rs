@@ -260,6 +260,8 @@ mod tests {
             },
             ssh_host: Some("user@host.com".to_string()),
             document: vec![serde_json::json!({"test": "data"})],
+            ssh_pool: None,
+            output_storage: None,
         };
 
         let original_runbook_id = context.runbook_id;

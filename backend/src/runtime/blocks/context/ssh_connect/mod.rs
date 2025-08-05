@@ -396,6 +396,8 @@ mod tests {
             },
             ssh_host: None,
             document: vec![serde_json::json!({"test": "data"})],
+            ssh_pool: None,
+            output_storage: None,
         };
 
         let original_runbook_id = context.runbook_id;
