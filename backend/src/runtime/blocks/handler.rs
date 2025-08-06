@@ -7,6 +7,7 @@ use tauri::ipc::Channel;
 use ts_rs::TS;
 use uuid::Uuid;
 use crate::runtime::ssh_pool::SshPoolHandle;
+use crate::runtime::pty_store::PtyStoreHandle;
 use crate::runtime::workflow::event::WorkflowEvent;
 
 #[derive(Clone, Debug)]
@@ -19,6 +20,8 @@ pub struct ExecutionContext {
     pub document: Vec<serde_json::Value>, // For template resolution
     pub ssh_pool: Option<SshPoolHandle>, // For SSH execution
     pub output_storage: Option<Arc<RwLock<HashMap<String, HashMap<String, String>>>>>, // For storing output variables
+    pub pty_store: Option<PtyStoreHandle>, // For PTY management
+    pub app_handle: Option<tauri::AppHandle>, // For emitting events
 }
 
 impl Default for ExecutionContext {
@@ -35,6 +38,8 @@ impl Default for ExecutionContext {
             document: Vec::new(),
             ssh_pool: None,
             output_storage: None,
+            pty_store: None,
+            app_handle: None,
         }
     }
 }
@@ -99,6 +104,7 @@ pub struct BlockOutput {
     pub stdout: Option<String>,
     pub stderr: Option<String>,
     pub lifecycle: Option<BlockLifecycleEvent>,
+    pub binary: Option<Vec<u8>>, // For terminal raw data
 }
 
 #[derive(TS, Debug, Clone, Serialize, Deserialize)]

@@ -1,5 +1,5 @@
 use super::handler::{BlockHandler, BlockOutput, ExecutionContext, ExecutionHandle};
-use super::handlers::ScriptHandler;
+use super::handlers::{ScriptHandler, TerminalHandler};
 use super::Block;
 use crate::runtime::workflow::event::WorkflowEvent;
 use tauri::ipc::Channel;
@@ -30,9 +30,15 @@ impl BlockRegistry {
                     )
                     .await
             }
-            Block::Terminal(_terminal) => {
-                // TODO: Implement TerminalHandler
-                Err("Terminal handler not yet implemented".into())
+            Block::Terminal(terminal) => {
+                TerminalHandler
+                    .execute(
+                        terminal.clone(),
+                        context,
+                        event_sender,
+                        output_channel,
+                    )
+                    .await
             }
             Block::Postgres(_postgres) => {
                 // TODO: Implement PostgresHandler

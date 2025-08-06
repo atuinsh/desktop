@@ -38,7 +38,7 @@ mod tests {
             document: Vec::new(),
             ssh_pool: None,
             output_storage: Some(output_storage.clone()),
-        };
+            pty_store: None,        };
         
         // Execute script 1
         let handler = ScriptHandler;
@@ -92,7 +92,7 @@ mod tests {
             document: Vec::new(),
             ssh_pool: None,
             output_storage: Some(output_storage.clone()),
-        };
+            pty_store: None,        };
         
         // Execute script 2
         let handle2 = handler.execute(
@@ -163,8 +163,8 @@ mod tests {
                 ssh_host: None,
                 document: Vec::new(),
                 ssh_pool: None,
-                output_storage: Some(output_storage.clone()),
-            };
+            output_storage: Some(output_storage.clone()),
+            pty_store: None,            };
             
             let handle = handler.execute(script, context, tx.clone(), None).await.unwrap();
             
@@ -201,7 +201,7 @@ mod tests {
             document: Vec::new(),
             ssh_pool: None,
             output_storage: Some(output_storage.clone()),
-        };
+            pty_store: None,        };
         
         let handle3 = handler.execute(script3, context3, tx.clone(), None).await.unwrap();
         

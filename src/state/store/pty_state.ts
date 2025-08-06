@@ -14,6 +14,7 @@ const logger = new Logger("PtyStore");
 const endMarkerRegex = /\x1b\]633;ATUIN_COMMAND_END;(\d+)\x1b\\/;
 
 export class TerminalData extends Emittery {
+  channel: any;
   terminal: Terminal;
   fitAddon: FitAddon;
   pty: string;
@@ -21,8 +22,14 @@ export class TerminalData extends Emittery {
   disposeResize: IDisposable;
   disposeOnData: IDisposable;
   unlisten: UnlistenFn | null;
+  channelUnsubscribe: (() => void) | null;
 
-  startTime: number | null;
+  // Execution state - TerminalData is now the single source of truth
+  isRunning: boolean = false;
+  exitCode: number | null = null;
+  executionId: string | null = null;
+  commandDuration: number | null = null;
+  startTime: number | null = null;
 
   constructor(pty: string, terminal: Terminal, fit: FitAddon) {
     super();
@@ -32,9 +39,80 @@ export class TerminalData extends Emittery {
     this.pty = pty;
     this.startTime = null;
     this.unlisten = null;
+    this.channelUnsubscribe = null;
 
     this.disposeResize = this.terminal.onResize((e) => this.onResize(e));
     this.disposeOnData = this.terminal.onData((e) => this.onData(e));
+  }
+
+  handleBlockOutput(channel: any) {
+    this.channel = channel;
+
+    if (this.channelUnsubscribe) {
+      this.channelUnsubscribe();
+    }
+
+    console.log("TerminalData: Setting up BlockOutput channel handler for pty:", this.pty);
+
+    channel.onmessage = (data: any) => {
+      console.log("TerminalData: Received BlockOutput:", data);
+
+      // Handle binary data - write directly to terminal
+      if (data.binary) {
+        console.log("TerminalData: Writing binary data to terminal, length:", data.binary.length);
+        const bytes = new Uint8Array(data.binary);
+        this.terminal.write(bytes);
+      }
+
+      // Handle lifecycle events and update execution state
+      if (data.lifecycle) {
+        console.log("TerminalData: Handling lifecycle event:", data.lifecycle.type);
+        switch (data.lifecycle.type) {
+          case 'started':
+            this.isRunning = true;
+            this.startTime = performance.now();
+            this.emit("execution_started");
+            this.emit("command_start"); // Keep for backward compatibility
+            break;
+          case 'finished':
+            this.isRunning = false;
+            if (data.lifecycle.data) {
+              this.exitCode = data.lifecycle.data.exit_code || 0;
+            }
+            if (this.startTime) {
+              this.commandDuration = performance.now() - this.startTime;
+              this.startTime = null;
+            }
+            this.emit("execution_finished", { 
+              exitCode: this.exitCode, 
+              duration: this.commandDuration 
+            });
+            this.emit("command_end", { 
+              exitCode: this.exitCode, 
+              duration: this.commandDuration 
+            }); // Keep for backward compatibility
+            break;
+          case 'cancelled':
+            this.isRunning = false;
+            this.emit("execution_cancelled");
+            break;
+          case 'error':
+            this.isRunning = false;
+            if (data.lifecycle.data) {
+              this.emit("execution_error", { message: data.lifecycle.data.message });
+            }
+            break;
+        }
+      }
+    };
+
+    this.channelUnsubscribe = () => {
+      this.channel.onmessage = null;
+    };
+  }
+
+  setExecutionId(executionId: string) {
+    this.executionId = executionId;
   }
 
   async listen() {
@@ -95,6 +173,11 @@ export class TerminalData extends Emittery {
       this.unlisten();
       this.unlisten = null;
     }
+
+    if (this.channelUnsubscribe) {
+      this.channelUnsubscribe();
+      this.channelUnsubscribe = null;
+    }
   }
 
   relisten(pty: string) {
@@ -116,7 +199,7 @@ export interface AtuinPtyState {
   terminals: { [pty: string]: TerminalData };
 
   setPtyTerm: (pty: string, terminal: any) => void;
-  newPtyTerm: (pty: string) => Promise<TerminalData>;
+  newPtyTerm: (pty: string, channel?: any) => Promise<TerminalData>;
   cleanupPtyTerm: (pty: string) => void;
 }
 
@@ -147,7 +230,7 @@ export const createPtyState: StateCreator<AtuinPtyState> = (set, get, _store): A
     });
   },
 
-  newPtyTerm: async (pty: string) => {
+  newPtyTerm: async (pty: string, channel?: any) => {
     // FiraCode is included as part of our build
     // We could consider including a few different popular fonts, and providing a dropdown
     // for the user to select from.
@@ -179,7 +262,13 @@ export const createPtyState: StateCreator<AtuinPtyState> = (set, get, _store): A
       terminals: { ...get().terminals, [pty]: td },
     });
 
-    await td.listen();
+    // If a channel is provided, set it up for BlockOutput handling
+    if (channel) {
+      td.handleBlockOutput(channel);
+    } else {
+      // Only listen to old PTY events if no channel is provided
+      await td.listen();
+    }
 
     return td;
   },

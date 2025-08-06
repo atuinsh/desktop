@@ -31,6 +31,12 @@ pub async fn execute_block(
     
     // Add output storage to context
     context.output_storage = Some(state.runbook_output_variables.clone());
+    
+    // Add PTY store to context
+    context.pty_store = Some(state.pty_store());
+    
+    // Add app handle to context
+    context.app_handle = Some(app_handle.clone());
 
     // Find the block in the document
     let block_data = editor_document
@@ -66,7 +72,7 @@ pub async fn execute_block(
                     .await
                     .insert(execution_id, handle.clone());
             }
-            Ok(format!("Execution started with handle: {}", execution_id))
+            Ok(execution_id.to_string())
         }
         Err(e) => Err(format!("Execution failed: {}", e)),
     }

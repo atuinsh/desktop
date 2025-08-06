@@ -13,6 +13,9 @@ pub(crate) mod script;
 pub(crate) mod sqlite;
 pub(crate) mod terminal;
 
+#[cfg(test)]
+mod terminal_integration_test;
+
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -72,7 +75,7 @@ impl Block {
 
         match block_type {
             "script" => Ok(Block::Script(script::Script::from_document(block_data)?)),
-            "terminal" => Ok(Block::Terminal(terminal::Terminal::from_document(
+            "terminal" | "run" => Ok(Block::Terminal(terminal::Terminal::from_document(
                 block_data,
             )?)),
             "postgres" => Ok(Block::Postgres(postgres::Postgres::from_document(

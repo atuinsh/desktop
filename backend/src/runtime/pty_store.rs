@@ -50,7 +50,7 @@ pub enum PtyStoreMessage {
     },
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct PtyStoreHandle {
     sender: mpsc::Sender<PtyStoreMessage>,
 }

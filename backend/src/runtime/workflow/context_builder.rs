@@ -43,6 +43,8 @@ impl ContextBuilder {
             document: document.to_vec(),
             ssh_pool: None, // Will be set by the caller if needed
             output_storage: None, // Will be set by the caller if needed
+            pty_store: None, // Will be set by the caller if needed
+            app_handle: None, // Will be set by the caller if needed
         };
 
         // Apply context modifications from preceding blocks (in document order)

@@ -155,6 +155,7 @@ impl ScriptHandler {
             let _ = ch.send(BlockOutput {
                 stdout: None,
                 stderr: None,
+                binary: None,
                 lifecycle: Some(BlockLifecycleEvent::Started),
             });
         }
@@ -172,7 +173,8 @@ impl ScriptHandler {
                     let _ = ch.send(BlockOutput {
                         stdout: None,
                         stderr: None,
-                        lifecycle: Some(BlockLifecycleEvent::Error(BlockErrorData {
+                        binary: None,
+                lifecycle: Some(BlockLifecycleEvent::Error(BlockErrorData {
                             message: error_msg.to_string(),
                         })),
                     });
@@ -210,7 +212,8 @@ impl ScriptHandler {
                 let _ = ch.send(BlockOutput {
                     stdout: None,
                     stderr: None,
-                    lifecycle: Some(BlockLifecycleEvent::Error(BlockErrorData {
+                    binary: None,
+                lifecycle: Some(BlockLifecycleEvent::Error(BlockErrorData {
                         message: error_msg.clone(),
                     })),
                 });
@@ -234,6 +237,7 @@ impl ScriptHandler {
                         stdout: Some(line.clone()),
                         stderr: None,
                         lifecycle: None,
+                binary: None,
                     });
                 }
                 
@@ -257,7 +261,8 @@ impl ScriptHandler {
                         let _ = ch.send(BlockOutput {
                             stdout: None,
                             stderr: None,
-                            lifecycle: Some(BlockLifecycleEvent::Cancelled),
+                            binary: None,
+                lifecycle: Some(BlockLifecycleEvent::Cancelled),
                         });
                     }
                     return (Err("SSH script execution cancelled".into()), captured);
@@ -279,6 +284,7 @@ impl ScriptHandler {
             let _ = ch.send(BlockOutput {
                 stdout: None,
                 stderr: None,
+                binary: None,
                 lifecycle: Some(BlockLifecycleEvent::Finished(BlockFinishedData {
                     exit_code: Some(exit_code),
                     success: exit_code == 0,
@@ -309,6 +315,7 @@ impl ScriptHandler {
             let _ = ch.send(BlockOutput {
                 stdout: None,
                 stderr: None,
+                binary: None,
                 lifecycle: Some(BlockLifecycleEvent::Started),
             });
         }
@@ -354,7 +361,8 @@ impl ScriptHandler {
                     let _ = ch.send(BlockOutput {
                         stdout: None,
                         stderr: None,
-                        lifecycle: Some(BlockLifecycleEvent::Error(BlockErrorData {
+                        binary: None,
+                lifecycle: Some(BlockLifecycleEvent::Error(BlockErrorData {
                             message: format!("Failed to spawn process: {}", e),
                         })),
                     });
@@ -383,6 +391,7 @@ impl ScriptHandler {
                             stdout: Some(line.clone()),
                             stderr: None,
                             lifecycle: None,
+                binary: None,
                         });
                     }
                     // Capture output
@@ -408,6 +417,7 @@ impl ScriptHandler {
                             stdout: None,
                             stderr: Some(line.clone()),
                             lifecycle: None,
+                binary: None,
                         });
                     }
                     line.clear();
@@ -441,7 +451,8 @@ impl ScriptHandler {
                         let _ = ch.send(BlockOutput {
                             stdout: None,
                             stderr: None,
-                            lifecycle: Some(BlockLifecycleEvent::Cancelled),
+                            binary: None,
+                lifecycle: Some(BlockLifecycleEvent::Cancelled),
                         });
                     }
                     return (Err("Script execution cancelled".into()), captured);
@@ -458,7 +469,8 @@ impl ScriptHandler {
                                 let _ = ch.send(BlockOutput {
                                     stdout: None,
                                     stderr: None,
-                                    lifecycle: Some(BlockLifecycleEvent::Error(BlockErrorData {
+                                    binary: None,
+                lifecycle: Some(BlockLifecycleEvent::Error(BlockErrorData {
                                         message: format!("Failed to wait for process: {e}")
                                     })),
                                 });
@@ -481,7 +493,8 @@ impl ScriptHandler {
                         let _ = ch.send(BlockOutput {
                             stdout: None,
                             stderr: None,
-                            lifecycle: Some(BlockLifecycleEvent::Error(BlockErrorData {
+                            binary: None,
+                lifecycle: Some(BlockLifecycleEvent::Error(BlockErrorData {
                                 message: format!("Failed to wait for process: {}", e),
                             })),
                         });
@@ -502,6 +515,7 @@ impl ScriptHandler {
             let _ = ch.send(BlockOutput {
                 stdout: None,
                 stderr: None,
+                binary: None,
                 lifecycle: Some(BlockLifecycleEvent::Finished(BlockFinishedData {
                     exit_code: Some(exit_code),
                     success: exit_code == 0,
@@ -542,6 +556,7 @@ mod tests {
             document: Vec::new(),
             ssh_pool: None, // Tests don't need SSH pool unless specifically testing SSH
             output_storage: None, // Tests can add this when needed
+            pty_store: None, // Tests don't need PTY store
         }
     }
 
