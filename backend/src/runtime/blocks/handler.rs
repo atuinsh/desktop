@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::{broadcast, oneshot, RwLock};
 use tauri::ipc::Channel;
+use ts_rs::TS;
 use uuid::Uuid;
 use crate::runtime::ssh_pool::SshPoolHandle;
 use crate::runtime::workflow::event::WorkflowEvent;
@@ -81,7 +82,8 @@ pub struct ExecutionHandle {
     pub output_variable: Option<String>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(TS, Clone, Debug, Serialize, Deserialize)]
+#[ts(tag = "type", content = "data", export)]
 pub enum ExecutionStatus {
     Running,
     Success(String), // The output value
@@ -91,25 +93,35 @@ pub enum ExecutionStatus {
     Cancelled,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(TS, Debug, Clone, Serialize, Deserialize)]
+#[ts(export)]
 pub struct BlockOutput {
     pub stdout: Option<String>,
     pub stderr: Option<String>,
     pub lifecycle: Option<BlockLifecycleEvent>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", tag = "type")]
+#[derive(TS, Debug, Clone, Serialize, Deserialize)]
+#[ts(export)]
+pub struct BlockFinishedData {
+    pub exit_code: Option<i32>,
+    pub success: bool,
+}
+
+#[derive(TS, Debug, Clone, Serialize, Deserialize)]
+#[ts(export)]
+pub struct BlockErrorData {
+    pub message: String,
+}
+
+#[derive(TS, Debug, Clone, Serialize, Deserialize)]
+#[ts(tag = "type", content = "data", export)]
+#[serde(rename_all = "camelCase", tag = "type", content = "data")]
 pub enum BlockLifecycleEvent {
     Started,
-    Finished {
-        exit_code: Option<i32>,
-        success: bool,
-    },
+    Finished(BlockFinishedData),
     Cancelled,
-    Error {
-        message: String,
-    },
+    Error(BlockErrorData),
 }
 
 #[async_trait]

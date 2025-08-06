@@ -26,18 +26,8 @@ import Block from "@/lib/blocks/common/Block.tsx";
 import InterpreterSelector, { supportedShells } from "@/lib/blocks/common/InterpreterSelector.tsx";
 import { exportPropMatter } from "@/lib/utils.ts";
 import PlayButton from "@/lib/blocks/common/PlayButton.tsx";
-
-interface BlockOutput {
-  stdout?: string;
-  stderr?: string;
-  lifecycle?: BlockLifecycleEvent;
-}
-
-type BlockLifecycleEvent =
-  | { type: "started" }
-  | { type: "finished"; exitCode?: number; success: boolean }
-  | { type: "cancelled" }
-  | { type: "error"; message: string };
+import { BlockOutput } from "@/rs-bindings/BlockOutput.ts";
+import { BlockLifecycleEvent } from "@/rs-bindings/BlockLifecycleEvent.ts";
 
 interface ScriptBlockProps {
   onChange: (val: string) => void;
@@ -237,7 +227,7 @@ const ScriptBlock = ({
         console.log("Script execution started");
         break;
       case "finished":
-        console.log(`Script execution finished with exit code ${event.exitCode}, success: ${event.success}`);
+        console.log(`Script execution finished with exit code ${event.data.exit_code}, success: ${event.data.success}`);
         setIsRunning(false);
         setExecutionId(null);
         break;
@@ -247,7 +237,7 @@ const ScriptBlock = ({
         setExecutionId(null);
         break;
       case "error":
-        console.error("Script execution error:", event.message);
+        console.error("Script execution error:", event.data.message);
         setIsRunning(false);
         setExecutionId(null);
         break;

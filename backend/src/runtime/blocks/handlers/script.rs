@@ -8,8 +8,8 @@ use tokio::sync::{broadcast, RwLock};
 use uuid::Uuid;
 
 use crate::runtime::blocks::handler::{
-    BlockHandler, BlockLifecycleEvent, BlockOutput, CancellationToken, ExecutionContext,
-    ExecutionHandle, ExecutionStatus,
+    BlockHandler, BlockLifecycleEvent, BlockOutput, BlockFinishedData, BlockErrorData,
+    CancellationToken, ExecutionContext, ExecutionHandle, ExecutionStatus,
 };
 use crate::runtime::blocks::script::Script;
 use crate::runtime::workflow::event::WorkflowEvent;
@@ -172,9 +172,9 @@ impl ScriptHandler {
                     let _ = ch.send(BlockOutput {
                         stdout: None,
                         stderr: None,
-                        lifecycle: Some(BlockLifecycleEvent::Error {
+                        lifecycle: Some(BlockLifecycleEvent::Error(BlockErrorData {
                             message: error_msg.to_string(),
-                        }),
+                        })),
                     });
                 }
                 return (Err(error_msg.into()), String::new());
@@ -210,9 +210,9 @@ impl ScriptHandler {
                 let _ = ch.send(BlockOutput {
                     stdout: None,
                     stderr: None,
-                    lifecycle: Some(BlockLifecycleEvent::Error {
+                    lifecycle: Some(BlockLifecycleEvent::Error(BlockErrorData {
                         message: error_msg.clone(),
-                    }),
+                    })),
                 });
             }
             return (Err(error_msg.into()), String::new());
@@ -279,10 +279,10 @@ impl ScriptHandler {
             let _ = ch.send(BlockOutput {
                 stdout: None,
                 stderr: None,
-                lifecycle: Some(BlockLifecycleEvent::Finished {
+                lifecycle: Some(BlockLifecycleEvent::Finished(BlockFinishedData {
                     exit_code: Some(exit_code),
                     success: exit_code == 0,
-                }),
+                })),
             });
         }
         
@@ -354,9 +354,9 @@ impl ScriptHandler {
                     let _ = ch.send(BlockOutput {
                         stdout: None,
                         stderr: None,
-                        lifecycle: Some(BlockLifecycleEvent::Error {
+                        lifecycle: Some(BlockLifecycleEvent::Error(BlockErrorData {
                             message: format!("Failed to spawn process: {}", e),
-                        }),
+                        })),
                     });
                 }
                 return (Err(e.into()), String::new());
@@ -458,9 +458,9 @@ impl ScriptHandler {
                                 let _ = ch.send(BlockOutput {
                                     stdout: None,
                                     stderr: None,
-                                    lifecycle: Some(BlockLifecycleEvent::Error {
+                                    lifecycle: Some(BlockLifecycleEvent::Error(BlockErrorData {
                                         message: format!("Failed to wait for process: {e}")
-                                    }),
+                                    })),
                                 });
                             }
                             return (Err(format!("Failed to wait for process: {e}").into()), captured);
@@ -481,9 +481,9 @@ impl ScriptHandler {
                         let _ = ch.send(BlockOutput {
                             stdout: None,
                             stderr: None,
-                            lifecycle: Some(BlockLifecycleEvent::Error {
+                            lifecycle: Some(BlockLifecycleEvent::Error(BlockErrorData {
                                 message: format!("Failed to wait for process: {}", e),
-                            }),
+                            })),
                         });
                     }
                     return (
@@ -502,10 +502,10 @@ impl ScriptHandler {
             let _ = ch.send(BlockOutput {
                 stdout: None,
                 stderr: None,
-                lifecycle: Some(BlockLifecycleEvent::Finished {
+                lifecycle: Some(BlockLifecycleEvent::Finished(BlockFinishedData {
                     exit_code: Some(exit_code),
                     success: exit_code == 0,
-                }),
+                })),
             });
         }
 
