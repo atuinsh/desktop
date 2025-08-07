@@ -12,6 +12,7 @@ use crate::runtime::blocks::handler::{
     CancellationToken, ExecutionContext, ExecutionHandle, ExecutionStatus,
 };
 use crate::runtime::blocks::script::Script;
+use crate::runtime::events::GCEvent;
 use crate::runtime::workflow::event::WorkflowEvent;
 
 use crate::templates::template_with_context;
@@ -56,9 +57,19 @@ impl BlockHandler for ScriptHandler {
         let output_storage = context.output_storage.clone();
 
         tokio::spawn(async move {
+            // Emit BlockStarted event via Grand Central
+            if let Some(event_bus) = &context_clone.event_bus {
+                let _ = event_bus
+                    .emit(GCEvent::BlockStarted {
+                        block_id: script_clone.id,
+                        runbook_id: context_clone.runbook_id,
+                    })
+                    .await;
+            }
+
             let (exit_code, captured_output) = Self::run_script(
                 &script_clone,
-                context_clone,
+                context_clone.clone(),
                 handle_clone.cancellation_token.clone(),
                 event_sender_clone,
                 output_channel_clone,
@@ -82,10 +93,47 @@ impl BlockHandler for ScriptHandler {
                             .insert(var_name.clone(), output.clone());
                     }
 
+                    // Emit BlockFinished event via Grand Central
+                    if let Some(event_bus) = &context_clone.event_bus {
+                        let _ = event_bus
+                            .emit(GCEvent::BlockFinished {
+                                block_id: script_clone.id,
+                                runbook_id: context_clone.runbook_id,
+                                success: true,
+                            })
+                            .await;
+                    }
+
                     ExecutionStatus::Success(output)
                 }
-                Ok(code) => ExecutionStatus::Failed(format!("Process exited with code {}", code)),
-                Err(e) => ExecutionStatus::Failed(e.to_string()),
+                Ok(code) => {
+                    // Emit BlockFailed event via Grand Central
+                    if let Some(event_bus) = &context_clone.event_bus {
+                        let _ = event_bus
+                            .emit(GCEvent::BlockFailed {
+                                block_id: script_clone.id,
+                                runbook_id: context_clone.runbook_id,
+                                error: format!("Process exited with code {}", code),
+                            })
+                            .await;
+                    }
+
+                    ExecutionStatus::Failed(format!("Process exited with code {}", code))
+                }
+                Err(e) => {
+                    // Emit BlockFailed event via Grand Central
+                    if let Some(event_bus) = &context_clone.event_bus {
+                        let _ = event_bus
+                            .emit(GCEvent::BlockFailed {
+                                block_id: script_clone.id,
+                                runbook_id: context_clone.runbook_id,
+                                error: e.to_string(),
+                            })
+                            .await;
+                    }
+
+                    ExecutionStatus::Failed(e.to_string())
+                }
             };
 
             *handle_clone.status.write().await = status.clone();
@@ -258,6 +306,14 @@ impl ScriptHandler {
                     // Cancel SSH execution
                     let _ = ssh_pool_clone.exec_cancel(&channel_id_clone).await;
                     let captured = captured_output.read().await.clone();
+
+                    // Emit BlockCancelled event via Grand Central
+                    if let Some(event_bus) = &context.event_bus {
+                        let _ = event_bus.emit(GCEvent::BlockCancelled {
+                            block_id: script_id,
+                            runbook_id: context.runbook_id,
+                        }).await;
+                    }
 
                     // Send completion events
                     let _ = event_sender.send(WorkflowEvent::BlockFinished { id: script_id });
@@ -450,6 +506,15 @@ impl ScriptHandler {
                         }
                     }
                     let captured = captured_output.read().await.clone();
+
+                    // Emit BlockCancelled event via Grand Central
+                    if let Some(event_bus) = &context.event_bus {
+                        let _ = event_bus.emit(GCEvent::BlockCancelled {
+                            block_id: script.id,
+                            runbook_id: context.runbook_id,
+                        }).await;
+                    }
+
                     // Send completion event on cancellation
                     let _ = event_sender.send(WorkflowEvent::BlockFinished { id: script.id });
                     // Send cancelled lifecycle event
@@ -539,6 +604,7 @@ impl ScriptHandler {
 mod tests {
     use super::*;
     use crate::runtime::blocks::script::Script;
+    use crate::runtime::events::MemoryEventBus;
     use std::collections::HashMap;
     use tokio::time::{timeout, Duration};
 
@@ -564,6 +630,21 @@ mod tests {
             output_storage: None, // Tests can add this when needed
             pty_store: None, // Tests don't need PTY store
             event_bus: None,
+        }
+    }
+
+    fn create_test_context_with_event_bus(event_bus: Arc<MemoryEventBus>) -> ExecutionContext {
+        ExecutionContext {
+            runbook_id: Uuid::new_v4(),
+            cwd: std::env::temp_dir().to_string_lossy().to_string(),
+            env: HashMap::new(),
+            variables: HashMap::new(),
+            ssh_host: None,
+            document: Vec::new(),
+            ssh_pool: None,
+            output_storage: None,
+            pty_store: None,
+            event_bus: Some(event_bus),
         }
     }
 
@@ -1200,5 +1281,211 @@ mod tests {
         // Verify nothing was stored
         let stored_vars = output_storage.read().await;
         assert!(stored_vars.get(&runbook_id.to_string()).is_none());
+    }
+
+    #[tokio::test]
+    async fn test_grand_central_events_successful_script() {
+        let (tx, _rx) = broadcast::channel::<WorkflowEvent>(16);
+
+        // Create memory event bus
+        let event_bus = Arc::new(MemoryEventBus::new());
+        let context = create_test_context_with_event_bus(event_bus.clone());
+        let runbook_id = context.runbook_id;
+
+        // Create and execute script
+        let script = create_test_script("echo 'test'", "bash");
+        let script_id = script.id;
+
+        let handler = ScriptHandler;
+        let handle = handler.execute(script, context, tx, None).await.unwrap();
+
+        // Wait for execution to complete
+        loop {
+            tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+            let status = handle.status.read().await.clone();
+            match status {
+                ExecutionStatus::Success(_) => break,
+                ExecutionStatus::Failed(e) => panic!("Script failed: {}", e),
+                ExecutionStatus::Cancelled => panic!("Script was cancelled"),
+                ExecutionStatus::Running => continue,
+            }
+        }
+
+        // Verify events were emitted
+        let events = event_bus.events();
+        assert_eq!(events.len(), 2);
+
+        // Check BlockStarted event
+        match &events[0] {
+            GCEvent::BlockStarted {
+                block_id,
+                runbook_id: rb_id,
+            } => {
+                assert_eq!(*block_id, script_id);
+                assert_eq!(*rb_id, runbook_id);
+            }
+            _ => panic!("Expected BlockStarted event, got: {:?}", events[0]),
+        }
+
+        // Check BlockFinished event
+        match &events[1] {
+            GCEvent::BlockFinished {
+                block_id,
+                runbook_id: rb_id,
+                success,
+            } => {
+                assert_eq!(*block_id, script_id);
+                assert_eq!(*rb_id, runbook_id);
+                assert_eq!(*success, true);
+            }
+            _ => panic!("Expected BlockFinished event, got: {:?}", events[1]),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_grand_central_events_failed_script() {
+        let (tx, _rx) = broadcast::channel::<WorkflowEvent>(16);
+
+        // Create memory event bus
+        let event_bus = Arc::new(MemoryEventBus::new());
+        let context = create_test_context_with_event_bus(event_bus.clone());
+        let runbook_id = context.runbook_id;
+
+        // Create script that will fail
+        let script = create_test_script("exit 1", "bash");
+        let script_id = script.id;
+
+        let handler = ScriptHandler;
+        let handle = handler.execute(script, context, tx, None).await.unwrap();
+
+        // Wait for execution to complete
+        loop {
+            tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+            let status = handle.status.read().await.clone();
+            match status {
+                ExecutionStatus::Failed(_) => break,
+                ExecutionStatus::Success(_) => panic!("Script should have failed"),
+                ExecutionStatus::Cancelled => panic!("Script was cancelled"),
+                ExecutionStatus::Running => continue,
+            }
+        }
+
+        // Verify events were emitted
+        let events = event_bus.events();
+        assert_eq!(events.len(), 2);
+
+        // Check BlockStarted event
+        match &events[0] {
+            GCEvent::BlockStarted {
+                block_id,
+                runbook_id: rb_id,
+            } => {
+                assert_eq!(*block_id, script_id);
+                assert_eq!(*rb_id, runbook_id);
+            }
+            _ => panic!("Expected BlockStarted event, got: {:?}", events[0]),
+        }
+
+        // Check BlockFailed event
+        match &events[1] {
+            GCEvent::BlockFailed {
+                block_id,
+                runbook_id: rb_id,
+                error,
+            } => {
+                assert_eq!(*block_id, script_id);
+                assert_eq!(*rb_id, runbook_id);
+                assert!(error.contains("Process exited with code 1"));
+            }
+            _ => panic!("Expected BlockFailed event, got: {:?}", events[1]),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_grand_central_events_cancelled_script() {
+        let (tx, _rx) = broadcast::channel::<WorkflowEvent>(16);
+
+        // Create memory event bus
+        let event_bus = Arc::new(MemoryEventBus::new());
+        let context = create_test_context_with_event_bus(event_bus.clone());
+        let runbook_id = context.runbook_id;
+
+        // Create long-running script
+        let script = create_test_script("sleep 10", "bash");
+        let script_id = script.id;
+
+        let handler = ScriptHandler;
+        let handle = handler.execute(script, context, tx, None).await.unwrap();
+
+        // Cancel after a short delay
+        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+        handle.cancellation_token.cancel();
+
+        // Wait for cancellation to complete
+        loop {
+            tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+            let status = handle.status.read().await.clone();
+            match status {
+                ExecutionStatus::Failed(e) if e.contains("cancelled") => break,
+                ExecutionStatus::Success(_) => panic!("Script should have been cancelled"),
+                ExecutionStatus::Cancelled => break,
+                ExecutionStatus::Running => continue,
+                ExecutionStatus::Failed(_e) => break, // May fail due to cancellation
+            }
+        }
+
+        // Verify events were emitted
+        let events = event_bus.events();
+        assert!(
+            events.len() >= 2,
+            "Expected at least 2 events, got: {}",
+            events.len()
+        );
+
+        // Check BlockStarted event
+        match &events[0] {
+            GCEvent::BlockStarted {
+                block_id,
+                runbook_id: rb_id,
+            } => {
+                assert_eq!(*block_id, script_id);
+                assert_eq!(*rb_id, runbook_id);
+            }
+            _ => panic!("Expected BlockStarted event, got: {:?}", events[0]),
+        }
+
+        // Check final event (could be BlockCancelled or BlockFinished depending on timing)
+        let last_event = events.last().unwrap();
+        match last_event {
+            GCEvent::BlockCancelled {
+                block_id,
+                runbook_id: rb_id,
+            } => {
+                assert_eq!(*block_id, script_id);
+                assert_eq!(*rb_id, runbook_id);
+            }
+            GCEvent::BlockFinished {
+                block_id,
+                runbook_id: rb_id,
+                success: _,
+            } => {
+                // Script may finish before cancellation takes effect
+                assert_eq!(*block_id, script_id);
+                assert_eq!(*rb_id, runbook_id);
+            }
+            GCEvent::BlockFailed {
+                block_id,
+                runbook_id: rb_id,
+                error: _,
+            } => {
+                // Script may fail due to cancellation
+                assert_eq!(*block_id, script_id);
+                assert_eq!(*rb_id, runbook_id);
+            }
+            _ => panic!(
+                "Expected BlockCancelled, BlockFinished, or BlockFailed event, got: {:?}",
+                last_event
+            ),
+        }
     }
 }

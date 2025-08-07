@@ -54,6 +54,16 @@ impl BlockHandler for TerminalHandler {
             });
         }
 
+        // Emit BlockStarted event via Grand Central
+        if let Some(event_bus) = &context.event_bus {
+            let _ = event_bus
+                .emit(GCEvent::BlockStarted {
+                    block_id: terminal.id,
+                    runbook_id: context.runbook_id,
+                })
+                .await;
+        }
+
         let pty_id = terminal.id;
         let nanoseconds_now = time::OffsetDateTime::now_utc().unix_timestamp_nanos();
         let metadata = PtyMetadata {
@@ -69,6 +79,9 @@ impl BlockHandler for TerminalHandler {
         let handle_clone = handle.clone();
         let event_sender_clone = event_sender.clone();
         let output_channel_clone = output_channel.clone();
+        let terminal_id = terminal.id;
+        let runbook_id = context.runbook_id;
+        let event_bus_clone = context.event_bus.clone();
 
         tokio::spawn(async move {
             let result = Self::run_terminal(
@@ -81,10 +94,22 @@ impl BlockHandler for TerminalHandler {
             )
             .await;
 
-            // Update status based on result
             let status = match result {
-                Ok(_) => ExecutionStatus::Success("Terminal session ended".to_string()),
-                Err(e) => ExecutionStatus::Failed(e.to_string()),
+                Ok(false) => ExecutionStatus::Success("Terminal session ended".to_string()),
+                Ok(true) => ExecutionStatus::Cancelled,
+                Err(e) => {
+                    // Emit BlockFailed event via Grand Central
+                    if let Some(event_bus) = &event_bus_clone {
+                        let _ = event_bus
+                            .emit(GCEvent::BlockFailed {
+                                block_id: terminal_id,
+                                runbook_id,
+                                error: e.to_string(),
+                            })
+                            .await;
+                    }
+                    ExecutionStatus::Failed(e.to_string())
+                }
             };
 
             *handle_clone.status.write().await = status;
@@ -103,9 +128,6 @@ impl BlockHandler for TerminalHandler {
     }
 }
 
-#[cfg(test)]
-#[path = "terminal_simple_test.rs"]
-mod tests;
 impl TerminalHandler {
     /// Parse SSH host string to extract username and hostname
     fn parse_ssh_host(ssh_host: &str) -> (Option<String>, String) {
@@ -137,7 +159,7 @@ impl TerminalHandler {
         cancellation_token: CancellationToken,
         event_sender: broadcast::Sender<WorkflowEvent>,
         output_channel: Option<Channel<BlockOutput>>,
-    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
         // Get PTY store from context
         let pty_store = context
             .pty_store
@@ -323,7 +345,8 @@ impl TerminalHandler {
 
         // For terminals, we don't wait for them to finish naturally
         // They stay running until cancelled
-        // Natural termination is handled by the PTY reader loop detecting EOF
+        // Natural termination is handled by the PTY reader loop detecting EOF, usually because the
+        // user has run 'exit', pressed ctrl-d, or similar.
         let cancellation_receiver = cancellation_token.take_receiver();
         if let Some(cancel_rx) = cancellation_receiver {
             let _ = cancel_rx.await;
@@ -331,7 +354,17 @@ impl TerminalHandler {
             // Remove PTY from store (this will also kill it)
             let _ = pty_store.remove_pty(terminal.id).await;
 
-            // Send cancelled event
+            // Emit BlockCancelled event via Grand Central
+            if let Some(event_bus) = &context.event_bus {
+                let _ = event_bus
+                    .emit(GCEvent::BlockCancelled {
+                        block_id: terminal.id,
+                        runbook_id: context.runbook_id,
+                    })
+                    .await;
+            }
+
+            // Send cancelled event to the block channel
             let _ = event_sender.send(WorkflowEvent::BlockFinished { id: terminal.id });
             if let Some(ref ch) = output_channel {
                 let _ = ch.send(BlockOutput {
@@ -341,8 +374,14 @@ impl TerminalHandler {
                     binary: None,
                 });
             }
-        }
 
-        Ok(())
+            Ok(true)
+        } else {
+            Ok(false)
+        }
     }
 }
+
+#[cfg(test)]
+#[path = "terminal_test.rs"]
+mod tests;

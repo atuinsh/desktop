@@ -20,8 +20,7 @@ import EditableHeading from "@/components/EditableHeading/index.tsx";
 import CodeEditor, { TabAutoComplete } from "../common/CodeEditor/CodeEditor.tsx";
 import { Command } from "@codemirror/view";
 import { TerminalBlock } from "./schema.ts";
-import { convertBlocknoteToAtuin } from "@/lib/workflow/blocks/convert.ts";
-import BlockBus from "@/lib/workflow/block_bus.ts";
+import { DependencySpec } from "@/lib/workflow/dependency.ts";
 import {
   useBlockBusRunSubscription,
   useBlockBusStopSubscription,
@@ -30,7 +29,6 @@ import { useBlockDeleted, useBlockInserted } from "@/lib/buses/editor.ts";
 import TerminalComponent from "./components/terminal.tsx";
 import { findFirstParentOfType } from "../exec.ts";
 import Block from "../common/Block.tsx";
-import { default as BlockType } from "@/lib/workflow/blocks/block.ts";
 import PlayButton from "../common/PlayButton.tsx";
 import { BlockOutput } from "@/rs-bindings/BlockOutput";
 import { useTerminalEvents } from "./useTerminalEvents";
@@ -66,7 +64,6 @@ export const RunBlock = ({
 
   // TerminalData is the single source of truth
   const [terminalData, setTerminalData] = useState<any | null>(null);
-  const [parentBlock, setParentBlock] = useState<BlockType | null>(null);
   const elementRef = useRef<HTMLDivElement>(null);
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
 
@@ -76,7 +73,7 @@ export const RunBlock = ({
   // Don't show spinner during terminal session, only during loading
   const commandRunning = false;
 
-  const unsubscribeNameChanged = useRef<(() => void) | null>(null);
+
 
   const lightModeEditorTheme = useStore((state) => state.lightModeEditorTheme);
   const darkModeEditorTheme = useStore((state) => state.darkModeEditorTheme);
