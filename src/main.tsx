@@ -41,6 +41,7 @@ import Operation from "./state/runbooks/operation";
 import EditorBus from "./lib/buses/editor";
 import BlockBus from "./lib/workflow/block_bus";
 import { generateBlocks } from "./lib/ai/block_generator";
+import { grandCentral } from "./lib/events/grand_central";
 
 (async () => {
   try {
@@ -98,6 +99,7 @@ DevConsole.addAppObject("invoke", invoke)
   .addAppObject("BlockBus", BlockBus.get())
   .addAppObject("SharedStateManager", SharedStateManager)
   .addAppObject("generateBlocks", generateBlocks)
+  .addAppObject("grandCentral", grandCentral)
   .addAppObject("models", {
     Runbook,
     Workspace,
@@ -238,6 +240,14 @@ function Application() {
 async function setup() {
   const currentVersion = await invoke<string>("get_app_version");
   useStore.getState().setCurrentVersion(currentVersion);
+  
+  // Initialize Grand Central event system
+  try {
+    await grandCentral.startListening();
+    console.log("Grand Central event system initialized");
+  } catch (error) {
+    console.error("Failed to initialize Grand Central event system:", error);
+  }
 }
 
 (async () => {

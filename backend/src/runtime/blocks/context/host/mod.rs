@@ -71,7 +71,7 @@ impl ContextProvider for HostHandler {
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         // Determine if this should be local or SSH execution
         let hostname = block.hostname.trim();
-        
+
         if hostname.is_empty() || hostname == "localhost" {
             // Switch to local execution
             context.ssh_host = None;
@@ -129,7 +129,9 @@ mod tests {
             document: Vec::new(),
             ssh_pool: None,
             output_storage: None,
-            pty_store: None,        }
+            pty_store: None,
+            event_bus: None,
+        }
     }
 
     #[test]
@@ -177,10 +179,7 @@ mod tests {
 
     #[test]
     fn test_switch_to_empty_hostname() {
-        let host = Host::builder()
-            .id(Uuid::new_v4())
-            .hostname("")
-            .build();
+        let host = Host::builder().id(Uuid::new_v4()).hostname("").build();
 
         let mut context = create_test_context();
         assert!(context.ssh_host.is_some()); // Start with SSH
@@ -246,7 +245,7 @@ mod tests {
     #[test]
     fn test_localhost_variations() {
         let variations = vec!["localhost", "LOCALHOST", "LocalHost"];
-        
+
         for hostname in variations {
             let host = Host::builder()
                 .id(Uuid::new_v4())
@@ -293,7 +292,9 @@ mod tests {
             document: vec![serde_json::json!({"test": "data"})],
             ssh_pool: None,
             output_storage: None,
-            pty_store: None,        };
+            pty_store: None,
+            event_bus: None,
+        };
 
         let original_runbook_id = context.runbook_id;
         let original_cwd = context.cwd.clone();
@@ -355,7 +356,10 @@ mod tests {
 
         let result = Host::from_document(&block);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Missing or invalid id field"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Missing or invalid id field"));
     }
 
     #[test]
@@ -367,7 +371,10 @@ mod tests {
 
         let result = Host::from_document(&block);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Missing or invalid props field"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Missing or invalid props field"));
     }
 
     #[test]

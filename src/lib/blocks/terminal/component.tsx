@@ -20,7 +20,6 @@ import EditableHeading from "@/components/EditableHeading/index.tsx";
 import CodeEditor, { TabAutoComplete } from "../common/CodeEditor/CodeEditor.tsx";
 import { Command } from "@codemirror/view";
 import { TerminalBlock } from "./schema.ts";
-import { DependencySpec } from "@/lib/workflow/dependency.ts";
 import { convertBlocknoteToAtuin } from "@/lib/workflow/blocks/convert.ts";
 import BlockBus from "@/lib/workflow/block_bus.ts";
 import {
@@ -78,7 +77,6 @@ export const RunBlock = ({
   const commandRunning = false;
 
   const unsubscribeNameChanged = useRef<(() => void) | null>(null);
-  const unsubscribeDependencyChanged = useRef<(() => void) | null>(null);
 
   const lightModeEditorTheme = useStore((state) => state.lightModeEditorTheme);
   const darkModeEditorTheme = useStore((state) => state.darkModeEditorTheme);
@@ -136,12 +134,6 @@ export const RunBlock = ({
       await invoke("cancel_block_execution", { 
         executionId: terminalData.executionId 
       });
-
-      // Kill the PTY
-      await invoke("pty_kill", { 
-        pid: terminal.id,
-        runbook: currentRunbookId 
-      });
     } catch (error) {
       console.error("Error stopping terminal:", error);
     }
@@ -178,13 +170,6 @@ export const RunBlock = ({
         // Set TerminalData for the custom hook to manage other events
         setTerminalData(td);
         
-        // Execute block - TerminalData handles all the events
-        console.log("Calling execute_block with:", {
-          blockId: terminal.id,
-          runbookId: currentRunbookId,
-          outputChannel: outputChannel.id
-        });
-        
         const executionIdResult = await invoke<string>('execute_block', {
           blockId: terminal.id,
           runbookId: currentRunbookId,
@@ -192,14 +177,10 @@ export const RunBlock = ({
           outputChannel: outputChannel
         });
         
-        console.log("execute_block returned:", executionIdResult);
         td.setExecutionId(executionIdResult);
 
         if (onRun) onRun(terminal.id);
         
-        if (elementRef.current) {
-          elementRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
-        }
       } catch (error) {
         console.error("Error starting terminal:", error);
         setIsLoading(false);
@@ -237,61 +218,6 @@ export const RunBlock = ({
 
     return true;
   }, [isRunning, handlePlay, handleStop]);
-
-  const refreshParentBlock = () => {
-    if (!terminal.dependency.parent) {
-      setParentBlock(null);
-      return;
-    }
-
-    if (parentBlock && parentBlock.id === terminal.dependency.parent) {
-      return;
-    }
-
-    let bnb = editor.document.find((b: any) => b.id === terminal.dependency.parent);
-    if (bnb) {
-      let block = convertBlocknoteToAtuin(bnb);
-      setParentBlock(block);
-    }
-  };
-
-  useEffect(() => {
-    if (!terminal.dependency.parent) {
-      setParentBlock(null);
-      return;
-    }
-
-    if (parentBlock && parentBlock.id === terminal.dependency.parent) {
-      return;
-    }
-
-    if (unsubscribeDependencyChanged.current) {
-      unsubscribeDependencyChanged.current();
-    }
-    if (unsubscribeNameChanged.current) {
-      unsubscribeNameChanged.current();
-    }
-
-    unsubscribeDependencyChanged.current = BlockBus.get().subscribeDependencyChanged(
-      terminal.dependency.parent,
-      refreshParentBlock,
-    );
-    unsubscribeNameChanged.current = BlockBus.get().subscribeNameChanged(
-      terminal.dependency.parent,
-      refreshParentBlock,
-    );
-
-    refreshParentBlock();
-
-    return () => {
-      if (unsubscribeDependencyChanged.current) {
-        unsubscribeDependencyChanged.current();
-      }
-      if (unsubscribeNameChanged.current) {
-        unsubscribeNameChanged.current();
-      }
-    };
-  }, [terminal.dependency.parent]);
 
   useBlockBusRunSubscription(terminal.id, handlePlay);
   useBlockBusStopSubscription(terminal.id, handleStop);

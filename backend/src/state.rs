@@ -15,6 +15,7 @@ use uuid::Uuid;
 
 use crate::{
     runtime::{
+        events::GCEvent,
         exec_log::ExecLogHandle,
         pty_store::PtyStoreHandle,
         ssh_pool::SshPoolHandle,
@@ -46,6 +47,10 @@ pub(crate) struct AtuinState {
 
     executor: Mutex<Option<ExecutorHandle>>,
     event_sender: Mutex<Option<broadcast::Sender<WorkflowEvent>>>,
+
+    // Grand Central event system
+    pub gc_event_sender: Mutex<Option<mpsc::UnboundedSender<GCEvent>>>,
+    pub event_receiver: Arc<tokio::sync::Mutex<Option<mpsc::UnboundedReceiver<GCEvent>>>>,
 
     // the second rwlock could probs be a mutex
     // i cba it works fine
@@ -88,6 +93,8 @@ impl AtuinState {
             shared_state: Mutex::new(None),
             executor: Mutex::new(None),
             event_sender: Mutex::new(None),
+            gc_event_sender: Mutex::new(None),
+            event_receiver: Arc::new(tokio::sync::Mutex::new(None)),
             child_processes: Default::default(),
             template_state: Default::default(),
             runbooks_api_token: Default::default(),
@@ -110,7 +117,7 @@ impl AtuinState {
         let exec_log = ExecLogHandle::new(path).expect("Failed to boot exec log");
         self.exec_log.lock().unwrap().replace(exec_log);
 
-        let pty_store = PtyStoreHandle::new();
+        let pty_store = PtyStoreHandle::new_with_app(app.clone());
         self.pty_store.lock().unwrap().replace(pty_store);
 
         let ssh_pool = SshPoolHandle::new();
@@ -188,6 +195,11 @@ impl AtuinState {
         self.executor.lock().unwrap().replace(executor);
         self.event_sender.lock().unwrap().replace(event_sender);
 
+        // Initialize Grand Central event system
+        let (gc_sender, gc_receiver) = mpsc::unbounded_channel::<GCEvent>();
+        self.gc_event_sender.lock().unwrap().replace(gc_sender);
+        *self.event_receiver.lock().await = Some(gc_receiver);
+
         Ok(())
     }
 
@@ -248,6 +260,14 @@ impl AtuinState {
             (*event_sender).clone()
         } else {
             panic!("Event sender not initialized");
+        }
+    }
+
+    pub fn gc_event_sender(&self) -> mpsc::UnboundedSender<GCEvent> {
+        if let Some(gc_event_sender) = self.gc_event_sender.lock().unwrap().as_ref() {
+            gc_event_sender.clone()
+        } else {
+            panic!("GC event sender not initialized");
         }
     }
 }

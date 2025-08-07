@@ -484,6 +484,7 @@ fn main() {
             commands::kubernetes::kubernetes_get_execute,
             commands::blocks::execute_block,
             commands::blocks::cancel_block_execution,
+            commands::events::subscribe_to_events,
             shared_state::get_shared_state_document,
             shared_state::push_optimistic_update,
             shared_state::update_shared_state_document,

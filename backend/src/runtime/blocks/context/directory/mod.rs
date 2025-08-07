@@ -263,6 +263,7 @@ mod tests {
             ssh_pool: None,
             output_storage: None,
             pty_store: None,
+            event_bus: None,
         };
 
         let original_runbook_id = context.runbook_id;

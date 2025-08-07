@@ -22,22 +22,12 @@ impl BlockRegistry {
         match block {
             Block::Script(script) => {
                 ScriptHandler
-                    .execute(
-                        script.clone(),
-                        context,
-                        event_sender,
-                        output_channel,
-                    )
+                    .execute(script.clone(), context, event_sender, output_channel)
                     .await
             }
             Block::Terminal(terminal) => {
                 TerminalHandler
-                    .execute(
-                        terminal.clone(),
-                        context,
-                        event_sender,
-                        output_channel,
-                    )
+                    .execute(terminal.clone(), context, event_sender, output_channel)
                     .await
             }
             Block::Postgres(_postgres) => {

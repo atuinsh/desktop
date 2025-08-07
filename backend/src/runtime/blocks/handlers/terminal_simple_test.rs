@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod simple_tests {
-    use super::TerminalHandler;
     use crate::runtime::blocks::handler::{BlockHandler, ExecutionContext, ExecutionStatus};
+    use crate::runtime::blocks::handlers::terminal::TerminalHandler;
     use crate::runtime::blocks::terminal::Terminal;
     use crate::runtime::pty_store::PtyStoreHandle;
     use crate::runtime::workflow::event::WorkflowEvent;
@@ -38,7 +38,7 @@ mod simple_tests {
             .code("echo 'Hello Terminal'")
             .output_visible(true)
             .build();
-        
+
         let context = ExecutionContext {
             runbook_id: Uuid::new_v4(),
             cwd: std::env::temp_dir().to_string_lossy().to_string(),
@@ -49,8 +49,9 @@ mod simple_tests {
             ssh_pool: None,
             output_storage: None,
             pty_store: Some(PtyStoreHandle::new()),
+            event_bus: None,
         };
-        
+
         let (tx, _rx) = broadcast::channel::<WorkflowEvent>(16);
 
         // Execute the terminal without output channel
@@ -67,7 +68,10 @@ mod simple_tests {
         tokio::time::sleep(Duration::from_millis(100)).await;
 
         // Cancel the terminal to clean up
-        handler.cancel(&handle).await.expect("Cancel should succeed");
+        handler
+            .cancel(&handle)
+            .await
+            .expect("Cancel should succeed");
     }
 
     #[tokio::test]
@@ -80,7 +84,7 @@ mod simple_tests {
             .code("sleep 10")
             .output_visible(true)
             .build();
-        
+
         let context = ExecutionContext {
             runbook_id: Uuid::new_v4(),
             cwd: std::env::temp_dir().to_string_lossy().to_string(),
@@ -91,8 +95,9 @@ mod simple_tests {
             ssh_pool: None,
             output_storage: None,
             pty_store: Some(PtyStoreHandle::new()),
+            event_bus: None,
         };
-        
+
         let (tx, _rx) = broadcast::channel::<WorkflowEvent>(16);
 
         // Execute the terminal
@@ -107,7 +112,10 @@ mod simple_tests {
 
         // Cancel after a short delay
         tokio::time::sleep(Duration::from_millis(100)).await;
-        handler.cancel(&handle).await.expect("Cancel should succeed");
+        handler
+            .cancel(&handle)
+            .await
+            .expect("Cancel should succeed");
 
         // Give cancellation time to propagate
         tokio::time::sleep(Duration::from_millis(100)).await;
@@ -129,23 +137,23 @@ mod simple_tests {
     #[test]
     fn test_parse_ssh_host() {
         // Test various SSH host formats
-        use super::super::TerminalHandler;
-        
+        use crate::runtime::blocks::handlers::terminal::TerminalHandler;
+
         assert_eq!(
             TerminalHandler::parse_ssh_host("user@host.com"),
             (Some("user".to_string()), "host.com".to_string())
         );
-        
+
         assert_eq!(
             TerminalHandler::parse_ssh_host("host.com"),
             (None, "host.com".to_string())
         );
-        
+
         assert_eq!(
             TerminalHandler::parse_ssh_host("user@host.com:22"),
             (Some("user".to_string()), "host.com".to_string())
         );
-        
+
         assert_eq!(
             TerminalHandler::parse_ssh_host("host.com:2222"),
             (None, "host.com".to_string())

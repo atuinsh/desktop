@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod integration_tests {
     use crate::runtime::blocks::handler::{
-        BlockHandler, BlockOutput, ExecutionContext, ExecutionStatus,
+        BlockHandler, BlockOutput, ContextProvider, ExecutionContext, ExecutionStatus,
     };
     use crate::runtime::blocks::handlers::{ScriptHandler, TerminalHandler};
     use crate::runtime::blocks::handlers::context_providers::{
@@ -10,7 +10,7 @@ mod integration_tests {
     use crate::runtime::blocks::context::{
         directory::Directory,
         environment::Environment,
-        ContextProvider,
+        // ContextProvider is now in handler module
     };
     use crate::runtime::blocks::{script::Script, terminal::Terminal};
     use crate::runtime::pty_store::PtyStoreHandle;

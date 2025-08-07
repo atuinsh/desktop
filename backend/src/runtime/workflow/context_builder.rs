@@ -28,9 +28,11 @@ impl ContextBuilder {
         // Find the target block index
 
         // Find all blocks that come before the target block in document order
-        let target_index = blocks.iter().position(|b| b.id == block_id)
+        let target_index = blocks
+            .iter()
+            .position(|b| b.id == block_id)
             .ok_or_else(|| format!("Block {} not found in flattened document", block_id))?;
-        
+
         let preceding_blocks = &blocks[..target_index];
 
         // Build context by applying each preceding block's contribution
@@ -41,10 +43,10 @@ impl ContextBuilder {
             variables: HashMap::new(),
             ssh_host: None,
             document: document.to_vec(),
-            ssh_pool: None, // Will be set by the caller if needed
+            ssh_pool: None,       // Will be set by the caller if needed
             output_storage: None, // Will be set by the caller if needed
-            pty_store: None, // Will be set by the caller if needed
-            app_handle: None, // Will be set by the caller if needed
+            pty_store: None,      // Will be set by the caller if needed
+            event_bus: None,      // Will be set by the caller if needed
         };
 
         // Apply context modifications from preceding blocks (in document order)
@@ -105,8 +107,6 @@ impl ContextBuilder {
 
         Ok(())
     }
-
-
 
     /// Apply a block's context modifications
     fn apply_block_context(

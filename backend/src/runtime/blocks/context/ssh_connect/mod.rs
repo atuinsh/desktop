@@ -398,7 +398,9 @@ mod tests {
             document: vec![serde_json::json!({"test": "data"})],
             ssh_pool: None,
             output_storage: None,
-            pty_store: None,        };
+            pty_store: None,
+            event_bus: None,
+        };
 
         let original_runbook_id = context.runbook_id;
         let original_cwd = context.cwd.clone();

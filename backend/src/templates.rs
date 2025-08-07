@@ -102,7 +102,7 @@ pub fn serialized_block_to_state(block: serde_json::Value) -> BlockState {
             };
         }
     };
-    
+
     let block_type = block
         .get("type")
         .and_then(|t| t.as_str())
@@ -385,19 +385,16 @@ pub fn template_with_context(
             .collect();
 
         Some(DocumentTemplateState {
-            first: serialized_block_to_state(
-                document.first()
-                    .ok_or("Document is empty")?
-                    .clone()
-            ),
-            last: serialized_block_to_state(
-                document.last()
-                    .ok_or("Document is empty")?
-                    .clone()
-            ),
-            content: flattened_doc.iter().map(|b| serialized_block_to_state(b.clone())).collect(),
+            first: serialized_block_to_state(document.first().ok_or("Document is empty")?.clone()),
+            last: serialized_block_to_state(document.last().ok_or("Document is empty")?.clone()),
+            content: flattened_doc
+                .iter()
+                .map(|b| serialized_block_to_state(b.clone()))
+                .collect(),
             named,
-            previous: serialized_block_to_state(previous.unwrap_or_else(|| serde_json::Value::Null)),
+            previous: serialized_block_to_state(
+                previous.unwrap_or_else(|| serde_json::Value::Null),
+            ),
         })
     } else {
         None
@@ -421,73 +418,65 @@ pub fn template_with_context(
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_template_with_context_basic() {
         let mut variables = HashMap::new();
         variables.insert("name".to_string(), "World".to_string());
-        
-        let result = template_with_context(
-            "Hello {{ var.name }}!",
-            &variables,
-            &[],
-            None
-        ).unwrap();
-        
+
+        let result = template_with_context("Hello {{ var.name }}!", &variables, &[], None).unwrap();
+
         assert_eq!(result, "Hello World!");
     }
-    
+
     #[test]
     fn test_template_with_context_multiple_vars() {
         let mut variables = HashMap::new();
         variables.insert("first".to_string(), "Hello".to_string());
         variables.insert("second".to_string(), "World".to_string());
-        
-        let result = template_with_context(
-            "{{ var.first }} {{ var.second }}!",
-            &variables,
-            &[],
-            None
-        ).unwrap();
-        
+
+        let result =
+            template_with_context("{{ var.first }} {{ var.second }}!", &variables, &[], None)
+                .unwrap();
+
         assert_eq!(result, "Hello World!");
     }
-    
+
     #[test]
     fn test_template_with_missing_var() {
         let variables = HashMap::new();
-        
+
         let result = template_with_context(
             "Hello {{ var.missing | default('Default') }}!",
             &variables,
             &[],
-            None
-        ).unwrap();
-        
+            None,
+        )
+        .unwrap();
+
         assert_eq!(result, "Hello Default!");
     }
-    
+
     #[test]
     fn test_template_with_document_context() {
         let mut variables = HashMap::new();
         variables.insert("test_var".to_string(), "test_value".to_string());
-        
-        let doc = vec![
-            serde_json::json!({
-                "id": "block1",
-                "type": "paragraph",
-                "props": { "name": "first_block" },
-                "content": [{"type": "text", "text": "First block content"}]
-            })
-        ];
-        
+
+        let doc = vec![serde_json::json!({
+            "id": "block1",
+            "type": "paragraph",
+            "props": { "name": "first_block" },
+            "content": [{"type": "text", "text": "First block content"}]
+        })];
+
         let result = template_with_context(
             "Variable: {{ var.test_var }}",
             &variables,
             &doc,
-            Some("block2")
-        ).unwrap();
-        
+            Some("block2"),
+        )
+        .unwrap();
+
         assert_eq!(result, "Variable: test_value");
     }
 }

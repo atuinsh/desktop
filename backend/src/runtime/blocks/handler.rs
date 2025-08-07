@@ -1,16 +1,17 @@
+use crate::runtime::events::EventBus;
+use crate::runtime::pty_store::PtyStoreHandle;
+use crate::runtime::ssh_pool::SshPoolHandle;
+use crate::runtime::workflow::event::WorkflowEvent;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::{broadcast, oneshot, RwLock};
 use tauri::ipc::Channel;
+use tokio::sync::{broadcast, oneshot, RwLock};
 use ts_rs::TS;
 use uuid::Uuid;
-use crate::runtime::ssh_pool::SshPoolHandle;
-use crate::runtime::pty_store::PtyStoreHandle;
-use crate::runtime::workflow::event::WorkflowEvent;
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct ExecutionContext {
     pub runbook_id: Uuid,
     pub cwd: String,
@@ -18,10 +19,10 @@ pub struct ExecutionContext {
     pub variables: HashMap<String, String>,
     pub ssh_host: Option<String>,
     pub document: Vec<serde_json::Value>, // For template resolution
-    pub ssh_pool: Option<SshPoolHandle>, // For SSH execution
+    pub ssh_pool: Option<SshPoolHandle>,  // For SSH execution
     pub output_storage: Option<Arc<RwLock<HashMap<String, HashMap<String, String>>>>>, // For storing output variables
     pub pty_store: Option<PtyStoreHandle>, // For PTY management
-    pub app_handle: Option<tauri::AppHandle>, // For emitting events
+    pub event_bus: Option<Arc<dyn EventBus>>, // For emitting events
 }
 
 impl Default for ExecutionContext {
@@ -39,7 +40,7 @@ impl Default for ExecutionContext {
             ssh_pool: None,
             output_storage: None,
             pty_store: None,
-            app_handle: None,
+            event_bus: None,
         }
     }
 }

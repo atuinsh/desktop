@@ -1,9 +1,7 @@
 use async_trait::async_trait;
 use std::sync::Arc;
 use tauri::ipc::Channel;
-use tauri::Emitter;
 use tokio::sync::{broadcast, RwLock};
-
 
 use crate::pty::{Pty, PtyMetadata};
 use crate::runtime::blocks::handler::{
@@ -11,10 +9,10 @@ use crate::runtime::blocks::handler::{
     CancellationToken, ExecutionContext, ExecutionHandle, ExecutionStatus,
 };
 use crate::runtime::blocks::terminal::Terminal;
+use crate::runtime::events::GCEvent;
+use crate::runtime::pty_store::PtyLike;
 use crate::runtime::ssh_pool::SshPty;
 use crate::runtime::workflow::event::WorkflowEvent;
-use crate::runtime::pty_store::PtyLike;
-use crate::run::pty::PTY_OPEN_CHANNEL;
 
 pub struct TerminalHandler;
 
@@ -95,7 +93,10 @@ impl BlockHandler for TerminalHandler {
         Ok(handle)
     }
 
-    async fn cancel(&self, handle: &ExecutionHandle) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    async fn cancel(
+        &self,
+        handle: &ExecutionHandle,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         // Cancel via cancellation token
         handle.cancellation_token.cancel();
         Ok(())
@@ -189,24 +190,24 @@ impl TerminalHandler {
                 ssh_pool: ssh_pool.clone(),
             })
         } else {
-        // Open local PTY
-        let pty = Pty::open(
-            24,
-            80,
-            Some(context.cwd.clone()),
-            context.env.clone(),
-            metadata.clone(),
-            None, // Use default shell
-        )
-        .await
-        .map_err(|e| format!("Failed to open local PTY: {}", e))?;
-        
-        // Clone reader before moving PTY
-        let reader = pty.reader.clone();
-        
-        // Spawn reader task for local PTY
+            // Open local PTY
+            let pty = Pty::open(
+                24,
+                80,
+                Some(context.cwd.clone()),
+                context.env.clone(),
+                metadata.clone(),
+                None, // Use default shell
+            )
+            .await
+            .map_err(|e| format!("Failed to open local PTY: {}", e))?;
+
+            // Clone reader before moving PTY
+            let reader = pty.reader.clone();
+
+            // Spawn reader task for local PTY
             let output_channel_local = output_channel.clone();
-            
+
             tokio::spawn(async move {
                 loop {
                     // Use blocking read in a blocking task
@@ -229,10 +230,12 @@ impl TerminalHandler {
                                 let _ = ch.send(BlockOutput {
                                     stdout: None,
                                     stderr: None,
-                                    lifecycle: Some(BlockLifecycleEvent::Finished(BlockFinishedData {
-                                        exit_code: Some(0), // We don't have access to actual exit code here
-                                        success: true,
-                                    })),
+                                    lifecycle: Some(BlockLifecycleEvent::Finished(
+                                        BlockFinishedData {
+                                            exit_code: Some(0), // We don't have access to actual exit code here
+                                            success: true,
+                                        },
+                                    )),
                                     binary: None,
                                 });
                             }
@@ -289,10 +292,10 @@ impl TerminalHandler {
             .add_pty(pty)
             .await
             .map_err(|e| format!("Failed to add PTY to store: {}", e))?;
-        
-        // Emit PTY open event for frontend PTY store
-        if let Some(app) = &context.app_handle {
-            let _ = app.emit(PTY_OPEN_CHANNEL, &metadata);
+
+        // Emit PTY open event via Grand Central
+        if let Some(event_bus) = &context.event_bus {
+            let _ = event_bus.emit(GCEvent::PtyOpened(metadata.clone())).await;
         }
 
         // Write the command to the PTY after started event
@@ -302,7 +305,7 @@ impl TerminalHandler {
             } else {
                 format!("{}\n", terminal.code)
             };
-            
+
             if let Err(e) = pty_store.write_pty(terminal.id, command.into()).await {
                 // Send error event if command writing fails
                 if let Some(ref ch) = output_channel {
@@ -324,10 +327,10 @@ impl TerminalHandler {
         let cancellation_receiver = cancellation_token.take_receiver();
         if let Some(cancel_rx) = cancellation_receiver {
             let _ = cancel_rx.await;
-            
+
             // Remove PTY from store (this will also kill it)
             let _ = pty_store.remove_pty(terminal.id).await;
-            
+
             // Send cancelled event
             let _ = event_sender.send(WorkflowEvent::BlockFinished { id: terminal.id });
             if let Some(ref ch) = output_channel {

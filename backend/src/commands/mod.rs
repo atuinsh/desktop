@@ -1,5 +1,6 @@
 pub(crate) mod blocks;
 pub(crate) mod dependency;
+pub(crate) mod events;
 pub(crate) mod exec_log;
 pub(crate) mod kubernetes;
 pub(crate) mod mysql;

@@ -9,11 +9,13 @@ use bytes::Bytes;
 use eyre::{eyre, Result};
 use portable_pty::{CommandBuilder, MasterPty, PtySize};
 use serde::{Deserialize, Serialize};
+use ts_rs::TS;
 use uuid::Uuid;
 
 use crate::runtime::pty_store::PtyLike;
 
-#[derive(Clone, Deserialize, Serialize, Debug)]
+#[derive(Clone, Deserialize, Serialize, Debug, TS)]
+#[ts(export)]
 pub struct PtyMetadata {
     pub pid: Uuid,
     pub runbook: Uuid,

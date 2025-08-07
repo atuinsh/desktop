@@ -1,6 +1,7 @@
 use tauri::{ipc::Channel, AppHandle, Manager, State};
 use uuid::Uuid;
 
+use crate::commands::events::ChannelEventBus;
 use crate::runtime::blocks::handler::BlockOutput;
 use crate::runtime::blocks::registry::BlockRegistry;
 use crate::runtime::blocks::Block;
@@ -25,18 +26,20 @@ pub async fn execute_block(
     let mut context = ContextBuilder::build_context(&block_id, &editor_document, &runbook_id)
         .await
         .map_err(|e| e.to_string())?;
-    
+
     // Add SSH pool to context
     context.ssh_pool = Some(state.ssh_pool());
-    
+
     // Add output storage to context
     context.output_storage = Some(state.runbook_output_variables.clone());
-    
+
     // Add PTY store to context
     context.pty_store = Some(state.pty_store());
-    
-    // Add app handle to context
-    context.app_handle = Some(app_handle.clone());
+
+    // Add event bus to context
+    let gc_sender = state.gc_event_sender();
+    let event_bus = std::sync::Arc::new(ChannelEventBus::new(gc_sender));
+    context.event_bus = Some(event_bus);
 
     // Find the block in the document
     let block_data = editor_document
@@ -54,12 +57,7 @@ pub async fn execute_block(
     let registry = BlockRegistry::new();
 
     match registry
-        .execute_block(
-            &block,
-            context,
-            event_sender,
-            Some(output_channel),
-        )
+        .execute_block(&block, context, event_sender, Some(output_channel))
         .await
     {
         Ok(handle) => {

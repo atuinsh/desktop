@@ -473,7 +473,7 @@ impl Session {
                         match msg {
                             ChannelMsg::Data { data } => {
                                 stdout_buffer.extend_from_slice(&data);
-                                
+
                                 // Send data in chunks when buffer gets large enough or when we hit newlines
                                 while stdout_buffer.len() >= BUFFER_SIZE || stdout_buffer.contains(&b'\n') {
                                     let send_size = if stdout_buffer.len() >= BUFFER_SIZE {
@@ -484,7 +484,7 @@ impl Session {
                                             .map(|pos| pos + 1) // Include the newline
                                             .unwrap_or(stdout_buffer.len())
                                     };
-                                    
+
                                     let chunk = stdout_buffer.drain(..send_size).collect::<Vec<u8>>();
                                     if let Ok(chunk_str) = std::str::from_utf8(&chunk) {
                                         if output_stream_clone.send(chunk_str.to_string()).await.is_err() {
@@ -496,7 +496,7 @@ impl Session {
                             ChannelMsg::ExtendedData { data, ext: 1 } => {
                                 // stderr - same buffering approach
                                 stderr_buffer.extend_from_slice(&data);
-                                
+
                                 while stderr_buffer.len() >= BUFFER_SIZE || stderr_buffer.contains(&b'\n') {
                                     let send_size = if stderr_buffer.len() >= BUFFER_SIZE {
                                         BUFFER_SIZE
@@ -505,7 +505,7 @@ impl Session {
                                             .map(|pos| pos + 1)
                                             .unwrap_or(stderr_buffer.len())
                                     };
-                                    
+
                                     let chunk = stderr_buffer.drain(..send_size).collect::<Vec<u8>>();
                                     if let Ok(chunk_str) = std::str::from_utf8(&chunk) {
                                         if output_stream_clone.send(chunk_str.to_string()).await.is_err() {
