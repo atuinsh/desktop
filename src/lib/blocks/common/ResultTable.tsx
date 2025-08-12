@@ -57,16 +57,6 @@ export default function ResultTable({ columns, results, setColumns, width }: Res
     }));
   }, [columns]);
 
-  const rowData = useMemo(() => {
-    return results.map((row) => {
-      const rowObj: any = {};
-      columns.forEach((col, index) => {
-        rowObj[col.id] = row[index];
-      });
-      return rowObj;
-    });
-  }, [results, columns]);
-
   const onColumnResized = (event: ColumnResizedEvent) => {
     if (setColumns && event.finished) {
       const newColumns = columns.map((col) => {
@@ -203,7 +193,7 @@ export default function ResultTable({ columns, results, setColumns, width }: Res
       >
         <AgGridReact
           ref={gridRef}
-          rowData={rowData}
+          rowData={results}
           columnDefs={columnDefs}
           defaultColDef={defaultColDef}
           onGridReady={onGridReady}

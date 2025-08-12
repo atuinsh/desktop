@@ -1,5 +1,5 @@
 use super::handler::{BlockHandler, BlockOutput, ExecutionContext, ExecutionHandle};
-use super::handlers::{ScriptHandler, TerminalHandler};
+use super::handlers::{ScriptHandler, SQLiteHandler, TerminalHandler};
 use super::Block;
 use crate::runtime::workflow::event::WorkflowEvent;
 use tauri::ipc::Channel;
@@ -50,9 +50,10 @@ impl BlockRegistry {
                 // TODO: Implement MysqlHandler
                 Err("MySQL handler not yet implemented".into())
             }
-            Block::SQLite(_sqlite) => {
-                // TODO: Implement SQLiteHandler
-                Err("SQLite handler not yet implemented".into())
+            Block::SQLite(sqlite) => {
+                SQLiteHandler
+                    .execute(sqlite.clone(), context, event_sender, output_channel)
+                    .await
             }
         }
     }

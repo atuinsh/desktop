@@ -62,7 +62,7 @@ interface SQLProps {
   uri: string;
   query: string;
   autoRefresh: number;
-  runQuery: (uri: string, query: string) => Promise<QueryResult & { queryCount?: number; executedQueries?: string[] }>;
+  runQuery: (setResults: any) => Promise<void>;
 
   setCollapseQuery: (collapseQuery: boolean) => void;
   setQuery: (query: string) => void;
@@ -110,7 +110,9 @@ const SQL = ({
   let editor = useBlockNoteEditor();
   const [isRunning, setIsRunning] = useState<boolean>(false);
 
-  const [results, setResults] = useState<QueryResult & { queryCount?: number; executedQueries?: string[] } | null>(null);
+  const [results, setResults] = useState<
+    (QueryResult & { queryCount?: number; executedQueries?: string[] }) | null
+  >(null);
   const [columns, setColumns] = useState<
     { id: string; title: string; grow?: number; width?: number }[]
   >([]);
@@ -123,7 +125,7 @@ const SQL = ({
 
   const themeObj = useCodemirrorTheme();
   const codeMirrorValue = useCodeMirrorValue(query, setQuery);
-  
+
   // Get SQL language extension based on sqlType
   const getSqlExtension = () => {
     switch (sqlType) {
@@ -153,24 +155,25 @@ const SQL = ({
         elementRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
       }
 
-      let res = await runQuery(tUri, tQuery);
-      let endTime = new Date().getTime() * 1000000;
+      await runQuery(async (res) => {
+        let endTime = new Date().getTime() * 1000000;
 
-      // Don't log the actual data, but log the query and metadata
-      let output = {
-        query,
-        rowCount: res.rows?.length,
-        queryCount: res.queryCount || 1,
-        executedQueries: res.executedQueries || [],
-      };
-      await logExecution(block, block.typeName, startTime, endTime, JSON.stringify(output));
-      BlockBus.get().blockFinished(block);
+        // Don't log the actual data, but log the query and metadata
+        let output = {
+          query,
+          rowCount: res.rows?.length,
+          queryCount: res.queryCount || 1,
+          executedQueries: res.executedQueries || [],
+        };
+        await logExecution(block, block.typeName, startTime, endTime, JSON.stringify(output));
+        BlockBus.get().blockFinished(block);
 
-      setIsRunning(false);
+        setIsRunning(false);
 
-      setColumns(columns);
-      setResults(res);
-      setError(null);
+        setResults(res);
+        setColumns(columns);
+        setError(null);
+      });
     } catch (e: any) {
       if (e.message) {
         e = e.message;
@@ -416,7 +419,11 @@ const SQL = ({
               onPress={() => setCollapseQuery(!collapseQuery)}
             >
               <Tooltip content={collapseQuery ? "Expand query" : "Collapse query"}>
-                {collapseQuery ? <ArrowDownToLineIcon size={16} /> : <ArrowUpToLineIcon size={16} />}
+                {collapseQuery ? (
+                  <ArrowDownToLineIcon size={16} />
+                ) : (
+                  <ArrowUpToLineIcon size={16} />
+                )}
               </Tooltip>
             </Button>
           </ButtonGroup>
@@ -568,10 +575,12 @@ const SQL = ({
               )}
 
               {/* Results Section - 2/3 height */}
-              <div className={cn("flex-1 min-h-0 overflow-hidden p-4", {
-                "h-2/3": !isFullscreenQueryCollapsed,
-                "h-full": isFullscreenQueryCollapsed
-              })}>
+              <div
+                className={cn("flex-1 min-h-0 overflow-hidden p-4", {
+                  "h-2/3": !isFullscreenQueryCollapsed,
+                  "h-full": isFullscreenQueryCollapsed,
+                })}
+              >
                 {(results || error) && (
                   <SQLResults
                     results={results}

@@ -87,6 +87,7 @@ features = [
     "time",
     "postgres",
     "mysql",
+    "sqlite",
     "uuid",
     "postgres",
     "bigdecimal",

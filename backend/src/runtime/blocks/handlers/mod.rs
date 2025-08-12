@@ -1,5 +1,6 @@
 pub mod context_providers;
 pub mod script;
+pub mod sqlite;
 pub mod terminal;
 
 #[cfg(test)]
@@ -7,4 +8,5 @@ mod script_output_test;
 
 // Re-export handlers
 pub use script::ScriptHandler;
+pub use sqlite::SQLiteHandler;
 pub use terminal::TerminalHandler;

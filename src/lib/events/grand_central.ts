@@ -98,7 +98,7 @@ export class GrandCentral extends Emittery<GrandCentralEvents> {
         // Only handle PTY events for now
 
         default:
-          console.warn('Grand Central: Unknown event type:', event);
+          console.warn('Grand Central: Unhandled event type:', event);
       }
     } catch (error) {
       console.error('Grand Central: Error handling backend event:', error, event);

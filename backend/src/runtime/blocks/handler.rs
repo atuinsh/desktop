@@ -106,6 +106,7 @@ pub struct BlockOutput {
     pub stderr: Option<String>,
     pub lifecycle: Option<BlockLifecycleEvent>,
     pub binary: Option<Vec<u8>>, // For terminal raw data
+    pub object: Option<serde_json::Value>, // For structured JSON data
 }
 
 #[derive(TS, Debug, Clone, Serialize, Deserialize)]

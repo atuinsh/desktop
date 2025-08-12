@@ -51,6 +51,7 @@ impl BlockHandler for TerminalHandler {
                 stderr: None,
                 lifecycle: Some(BlockLifecycleEvent::Started),
                 binary: None,
+                object: None,
             });
         }
 
@@ -199,6 +200,7 @@ impl TerminalHandler {
                             stderr: None,
                             lifecycle: None,
                             binary: Some(output.as_bytes().to_vec()),
+                            object: None,
                         });
                     }
                 }
@@ -259,6 +261,7 @@ impl TerminalHandler {
                                         },
                                     )),
                                     binary: None,
+                                    object: None,
                                 });
                             }
                             break;
@@ -271,6 +274,7 @@ impl TerminalHandler {
                                     stderr: None,
                                     lifecycle: None,
                                     binary: Some(buf[..n].to_vec()),
+                                    object: None,
                                 });
                             }
                         }
@@ -284,6 +288,7 @@ impl TerminalHandler {
                                         message: format!("PTY read error: {}", e),
                                     })),
                                     binary: None,
+                                    object: None,
                                 });
                             }
                             break;
@@ -298,6 +303,7 @@ impl TerminalHandler {
                                         message: format!("Task error: {}", e),
                                     })),
                                     binary: None,
+                                    object: None,
                                 });
                             }
                             break;
@@ -338,6 +344,7 @@ impl TerminalHandler {
                             message: format!("Failed to write command to PTY: {}", e),
                         })),
                         binary: None,
+                        object: None,
                     });
                 }
             }
@@ -372,6 +379,7 @@ impl TerminalHandler {
                     stderr: None,
                     lifecycle: Some(BlockLifecycleEvent::Cancelled),
                     binary: None,
+                    object: None,
                 });
             }
 
