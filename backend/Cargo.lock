@@ -473,6 +473,7 @@ dependencies = [
  "base64 0.22.1",
  "bigdecimal",
  "bytes",
+ "chrono",
  "cocoa",
  "comrak",
  "dirs 5.0.1",
@@ -1027,8 +1028,10 @@ checksum = "c469d952047f47f91b68d1cba3f10d63c11d73e4636f24f08daf0278abf01c4d"
 dependencies = [
  "android-tzdata",
  "iana-time-zone",
+ "js-sys",
  "num-traits",
  "serde",
+ "wasm-bindgen",
  "windows-link",
 ]
 
@@ -6829,6 +6832,7 @@ dependencies = [
  "base64 0.22.1",
  "bigdecimal",
  "bytes",
+ "chrono",
  "crc",
  "crossbeam-queue",
  "either",
@@ -6910,6 +6914,7 @@ dependencies = [
  "bitflags 2.9.1",
  "byteorder",
  "bytes",
+ "chrono",
  "crc",
  "digest",
  "dotenvy",
@@ -6954,6 +6959,7 @@ dependencies = [
  "bigdecimal",
  "bitflags 2.9.1",
  "byteorder",
+ "chrono",
  "crc",
  "dotenvy",
  "etcetera",
@@ -6991,6 +6997,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2d12fe70b2c1b4401038055f90f151b78208de1f9f89a7dbfd41587a10c3eea"
 dependencies = [
  "atoi",
+ "chrono",
  "flume",
  "futures-channel",
  "futures-core",

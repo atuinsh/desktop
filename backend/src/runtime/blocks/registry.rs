@@ -1,5 +1,5 @@
 use super::handler::{BlockHandler, BlockOutput, ExecutionContext, ExecutionHandle};
-use super::handlers::{ScriptHandler, SQLiteHandler, TerminalHandler};
+use super::handlers::{PostgresHandler, ScriptHandler, SQLiteHandler, TerminalHandler};
 use super::Block;
 use crate::runtime::workflow::event::WorkflowEvent;
 use tauri::ipc::Channel;
@@ -30,9 +30,10 @@ impl BlockRegistry {
                     .execute(terminal.clone(), context, event_sender, output_channel)
                     .await
             }
-            Block::Postgres(_postgres) => {
-                // TODO: Implement PostgresHandler
-                Err("Postgres handler not yet implemented".into())
+            Block::Postgres(postgres) => {
+                PostgresHandler
+                    .execute(postgres.clone(), context, event_sender, output_channel)
+                    .await
             }
             Block::Http(_http) => {
                 // TODO: Implement HttpHandler

@@ -76,6 +76,7 @@ dirs = "5.0" # For finding home directory
 glob = "0.3" # For general glob pattern matching
 base64 = "0.22"
 async-trait = "0.1.88"
+chrono = { version = "0.4", features = ["serde", "clock"] }
 ts-rs = { version = "11.0.1", features = ["serde-json-impl", "uuid-impl"] }
 
 
@@ -85,6 +86,7 @@ features = [
     "runtime-tokio",
     "tls-native-tls",
     "time",
+    "chrono",
     "postgres",
     "mysql",
     "sqlite",

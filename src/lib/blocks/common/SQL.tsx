@@ -37,7 +37,7 @@ import { QueryResult } from "./database";
 import SQLResults from "./SQLResults";
 import MaskedInput from "@/components/MaskedInput/MaskedInput";
 import Block from "./Block";
-import { templateString } from "@/state/templates";
+// import { templateString } from "@/state/templates"; // No longer needed for backend execution
 import { useBlockNoteEditor } from "@blocknote/react";
 import { AtuinState, useStore } from "@/state/store";
 import { cn, toSnakeCase } from "@/lib/utils";
@@ -62,7 +62,7 @@ interface SQLProps {
   uri: string;
   query: string;
   autoRefresh: number;
-  runQuery: (setResults: any) => Promise<void>;
+  runQuery: (setResults: any, onError: any) => Promise<void>;
 
   setCollapseQuery: (collapseQuery: boolean) => void;
   setQuery: (query: string) => void;
@@ -148,14 +148,11 @@ const SQL = ({
 
     let startTime = new Date().getTime() * 1000000;
     try {
-      let tUri = await templateString(id, uri, editor.document, currentRunbookId);
-      let tQuery = await templateString(id, query, editor.document, currentRunbookId);
-
       if (elementRef.current) {
         elementRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
       }
 
-      await runQuery(async (res) => {
+      await runQuery(async (res: any) => {
         let endTime = new Date().getTime() * 1000000;
 
         // Don't log the actual data, but log the query and metadata
@@ -173,6 +170,14 @@ const SQL = ({
         setResults(res);
         setColumns(columns);
         setError(null);
+      }, async (errorMessage: string) => {
+        // Handle errors from the backend via lifecycle events
+        setIsRunning(false);
+        setError(errorMessage);
+        
+        let endTime = new Date().getTime() * 1000000;
+        await logExecution(block, block.typeName, startTime, endTime, JSON.stringify({ error: errorMessage }));
+        BlockBus.get().blockFinished(block);
       });
     } catch (e: any) {
       if (e.message) {

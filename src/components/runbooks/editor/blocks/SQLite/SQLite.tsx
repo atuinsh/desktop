@@ -45,13 +45,34 @@ const SQLite = ({
 
   // Custom runQuery function - clean version without Promise wrapper
   const runQuery = useCallback(
-    async (onResult: any) => {
+    async (onResult: any, onError: any) => {
       // Create a channel for output streaming
       const outputChannel = new Channel<BlockOutput>();
 
       // Set up output handler
       outputChannel.onmessage = (output: BlockOutput) => {
-        // Handle structured JSON object data (new way)
+        console.log("SQLite output:", output);
+
+        // Handle lifecycle events
+        if (output.lifecycle) {
+          switch (output.lifecycle.type) {
+            case "started":
+              console.log("SQLite execution started");
+              break;
+            case "finished":
+              console.log(`SQLite execution finished, success: ${output.lifecycle.data.success}`);
+              break;
+            case "cancelled":
+              console.log("SQLite execution was cancelled");
+              break;
+            case "error":
+              console.error("SQLite execution error:", output.lifecycle.data.message);
+              onError(output.lifecycle.data.message);
+              return; // Don't continue processing after error
+          }
+        }
+
+        // Handle structured JSON object data (success case)
         if (output.object && typeof output.object === "object" && output.object !== null) {
           const parsed = output.object as any;
           let queryResult = {
@@ -66,13 +87,18 @@ const SQLite = ({
         }
       };
 
-      // Execute the block using the generic command
-      await invoke<string>("execute_block", {
-        blockId: sqlite.id,
-        runbookId: currentRunbookId || "",
-        editorDocument: editor.document,
-        outputChannel,
-      });
+      try {
+        // Execute the block using the generic command
+        await invoke<string>("execute_block", {
+          blockId: sqlite.id,
+          runbookId: currentRunbookId || "",
+          editorDocument: editor.document,
+          outputChannel,
+        });
+      } catch (err: any) {
+        console.error("Failed to execute SQLite query:", err);
+        onError(err.message || "Failed to execute query");
+      }
     },
     [sqlite.id, currentRunbookId, editor],
   );
