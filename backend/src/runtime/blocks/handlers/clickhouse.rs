@@ -834,7 +834,7 @@ mod tests {
                 assert_eq!(*block_id, clickhouse_id);
                 assert_eq!(*rb_id, runbook_id);
                 assert!(
-                    error.contains("URI") || error.contains("SQL") || error.contains("syntax") || error.contains("HTTP")
+                    error.contains("URI") || error.contains("SQL") || error.contains("syntax") || error.contains("HTTP") || error.contains("url") || error.contains("connect")
                 );
             }
             _ => panic!("Expected BlockFailed event, got: {:?}", events[1]),

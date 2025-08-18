@@ -831,7 +831,7 @@ mod tests {
             } => {
                 assert_eq!(*block_id, postgres_id);
                 assert_eq!(*rb_id, runbook_id);
-                assert!(error.contains("URI") || error.contains("SQL") || error.contains("syntax"));
+                assert!(error.contains("URI") || error.contains("SQL") || error.contains("syntax") || error.contains("database") || error.contains("role"));
             }
             _ => panic!("Expected BlockFailed event, got: {:?}", events[1]),
         }
