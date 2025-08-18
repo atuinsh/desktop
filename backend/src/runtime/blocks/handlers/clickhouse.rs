@@ -160,18 +160,21 @@ impl ClickhouseHandler {
     }
 
     /// Parse ClickHouse URI and extract HTTP endpoint and credentials
-    fn parse_clickhouse_uri(uri: &str) -> Result<(String, String, String), Box<dyn std::error::Error + Send + Sync>> {
+    fn parse_clickhouse_uri(
+        uri: &str,
+    ) -> Result<(String, String, String), Box<dyn std::error::Error + Send + Sync>> {
         let url = Url::parse(uri)?;
         let username = url.username();
         let password = url.password().unwrap_or("");
-        
+
         // Build HTTP endpoint (remove any path, just use root)
-        let http_endpoint = format!("{}://{}:{}/", 
+        let http_endpoint = format!(
+            "{}://{}:{}/",
             url.scheme(),
             url.host_str().unwrap_or("localhost"),
             url.port().unwrap_or(8123)
         );
-        
+
         Ok((http_endpoint, username.to_string(), password.to_string()))
     }
 
@@ -207,12 +210,12 @@ impl ClickhouseHandler {
 
         // Make HTTP request to ClickHouse
         let mut request = http_client.post(endpoint).body(query_to_execute);
-        
+
         // Add authentication if provided
         if !username.is_empty() {
             request = request.basic_auth(username, Some(password));
         }
-        
+
         let response = request.send().await?;
 
         // Check for HTTP errors
@@ -249,7 +252,11 @@ impl ClickhouseHandler {
                         results.push(row);
                     }
                     Err(e) => {
-                        return Err(format!("Failed to parse JSON response: {} (line: {})", e, line).into());
+                        return Err(format!(
+                            "Failed to parse JSON response: {} (line: {})",
+                            e, line
+                        )
+                        .into());
                     }
                 }
             }
@@ -273,7 +280,7 @@ impl ClickhouseHandler {
         } else {
             // Non-SELECT statement (INSERT, UPDATE, DELETE, CREATE, etc.)
             // ClickHouse HTTP interface returns success status for successful operations
-            
+
             // Send execution result as structured JSON object
             if let Some(ref ch) = output_channel {
                 let result_json = json!({
@@ -302,9 +309,7 @@ impl ClickhouseHandler {
         output_channel: Option<Channel<BlockOutput>>,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         // Send start event
-        let _ = event_sender.send(WorkflowEvent::BlockStarted {
-            id: clickhouse.id,
-        });
+        let _ = event_sender.send(WorkflowEvent::BlockStarted { id: clickhouse.id });
 
         // Send started lifecycle event to output channel
         if let Some(ref ch) = output_channel {
@@ -360,27 +365,32 @@ impl ClickhouseHandler {
         let (endpoint, username, password, http_client) = {
             let connection_task = async {
                 let (endpoint, username, password) = Self::parse_clickhouse_uri(&clickhouse.uri)?;
-                
+
                 // Create HTTP client with timeout
                 let http_client = reqwest::Client::builder()
                     .timeout(Duration::from_secs(30))
                     .build()?;
-                
+
                 // Test connection with simple query
-                let mut test_request = http_client.post(&endpoint).body("SELECT 1 FORMAT JSONEachRow");
-                
+                let mut test_request = http_client
+                    .post(&endpoint)
+                    .body("SELECT 1 FORMAT JSONEachRow");
+
                 if !username.is_empty() {
                     test_request = test_request.basic_auth(&username, Some(&password));
                 }
-                
+
                 let response = test_request.send().await?;
-                
+
                 if !response.status().is_success() {
                     let error = response.text().await?;
                     return Err(format!("Connection test failed: {}", error).into());
                 }
-                
-                Ok::<(String, String, String, reqwest::Client), Box<dyn std::error::Error + Send + Sync>>((endpoint, username, password, http_client))
+
+                Ok::<
+                    (String, String, String, reqwest::Client),
+                    Box<dyn std::error::Error + Send + Sync>,
+                >((endpoint, username, password, http_client))
             };
 
             let timeout_task = tokio::time::sleep(Duration::from_secs(10));
@@ -475,7 +485,10 @@ impl ClickhouseHandler {
             // Send executing status
             if let Some(ref ch) = &output_channel_clone {
                 let _ = ch.send(BlockOutput {
-                    stdout: Some(format!("Executing {} SQL statement(s)...", statements.len())),
+                    stdout: Some(format!(
+                        "Executing {} SQL statement(s)...",
+                        statements.len()
+                    )),
                     stderr: None,
                     binary: None,
                     object: None,
@@ -492,7 +505,9 @@ impl ClickhouseHandler {
                     &password_clone,
                     statement,
                     &output_channel_clone,
-                ).await {
+                )
+                .await
+                {
                     let error_msg = format!("Statement {} failed: {}", i + 1, e);
                     if let Some(ref ch) = &output_channel_clone {
                         let _ = ch.send(BlockOutput {
@@ -546,9 +561,7 @@ impl ClickhouseHandler {
         };
 
         // Send completion events
-        let _ = event_sender.send(WorkflowEvent::BlockFinished {
-            id: clickhouse.id,
-        });
+        let _ = event_sender.send(WorkflowEvent::BlockFinished { id: clickhouse.id });
         if let Some(ref ch) = output_channel {
             // Send success message
             let _ = ch.send(BlockOutput {
@@ -641,14 +654,18 @@ mod tests {
     #[test]
     fn test_uri_validation() {
         assert!(ClickhouseHandler::validate_clickhouse_uri("http://localhost:8123").is_ok());
-        assert!(ClickhouseHandler::validate_clickhouse_uri("https://clickhouse.example.com:8443").is_ok());
+        assert!(
+            ClickhouseHandler::validate_clickhouse_uri("https://clickhouse.example.com:8443")
+                .is_ok()
+        );
         assert!(ClickhouseHandler::validate_clickhouse_uri("tcp://localhost:9000").is_err());
         assert!(ClickhouseHandler::validate_clickhouse_uri("").is_err());
     }
 
     #[test]
     fn test_uri_parsing() {
-        let (endpoint, username, password) = ClickhouseHandler::parse_clickhouse_uri("http://user:pass@localhost:8123/db").unwrap();
+        let (endpoint, username, password) =
+            ClickhouseHandler::parse_clickhouse_uri("http://user:pass@localhost:8123/db").unwrap();
         assert_eq!(endpoint, "http://localhost:8123/");
         assert_eq!(username, "user");
         assert_eq!(password, "pass");
@@ -794,7 +811,10 @@ mod tests {
         let clickhouse_id = clickhouse.id;
 
         let handler = ClickhouseHandler;
-        let handle = handler.execute(clickhouse, context, tx, None).await.unwrap();
+        let handle = handler
+            .execute(clickhouse, context, tx, None)
+            .await
+            .unwrap();
 
         // Wait for execution to complete
         loop {
@@ -834,7 +854,12 @@ mod tests {
                 assert_eq!(*block_id, clickhouse_id);
                 assert_eq!(*rb_id, runbook_id);
                 assert!(
-                    error.contains("URI") || error.contains("SQL") || error.contains("syntax") || error.contains("HTTP") || error.contains("url") || error.contains("connect")
+                    error.contains("URI")
+                        || error.contains("SQL")
+                        || error.contains("syntax")
+                        || error.contains("HTTP")
+                        || error.contains("url")
+                        || error.contains("connect")
                 );
             }
             _ => panic!("Expected BlockFailed event, got: {:?}", events[1]),

@@ -452,7 +452,10 @@ mod tests {
             .id(Uuid::new_v4())
             .hostname("localhost")
             .build();
-        handler.apply_context(&localhost, &mut context).await.unwrap();
+        handler
+            .apply_context(&localhost, &mut context)
+            .await
+            .unwrap();
         assert!(context.ssh_host.is_none());
     }
 }

@@ -225,7 +225,7 @@ impl ScriptHandler {
                         stdout: None,
                         stderr: None,
                         binary: None,
-                object: None,
+                        object: None,
                         lifecycle: Some(BlockLifecycleEvent::Error(BlockErrorData {
                             message: error_msg.to_string(),
                         })),
@@ -267,7 +267,7 @@ impl ScriptHandler {
                     stdout: None,
                     stderr: None,
                     binary: None,
-                object: None,
+                    object: None,
                     lifecycle: Some(BlockLifecycleEvent::Error(BlockErrorData {
                         message: error_msg.clone(),
                     })),
@@ -293,7 +293,7 @@ impl ScriptHandler {
                         stderr: None,
                         lifecycle: None,
                         binary: None,
-                object: None,
+                        object: None,
                     });
                 }
 
@@ -431,7 +431,7 @@ impl ScriptHandler {
                         stdout: None,
                         stderr: None,
                         binary: None,
-                object: None,
+                        object: None,
                         lifecycle: Some(BlockLifecycleEvent::Error(BlockErrorData {
                             message: format!("Failed to spawn process: {}", e),
                         })),
@@ -462,7 +462,7 @@ impl ScriptHandler {
                             stderr: None,
                             lifecycle: None,
                             binary: None,
-                object: None,
+                            object: None,
                         });
                     }
                     // Capture output
@@ -489,7 +489,7 @@ impl ScriptHandler {
                             stderr: Some(line.clone()),
                             lifecycle: None,
                             binary: None,
-                object: None,
+                            object: None,
                         });
                     }
                     line.clear();
@@ -577,7 +577,7 @@ impl ScriptHandler {
                             stdout: None,
                             stderr: None,
                             binary: None,
-                object: None,
+                            object: None,
                             lifecycle: Some(BlockLifecycleEvent::Error(BlockErrorData {
                                 message: format!("Failed to wait for process: {}", e),
                             })),

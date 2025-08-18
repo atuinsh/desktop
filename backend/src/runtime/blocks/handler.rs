@@ -105,7 +105,7 @@ pub struct BlockOutput {
     pub stdout: Option<String>,
     pub stderr: Option<String>,
     pub lifecycle: Option<BlockLifecycleEvent>,
-    pub binary: Option<Vec<u8>>, // For terminal raw data
+    pub binary: Option<Vec<u8>>,           // For terminal raw data
     pub object: Option<serde_json::Value>, // For structured JSON data
 }
 

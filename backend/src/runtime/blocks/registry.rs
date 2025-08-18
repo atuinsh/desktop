@@ -1,5 +1,7 @@
 use super::handler::{BlockHandler, BlockOutput, ExecutionContext, ExecutionHandle};
-use super::handlers::{ClickhouseHandler, MySQLHandler, PostgresHandler, ScriptHandler, SQLiteHandler, TerminalHandler};
+use super::handlers::{
+    ClickhouseHandler, MySQLHandler, PostgresHandler, SQLiteHandler, ScriptHandler, TerminalHandler,
+};
 use super::Block;
 use crate::runtime::workflow::event::WorkflowEvent;
 use tauri::ipc::Channel;

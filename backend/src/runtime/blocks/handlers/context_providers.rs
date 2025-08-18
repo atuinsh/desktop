@@ -175,10 +175,7 @@ mod tests {
     #[tokio::test]
     async fn test_host_handler_local() {
         let handler = HostHandler;
-        let host = Host::builder()
-            .id(Uuid::new_v4())
-            .host("local")
-            .build();
+        let host = Host::builder().id(Uuid::new_v4()).host("local").build();
 
         let mut context = ExecutionContext::default();
         handler.apply_context(&host, &mut context).await.unwrap();
@@ -189,10 +186,7 @@ mod tests {
     #[tokio::test]
     async fn test_host_handler_localhost() {
         let handler = HostHandler;
-        let host = Host::builder()
-            .id(Uuid::new_v4())
-            .host("localhost")
-            .build();
+        let host = Host::builder().id(Uuid::new_v4()).host("localhost").build();
 
         let mut context = ExecutionContext::default();
         handler.apply_context(&host, &mut context).await.unwrap();
@@ -203,10 +197,7 @@ mod tests {
     #[tokio::test]
     async fn test_host_handler_empty() {
         let handler = HostHandler;
-        let host = Host::builder()
-            .id(Uuid::new_v4())
-            .host("")
-            .build();
+        let host = Host::builder().id(Uuid::new_v4()).host("").build();
 
         let mut context = ExecutionContext::default();
         handler.apply_context(&host, &mut context).await.unwrap();
@@ -245,13 +236,13 @@ mod tests {
     #[tokio::test]
     async fn test_local_var_handler_empty_name() {
         let handler = LocalVarHandler;
-        let local_var = LocalVar::builder()
-            .id(Uuid::new_v4())
-            .name("")
-            .build();
+        let local_var = LocalVar::builder().id(Uuid::new_v4()).name("").build();
 
         let mut context = ExecutionContext::default();
-        handler.apply_context(&local_var, &mut context).await.unwrap();
+        handler
+            .apply_context(&local_var, &mut context)
+            .await
+            .unwrap();
 
         // Should not add anything to variables for empty name
         assert!(context.variables.is_empty());
@@ -266,7 +257,10 @@ mod tests {
             .build();
 
         let mut context = ExecutionContext::default();
-        handler.apply_context(&local_var, &mut context).await.unwrap();
+        handler
+            .apply_context(&local_var, &mut context)
+            .await
+            .unwrap();
 
         // Should add empty value for the variable (since no stored value in test)
         assert_eq!(context.variables.get("test_var"), Some(&String::new()));

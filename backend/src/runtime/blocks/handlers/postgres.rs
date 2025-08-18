@@ -9,8 +9,8 @@ use tokio::sync::{broadcast, RwLock};
 use uuid::Uuid;
 
 use crate::runtime::blocks::handler::{
-    BlockErrorData, BlockFinishedData, BlockHandler, BlockLifecycleEvent, BlockOutput, CancellationToken,
-    ExecutionContext, ExecutionHandle, ExecutionStatus,
+    BlockErrorData, BlockFinishedData, BlockHandler, BlockLifecycleEvent, BlockOutput,
+    CancellationToken, ExecutionContext, ExecutionHandle, ExecutionStatus,
 };
 use crate::runtime::blocks::postgres::Postgres;
 use crate::runtime::events::GCEvent;
@@ -132,16 +132,19 @@ impl PostgresHandler {
         if uri.is_empty() {
             return Err("Postgres URI cannot be empty".to_string());
         }
-        
+
         if !uri.starts_with("postgres://") && !uri.starts_with("postgresql://") {
-            return Err("Invalid Postgres URI format. Must start with 'postgres://' or 'postgresql://'".to_string());
+            return Err(
+                "Invalid Postgres URI format. Must start with 'postgres://' or 'postgresql://'"
+                    .to_string(),
+            );
         }
-        
+
         // Try parsing the URI to catch format errors early
         if let Err(e) = PgConnectOptions::from_str(uri) {
             return Err(format!("Invalid URI format: {}", e));
         }
-        
+
         Ok(())
     }
 
@@ -281,7 +284,9 @@ impl PostgresHandler {
 
         if first_word == "select" || first_word == "with" {
             // Handle SELECT query or CTE
-            let rows = sqlx::query(statement).fetch_all(pool).await
+            let rows = sqlx::query(statement)
+                .fetch_all(pool)
+                .await
                 .map_err(|e| format!("SQL query failed: {}", e))?;
 
             let mut results = Vec::new();
@@ -317,7 +322,9 @@ impl PostgresHandler {
             }
         } else {
             // Handle non-SELECT statement (INSERT, UPDATE, DELETE, CREATE, etc.)
-            let result = sqlx::query(statement).execute(pool).await
+            let result = sqlx::query(statement)
+                .execute(pool)
+                .await
                 .map_err(|e| format!("SQL execution failed: {}", e))?;
 
             // Send execution result as structured JSON object
@@ -488,7 +495,10 @@ impl PostgresHandler {
             // Send executing status
             if let Some(ref ch) = &output_channel_clone {
                 let _ = ch.send(BlockOutput {
-                    stdout: Some(format!("Executing {} SQL statement(s)...", statements.len())),
+                    stdout: Some(format!(
+                        "Executing {} SQL statement(s)...",
+                        statements.len()
+                    )),
                     stderr: None,
                     binary: None,
                     object: None,
@@ -572,7 +582,7 @@ impl PostgresHandler {
                 object: None,
                 lifecycle: None,
             });
-            
+
             // Send finished lifecycle event
             let _ = ch.send(BlockOutput {
                 stdout: None,
@@ -831,7 +841,13 @@ mod tests {
             } => {
                 assert_eq!(*block_id, postgres_id);
                 assert_eq!(*rb_id, runbook_id);
-                assert!(error.contains("URI") || error.contains("SQL") || error.contains("syntax") || error.contains("database") || error.contains("role"));
+                assert!(
+                    error.contains("URI")
+                        || error.contains("SQL")
+                        || error.contains("syntax")
+                        || error.contains("database")
+                        || error.contains("role")
+                );
             }
             _ => panic!("Expected BlockFailed event, got: {:?}", events[1]),
         }

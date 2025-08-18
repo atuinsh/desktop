@@ -2,11 +2,11 @@ use serde_json::Value;
 use std::collections::HashMap;
 use uuid::Uuid;
 
-use crate::runtime::blocks::handler::{ExecutionContext, ContextProvider};
+use crate::runtime::blocks::context_blocks::{Directory, Environment, Host, LocalVar, SshConnect};
+use crate::runtime::blocks::handler::{ContextProvider, ExecutionContext};
 use crate::runtime::blocks::handlers::context_providers::{
-    DirectoryHandler, EnvironmentHandler, SshConnectHandler, HostHandler, LocalVarHandler
+    DirectoryHandler, EnvironmentHandler, HostHandler, LocalVarHandler, SshConnectHandler,
 };
-use crate::runtime::blocks::context_blocks::{Directory, Environment, SshConnect, Host, LocalVar};
 
 #[derive(Debug, Clone)]
 pub struct BlockInfo {
@@ -125,7 +125,10 @@ impl ContextBuilder {
                             .id(uuid::Uuid::parse_str(&block.id)?)
                             .path(path.clone())
                             .build();
-                        DirectoryHandler.apply_context(&directory_block, context).await.map_err(|e| format!("Directory context error: {}", e))?;
+                        DirectoryHandler
+                            .apply_context(&directory_block, context)
+                            .await
+                            .map_err(|e| format!("Directory context error: {}", e))?;
                     }
                 }
             }
@@ -139,7 +142,10 @@ impl ContextBuilder {
                             .name(name.clone())
                             .value(value.clone())
                             .build();
-                        EnvironmentHandler.apply_context(&env_block, context).await.map_err(|e| format!("Environment context error: {}", e))?;
+                        EnvironmentHandler
+                            .apply_context(&env_block, context)
+                            .await
+                            .map_err(|e| format!("Environment context error: {}", e))?;
                     }
                 }
             }
@@ -150,7 +156,10 @@ impl ContextBuilder {
                             .id(uuid::Uuid::parse_str(&block.id)?)
                             .user_host(user_host.clone())
                             .build();
-                        SshConnectHandler.apply_context(&ssh_block, context).await.map_err(|e| format!("SSH context error: {}", e))?;
+                        SshConnectHandler
+                            .apply_context(&ssh_block, context)
+                            .await
+                            .map_err(|e| format!("SSH context error: {}", e))?;
                     }
                 }
             }
@@ -160,7 +169,10 @@ impl ContextBuilder {
                         .id(uuid::Uuid::parse_str(&block.id)?)
                         .host(host.clone())
                         .build();
-                    HostHandler.apply_context(&host_block, context).await.map_err(|e| format!("Host context error: {}", e))?;
+                    HostHandler
+                        .apply_context(&host_block, context)
+                        .await
+                        .map_err(|e| format!("Host context error: {}", e))?;
                 }
             }
             "var" => {
@@ -179,7 +191,10 @@ impl ContextBuilder {
                             .id(uuid::Uuid::parse_str(&block.id)?)
                             .name(name.clone())
                             .build();
-                        LocalVarHandler.apply_context(&local_var_block, context).await.map_err(|e| format!("Local var context error: {}", e))?;
+                        LocalVarHandler
+                            .apply_context(&local_var_block, context)
+                            .await
+                            .map_err(|e| format!("Local var context error: {}", e))?;
                     }
                 }
             }

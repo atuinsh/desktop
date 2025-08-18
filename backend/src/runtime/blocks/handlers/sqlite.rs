@@ -385,7 +385,7 @@ impl SQLiteHandler {
                         object: None,
                         lifecycle: None,
                     });
-                    
+
                     // Send finished lifecycle event
                     let _ = ch.send(BlockOutput {
                         stdout: None,

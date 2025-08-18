@@ -9,8 +9,8 @@ use tokio::sync::{broadcast, RwLock};
 use uuid::Uuid;
 
 use crate::runtime::blocks::handler::{
-    BlockErrorData, BlockFinishedData, BlockHandler, BlockLifecycleEvent, BlockOutput, CancellationToken,
-    ExecutionContext, ExecutionHandle, ExecutionStatus,
+    BlockErrorData, BlockFinishedData, BlockHandler, BlockLifecycleEvent, BlockOutput,
+    CancellationToken, ExecutionContext, ExecutionHandle, ExecutionStatus,
 };
 use crate::runtime::blocks::mysql::Mysql;
 use crate::runtime::events::GCEvent;
@@ -132,16 +132,18 @@ impl MySQLHandler {
         if uri.is_empty() {
             return Err("MySQL URI cannot be empty".to_string());
         }
-        
+
         if !uri.starts_with("mysql://") && !uri.starts_with("mariadb://") {
-            return Err("Invalid MySQL URI format. Must start with 'mysql://' or 'mariadb://'".to_string());
+            return Err(
+                "Invalid MySQL URI format. Must start with 'mysql://' or 'mariadb://'".to_string(),
+            );
         }
-        
+
         // Try parsing the URI to catch format errors early
         if let Err(e) = MySqlConnectOptions::from_str(uri) {
             return Err(format!("Invalid URI format: {}", e));
         }
-        
+
         Ok(())
     }
 
@@ -168,11 +170,11 @@ impl MySQLHandler {
         for (i, column) in row.columns().iter().enumerate() {
             let column_name = column.name().to_string();
             let raw_value = row.try_get_raw(i)?;
-            
+
             // Use existing MySQL decode function
-            let value = crate::runtime::blocks::mysql::decode::to_json(raw_value)
-                .unwrap_or(Value::Null);
-            
+            let value =
+                crate::runtime::blocks::mysql::decode::to_json(raw_value).unwrap_or(Value::Null);
+
             obj.insert(column_name, value);
         }
 
@@ -197,9 +199,16 @@ impl MySQLHandler {
             .unwrap_or("")
             .to_lowercase();
 
-        if first_word == "select" || first_word == "with" || first_word == "show" || first_word == "describe" || first_word == "explain" {
+        if first_word == "select"
+            || first_word == "with"
+            || first_word == "show"
+            || first_word == "describe"
+            || first_word == "explain"
+        {
             // Handle SELECT query or other queries that return results
-            let rows = sqlx::query(statement).fetch_all(pool).await
+            let rows = sqlx::query(statement)
+                .fetch_all(pool)
+                .await
                 .map_err(|e| format!("SQL query failed: {}", e))?;
 
             let mut results = Vec::new();
@@ -235,7 +244,9 @@ impl MySQLHandler {
             }
         } else {
             // Handle non-SELECT statement (INSERT, UPDATE, DELETE, CREATE, etc.)
-            let result = sqlx::query(statement).execute(pool).await
+            let result = sqlx::query(statement)
+                .execute(pool)
+                .await
                 .map_err(|e| format!("SQL execution failed: {}", e))?;
 
             // Send execution result as structured JSON object
@@ -407,7 +418,10 @@ impl MySQLHandler {
             // Send executing status
             if let Some(ref ch) = &output_channel_clone {
                 let _ = ch.send(BlockOutput {
-                    stdout: Some(format!("Executing {} SQL statement(s)...", statements.len())),
+                    stdout: Some(format!(
+                        "Executing {} SQL statement(s)...",
+                        statements.len()
+                    )),
                     stderr: None,
                     binary: None,
                     object: None,
@@ -491,7 +505,7 @@ impl MySQLHandler {
                 object: None,
                 lifecycle: None,
             });
-            
+
             // Send finished lifecycle event
             let _ = ch.send(BlockOutput {
                 stdout: None,
@@ -750,8 +764,13 @@ mod tests {
             } => {
                 assert_eq!(*block_id, mysql_id);
                 assert_eq!(*rb_id, runbook_id);
-                // The error should contain connection or validation info 
-                assert!(error.contains("URI") || error.contains("connect") || error.contains("invalid") || error.contains("failed"));
+                // The error should contain connection or validation info
+                assert!(
+                    error.contains("URI")
+                        || error.contains("connect")
+                        || error.contains("invalid")
+                        || error.contains("failed")
+                );
             }
             _ => panic!("Expected BlockFailed event, got: {:?}", events[1]),
         }
