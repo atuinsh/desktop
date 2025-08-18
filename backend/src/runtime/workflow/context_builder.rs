@@ -137,13 +137,13 @@ impl ContextBuilder {
                     }
                 }
             }
-            "host" => {
-                if let Some(hostname) = block.props.get("hostname") {
-                    let hostname = hostname.trim();
-                    if hostname.is_empty() || hostname == "localhost" {
+            "host-select" => {
+                if let Some(host) = block.props.get("host") {
+                    let host = host.trim();
+                    if host.is_empty() || host == "local" || host == "localhost" {
                         context.ssh_host = None; // Switch to local execution
                     } else {
-                        context.ssh_host = Some(hostname.to_string()); // Switch to SSH execution
+                        context.ssh_host = Some(host.to_string()); // Switch to SSH execution
                     }
                 }
             }
@@ -200,5 +200,64 @@ mod tests {
 
         assert_eq!(context.cwd, "/tmp");
         assert_eq!(context.env.get("TEST_VAR"), Some(&"test_value".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_context_builder_host_select() {
+        let document = vec![json!({
+            "id": "root",
+            "type": "host-select",
+            "props": { "host": "local" },
+            "children": [
+                {
+                    "id": "host2",
+                    "type": "host-select",
+                    "props": { "host": "user@remote.com" }
+                },
+                {
+                    "id": "script1",
+                    "type": "script",
+                    "props": { "code": "echo 'test'" }
+                }
+            ]
+        })];
+
+        let context = ContextBuilder::build_context(
+            "script1",
+            &document,
+            "00000000-0000-0000-0000-000000000000",
+        )
+        .await
+        .unwrap();
+
+        // Should have SSH host set by the second host-select block
+        assert_eq!(context.ssh_host, Some("user@remote.com".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_context_builder_host_select_local() {
+        let document = vec![json!({
+            "id": "host1",
+            "type": "host-select",
+            "props": { "host": "local" },
+            "children": [
+                {
+                    "id": "script1",
+                    "type": "script",
+                    "props": { "code": "echo 'test'" }
+                }
+            ]
+        })];
+
+        let context = ContextBuilder::build_context(
+            "script1",
+            &document,
+            "00000000-0000-0000-0000-000000000000",
+        )
+        .await
+        .unwrap();
+
+        // Should have no SSH host (local execution)
+        assert_eq!(context.ssh_host, None);
     }
 }

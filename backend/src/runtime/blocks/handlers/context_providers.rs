@@ -1,4 +1,4 @@
-use crate::runtime::blocks::context_blocks::{Directory, Environment, SshConnect};
+use crate::runtime::blocks::context_blocks::{Directory, Environment, Host, SshConnect};
 use crate::runtime::blocks::handler::{ContextProvider, ExecutionContext};
 
 pub struct DirectoryHandler;
@@ -58,6 +58,30 @@ impl ContextProvider for SshConnectHandler {
     }
 }
 
+pub struct HostHandler;
+
+impl ContextProvider for HostHandler {
+    type Block = Host;
+
+    fn block_type(&self) -> &'static str {
+        "host-select"
+    }
+
+    fn apply_context(
+        &self,
+        block: &Host,
+        context: &mut ExecutionContext,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        let host = block.host.trim();
+        if host.is_empty() || host == "local" || host == "localhost" {
+            context.ssh_host = None; // Switch to local execution
+        } else {
+            context.ssh_host = Some(host.to_string()); // Switch to SSH execution
+        }
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -104,5 +128,75 @@ mod tests {
         handler.apply_context(&ssh, &mut context).unwrap();
 
         assert_eq!(context.ssh_host, Some("user@host.com".to_string()));
+    }
+
+    #[test]
+    fn test_host_handler_local() {
+        let handler = HostHandler;
+        let host = Host::builder()
+            .id(Uuid::new_v4())
+            .host("local")
+            .build();
+
+        let mut context = ExecutionContext::default();
+        handler.apply_context(&host, &mut context).unwrap();
+
+        assert_eq!(context.ssh_host, None);
+    }
+
+    #[test]
+    fn test_host_handler_localhost() {
+        let handler = HostHandler;
+        let host = Host::builder()
+            .id(Uuid::new_v4())
+            .host("localhost")
+            .build();
+
+        let mut context = ExecutionContext::default();
+        handler.apply_context(&host, &mut context).unwrap();
+
+        assert_eq!(context.ssh_host, None);
+    }
+
+    #[test]
+    fn test_host_handler_empty() {
+        let handler = HostHandler;
+        let host = Host::builder()
+            .id(Uuid::new_v4())
+            .host("")
+            .build();
+
+        let mut context = ExecutionContext::default();
+        handler.apply_context(&host, &mut context).unwrap();
+
+        assert_eq!(context.ssh_host, None);
+    }
+
+    #[test]
+    fn test_host_handler_remote() {
+        let handler = HostHandler;
+        let host = Host::builder()
+            .id(Uuid::new_v4())
+            .host("user@remote.com")
+            .build();
+
+        let mut context = ExecutionContext::default();
+        handler.apply_context(&host, &mut context).unwrap();
+
+        assert_eq!(context.ssh_host, Some("user@remote.com".to_string()));
+    }
+
+    #[test]
+    fn test_host_handler_whitespace() {
+        let handler = HostHandler;
+        let host = Host::builder()
+            .id(Uuid::new_v4())
+            .host("  localhost  ")
+            .build();
+
+        let mut context = ExecutionContext::default();
+        handler.apply_context(&host, &mut context).unwrap();
+
+        assert_eq!(context.ssh_host, None);
     }
 }
