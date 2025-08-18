@@ -2,7 +2,11 @@ use serde_json::Value;
 use std::collections::HashMap;
 use uuid::Uuid;
 
-use crate::runtime::blocks::handler::ExecutionContext;
+use crate::runtime::blocks::handler::{ExecutionContext, ContextProvider};
+use crate::runtime::blocks::handlers::context_providers::{
+    DirectoryHandler, EnvironmentHandler, SshConnectHandler, HostHandler, LocalVarHandler
+};
+use crate::runtime::blocks::context_blocks::{Directory, Environment, SshConnect, Host, LocalVar};
 
 #[derive(Debug, Clone)]
 pub struct BlockInfo {
@@ -51,7 +55,7 @@ impl ContextBuilder {
 
         // Apply context modifications from preceding blocks (in document order)
         for block in preceding_blocks {
-            Self::apply_block_context(block, &mut context)?;
+            Self::apply_block_context(block, &mut context).await?;
         }
 
         Ok(context)
@@ -109,7 +113,7 @@ impl ContextBuilder {
     }
 
     /// Apply a block's context modifications
-    fn apply_block_context(
+    async fn apply_block_context(
         block: &BlockInfo,
         context: &mut ExecutionContext,
     ) -> Result<(), Box<dyn std::error::Error>> {
@@ -117,7 +121,11 @@ impl ContextBuilder {
             "directory" => {
                 if let Some(path) = block.props.get("path") {
                     if !path.is_empty() {
-                        context.cwd = path.clone();
+                        let directory_block = Directory::builder()
+                            .id(uuid::Uuid::parse_str(&block.id)?)
+                            .path(path.clone())
+                            .build();
+                        DirectoryHandler.apply_context(&directory_block, context).await.map_err(|e| format!("Directory context error: {}", e))?;
                     }
                 }
             }
@@ -126,25 +134,33 @@ impl ContextBuilder {
                     (block.props.get("name"), block.props.get("value"))
                 {
                     if !name.is_empty() {
-                        context.env.insert(name.clone(), value.clone());
+                        let env_block = Environment::builder()
+                            .id(uuid::Uuid::parse_str(&block.id)?)
+                            .name(name.clone())
+                            .value(value.clone())
+                            .build();
+                        EnvironmentHandler.apply_context(&env_block, context).await.map_err(|e| format!("Environment context error: {}", e))?;
                     }
                 }
             }
             "ssh-connect" => {
                 if let Some(user_host) = block.props.get("userHost") {
                     if !user_host.is_empty() {
-                        context.ssh_host = Some(user_host.clone());
+                        let ssh_block = SshConnect::builder()
+                            .id(uuid::Uuid::parse_str(&block.id)?)
+                            .user_host(user_host.clone())
+                            .build();
+                        SshConnectHandler.apply_context(&ssh_block, context).await.map_err(|e| format!("SSH context error: {}", e))?;
                     }
                 }
             }
             "host-select" => {
                 if let Some(host) = block.props.get("host") {
-                    let host = host.trim();
-                    if host.is_empty() || host == "local" || host == "localhost" {
-                        context.ssh_host = None; // Switch to local execution
-                    } else {
-                        context.ssh_host = Some(host.to_string()); // Switch to SSH execution
-                    }
+                    let host_block = Host::builder()
+                        .id(uuid::Uuid::parse_str(&block.id)?)
+                        .host(host.clone())
+                        .build();
+                    HostHandler.apply_context(&host_block, context).await.map_err(|e| format!("Host context error: {}", e))?;
                 }
             }
             "var" => {
@@ -153,6 +169,17 @@ impl ContextBuilder {
                 {
                     if !name.is_empty() {
                         context.variables.insert(name.clone(), value.clone());
+                    }
+                }
+            }
+            "local-var" => {
+                if let Some(name) = block.props.get("name") {
+                    if !name.is_empty() {
+                        let local_var_block = LocalVar::builder()
+                            .id(uuid::Uuid::parse_str(&block.id)?)
+                            .name(name.clone())
+                            .build();
+                        LocalVarHandler.apply_context(&local_var_block, context).await.map_err(|e| format!("Local var context error: {}", e))?;
                     }
                 }
             }
@@ -173,17 +200,17 @@ mod tests {
     #[tokio::test]
     async fn test_context_builder() {
         let document = vec![json!({
-            "id": "root",
+            "id": "00000000-0000-0000-0000-000000000001",
             "type": "directory",
             "props": { "path": "/tmp" },
             "children": [
                 {
-                    "id": "env1",
+                    "id": "00000000-0000-0000-0000-000000000002",
                     "type": "env",
                     "props": { "name": "TEST_VAR", "value": "test_value" }
                 },
                 {
-                    "id": "script1",
+                    "id": "00000000-0000-0000-0000-000000000003",
                     "type": "script",
                     "props": { "code": "echo $TEST_VAR" }
                 }
@@ -191,7 +218,7 @@ mod tests {
         })];
 
         let context = ContextBuilder::build_context(
-            "script1",
+            "00000000-0000-0000-0000-000000000003",
             &document,
             "00000000-0000-0000-0000-000000000000",
         )
@@ -205,17 +232,17 @@ mod tests {
     #[tokio::test]
     async fn test_context_builder_host_select() {
         let document = vec![json!({
-            "id": "root",
+            "id": "00000000-0000-0000-0000-000000000001",
             "type": "host-select",
             "props": { "host": "local" },
             "children": [
                 {
-                    "id": "host2",
+                    "id": "00000000-0000-0000-0000-000000000002",
                     "type": "host-select",
                     "props": { "host": "user@remote.com" }
                 },
                 {
-                    "id": "script1",
+                    "id": "00000000-0000-0000-0000-000000000003",
                     "type": "script",
                     "props": { "code": "echo 'test'" }
                 }
@@ -223,7 +250,7 @@ mod tests {
         })];
 
         let context = ContextBuilder::build_context(
-            "script1",
+            "00000000-0000-0000-0000-000000000003",
             &document,
             "00000000-0000-0000-0000-000000000000",
         )
@@ -235,14 +262,68 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_context_builder_local_var() {
+        let document = vec![json!({
+            "id": "00000000-0000-0000-0000-000000000001",
+            "type": "local-var",
+            "props": { "name": "secret_key" },
+            "children": [
+                {
+                    "id": "00000000-0000-0000-0000-000000000002",
+                    "type": "script",
+                    "props": { "code": "echo $secret_key" }
+                }
+            ]
+        })];
+
+        let context = ContextBuilder::build_context(
+            "00000000-0000-0000-0000-000000000002",
+            &document,
+            "00000000-0000-0000-0000-000000000000",
+        )
+        .await
+        .unwrap();
+
+        // Should add empty value for the local variable (since no stored value in test)
+        assert_eq!(context.variables.get("secret_key"), Some(&String::new()));
+    }
+
+    #[tokio::test]
+    async fn test_context_builder_local_var_empty_name() {
+        let document = vec![json!({
+            "id": "00000000-0000-0000-0000-000000000001",
+            "type": "local-var",
+            "props": { "name": "" },
+            "children": [
+                {
+                    "id": "00000000-0000-0000-0000-000000000002",
+                    "type": "script",
+                    "props": { "code": "echo test" }
+                }
+            ]
+        })];
+
+        let context = ContextBuilder::build_context(
+            "00000000-0000-0000-0000-000000000002",
+            &document,
+            "00000000-0000-0000-0000-000000000000",
+        )
+        .await
+        .unwrap();
+
+        // Should not add anything for empty name
+        assert!(context.variables.is_empty());
+    }
+
+    #[tokio::test]
     async fn test_context_builder_host_select_local() {
         let document = vec![json!({
-            "id": "host1",
+            "id": "00000000-0000-0000-0000-000000000001",
             "type": "host-select",
             "props": { "host": "local" },
             "children": [
                 {
-                    "id": "script1",
+                    "id": "00000000-0000-0000-0000-000000000002",
                     "type": "script",
                     "props": { "code": "echo 'test'" }
                 }
@@ -250,7 +331,7 @@ mod tests {
         })];
 
         let context = ContextBuilder::build_context(
-            "script1",
+            "00000000-0000-0000-0000-000000000002",
             &document,
             "00000000-0000-0000-0000-000000000000",
         )

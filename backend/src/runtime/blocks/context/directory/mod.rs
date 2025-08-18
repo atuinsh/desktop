@@ -1,4 +1,5 @@
 use crate::runtime::blocks::handler::{ContextProvider, ExecutionContext};
+use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use typed_builder::TypedBuilder;
 use uuid::Uuid;
@@ -15,6 +16,7 @@ pub struct Directory {
 
 pub struct DirectoryHandler;
 
+#[async_trait]
 impl ContextProvider for DirectoryHandler {
     type Block = Directory;
 
@@ -22,7 +24,7 @@ impl ContextProvider for DirectoryHandler {
         "directory"
     }
 
-    fn apply_context(
+    async fn apply_context(
         &self,
         block: &Directory,
         context: &mut ExecutionContext,
@@ -57,8 +59,8 @@ mod tests {
     use std::collections::HashMap;
 
     // Basic functionality tests
-    #[test]
-    fn test_basic_directory_context() {
+    #[tokio::test]
+    async fn test_basic_directory_context() {
         let handler = DirectoryHandler;
         let dir = Directory::builder()
             .id(Uuid::new_v4())
@@ -66,31 +68,31 @@ mod tests {
             .build();
 
         let mut context = ExecutionContext::default();
-        handler.apply_context(&dir, &mut context).unwrap();
+        handler.apply_context(&dir, &mut context).await.unwrap();
 
         assert_eq!(context.cwd, "/tmp/test");
     }
 
-    #[test]
-    fn test_block_type() {
+    #[tokio::test]
+    async fn test_block_type() {
         let handler = DirectoryHandler;
         assert_eq!(handler.block_type(), "directory");
     }
 
     // Edge cases
-    #[test]
-    fn test_empty_path() {
+    #[tokio::test]
+    async fn test_empty_path() {
         let handler = DirectoryHandler;
         let dir = Directory::builder().id(Uuid::new_v4()).path("").build();
 
         let mut context = ExecutionContext::default();
-        handler.apply_context(&dir, &mut context).unwrap();
+        handler.apply_context(&dir, &mut context).await.unwrap();
 
         assert_eq!(context.cwd, "");
     }
 
-    #[test]
-    fn test_relative_path() {
+    #[tokio::test]
+    async fn test_relative_path() {
         let handler = DirectoryHandler;
         let dir = Directory::builder()
             .id(Uuid::new_v4())
@@ -98,13 +100,13 @@ mod tests {
             .build();
 
         let mut context = ExecutionContext::default();
-        handler.apply_context(&dir, &mut context).unwrap();
+        handler.apply_context(&dir, &mut context).await.unwrap();
 
         assert_eq!(context.cwd, "./relative/path");
     }
 
-    #[test]
-    fn test_path_with_spaces() {
+    #[tokio::test]
+    async fn test_path_with_spaces() {
         let handler = DirectoryHandler;
         let dir = Directory::builder()
             .id(Uuid::new_v4())
@@ -112,13 +114,13 @@ mod tests {
             .build();
 
         let mut context = ExecutionContext::default();
-        handler.apply_context(&dir, &mut context).unwrap();
+        handler.apply_context(&dir, &mut context).await.unwrap();
 
         assert_eq!(context.cwd, "/path with spaces/test");
     }
 
-    #[test]
-    fn test_path_with_special_chars() {
+    #[tokio::test]
+    async fn test_path_with_special_chars() {
         let handler = DirectoryHandler;
         let dir = Directory::builder()
             .id(Uuid::new_v4())
@@ -126,13 +128,13 @@ mod tests {
             .build();
 
         let mut context = ExecutionContext::default();
-        handler.apply_context(&dir, &mut context).unwrap();
+        handler.apply_context(&dir, &mut context).await.unwrap();
 
         assert_eq!(context.cwd, "/path/with-special_chars.123/test");
     }
 
-    #[test]
-    fn test_unicode_path() {
+    #[tokio::test]
+    async fn test_unicode_path() {
         let handler = DirectoryHandler;
         let dir = Directory::builder()
             .id(Uuid::new_v4())
@@ -140,14 +142,14 @@ mod tests {
             .build();
 
         let mut context = ExecutionContext::default();
-        handler.apply_context(&dir, &mut context).unwrap();
+        handler.apply_context(&dir, &mut context).await.unwrap();
 
         assert_eq!(context.cwd, "/path/with/unicode/测试/test");
     }
 
     // Serialization tests
-    #[test]
-    fn test_json_serialization_roundtrip() {
+    #[tokio::test]
+    async fn test_json_serialization_roundtrip() {
         let original = Directory::builder()
             .id(Uuid::new_v4())
             .path("/tmp/test")
@@ -160,8 +162,8 @@ mod tests {
         assert_eq!(original.path, deserialized.path);
     }
 
-    #[test]
-    fn test_from_document_valid() {
+    #[tokio::test]
+    async fn test_from_document_valid() {
         let id = Uuid::new_v4();
         let json_data = serde_json::json!({
             "id": id.to_string(),
@@ -174,8 +176,8 @@ mod tests {
         assert_eq!(dir.path, "/tmp/test");
     }
 
-    #[test]
-    fn test_from_document_missing_id() {
+    #[tokio::test]
+    async fn test_from_document_missing_id() {
         let json_data = serde_json::json!({
             "path": "/tmp/test",
             "type": "directory"
@@ -186,8 +188,8 @@ mod tests {
         assert!(result.unwrap_err().contains("Invalid or missing id"));
     }
 
-    #[test]
-    fn test_from_document_missing_path() {
+    #[tokio::test]
+    async fn test_from_document_missing_path() {
         let json_data = serde_json::json!({
             "id": Uuid::new_v4().to_string(),
             "type": "directory"
@@ -198,8 +200,8 @@ mod tests {
         assert!(result.unwrap_err().contains("Missing path"));
     }
 
-    #[test]
-    fn test_from_document_invalid_id() {
+    #[tokio::test]
+    async fn test_from_document_invalid_id() {
         let json_data = serde_json::json!({
             "id": "not-a-uuid",
             "path": "/tmp/test",
@@ -212,8 +214,8 @@ mod tests {
     }
 
     // Integration tests
-    #[test]
-    fn test_multiple_directory_contexts() {
+    #[tokio::test]
+    async fn test_multiple_directory_contexts() {
         let handler = DirectoryHandler;
 
         let dir1 = Directory::builder()
@@ -229,16 +231,16 @@ mod tests {
         let mut context = ExecutionContext::default();
 
         // Apply first directory
-        handler.apply_context(&dir1, &mut context).unwrap();
+        handler.apply_context(&dir1, &mut context).await.unwrap();
         assert_eq!(context.cwd, "/first/path");
 
         // Apply second directory (should override)
-        handler.apply_context(&dir2, &mut context).unwrap();
+        handler.apply_context(&dir2, &mut context).await.unwrap();
         assert_eq!(context.cwd, "/second/path");
     }
 
-    #[test]
-    fn test_directory_context_preserves_other_fields() {
+    #[tokio::test]
+    async fn test_directory_context_preserves_other_fields() {
         let handler = DirectoryHandler;
         let dir = Directory::builder()
             .id(Uuid::new_v4())
@@ -272,7 +274,7 @@ mod tests {
         let original_ssh_host = context.ssh_host.clone();
         let original_document = context.document.clone();
 
-        handler.apply_context(&dir, &mut context).unwrap();
+        handler.apply_context(&dir, &mut context).await.unwrap();
 
         // Directory should be updated
         assert_eq!(context.cwd, "/tmp/test");
@@ -285,8 +287,8 @@ mod tests {
         assert_eq!(context.document, original_document);
     }
 
-    #[test]
-    fn test_builder_pattern() {
+    #[tokio::test]
+    async fn test_builder_pattern() {
         let id = Uuid::new_v4();
         let dir = Directory::builder().id(id).path("/test/path").build();
 
@@ -294,8 +296,8 @@ mod tests {
         assert_eq!(dir.path, "/test/path");
     }
 
-    #[test]
-    fn test_builder_with_string_conversions() {
+    #[tokio::test]
+    async fn test_builder_with_string_conversions() {
         let id = Uuid::new_v4();
         let dir = Directory::builder()
             .id(id)

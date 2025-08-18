@@ -38,6 +38,7 @@ use typed_builder::TypedBuilder;
 use uuid::Uuid;
 
 use crate::runtime::blocks::handler::{ContextProvider, ExecutionContext};
+use async_trait::async_trait;
 
 /// Host context block for switching between localhost and SSH connections
 #[derive(Debug, Serialize, Deserialize, Clone, TypedBuilder)]
@@ -57,6 +58,7 @@ pub struct Host {
 /// Handler for host context blocks
 pub struct HostHandler;
 
+#[async_trait]
 impl ContextProvider for HostHandler {
     type Block = Host;
 
@@ -64,7 +66,7 @@ impl ContextProvider for HostHandler {
         "host"
     }
 
-    fn apply_context(
+    async fn apply_context(
         &self,
         block: &Self::Block,
         context: &mut ExecutionContext,
@@ -134,14 +136,14 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_block_type() {
+    #[tokio::test]
+    async fn test_block_type() {
         let handler = HostHandler;
         assert_eq!(handler.block_type(), "host");
     }
 
-    #[test]
-    fn test_builder_pattern() {
+    #[tokio::test]
+    async fn test_builder_pattern() {
         let host = Host::builder()
             .id(Uuid::new_v4())
             .hostname("test.example.com")
@@ -150,8 +152,8 @@ mod tests {
         assert_eq!(host.hostname, "test.example.com");
     }
 
-    #[test]
-    fn test_builder_with_string_conversions() {
+    #[tokio::test]
+    async fn test_builder_with_string_conversions() {
         let host = Host::builder()
             .id(Uuid::new_v4())
             .hostname("user@host.com") // Test string conversion
@@ -160,8 +162,8 @@ mod tests {
         assert_eq!(host.hostname, "user@host.com");
     }
 
-    #[test]
-    fn test_switch_to_localhost() {
+    #[tokio::test]
+    async fn test_switch_to_localhost() {
         let host = Host::builder()
             .id(Uuid::new_v4())
             .hostname("localhost")
@@ -171,28 +173,28 @@ mod tests {
         assert!(context.ssh_host.is_some()); // Start with SSH
 
         let handler = HostHandler;
-        let result = handler.apply_context(&host, &mut context);
+        let result = handler.apply_context(&host, &mut context).await;
 
         assert!(result.is_ok());
         assert!(context.ssh_host.is_none()); // Should switch to local
     }
 
-    #[test]
-    fn test_switch_to_empty_hostname() {
+    #[tokio::test]
+    async fn test_switch_to_empty_hostname() {
         let host = Host::builder().id(Uuid::new_v4()).hostname("").build();
 
         let mut context = create_test_context();
         assert!(context.ssh_host.is_some()); // Start with SSH
 
         let handler = HostHandler;
-        let result = handler.apply_context(&host, &mut context);
+        let result = handler.apply_context(&host, &mut context).await;
 
         assert!(result.is_ok());
         assert!(context.ssh_host.is_none()); // Should switch to local
     }
 
-    #[test]
-    fn test_switch_to_ssh_host() {
+    #[tokio::test]
+    async fn test_switch_to_ssh_host() {
         let host = Host::builder()
             .id(Uuid::new_v4())
             .hostname("user@newhost.com")
@@ -202,14 +204,14 @@ mod tests {
         context.ssh_host = None; // Start with local
 
         let handler = HostHandler;
-        let result = handler.apply_context(&host, &mut context);
+        let result = handler.apply_context(&host, &mut context).await;
 
         assert!(result.is_ok());
         assert_eq!(context.ssh_host, Some("user@newhost.com".to_string()));
     }
 
-    #[test]
-    fn test_switch_between_ssh_hosts() {
+    #[tokio::test]
+    async fn test_switch_between_ssh_hosts() {
         let host = Host::builder()
             .id(Uuid::new_v4())
             .hostname("user@different.com")
@@ -219,14 +221,14 @@ mod tests {
         assert_eq!(context.ssh_host, Some("existing@host.com".to_string()));
 
         let handler = HostHandler;
-        let result = handler.apply_context(&host, &mut context);
+        let result = handler.apply_context(&host, &mut context).await;
 
         assert!(result.is_ok());
         assert_eq!(context.ssh_host, Some("user@different.com".to_string()));
     }
 
-    #[test]
-    fn test_hostname_with_whitespace() {
+    #[tokio::test]
+    async fn test_hostname_with_whitespace() {
         let host = Host::builder()
             .id(Uuid::new_v4())
             .hostname("  user@host.com  ")
@@ -236,14 +238,14 @@ mod tests {
         context.ssh_host = None;
 
         let handler = HostHandler;
-        let result = handler.apply_context(&host, &mut context);
+        let result = handler.apply_context(&host, &mut context).await;
 
         assert!(result.is_ok());
         assert_eq!(context.ssh_host, Some("user@host.com".to_string())); // Trimmed
     }
 
-    #[test]
-    fn test_localhost_variations() {
+    #[tokio::test]
+    async fn test_localhost_variations() {
         let variations = vec!["localhost", "LOCALHOST", "LocalHost"];
 
         for hostname in variations {
@@ -256,7 +258,7 @@ mod tests {
             assert!(context.ssh_host.is_some()); // Start with SSH
 
             let handler = HostHandler;
-            let result = handler.apply_context(&host, &mut context);
+            let result = handler.apply_context(&host, &mut context).await;
 
             assert!(result.is_ok());
             // Only exact "localhost" should switch to local, others should be treated as hostnames
@@ -268,8 +270,8 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_host_context_preserves_other_fields() {
+    #[tokio::test]
+    async fn test_host_context_preserves_other_fields() {
         let host = Host::builder()
             .id(Uuid::new_v4())
             .hostname("localhost")
@@ -303,7 +305,7 @@ mod tests {
         let original_document = context.document.clone();
 
         let handler = HostHandler;
-        let result = handler.apply_context(&host, &mut context);
+        let result = handler.apply_context(&host, &mut context).await;
 
         assert!(result.is_ok());
 
@@ -318,8 +320,8 @@ mod tests {
         assert_eq!(context.document, original_document);
     }
 
-    #[test]
-    fn test_from_document_valid() {
+    #[tokio::test]
+    async fn test_from_document_valid() {
         let block = json!({
             "id": "550e8400-e29b-41d4-a716-446655440000",
             "type": "host",
@@ -333,8 +335,8 @@ mod tests {
         assert_eq!(host.id.to_string(), "550e8400-e29b-41d4-a716-446655440000");
     }
 
-    #[test]
-    fn test_from_document_missing_hostname_defaults_localhost() {
+    #[tokio::test]
+    async fn test_from_document_missing_hostname_defaults_localhost() {
         let block = json!({
             "id": "550e8400-e29b-41d4-a716-446655440000",
             "type": "host",
@@ -345,8 +347,8 @@ mod tests {
         assert_eq!(host.hostname, "localhost");
     }
 
-    #[test]
-    fn test_from_document_missing_id() {
+    #[tokio::test]
+    async fn test_from_document_missing_id() {
         let block = json!({
             "type": "host",
             "props": {
@@ -362,8 +364,8 @@ mod tests {
             .contains("Missing or invalid id field"));
     }
 
-    #[test]
-    fn test_from_document_missing_props() {
+    #[tokio::test]
+    async fn test_from_document_missing_props() {
         let block = json!({
             "id": "550e8400-e29b-41d4-a716-446655440000",
             "type": "host"
@@ -377,8 +379,8 @@ mod tests {
             .contains("Missing or invalid props field"));
     }
 
-    #[test]
-    fn test_json_serialization_roundtrip() {
+    #[tokio::test]
+    async fn test_json_serialization_roundtrip() {
         let original = Host::builder()
             .id(Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap())
             .hostname("test@example.com")
@@ -391,8 +393,8 @@ mod tests {
         assert_eq!(original.hostname, deserialized.hostname);
     }
 
-    #[test]
-    fn test_common_host_patterns() {
+    #[tokio::test]
+    async fn test_common_host_patterns() {
         let test_cases = vec![
             ("localhost", None),
             ("", None),
@@ -411,7 +413,7 @@ mod tests {
 
             let mut context = create_test_context();
             let handler = HostHandler;
-            let result = handler.apply_context(&host, &mut context);
+            let result = handler.apply_context(&host, &mut context).await;
 
             assert!(result.is_ok(), "Failed for hostname: {}", hostname);
             assert_eq!(
@@ -423,8 +425,8 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_multiple_host_switches() {
+    #[tokio::test]
+    async fn test_multiple_host_switches() {
         let mut context = create_test_context();
         context.ssh_host = None; // Start local
         let handler = HostHandler;
@@ -434,7 +436,7 @@ mod tests {
             .id(Uuid::new_v4())
             .hostname("user@host1.com")
             .build();
-        handler.apply_context(&host1, &mut context).unwrap();
+        handler.apply_context(&host1, &mut context).await.unwrap();
         assert_eq!(context.ssh_host, Some("user@host1.com".to_string()));
 
         // Switch to different SSH
@@ -442,7 +444,7 @@ mod tests {
             .id(Uuid::new_v4())
             .hostname("user@host2.com")
             .build();
-        handler.apply_context(&host2, &mut context).unwrap();
+        handler.apply_context(&host2, &mut context).await.unwrap();
         assert_eq!(context.ssh_host, Some("user@host2.com".to_string()));
 
         // Switch back to local
@@ -450,7 +452,7 @@ mod tests {
             .id(Uuid::new_v4())
             .hostname("localhost")
             .build();
-        handler.apply_context(&localhost, &mut context).unwrap();
+        handler.apply_context(&localhost, &mut context).await.unwrap();
         assert!(context.ssh_host.is_none());
     }
 }

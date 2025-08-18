@@ -1,8 +1,10 @@
-use crate::runtime::blocks::context_blocks::{Directory, Environment, Host, SshConnect};
+use crate::runtime::blocks::context_blocks::{Directory, Environment, Host, LocalVar, SshConnect};
 use crate::runtime::blocks::handler::{ContextProvider, ExecutionContext};
+use async_trait::async_trait;
 
 pub struct DirectoryHandler;
 
+#[async_trait]
 impl ContextProvider for DirectoryHandler {
     type Block = Directory;
 
@@ -10,7 +12,7 @@ impl ContextProvider for DirectoryHandler {
         "directory"
     }
 
-    fn apply_context(
+    async fn apply_context(
         &self,
         block: &Directory,
         context: &mut ExecutionContext,
@@ -22,6 +24,7 @@ impl ContextProvider for DirectoryHandler {
 
 pub struct EnvironmentHandler;
 
+#[async_trait]
 impl ContextProvider for EnvironmentHandler {
     type Block = Environment;
 
@@ -29,7 +32,7 @@ impl ContextProvider for EnvironmentHandler {
         "env"
     }
 
-    fn apply_context(
+    async fn apply_context(
         &self,
         block: &Environment,
         context: &mut ExecutionContext,
@@ -41,6 +44,7 @@ impl ContextProvider for EnvironmentHandler {
 
 pub struct SshConnectHandler;
 
+#[async_trait]
 impl ContextProvider for SshConnectHandler {
     type Block = SshConnect;
 
@@ -48,7 +52,7 @@ impl ContextProvider for SshConnectHandler {
         "ssh-connect"
     }
 
-    fn apply_context(
+    async fn apply_context(
         &self,
         block: &SshConnect,
         context: &mut ExecutionContext,
@@ -60,6 +64,7 @@ impl ContextProvider for SshConnectHandler {
 
 pub struct HostHandler;
 
+#[async_trait]
 impl ContextProvider for HostHandler {
     type Block = Host;
 
@@ -67,7 +72,7 @@ impl ContextProvider for HostHandler {
         "host-select"
     }
 
-    fn apply_context(
+    async fn apply_context(
         &self,
         block: &Host,
         context: &mut ExecutionContext,
@@ -82,13 +87,50 @@ impl ContextProvider for HostHandler {
     }
 }
 
+pub struct LocalVarHandler;
+
+#[async_trait]
+impl ContextProvider for LocalVarHandler {
+    type Block = LocalVar;
+
+    fn block_type(&self) -> &'static str {
+        "local-var"
+    }
+
+    async fn apply_context(
+        &self,
+        block: &LocalVar,
+        context: &mut ExecutionContext,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        if !block.name.is_empty() {
+            // Get the value from output storage (same as get_template_var command)
+            let value = if let Some(output_storage) = &context.output_storage {
+                output_storage
+                    .read()
+                    .await
+                    .get(&context.runbook_id.to_string())
+                    .and_then(|vars| vars.get(&block.name))
+                    .cloned()
+                    .unwrap_or_default()
+            } else {
+                // Fallback to empty if no output storage available
+                String::new()
+            };
+
+            // Add the variable to the execution context for template substitution
+            context.variables.insert(block.name.clone(), value);
+        }
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use uuid::Uuid;
 
-    #[test]
-    fn test_directory_handler() {
+    #[tokio::test]
+    async fn test_directory_handler() {
         let handler = DirectoryHandler;
         let dir = Directory::builder()
             .id(Uuid::new_v4())
@@ -96,13 +138,13 @@ mod tests {
             .build();
 
         let mut context = ExecutionContext::default();
-        handler.apply_context(&dir, &mut context).unwrap();
+        handler.apply_context(&dir, &mut context).await.unwrap();
 
         assert_eq!(context.cwd, "/tmp/test");
     }
 
-    #[test]
-    fn test_environment_handler() {
+    #[tokio::test]
+    async fn test_environment_handler() {
         let handler = EnvironmentHandler;
         let env = Environment::builder()
             .id(Uuid::new_v4())
@@ -111,13 +153,13 @@ mod tests {
             .build();
 
         let mut context = ExecutionContext::default();
-        handler.apply_context(&env, &mut context).unwrap();
+        handler.apply_context(&env, &mut context).await.unwrap();
 
         assert_eq!(context.env.get("TEST_VAR"), Some(&"test_value".to_string()));
     }
 
-    #[test]
-    fn test_ssh_handler() {
+    #[tokio::test]
+    async fn test_ssh_handler() {
         let handler = SshConnectHandler;
         let ssh = SshConnect::builder()
             .id(Uuid::new_v4())
@@ -125,13 +167,13 @@ mod tests {
             .build();
 
         let mut context = ExecutionContext::default();
-        handler.apply_context(&ssh, &mut context).unwrap();
+        handler.apply_context(&ssh, &mut context).await.unwrap();
 
         assert_eq!(context.ssh_host, Some("user@host.com".to_string()));
     }
 
-    #[test]
-    fn test_host_handler_local() {
+    #[tokio::test]
+    async fn test_host_handler_local() {
         let handler = HostHandler;
         let host = Host::builder()
             .id(Uuid::new_v4())
@@ -139,13 +181,13 @@ mod tests {
             .build();
 
         let mut context = ExecutionContext::default();
-        handler.apply_context(&host, &mut context).unwrap();
+        handler.apply_context(&host, &mut context).await.unwrap();
 
         assert_eq!(context.ssh_host, None);
     }
 
-    #[test]
-    fn test_host_handler_localhost() {
+    #[tokio::test]
+    async fn test_host_handler_localhost() {
         let handler = HostHandler;
         let host = Host::builder()
             .id(Uuid::new_v4())
@@ -153,13 +195,13 @@ mod tests {
             .build();
 
         let mut context = ExecutionContext::default();
-        handler.apply_context(&host, &mut context).unwrap();
+        handler.apply_context(&host, &mut context).await.unwrap();
 
         assert_eq!(context.ssh_host, None);
     }
 
-    #[test]
-    fn test_host_handler_empty() {
+    #[tokio::test]
+    async fn test_host_handler_empty() {
         let handler = HostHandler;
         let host = Host::builder()
             .id(Uuid::new_v4())
@@ -167,13 +209,13 @@ mod tests {
             .build();
 
         let mut context = ExecutionContext::default();
-        handler.apply_context(&host, &mut context).unwrap();
+        handler.apply_context(&host, &mut context).await.unwrap();
 
         assert_eq!(context.ssh_host, None);
     }
 
-    #[test]
-    fn test_host_handler_remote() {
+    #[tokio::test]
+    async fn test_host_handler_remote() {
         let handler = HostHandler;
         let host = Host::builder()
             .id(Uuid::new_v4())
@@ -181,13 +223,13 @@ mod tests {
             .build();
 
         let mut context = ExecutionContext::default();
-        handler.apply_context(&host, &mut context).unwrap();
+        handler.apply_context(&host, &mut context).await.unwrap();
 
         assert_eq!(context.ssh_host, Some("user@remote.com".to_string()));
     }
 
-    #[test]
-    fn test_host_handler_whitespace() {
+    #[tokio::test]
+    async fn test_host_handler_whitespace() {
         let handler = HostHandler;
         let host = Host::builder()
             .id(Uuid::new_v4())
@@ -195,8 +237,44 @@ mod tests {
             .build();
 
         let mut context = ExecutionContext::default();
-        handler.apply_context(&host, &mut context).unwrap();
+        handler.apply_context(&host, &mut context).await.unwrap();
 
         assert_eq!(context.ssh_host, None);
+    }
+
+    #[tokio::test]
+    async fn test_local_var_handler_empty_name() {
+        let handler = LocalVarHandler;
+        let local_var = LocalVar::builder()
+            .id(Uuid::new_v4())
+            .name("")
+            .build();
+
+        let mut context = ExecutionContext::default();
+        handler.apply_context(&local_var, &mut context).await.unwrap();
+
+        // Should not add anything to variables for empty name
+        assert!(context.variables.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_local_var_handler_with_name() {
+        let handler = LocalVarHandler;
+        let local_var = LocalVar::builder()
+            .id(Uuid::new_v4())
+            .name("test_var")
+            .build();
+
+        let mut context = ExecutionContext::default();
+        handler.apply_context(&local_var, &mut context).await.unwrap();
+
+        // Should add empty value for the variable (since no stored value in test)
+        assert_eq!(context.variables.get("test_var"), Some(&String::new()));
+    }
+
+    #[test]
+    fn test_local_var_handler_block_type() {
+        let handler = LocalVarHandler;
+        assert_eq!(handler.block_type(), "local-var");
     }
 }

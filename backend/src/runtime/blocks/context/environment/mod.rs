@@ -1,4 +1,5 @@
 use crate::runtime::blocks::handler::{ContextProvider, ExecutionContext};
+use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use typed_builder::TypedBuilder;
 use uuid::Uuid;
@@ -18,6 +19,7 @@ pub struct Environment {
 
 pub struct EnvironmentHandler;
 
+#[async_trait]
 impl ContextProvider for EnvironmentHandler {
     type Block = Environment;
 
@@ -25,7 +27,7 @@ impl ContextProvider for EnvironmentHandler {
         "env"
     }
 
-    fn apply_context(
+    async fn apply_context(
         &self,
         block: &Environment,
         context: &mut ExecutionContext,
@@ -80,8 +82,8 @@ mod tests {
     use std::collections::HashMap;
 
     // Basic functionality tests
-    #[test]
-    fn test_basic_environment_context() {
+    #[tokio::test]
+    async fn test_basic_environment_context() {
         let handler = EnvironmentHandler;
         let env = Environment::builder()
             .id(Uuid::new_v4())
@@ -90,20 +92,20 @@ mod tests {
             .build();
 
         let mut context = ExecutionContext::default();
-        handler.apply_context(&env, &mut context).unwrap();
+        handler.apply_context(&env, &mut context).await.unwrap();
 
         assert_eq!(context.env.get("TEST_VAR"), Some(&"test_value".to_string()));
     }
 
-    #[test]
-    fn test_block_type() {
+    #[tokio::test]
+    async fn test_block_type() {
         let handler = EnvironmentHandler;
         assert_eq!(handler.block_type(), "env");
     }
 
     // Edge cases
-    #[test]
-    fn test_empty_value() {
+    #[tokio::test]
+    async fn test_empty_value() {
         let handler = EnvironmentHandler;
         let env = Environment::builder()
             .id(Uuid::new_v4())
@@ -112,13 +114,13 @@ mod tests {
             .build();
 
         let mut context = ExecutionContext::default();
-        handler.apply_context(&env, &mut context).unwrap();
+        handler.apply_context(&env, &mut context).await.unwrap();
 
         assert_eq!(context.env.get("EMPTY_VAR"), Some(&"".to_string()));
     }
 
-    #[test]
-    fn test_empty_name_fails() {
+    #[tokio::test]
+    async fn test_empty_name_fails() {
         let handler = EnvironmentHandler;
         let env = Environment::builder()
             .id(Uuid::new_v4())
@@ -127,7 +129,7 @@ mod tests {
             .build();
 
         let mut context = ExecutionContext::default();
-        let result = handler.apply_context(&env, &mut context);
+        let result = handler.apply_context(&env, &mut context).await;
 
         assert!(result.is_err());
         assert!(result
@@ -136,8 +138,8 @@ mod tests {
             .contains("Environment variable name cannot be empty"));
     }
 
-    #[test]
-    fn test_invalid_name_with_equals() {
+    #[tokio::test]
+    async fn test_invalid_name_with_equals() {
         let handler = EnvironmentHandler;
         let env = Environment::builder()
             .id(Uuid::new_v4())
@@ -146,7 +148,7 @@ mod tests {
             .build();
 
         let mut context = ExecutionContext::default();
-        let result = handler.apply_context(&env, &mut context);
+        let result = handler.apply_context(&env, &mut context).await;
 
         assert!(result.is_err());
         assert!(result
@@ -155,8 +157,8 @@ mod tests {
             .contains("invalid characters"));
     }
 
-    #[test]
-    fn test_invalid_name_with_null() {
+    #[tokio::test]
+    async fn test_invalid_name_with_null() {
         let handler = EnvironmentHandler;
         let env = Environment::builder()
             .id(Uuid::new_v4())
@@ -165,7 +167,7 @@ mod tests {
             .build();
 
         let mut context = ExecutionContext::default();
-        let result = handler.apply_context(&env, &mut context);
+        let result = handler.apply_context(&env, &mut context).await;
 
         assert!(result.is_err());
         assert!(result
@@ -174,8 +176,8 @@ mod tests {
             .contains("invalid characters"));
     }
 
-    #[test]
-    fn test_value_with_special_chars() {
+    #[tokio::test]
+    async fn test_value_with_special_chars() {
         let handler = EnvironmentHandler;
         let env = Environment::builder()
             .id(Uuid::new_v4())
@@ -184,7 +186,7 @@ mod tests {
             .build();
 
         let mut context = ExecutionContext::default();
-        handler.apply_context(&env, &mut context).unwrap();
+        handler.apply_context(&env, &mut context).await.unwrap();
 
         assert_eq!(
             context.env.get("SPECIAL_VAR"),
@@ -192,8 +194,8 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_multiline_value() {
+    #[tokio::test]
+    async fn test_multiline_value() {
         let handler = EnvironmentHandler;
         let env = Environment::builder()
             .id(Uuid::new_v4())
@@ -202,7 +204,7 @@ mod tests {
             .build();
 
         let mut context = ExecutionContext::default();
-        handler.apply_context(&env, &mut context).unwrap();
+        handler.apply_context(&env, &mut context).await.unwrap();
 
         assert_eq!(
             context.env.get("MULTILINE_VAR"),
@@ -210,8 +212,8 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_unicode_value() {
+    #[tokio::test]
+    async fn test_unicode_value() {
         let handler = EnvironmentHandler;
         let env = Environment::builder()
             .id(Uuid::new_v4())
@@ -220,7 +222,7 @@ mod tests {
             .build();
 
         let mut context = ExecutionContext::default();
-        handler.apply_context(&env, &mut context).unwrap();
+        handler.apply_context(&env, &mut context).await.unwrap();
 
         assert_eq!(
             context.env.get("UNICODE_VAR"),
@@ -229,8 +231,8 @@ mod tests {
     }
 
     // Serialization tests
-    #[test]
-    fn test_json_serialization_roundtrip() {
+    #[tokio::test]
+    async fn test_json_serialization_roundtrip() {
         let original = Environment::builder()
             .id(Uuid::new_v4())
             .name("TEST_VAR")
@@ -245,8 +247,8 @@ mod tests {
         assert_eq!(original.value, deserialized.value);
     }
 
-    #[test]
-    fn test_from_document_valid() {
+    #[tokio::test]
+    async fn test_from_document_valid() {
         let id = Uuid::new_v4();
         let json_data = serde_json::json!({
             "id": id.to_string(),
@@ -261,8 +263,8 @@ mod tests {
         assert_eq!(env.value, "test_value");
     }
 
-    #[test]
-    fn test_from_document_missing_value_defaults_empty() {
+    #[tokio::test]
+    async fn test_from_document_missing_value_defaults_empty() {
         let id = Uuid::new_v4();
         let json_data = serde_json::json!({
             "id": id.to_string(),
@@ -276,8 +278,8 @@ mod tests {
         assert_eq!(env.value, "");
     }
 
-    #[test]
-    fn test_from_document_missing_name() {
+    #[tokio::test]
+    async fn test_from_document_missing_name() {
         let json_data = serde_json::json!({
             "id": Uuid::new_v4().to_string(),
             "value": "test_value",
@@ -290,8 +292,8 @@ mod tests {
     }
 
     // Integration tests
-    #[test]
-    fn test_multiple_environment_variables() {
+    #[tokio::test]
+    async fn test_multiple_environment_variables() {
         let handler = EnvironmentHandler;
 
         let env1 = Environment::builder()
@@ -309,15 +311,15 @@ mod tests {
         let mut context = ExecutionContext::default();
 
         // Apply both environment variables
-        handler.apply_context(&env1, &mut context).unwrap();
-        handler.apply_context(&env2, &mut context).unwrap();
+        handler.apply_context(&env1, &mut context).await.unwrap();
+        handler.apply_context(&env2, &mut context).await.unwrap();
 
         assert_eq!(context.env.get("VAR1"), Some(&"value1".to_string()));
         assert_eq!(context.env.get("VAR2"), Some(&"value2".to_string()));
     }
 
-    #[test]
-    fn test_environment_variable_override() {
+    #[tokio::test]
+    async fn test_environment_variable_override() {
         let handler = EnvironmentHandler;
 
         let env1 = Environment::builder()
@@ -335,21 +337,21 @@ mod tests {
         let mut context = ExecutionContext::default();
 
         // Apply first, then second (should override)
-        handler.apply_context(&env1, &mut context).unwrap();
+        handler.apply_context(&env1, &mut context).await.unwrap();
         assert_eq!(
             context.env.get("SAME_VAR"),
             Some(&"first_value".to_string())
         );
 
-        handler.apply_context(&env2, &mut context).unwrap();
+        handler.apply_context(&env2, &mut context).await.unwrap();
         assert_eq!(
             context.env.get("SAME_VAR"),
             Some(&"second_value".to_string())
         );
     }
 
-    #[test]
-    fn test_environment_context_preserves_other_fields() {
+    #[tokio::test]
+    async fn test_environment_context_preserves_other_fields() {
         let handler = EnvironmentHandler;
         let env = Environment::builder()
             .id(Uuid::new_v4())
@@ -380,7 +382,7 @@ mod tests {
         let original_ssh_host = context.ssh_host.clone();
         let original_document = context.document.clone();
 
-        handler.apply_context(&env, &mut context).unwrap();
+        handler.apply_context(&env, &mut context).await.unwrap();
 
         // Environment should be updated
         assert_eq!(context.env.get("TEST_VAR"), Some(&"test_value".to_string()));
@@ -393,8 +395,8 @@ mod tests {
         assert_eq!(context.document, original_document);
     }
 
-    #[test]
-    fn test_common_environment_variable_patterns() {
+    #[tokio::test]
+    async fn test_common_environment_variable_patterns() {
         let handler = EnvironmentHandler;
         let test_cases = vec![
             ("PATH", "/usr/bin:/bin"),
@@ -416,7 +418,7 @@ mod tests {
                 .value(value)
                 .build();
 
-            handler.apply_context(&env, &mut context).unwrap();
+            handler.apply_context(&env, &mut context).await.unwrap();
             assert_eq!(context.env.get(name), Some(&value.to_string()));
         }
     }

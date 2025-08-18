@@ -169,7 +169,7 @@ pub trait ContextProvider: Send + Sync {
     fn block_type(&self) -> &'static str;
 
     #[allow(dead_code)] // Used by context builder but not currently called directly
-    fn apply_context(
+    async fn apply_context(
         &self,
         block: &Self::Block,
         context: &mut ExecutionContext,

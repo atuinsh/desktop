@@ -1,4 +1,5 @@
 use crate::runtime::blocks::handler::{ContextProvider, ExecutionContext};
+use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use typed_builder::TypedBuilder;
 use uuid::Uuid;
@@ -15,6 +16,7 @@ pub struct SshConnect {
 
 pub struct SshConnectHandler;
 
+#[async_trait]
 impl ContextProvider for SshConnectHandler {
     type Block = SshConnect;
 
@@ -22,7 +24,7 @@ impl ContextProvider for SshConnectHandler {
         "ssh-connect"
     }
 
-    fn apply_context(
+    async fn apply_context(
         &self,
         block: &SshConnect,
         context: &mut ExecutionContext,
@@ -99,8 +101,8 @@ mod tests {
     use std::collections::HashMap;
 
     // Basic functionality tests
-    #[test]
-    fn test_basic_ssh_context() {
+    #[tokio::test]
+    async fn test_basic_ssh_context() {
         let handler = SshConnectHandler;
         let ssh = SshConnect::builder()
             .id(Uuid::new_v4())
@@ -108,20 +110,20 @@ mod tests {
             .build();
 
         let mut context = ExecutionContext::default();
-        handler.apply_context(&ssh, &mut context).unwrap();
+        handler.apply_context(&ssh, &mut context).await.unwrap();
 
         assert_eq!(context.ssh_host, Some("user@host.com".to_string()));
     }
 
-    #[test]
-    fn test_block_type() {
+    #[tokio::test]
+    async fn test_block_type() {
         let handler = SshConnectHandler;
         assert_eq!(handler.block_type(), "ssh-connect");
     }
 
     // Edge cases
-    #[test]
-    fn test_empty_user_host_fails() {
+    #[tokio::test]
+    async fn test_empty_user_host_fails() {
         let handler = SshConnectHandler;
         let ssh = SshConnect::builder()
             .id(Uuid::new_v4())
@@ -129,7 +131,7 @@ mod tests {
             .build();
 
         let mut context = ExecutionContext::default();
-        let result = handler.apply_context(&ssh, &mut context);
+        let result = handler.apply_context(&ssh, &mut context).await;
 
         assert!(result.is_err());
         assert!(result
@@ -138,8 +140,8 @@ mod tests {
             .contains("SSH user_host cannot be empty"));
     }
 
-    #[test]
-    fn test_invalid_format_with_spaces() {
+    #[tokio::test]
+    async fn test_invalid_format_with_spaces() {
         let handler = SshConnectHandler;
         let ssh = SshConnect::builder()
             .id(Uuid::new_v4())
@@ -147,7 +149,7 @@ mod tests {
             .build();
 
         let mut context = ExecutionContext::default();
-        let result = handler.apply_context(&ssh, &mut context);
+        let result = handler.apply_context(&ssh, &mut context).await;
 
         assert!(result.is_err());
         assert!(result
@@ -156,8 +158,8 @@ mod tests {
             .contains("Invalid SSH user_host format"));
     }
 
-    #[test]
-    fn test_hostname_only() {
+    #[tokio::test]
+    async fn test_hostname_only() {
         let handler = SshConnectHandler;
         let ssh = SshConnect::builder()
             .id(Uuid::new_v4())
@@ -165,13 +167,13 @@ mod tests {
             .build();
 
         let mut context = ExecutionContext::default();
-        handler.apply_context(&ssh, &mut context).unwrap();
+        handler.apply_context(&ssh, &mut context).await.unwrap();
 
         assert_eq!(context.ssh_host, Some("hostname.com".to_string()));
     }
 
-    #[test]
-    fn test_ip_address() {
+    #[tokio::test]
+    async fn test_ip_address() {
         let handler = SshConnectHandler;
         let ssh = SshConnect::builder()
             .id(Uuid::new_v4())
@@ -179,13 +181,13 @@ mod tests {
             .build();
 
         let mut context = ExecutionContext::default();
-        handler.apply_context(&ssh, &mut context).unwrap();
+        handler.apply_context(&ssh, &mut context).await.unwrap();
 
         assert_eq!(context.ssh_host, Some("192.168.1.100".to_string()));
     }
 
-    #[test]
-    fn test_user_with_ip() {
+    #[tokio::test]
+    async fn test_user_with_ip() {
         let handler = SshConnectHandler;
         let ssh = SshConnect::builder()
             .id(Uuid::new_v4())
@@ -193,13 +195,13 @@ mod tests {
             .build();
 
         let mut context = ExecutionContext::default();
-        handler.apply_context(&ssh, &mut context).unwrap();
+        handler.apply_context(&ssh, &mut context).await.unwrap();
 
         assert_eq!(context.ssh_host, Some("root@192.168.1.100".to_string()));
     }
 
-    #[test]
-    fn test_with_port() {
+    #[tokio::test]
+    async fn test_with_port() {
         let handler = SshConnectHandler;
         let ssh = SshConnect::builder()
             .id(Uuid::new_v4())
@@ -207,13 +209,13 @@ mod tests {
             .build();
 
         let mut context = ExecutionContext::default();
-        handler.apply_context(&ssh, &mut context).unwrap();
+        handler.apply_context(&ssh, &mut context).await.unwrap();
 
         assert_eq!(context.ssh_host, Some("user@host.com:2222".to_string()));
     }
 
-    #[test]
-    fn test_hostname_with_port() {
+    #[tokio::test]
+    async fn test_hostname_with_port() {
         let handler = SshConnectHandler;
         let ssh = SshConnect::builder()
             .id(Uuid::new_v4())
@@ -221,14 +223,14 @@ mod tests {
             .build();
 
         let mut context = ExecutionContext::default();
-        handler.apply_context(&ssh, &mut context).unwrap();
+        handler.apply_context(&ssh, &mut context).await.unwrap();
 
         assert_eq!(context.ssh_host, Some("host.com:2222".to_string()));
     }
 
     // Parsing tests
-    #[test]
-    fn test_parse_user_host_full() {
+    #[tokio::test]
+    async fn test_parse_user_host_full() {
         let ssh = SshConnect::builder()
             .id(Uuid::new_v4())
             .user_host("user@host.com:2222")
@@ -240,8 +242,8 @@ mod tests {
         assert_eq!(port, Some(2222));
     }
 
-    #[test]
-    fn test_parse_user_host_no_port() {
+    #[tokio::test]
+    async fn test_parse_user_host_no_port() {
         let ssh = SshConnect::builder()
             .id(Uuid::new_v4())
             .user_host("user@host.com")
@@ -253,8 +255,8 @@ mod tests {
         assert_eq!(port, None);
     }
 
-    #[test]
-    fn test_parse_host_only() {
+    #[tokio::test]
+    async fn test_parse_host_only() {
         let ssh = SshConnect::builder()
             .id(Uuid::new_v4())
             .user_host("host.com")
@@ -266,8 +268,8 @@ mod tests {
         assert_eq!(port, None);
     }
 
-    #[test]
-    fn test_parse_host_with_port() {
+    #[tokio::test]
+    async fn test_parse_host_with_port() {
         let ssh = SshConnect::builder()
             .id(Uuid::new_v4())
             .user_host("host.com:2222")
@@ -279,8 +281,8 @@ mod tests {
         assert_eq!(port, Some(2222));
     }
 
-    #[test]
-    fn test_parse_invalid_port() {
+    #[tokio::test]
+    async fn test_parse_invalid_port() {
         let ssh = SshConnect::builder()
             .id(Uuid::new_v4())
             .user_host("host.com:invalid")
@@ -293,8 +295,8 @@ mod tests {
     }
 
     // Serialization tests
-    #[test]
-    fn test_json_serialization_roundtrip() {
+    #[tokio::test]
+    async fn test_json_serialization_roundtrip() {
         let original = SshConnect::builder()
             .id(Uuid::new_v4())
             .user_host("user@host.com")
@@ -307,8 +309,8 @@ mod tests {
         assert_eq!(original.user_host, deserialized.user_host);
     }
 
-    #[test]
-    fn test_from_document_valid_camel_case() {
+    #[tokio::test]
+    async fn test_from_document_valid_camel_case() {
         let id = Uuid::new_v4();
         let json_data = serde_json::json!({
             "id": id.to_string(),
@@ -321,8 +323,8 @@ mod tests {
         assert_eq!(ssh.user_host, "user@host.com");
     }
 
-    #[test]
-    fn test_from_document_valid_snake_case() {
+    #[tokio::test]
+    async fn test_from_document_valid_snake_case() {
         let id = Uuid::new_v4();
         let json_data = serde_json::json!({
             "id": id.to_string(),
@@ -335,8 +337,8 @@ mod tests {
         assert_eq!(ssh.user_host, "user@host.com");
     }
 
-    #[test]
-    fn test_from_document_missing_user_host() {
+    #[tokio::test]
+    async fn test_from_document_missing_user_host() {
         let json_data = serde_json::json!({
             "id": Uuid::new_v4().to_string(),
             "type": "ssh-connect"
@@ -348,8 +350,8 @@ mod tests {
     }
 
     // Integration tests
-    #[test]
-    fn test_multiple_ssh_contexts_override() {
+    #[tokio::test]
+    async fn test_multiple_ssh_contexts_override() {
         let handler = SshConnectHandler;
 
         let ssh1 = SshConnect::builder()
@@ -365,16 +367,16 @@ mod tests {
         let mut context = ExecutionContext::default();
 
         // Apply first SSH connection
-        handler.apply_context(&ssh1, &mut context).unwrap();
+        handler.apply_context(&ssh1, &mut context).await.unwrap();
         assert_eq!(context.ssh_host, Some("user1@host1.com".to_string()));
 
         // Apply second SSH connection (should override)
-        handler.apply_context(&ssh2, &mut context).unwrap();
+        handler.apply_context(&ssh2, &mut context).await.unwrap();
         assert_eq!(context.ssh_host, Some("user2@host2.com".to_string()));
     }
 
-    #[test]
-    fn test_ssh_context_preserves_other_fields() {
+    #[tokio::test]
+    async fn test_ssh_context_preserves_other_fields() {
         let handler = SshConnectHandler;
         let ssh = SshConnect::builder()
             .id(Uuid::new_v4())
@@ -408,7 +410,7 @@ mod tests {
         let original_variables = context.variables.clone();
         let original_document = context.document.clone();
 
-        handler.apply_context(&ssh, &mut context).unwrap();
+        handler.apply_context(&ssh, &mut context).await.unwrap();
 
         // SSH host should be updated
         assert_eq!(context.ssh_host, Some("user@host.com".to_string()));
@@ -421,8 +423,8 @@ mod tests {
         assert_eq!(context.document, original_document);
     }
 
-    #[test]
-    fn test_common_ssh_patterns() {
+    #[tokio::test]
+    async fn test_common_ssh_patterns() {
         let handler = SshConnectHandler;
         let test_cases = vec![
             "root@server.com",
@@ -442,7 +444,7 @@ mod tests {
                 .build();
 
             let mut context = ExecutionContext::default();
-            handler.apply_context(&ssh, &mut context).unwrap();
+            handler.apply_context(&ssh, &mut context).await.unwrap();
             assert_eq!(context.ssh_host, Some(user_host.to_string()));
         }
     }
