@@ -1,3 +1,4 @@
+pub mod clickhouse;
 pub mod context_providers;
 pub mod mysql;
 pub mod postgres;
@@ -9,6 +10,7 @@ pub mod terminal;
 mod script_output_test;
 
 // Re-export handlers
+pub use clickhouse::ClickhouseHandler;
 pub use mysql::MySQLHandler;
 pub use postgres::PostgresHandler;
 pub use script::ScriptHandler;
