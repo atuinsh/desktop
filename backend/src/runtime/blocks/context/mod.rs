@@ -81,13 +81,13 @@ pub use var::VarHandler;
 
 // Re-export block types for external use when needed
 #[allow(unused_imports)] // Available for external use
-pub use crate::runtime::blocks::context_blocks::LocalVar;
-#[allow(unused_imports)] // Available for external use
 pub use directory::Directory;
 #[allow(unused_imports)] // Available for external use
 pub use environment::Environment;
 #[allow(unused_imports)] // Available for external use
 pub use host::Host;
+#[allow(unused_imports)] // Available for external use
+pub use local_var::LocalVar;
 #[allow(unused_imports)] // Available for external use
 pub use ssh_connect::SshConnect;
 #[allow(unused_imports)] // Available for external use

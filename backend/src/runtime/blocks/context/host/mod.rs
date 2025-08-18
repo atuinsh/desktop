@@ -7,30 +7,30 @@
 //! ## Usage
 //!
 //! ```json
-//! {
-//!   "type": "host",
-//!   "props": {
-//!     "hostname": "localhost"  // or "user@remote.host" or ""
-//!   }
-//! }
+ //! {
+ //!   "type": "host",
+ //!   "props": {
+ //!     "host": "localhost"  // or "user@remote.host" or ""
+ //!   }
+ //! }
 //! ```
 //!
-//! ## Behavior
-//!
-//! - `"localhost"` or `""` or `null` -> Sets context to local execution
-//! - Any other value -> Sets context to SSH execution with that host
+ //! ## Behavior
+ //!
+ //! - `"localhost"`, `"local"`, or `""` -> Sets context to local execution
+ //! - Any other value -> Sets context to SSH execution with that host
 //!
 //! ## Examples
 //!
 //! ```json
-//! // Switch to localhost
-//! {"type": "host", "props": {"hostname": "localhost"}}
-//!
-//! // Switch to SSH
-//! {"type": "host", "props": {"hostname": "user@server.com"}}
-//!
-//! // Switch back to localhost (empty string)
-//! {"type": "host", "props": {"hostname": ""}}
+ //! // Switch to localhost
+ //! {"type": "host", "props": {"host": "localhost"}}
+ //!
+ //! // Switch to SSH
+ //! {"type": "host", "props": {"host": "user@server.com"}}
+ //!
+ //! // Switch back to localhost (empty string)
+ //! {"type": "host", "props": {"host": ""}}
 //! ```
 
 use serde::{Deserialize, Serialize};
@@ -48,11 +48,11 @@ pub struct Host {
     #[builder(setter(into))]
     pub id: Uuid,
 
-    /// Hostname to switch to
-    /// - "localhost", "", or None -> local execution
+    /// Host to switch to
+    /// - "localhost", "local", "", or None -> local execution  
     /// - Any other value -> SSH execution to that host
     #[builder(setter(into))]
-    pub hostname: String,
+    pub host: String,
 }
 
 /// Handler for host context blocks
@@ -72,14 +72,14 @@ impl ContextProvider for HostHandler {
         context: &mut ExecutionContext,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         // Determine if this should be local or SSH execution
-        let hostname = block.hostname.trim();
+        let host = block.host.trim();
 
-        if hostname.is_empty() || hostname == "localhost" {
+        if host.is_empty() || host == "local" || host == "localhost" {
             // Switch to local execution
             context.ssh_host = None;
         } else {
             // Switch to SSH execution
-            context.ssh_host = Some(hostname.to_string());
+            context.ssh_host = Some(host.to_string());
         }
 
         Ok(())
@@ -101,15 +101,15 @@ impl Host {
             .and_then(|v| v.as_object())
             .ok_or("Missing or invalid props field")?;
 
-        let hostname = props
-            .get("hostname")
+        let host = props
+            .get("host")
             .and_then(|v| v.as_str())
             .unwrap_or("localhost") // Default to localhost if not specified
             .to_string();
 
         Ok(Host::builder()
             .id(Uuid::parse_str(id)?)
-            .hostname(hostname)
+            .host(host)
             .build())
     }
 }
@@ -146,27 +146,27 @@ mod tests {
     async fn test_builder_pattern() {
         let host = Host::builder()
             .id(Uuid::new_v4())
-            .hostname("test.example.com")
+            .host("test.example.com")
             .build();
 
-        assert_eq!(host.hostname, "test.example.com");
+        assert_eq!(host.host, "test.example.com");
     }
 
     #[tokio::test]
     async fn test_builder_with_string_conversions() {
         let host = Host::builder()
             .id(Uuid::new_v4())
-            .hostname("user@host.com") // Test string conversion
+            .host("user@host.com") // Test string conversion
             .build();
 
-        assert_eq!(host.hostname, "user@host.com");
+        assert_eq!(host.host, "user@host.com");
     }
 
     #[tokio::test]
     async fn test_switch_to_localhost() {
         let host = Host::builder()
             .id(Uuid::new_v4())
-            .hostname("localhost")
+            .host("localhost")
             .build();
 
         let mut context = create_test_context();
@@ -180,8 +180,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_switch_to_empty_hostname() {
-        let host = Host::builder().id(Uuid::new_v4()).hostname("").build();
+    async fn test_switch_to_empty_host() {
+        let host = Host::builder().id(Uuid::new_v4()).host("").build();
 
         let mut context = create_test_context();
         assert!(context.ssh_host.is_some()); // Start with SSH
@@ -197,7 +197,7 @@ mod tests {
     async fn test_switch_to_ssh_host() {
         let host = Host::builder()
             .id(Uuid::new_v4())
-            .hostname("user@newhost.com")
+            .host("user@newhost.com")
             .build();
 
         let mut context = create_test_context();
@@ -214,7 +214,7 @@ mod tests {
     async fn test_switch_between_ssh_hosts() {
         let host = Host::builder()
             .id(Uuid::new_v4())
-            .hostname("user@different.com")
+            .host("user@different.com")
             .build();
 
         let mut context = create_test_context();
@@ -228,10 +228,10 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_hostname_with_whitespace() {
+    async fn test_host_with_whitespace() {
         let host = Host::builder()
             .id(Uuid::new_v4())
-            .hostname("  user@host.com  ")
+            .host("  user@host.com  ")
             .build();
 
         let mut context = create_test_context();
@@ -248,24 +248,24 @@ mod tests {
     async fn test_localhost_variations() {
         let variations = vec!["localhost", "LOCALHOST", "LocalHost"];
 
-        for hostname in variations {
-            let host = Host::builder()
+        for host_str in variations {
+            let host_block = Host::builder()
                 .id(Uuid::new_v4())
-                .hostname(hostname)
+                .host(host_str)
                 .build();
 
             let mut context = create_test_context();
             assert!(context.ssh_host.is_some()); // Start with SSH
 
             let handler = HostHandler;
-            let result = handler.apply_context(&host, &mut context).await;
+            let result = handler.apply_context(&host_block, &mut context).await;
 
             assert!(result.is_ok());
-            // Only exact "localhost" should switch to local, others should be treated as hostnames
-            if hostname == "localhost" {
-                assert!(context.ssh_host.is_none(), "Failed for: {}", hostname);
+            // Only exact "localhost" should switch to local, others should be treated as hosts
+            if host_str == "localhost" {
+                assert!(context.ssh_host.is_none(), "Failed for: {}", host_str);
             } else {
-                assert!(context.ssh_host.is_some(), "Failed for: {}", hostname);
+                assert!(context.ssh_host.is_some(), "Failed for: {}", host_str);
             }
         }
     }
@@ -274,7 +274,7 @@ mod tests {
     async fn test_host_context_preserves_other_fields() {
         let host = Host::builder()
             .id(Uuid::new_v4())
-            .hostname("localhost")
+            .host("localhost")
             .build();
 
         let mut context = ExecutionContext {
@@ -326,17 +326,17 @@ mod tests {
             "id": "550e8400-e29b-41d4-a716-446655440000",
             "type": "host",
             "props": {
-                "hostname": "user@example.com"
+                "host": "user@example.com"
             }
         });
 
         let host = Host::from_document(&block).unwrap();
-        assert_eq!(host.hostname, "user@example.com");
+        assert_eq!(host.host, "user@example.com");
         assert_eq!(host.id.to_string(), "550e8400-e29b-41d4-a716-446655440000");
     }
 
     #[tokio::test]
-    async fn test_from_document_missing_hostname_defaults_localhost() {
+    async fn test_from_document_missing_host_defaults_localhost() {
         let block = json!({
             "id": "550e8400-e29b-41d4-a716-446655440000",
             "type": "host",
@@ -344,7 +344,7 @@ mod tests {
         });
 
         let host = Host::from_document(&block).unwrap();
-        assert_eq!(host.hostname, "localhost");
+        assert_eq!(host.host, "localhost");
     }
 
     #[tokio::test]
@@ -352,7 +352,7 @@ mod tests {
         let block = json!({
             "type": "host",
             "props": {
-                "hostname": "test.com"
+                "host": "test.com"
             }
         });
 
@@ -383,14 +383,14 @@ mod tests {
     async fn test_json_serialization_roundtrip() {
         let original = Host::builder()
             .id(Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap())
-            .hostname("test@example.com")
+            .host("test@example.com")
             .build();
 
         let json = serde_json::to_string(&original).unwrap();
         let deserialized: Host = serde_json::from_str(&json).unwrap();
 
         assert_eq!(original.id, deserialized.id);
-        assert_eq!(original.hostname, deserialized.hostname);
+        assert_eq!(original.host, deserialized.host);
     }
 
     #[tokio::test]
@@ -405,22 +405,22 @@ mod tests {
             ("user@host.com:22", Some("user@host.com:22")),
         ];
 
-        for (hostname, expected_ssh_host) in test_cases {
-            let host = Host::builder()
+        for (host_str, expected_ssh_host) in test_cases {
+            let host_block = Host::builder()
                 .id(Uuid::new_v4())
-                .hostname(hostname)
+                .host(host_str)
                 .build();
 
             let mut context = create_test_context();
             let handler = HostHandler;
-            let result = handler.apply_context(&host, &mut context).await;
+            let result = handler.apply_context(&host_block, &mut context).await;
 
-            assert!(result.is_ok(), "Failed for hostname: {}", hostname);
+            assert!(result.is_ok(), "Failed for host: {}", host_str);
             assert_eq!(
                 context.ssh_host.as_deref(),
                 expected_ssh_host,
-                "Failed for hostname: {}",
-                hostname
+                "Failed for host: {}",
+                host_str
             );
         }
     }
@@ -434,7 +434,7 @@ mod tests {
         // Switch to SSH
         let host1 = Host::builder()
             .id(Uuid::new_v4())
-            .hostname("user@host1.com")
+            .host("user@host1.com")
             .build();
         handler.apply_context(&host1, &mut context).await.unwrap();
         assert_eq!(context.ssh_host, Some("user@host1.com".to_string()));
@@ -442,7 +442,7 @@ mod tests {
         // Switch to different SSH
         let host2 = Host::builder()
             .id(Uuid::new_v4())
-            .hostname("user@host2.com")
+            .host("user@host2.com")
             .build();
         handler.apply_context(&host2, &mut context).await.unwrap();
         assert_eq!(context.ssh_host, Some("user@host2.com".to_string()));
@@ -450,7 +450,7 @@ mod tests {
         // Switch back to local
         let localhost = Host::builder()
             .id(Uuid::new_v4())
-            .hostname("localhost")
+            .host("localhost")
             .build();
         handler
             .apply_context(&localhost, &mut context)

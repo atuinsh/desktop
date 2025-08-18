@@ -2,12 +2,15 @@ use serde_json::Value;
 use std::collections::HashMap;
 use uuid::Uuid;
 
-use crate::runtime::blocks::context_blocks::{Directory, Environment, Host, LocalVar, SshConnect};
-use crate::runtime::blocks::context::var::{Var, VarHandler};
-use crate::runtime::blocks::handler::{ContextProvider, ExecutionContext};
-use crate::runtime::blocks::handlers::context_providers::{
-    DirectoryHandler, EnvironmentHandler, HostHandler, LocalVarHandler, SshConnectHandler,
+use crate::runtime::blocks::context::{
+    directory::{Directory, DirectoryHandler},
+    environment::{Environment, EnvironmentHandler},
+    host::{Host, HostHandler},
+    local_var::{LocalVar, LocalVarHandler},
+    ssh_connect::{SshConnect, SshConnectHandler},
+    var::{Var, VarHandler},
 };
+use crate::runtime::blocks::handler::{ContextProvider, ExecutionContext};
 
 #[derive(Debug, Clone)]
 pub struct BlockInfo {

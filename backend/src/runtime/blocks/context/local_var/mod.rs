@@ -1,6 +1,18 @@
-use crate::runtime::blocks::context_blocks::LocalVar;
 use crate::runtime::blocks::handler::{ContextProvider, ExecutionContext};
 use async_trait::async_trait;
+use serde::{Deserialize, Serialize};
+use typed_builder::TypedBuilder;
+use uuid::Uuid;
+
+#[derive(Debug, Serialize, Deserialize, Clone, TypedBuilder)]
+#[serde(rename_all = "camelCase")]
+pub struct LocalVar {
+    #[builder(setter(into))]
+    pub id: Uuid,
+
+    #[builder(setter(into))]
+    pub name: String,
+}
 
 pub struct LocalVarHandler;
 
@@ -36,6 +48,25 @@ impl ContextProvider for LocalVarHandler {
             context.variables.insert(block.name.clone(), value);
         }
         Ok(())
+    }
+}
+
+impl LocalVar {
+    #[allow(dead_code)] // Used for JSON parsing but not currently called
+    pub fn from_document(block_data: &serde_json::Value) -> Result<Self, String> {
+        let id = block_data
+            .get("id")
+            .and_then(|v| v.as_str())
+            .and_then(|s| Uuid::parse_str(s).ok())
+            .ok_or("Invalid or missing id")?;
+
+        let name = block_data
+            .get("name")
+            .and_then(|v| v.as_str())
+            .ok_or("Missing name")?
+            .to_string();
+
+        Ok(LocalVar::builder().id(id).name(name).build())
     }
 }
 

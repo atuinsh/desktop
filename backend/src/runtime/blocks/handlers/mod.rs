@@ -1,5 +1,4 @@
 pub mod clickhouse;
-pub mod context_providers;
 pub mod mysql;
 pub mod postgres;
 pub mod script;
