@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use uuid::Uuid;
 
 use crate::runtime::blocks::context_blocks::{Directory, Environment, Host, LocalVar, SshConnect};
+use crate::runtime::blocks::context::var::{Var, VarHandler};
 use crate::runtime::blocks::handler::{ContextProvider, ExecutionContext};
 use crate::runtime::blocks::handlers::context_providers::{
     DirectoryHandler, EnvironmentHandler, HostHandler, LocalVarHandler, SshConnectHandler,
@@ -180,7 +181,15 @@ impl ContextBuilder {
                     (block.props.get("name"), block.props.get("value"))
                 {
                     if !name.is_empty() {
-                        context.variables.insert(name.clone(), value.clone());
+                        let var_block = Var::builder()
+                            .id(uuid::Uuid::parse_str(&block.id)?)
+                            .name(name.clone())
+                            .value(value.clone())
+                            .build();
+                        VarHandler
+                            .apply_context(&var_block, context)
+                            .await
+                            .map_err(|e| format!("Var context error: {}", e))?;
                     }
                 }
             }
@@ -355,5 +364,88 @@ mod tests {
 
         // Should have no SSH host (local execution)
         assert_eq!(context.ssh_host, None);
+    }
+
+    #[tokio::test]
+    async fn test_context_builder_var() {
+        let document = vec![json!({
+            "id": "00000000-0000-0000-0000-000000000001",
+            "type": "var",
+            "props": { "name": "MY_VAR", "value": "my_value" },
+            "children": [
+                {
+                    "id": "00000000-0000-0000-0000-000000000002",
+                    "type": "script",
+                    "props": { "code": "echo $MY_VAR" }
+                }
+            ]
+        })];
+
+        let context = ContextBuilder::build_context(
+            "00000000-0000-0000-0000-000000000002",
+            &document,
+            "00000000-0000-0000-0000-000000000000",
+        )
+        .await
+        .unwrap();
+
+        // Should have the variable set
+        assert_eq!(context.variables.get("MY_VAR"), Some(&"my_value".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_context_builder_var_empty_name() {
+        let document = vec![json!({
+            "id": "00000000-0000-0000-0000-000000000001",
+            "type": "var",
+            "props": { "name": "", "value": "my_value" },
+            "children": [
+                {
+                    "id": "00000000-0000-0000-0000-000000000002",
+                    "type": "script",
+                    "props": { "code": "echo test" }
+                }
+            ]
+        })];
+
+        let context = ContextBuilder::build_context(
+            "00000000-0000-0000-0000-000000000002",
+            &document,
+            "00000000-0000-0000-0000-000000000000",
+        )
+        .await
+        .unwrap();
+
+        // Should not add anything for empty name
+        assert!(context.variables.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_context_builder_var_invalid_name() {
+        let document = vec![json!({
+            "id": "00000000-0000-0000-0000-000000000001",
+            "type": "var",
+            "props": { "name": "INVALID NAME!", "value": "my_value" },
+            "children": [
+                {
+                    "id": "00000000-0000-0000-0000-000000000002",
+                    "type": "script",
+                    "props": { "code": "echo test" }
+                }
+            ]
+        })];
+
+        let result = ContextBuilder::build_context(
+            "00000000-0000-0000-0000-000000000002",
+            &document,
+            "00000000-0000-0000-0000-000000000000",
+        )
+        .await;
+
+        // Should fail due to invalid variable name
+        assert!(result.is_err());
+        if let Err(e) = result {
+            assert!(e.to_string().contains("can only contain letters, numbers, and underscores"));
+        }
     }
 }
