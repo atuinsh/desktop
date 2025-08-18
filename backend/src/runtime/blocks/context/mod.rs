@@ -61,6 +61,7 @@
 pub mod directory;
 pub mod environment;
 pub mod host;
+pub mod local_var;
 pub mod ssh_connect;
 
 // Re-export all context blocks and handlers for easy access
@@ -71,6 +72,8 @@ pub use environment::EnvironmentHandler;
 #[allow(unused_imports)] // Available for external use
 pub use host::HostHandler;
 #[allow(unused_imports)] // Available for external use
+pub use local_var::LocalVarHandler;
+#[allow(unused_imports)] // Available for external use
 pub use ssh_connect::SshConnectHandler;
 
 // Re-export block types for external use when needed
@@ -80,5 +83,7 @@ pub use directory::Directory;
 pub use environment::Environment;
 #[allow(unused_imports)] // Available for external use
 pub use host::Host;
+#[allow(unused_imports)] // Available for external use
+pub use crate::runtime::blocks::context_blocks::LocalVar;
 #[allow(unused_imports)] // Available for external use
 pub use ssh_connect::SshConnect;

@@ -44,3 +44,13 @@ pub struct Host {
     #[builder(setter(into))]
     pub host: String,
 }
+
+#[derive(Debug, Serialize, Deserialize, Clone, TypedBuilder)]
+#[serde(rename_all = "camelCase")]
+pub struct LocalVar {
+    #[builder(setter(into))]
+    pub id: Uuid,
+
+    #[builder(setter(into))]
+    pub name: String,
+}
