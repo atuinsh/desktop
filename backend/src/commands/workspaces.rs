@@ -18,7 +18,12 @@ pub async fn copy_welcome_workspace(app: AppHandle) -> Result<String, String> {
         .resolve("resources/welcome", BaseDirectory::Resource)
         .map_err(|e| e.to_string())?;
 
-    let documents_path = app.path().document_dir().map_err(|e| e.to_string())?;
+    let documents_path = app
+        .path()
+        .document_dir()
+        .or_else(|_| app.path().home_dir()) // possible for a linux system to have no document directory
+        .or_else(|_| app.path().app_config_dir()) // can't imagine we'd ever have to fallback to here, but we know the dir works
+        .map_err(|_| "Failed to locate a suitable directory for welcome workspace")?;
 
     let mut target_path = documents_path
         .join("Atuin Runbooks")
