@@ -13,6 +13,7 @@ import { Rc } from "@binarymuse/ts-stdlib";
 import { createWorkspace } from "./workspaces/commands";
 import { TabIcon } from "@/state/store/ui_state";
 import { invoke } from "@tauri-apps/api/core";
+import { DialogBuilder } from "@/components/Dialogs/dialog";
 
 const logger = new Logger("WorkspaceMigration");
 
@@ -55,7 +56,20 @@ export default async function doWorkspaceSetup(): Promise<void> {
     } catch (err) {
       logger.info("Unable to fetch workspaces from server; creating default workspace");
 
-      const workspacePath = await invoke<string>("copy_welcome_workspace");
+      let workspacePath: string | null = null;
+      try {
+        workspacePath = await invoke<string>("copy_welcome_workspace");
+      } catch (err) {
+        await new DialogBuilder()
+          .title("Failed to create welcome workspace")
+          .icon("error")
+          .message(err as string)
+          .action({ label: "OK", value: "ok", variant: "flat" })
+          .build();
+
+        resolve?.();
+        return;
+      }
 
       let name = "Welcome to Atuin";
       let id = uuidv7();
