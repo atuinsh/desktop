@@ -20,8 +20,24 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  combined:
+  rust-checks:
+    name: ${{ matrix.name }}
     runs-on: depot-ubuntu-22.04
+    strategy:
+      matrix:
+        include:
+          - name: Test
+            command: test
+            components: ""
+          - name: Check
+            command: check
+            components: ""
+          - name: Clippy
+            command: clippy
+            components: clippy
+          - name: Format
+            command: fmt
+            components: rustfmt
     steps:
       - uses: actions/checkout@v4
 
@@ -34,22 +50,27 @@ jobs:
         uses: dtolnay/rust-toolchain@master
         with:
           toolchain: stable
-          components: clippy, rustfmt
+          components: ${{ matrix.components }}
 
       - name: install dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
 
-      - name: Run checks
+      - name: Run ${{ matrix.name }}
         working-directory: backend
         run: |
-          set -e
-          cargo test || { echo "cargo test failed"; TEST_FAILED=1; }
-          cargo check --no-default-features || { echo "cargo check failed"; CHECK_FAILED=1; }
-          cargo clippy -- -D warnings || { echo "cargo clippy failed"; CLIPPY_FAILED=1; }
-          cargo fmt -- --check || { echo "cargo fmt failed"; FMT_FAILED=1; }
-          if [ "$TEST_FAILED" -o "$CHECK_FAILED" -o "$CLIPPY_FAILED" -o "$FMT_FAILED" ]; then
-            echo "One or more checks failed."
-            exit 1
-          fi
+          case "${{ matrix.command }}" in
+            test)
+              cargo test
+              ;;
+            check)
+              cargo check --no-default-features
+              ;;
+            clippy)
+              cargo clippy -- -D warnings
+              ;;
+            fmt)
+              cargo fmt -- --check
+              ;;
+          esac
