@@ -48,7 +48,10 @@
         }
       }
     },
-    "resources": { "../resources/welcome/": "resources/welcome/" }
+    "resources": {
+      "../resources/welcome/": "resources/welcome/",
+      "../resources/images/": "resources/images/"
+    }
   },
   "identifier": "sh.atuin.app",
   "plugins": {

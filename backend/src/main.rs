@@ -6,7 +6,8 @@
 use std::path::PathBuf;
 use std::{env, fs};
 
-use tauri::{App, AppHandle, Manager, RunEvent};
+use tauri::path::BaseDirectory;
+use tauri::{http, App, AppHandle, Manager, RunEvent};
 use time::format_description::well_known::Rfc3339;
 
 mod blocks;
@@ -510,6 +511,46 @@ fn main() {
         ])
         .plugin(tauri_plugin_sql::Builder::default().build())
         .plugin(tauri_plugin_http::init())
+        .register_uri_scheme_protocol("resources", |ctx, request| {
+            let filename = request.uri().path()[1..].to_string();
+            let filename = if filename.is_empty() {
+                request
+                    .uri()
+                    .host()
+                    .expect("Resource URI must have a host")
+                    .to_string()
+            } else {
+                format!(
+                    "{}/{}",
+                    request.uri().host().expect("Resource URI must have a host"),
+                    filename
+                )
+            };
+
+            let resources_dir = ctx
+                .app_handle()
+                .path()
+                .resolve(format!("resources"), BaseDirectory::Resource);
+
+            if let Err(e) = resources_dir {
+                eprintln!("Failed to resolve resources directory: {}", e);
+                return http::Response::builder()
+                    .status(500)
+                    .header(http::header::CONTENT_TYPE, "text/plain")
+                    .body(b"Internal server error".to_vec())
+                    .unwrap();
+            }
+
+            if let Ok(data) = fs::read(resources_dir.unwrap().join(&filename)) {
+                http::Response::builder().body(data).unwrap()
+            } else {
+                http::Response::builder()
+                    .status(404)
+                    .header(http::header::CONTENT_TYPE, "text/plain")
+                    .body(b"Not found".to_vec())
+                    .unwrap()
+            }
+        })
         .setup(|app| {
             backup_databases(app)?;
 

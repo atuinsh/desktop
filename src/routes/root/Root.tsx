@@ -1018,7 +1018,7 @@ function App() {
                       className="flex-none"
                       size="sm"
                       name={user.username || ""}
-                      src={user.avatar_url || ""}
+                      src={user.avatar_url || "resources://images/ghost-turtle.png"}
                     />
                   </Button>
                 </DropdownTrigger>
@@ -1035,6 +1035,7 @@ function App() {
                           size: "sm",
                           name: "Anonymous User",
                           showFallback: true,
+                          src: "resources://images/ghost-turtle.png",
                           imgProps: {
                             className: "transition-none",
                           },
