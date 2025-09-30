@@ -41,13 +41,7 @@ export const init_tracking = async () => {
   }
 
   if (track) {
-    let appVersion: string | null = null;
-
-    try {
-      appVersion = await invoke<string>("get_app_version");
-    } catch (e) {
-      console.error("Failed to get app version:", e);
-    }
+    const appVersion = await getAppVersion();
 
     Sentry.init({
       dsn: "https://ac8c00adf29c329694a0b105e1981ca3@o4507730431442944.ingest.us.sentry.io/4507741947232256",
@@ -102,28 +96,22 @@ export default async function track_event(event: string, properties: any = {}) {
   // Get current org context from store
   const store = useStore.getState();
   const selectedOrg = store.selectedOrg;
-  
+
   // Determine org context (anonymous - just personal vs org)
   const orgContext = selectedOrg ? "org" : "personal";
 
   if (AtuinEnv.isDev) {
     console.log(
-      `[dev] track_event: ${event} -> ${JSON.stringify({ 
-        ...properties, 
+      `[dev] track_event: ${event} -> ${JSON.stringify({
+        ...properties,
         platform: platformInfo,
-        org_context: orgContext
+        org_context: orgContext,
       })}`,
     );
     return;
   }
 
-  let appVersion: string | null = null;
-
-  try {
-    appVersion = await invoke<string>("get_app_version");
-  } catch (e) {
-    console.error("Failed to get app version:", e);
-  }
+  const appVersion = await getAppVersion();
 
   // Always include platform info and org context in every event
   const eventProperties = {
@@ -135,4 +123,20 @@ export default async function track_event(event: string, properties: any = {}) {
 
   const { default: posthog } = await import("posthog-js");
   posthog.capture(event, eventProperties);
+}
+
+async function getAppVersion() {
+  const version = useStore.getState().appVersion;
+
+  if (version.isSome()) {
+    return version.unwrap();
+  }
+
+  try {
+    const backendVersion = await invoke<string>("get_app_version");
+    if (backendVersion) {
+      useStore.getState().setAppVersion(backendVersion);
+      return backendVersion;
+    }
+  } catch (_e) {}
 }

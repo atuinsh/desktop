@@ -34,6 +34,7 @@ export class TabUri {
 }
 
 export interface AtuinUiState {
+  appVersion: Option<string>;
   focused: boolean;
   connectedToHubSocket: boolean;
   searchOpen: boolean;
@@ -64,6 +65,7 @@ export interface AtuinUiState {
   lightModeEditorTheme: string;
   darkModeEditorTheme: string;
 
+  setAppVersion: (version: string) => void;
   setFocused: (focused: boolean) => void;
   setConnectedToHubSocket: (online: boolean) => void;
   setSearchOpen: (open: boolean) => void;
@@ -120,6 +122,7 @@ export const persistUiKeys: (keyof AtuinUiState)[] = [
 ];
 
 export const createUiState: StateCreator<AtuinUiState> = (set, get, _store): AtuinUiState => ({
+  appVersion: None,
   focused: false,
   connectedToHubSocket: false,
   searchOpen: false,
@@ -148,6 +151,7 @@ export const createUiState: StateCreator<AtuinUiState> = (set, get, _store): Atu
   lightModeEditorTheme: "githubLight",
   darkModeEditorTheme: "githubDark",
 
+  setAppVersion: (version: string) => set(() => ({ appVersion: Some(version) })),
   setFocused: (focused: boolean) => set(() => ({ focused })),
   setConnectedToHubSocket: (online: boolean) => set(() => ({ connectedToHubSocket: online })),
   setSearchOpen: (open) => set(() => ({ searchOpen: open })),
