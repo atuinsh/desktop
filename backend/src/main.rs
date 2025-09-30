@@ -530,7 +530,7 @@ fn main() {
             let resources_dir = ctx
                 .app_handle()
                 .path()
-                .resolve(format!("resources"), BaseDirectory::Resource);
+                .resolve("resources", BaseDirectory::Resource);
 
             if let Err(e) = resources_dir {
                 eprintln!("Failed to resolve resources directory: {}", e);
