@@ -215,6 +215,13 @@ pub async fn template_str(
     let mut env = Environment::new();
     env.set_trim_blocks(true);
 
+    // Add custom filter for shell escaping
+    env.add_filter("shellquote", |value: String| -> String {
+        // Use POSIX shell single-quote escaping:
+        // wrap in single quotes and escape any single quotes as '\''
+        format!("'{}'", value.replace('\'', "'\\''"))
+    });
+
     // Iterate through the flattened doc, and find the block previous to the current one
     // If the previous block is an empty paragraph, skip it. Its content array will have 0
     // length
@@ -300,4 +307,52 @@ pub async fn template_str(
         .map_err(|e| e.to_string())?;
 
     Ok(source)
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn test_shellquote_filter() {
+        use minijinja::Environment;
+
+        let mut env = Environment::new();
+        env.add_filter("shellquote", |value: String| -> String {
+            format!("'{}'", value.replace('\'', "'\\''"))
+        });
+
+        // Test simple string
+        let result = env.render_str(
+            "{{ text | shellquote }}",
+            minijinja::context! { text => "hello" },
+        );
+        assert_eq!(result.unwrap(), "'hello'");
+
+        // Test string with single quotes
+        let result = env.render_str(
+            "{{ text | shellquote }}",
+            minijinja::context! { text => "it's working" },
+        );
+        assert_eq!(result.unwrap(), "'it'\\''s working'");
+
+        // Test string with double quotes
+        let result = env.render_str(
+            "{{ text | shellquote }}",
+            minijinja::context! { text => "say \"hello\"" },
+        );
+        assert_eq!(result.unwrap(), "'say \"hello\"'");
+
+        // Test string with special shell characters
+        let result = env.render_str(
+            "{{ text | shellquote }}",
+            minijinja::context! { text => "$PATH and `whoami`" },
+        );
+        assert_eq!(result.unwrap(), "'$PATH and `whoami`'");
+
+        // Test empty string
+        let result = env.render_str(
+            "{{ text | shellquote }}",
+            minijinja::context! { text => "" },
+        );
+        assert_eq!(result.unwrap(), "''");
+    }
 }
