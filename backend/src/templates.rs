@@ -301,3 +301,19 @@ pub async fn template_str(
 
     Ok(source)
 }
+
+#[tauri::command]
+pub async fn get_dependent_variables(source: String) -> Result<Vec<String>, String> {
+    let mut env = Environment::new();
+    env.set_trim_blocks(true);
+
+    let template = env
+        .template_from_str(source.as_str())
+        .map_err(|e| e.to_string())?;
+    let dependent = template
+        .undeclared_variables(true)
+        .into_iter()
+        .collect::<Vec<String>>();
+
+    Ok(dependent)
+}

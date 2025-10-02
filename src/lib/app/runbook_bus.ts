@@ -29,13 +29,13 @@ export default class RunbookBus extends Emittery {
     super();
   }
 
-  public emitVariableChanged(name: string, value: string) {
-    return this.emit("variable-changed", { name, value });
+  public emitVariableChanged(name: string, value: string, source?: any) {
+    return this.emit("variable-changed", { name, value, source });
   }
 
-  public onVariableChanged(callback: (name: string, value: string) => void) {
-    return this.on("variable-changed", (evt: { name: string; value: string }) => {
-      return callback(evt.name, evt.value);
+  public onVariableChanged(callback: (name: string, value: string, source?: any) => void) {
+    return this.on("variable-changed", (evt: { name: string; value: string; source?: any }) => {
+      return callback(evt.name, evt.value, evt.source);
     });
   }
 }

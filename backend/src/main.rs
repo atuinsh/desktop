@@ -460,6 +460,7 @@ fn main() {
             secret::load_password,
             secret::delete_password,
             templates::template_str,
+            templates::get_dependent_variables,
             runbooks::ydoc::save_ydoc_for_runbook,
             runbooks::ydoc::load_ydoc_for_runbook,
             runbooks::runbook::export_atrb,
