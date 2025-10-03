@@ -2,14 +2,8 @@ name: publish
 
 on:
   push:
-    tags:
-      - "v*.*.*"
-      - "!v0.0.101"
-      - "!v0.0.102"
-      - "!v0.0.103"
-      - "!v0.0.104"
-      - "!v0.0.105"
-      - "!v0.0.106"
+    branches:
+      - "release/v*.*.*"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -20,9 +14,24 @@ env:
   NODE_ENV: production
 
 jobs:
+  extract-version:
+    name: Extract version from branch
+    runs-on: depot-ubuntu-24.04
+    outputs:
+      version: ${{ steps.extract-version.outputs.version }}
+    steps:
+      - name: Extract version from branch name
+        id: extract-version
+        run: |
+          # Extract version from branch name (e.g., release/v1.2.3 -> v1.2.3)
+          VERSION=${GITHUB_REF_NAME#release/}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Extracted version: $VERSION"
+
   generate-changelog:
     name: Generate changelog
     runs-on: depot-ubuntu-24.04
+    needs: extract-version
     outputs:
       release_body: ${{ steps.git-cliff.outputs.content }}
 
@@ -37,12 +46,12 @@ jobs:
         uses: orhun/git-cliff-action@v4
         with:
           version: latest
-          args: -vv --latest --no-exec --github-repo ${{ github.repository }}
+          args: -vv --unreleased --no-exec --github-repo ${{ github.repository }}
 
   draft:
     name: Draft releases
     runs-on: depot-ubuntu-24.04
-    needs: generate-changelog
+    needs: [extract-version, generate-changelog]
     permissions:
       contents: write
     outputs:
@@ -66,7 +75,7 @@ jobs:
 
   build:
     name: Build releases
-    needs: draft
+    needs: [extract-version, draft]
 
     permissions:
       contents: write
@@ -171,10 +180,10 @@ jobs:
                 new_path="$dir/$new_filename"
                 echo "Renaming: $file -> $new_path"
                 mv "$file" "$new_path"
-                gh release upload "${{ github.ref_name }}" "$new_path" --clobber
+                gh release upload "${{ needs.extract-version.outputs.version }}" "$new_path" --clobber
               else
                 echo "No rename needed for: $filename"
-                gh release upload "${{ github.ref_name }}" "$file" --clobber
+                gh release upload "${{ needs.extract-version.outputs.version }}" "$file" --clobber
               fi
             elif [[ "$file" == *.app.tar.gz ]] || [[ "$file" == *.app.tar.gz.sig ]]; then
               # Rename macOS files to include platform suffix
@@ -194,15 +203,15 @@ jobs:
                 new_path="$dir/$new_filename"
                 echo "Renaming: $file -> $new_path"
                 mv "$file" "$new_path"
-                gh release upload "${{ github.ref_name }}" "$new_path" --clobber
+                gh release upload "${{ needs.extract-version.outputs.version }}" "$new_path" --clobber
               else
-                gh release upload "${{ github.ref_name }}" "$file" --clobber
+                gh release upload "${{ needs.extract-version.outputs.version }}" "$file" --clobber
               fi
             elif [[ "$file" == *.app ]]; then
               # skip this file
               echo "Skipping raw .app bundle: $file"
             else
-              gh release upload "${{ github.ref_name }}" "$file" --clobber
+              gh release upload "${{ needs.extract-version.outputs.version }}" "$file" --clobber
             fi
           done
 
