@@ -176,8 +176,8 @@ jobs:
                 echo "No rename needed for: $filename"
                 gh release upload "${{ github.ref_name }}" "$file" --clobber
               fi
-            elif [[ "$file" == *.app.tar.gz ]] || [[ "$file" == *.app.tar.gz.sig ]]; then
-              # Rename macOS app bundles to include platform suffix
+            elif [[ "$file" == *.app.tar.gz ]] || [[ "$file" == *.app.tar.gz.sig ]] || [[ "$file" == *.dmg ]]; then
+              # Rename macOS files to include platform suffix
               if [[ -n "$platform_suffix" ]]; then
                 dir=$(dirname "$file")
                 filename=$(basename "$file")
@@ -185,8 +185,10 @@ jobs:
                 echo "Processing macOS file: $filename"
                 if [[ "$file" == *.app.tar.gz.sig ]]; then
                   new_filename=$(echo "$filename" | sed "s/\.app\.tar\.gz\.sig$/${platform_suffix}.app.tar.gz.sig/")
-                else
+                elif [[ "$file" == *.app.tar.gz ]]; then
                   new_filename=$(echo "$filename" | sed "s/\.app\.tar\.gz$/${platform_suffix}.app.tar.gz/")
+                elif [[ "$file" == *.dmg ]]; then
+                  new_filename=$(echo "$filename" | sed "s/\.dmg$/${platform_suffix}.dmg/")
                 fi
                 
                 new_path="$dir/$new_filename"
@@ -194,7 +196,6 @@ jobs:
                 mv "$file" "$new_path"
                 gh release upload "${{ github.ref_name }}" "$new_path" --clobber
               else
-                echo "No platform suffix for: $filename"
                 gh release upload "${{ github.ref_name }}" "$file" --clobber
               fi
             elif [[ "$file" == *.app ]]; then
