@@ -176,7 +176,7 @@ jobs:
                 echo "No rename needed for: $filename"
                 gh release upload "${{ github.ref_name }}" "$file" --clobber
               fi
-            elif [[ "$file" == *.app.tar.gz ]] || [[ "$file" == *.app.tar.gz.sig ]]; then
+            elif [[ "$file" == *.app.tar.gz ]] || [[ "$file" == *.app.tar.gz.sig ]] || [[ "$file" == *.dmg ]]; then
               # Rename macOS files to include platform suffix
               if [[ -n "$platform_suffix" ]]; then
                 dir=$(dirname "$file")
