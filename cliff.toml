@@ -10,7 +10,8 @@ body = """
     ## Atuin Desktop v{{ version | trim_start_matches(pat="v") }} - {{ timestamp | date(format="%Y-%m-%d") }}
 
     ### 🔗 Downloads
-    - [macOS](https://github.com/atuinsh/desktop/releases/download/v{{ version | trim_start_matches(pat="v") }}/Atuin_{{ version | trim_start_matches(pat="v") }}_aarch64.dmg)
+    - [macOS ARM](https://github.com/atuinsh/desktop/releases/download/v{{ version | trim_start_matches(pat="v") }}/Atuin_{{ version | trim_start_matches(pat="v") }}_aarch64.dmg)
+    - [macOS Intel](https://github.com/atuinsh/desktop/releases/download/v{{ version | trim_start_matches(pat="v") }}/Atuin_{{ version | trim_start_matches(pat="v") }}_x64.dmg)
     - [Linux .deb](https://github.com/atuinsh/desktop/releases/download/v{{ version | trim_start_matches(pat="v") }}/Atuin_Desktop_{{ version | trim_start_matches(pat="v") }}_amd64.deb)
     - [Linux .rpm](https://github.com/atuinsh/desktop/releases/download/v{{ version | trim_start_matches(pat="v") }}/Atuin_Desktop-{{ version | trim_start_matches(pat="v") }}-1.x86_64.rpm)
 
