@@ -117,7 +117,7 @@ tempfile = "3.10"
 cocoa = "0.26"
 
 [target."cfg(not(any(target_os = \"android\", target_os = \"ios\")))".dependencies]
-tauri-plugin-updater = "2.7.1"
+tauri-plugin-updater = "2.9.0"
 
 [features]
 # this feature is used for production builds or when `devPath` points to the filesystem
