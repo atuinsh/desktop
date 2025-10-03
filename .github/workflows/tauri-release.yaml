@@ -136,7 +136,7 @@ jobs:
         with:
           args: ${{ matrix.args }}
 
-      - name: Rename Linux files and upload to GitHub release
+      - name: Rename platform-specific files and upload to GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -147,7 +147,15 @@ jobs:
           paths_str=$(echo "${{ steps.tauri-action.outputs.artifactPaths }}" | sed 's/^\[//;s/\]$//')
           IFS=',' read -ra paths <<< "$paths_str"
 
-          # Rename .deb and .rpm files to remove spaces and upload to GitHub release
+          # Determine platform suffix based on matrix args
+          platform_suffix=""
+          if [[ "${{ matrix.args }}" == *"aarch64-apple-darwin"* ]]; then
+            platform_suffix="-aarch64"
+          elif [[ "${{ matrix.args }}" == *"x86_64-apple-darwin"* ]]; then
+            platform_suffix="-x86_64"
+          fi
+
+          # Rename files and upload to GitHub release
           for file in "${paths[@]}"; do
             echo "Checking file: $file"
             if [[ "$file" == *.deb ]] || [[ "$file" == *.rpm ]]; then
@@ -166,6 +174,27 @@ jobs:
                 gh release upload "${{ github.ref_name }}" "$new_path" --clobber
               else
                 echo "No rename needed for: $filename"
+                gh release upload "${{ github.ref_name }}" "$file" --clobber
+              fi
+            elif [[ "$file" == *.app.tar.gz ]] || [[ "$file" == *.app.tar.gz.sig ]]; then
+              # Rename macOS app bundles to include platform suffix
+              if [[ -n "$platform_suffix" ]]; then
+                dir=$(dirname "$file")
+                filename=$(basename "$file")
+                
+                echo "Processing macOS file: $filename"
+                if [[ "$file" == *.app.tar.gz.sig ]]; then
+                  new_filename=$(echo "$filename" | sed "s/\.app\.tar\.gz\.sig$/${platform_suffix}.app.tar.gz.sig/")
+                else
+                  new_filename=$(echo "$filename" | sed "s/\.app\.tar\.gz$/${platform_suffix}.app.tar.gz/")
+                fi
+                
+                new_path="$dir/$new_filename"
+                echo "Renaming: $file -> $new_path"
+                mv "$file" "$new_path"
+                gh release upload "${{ github.ref_name }}" "$new_path" --clobber
+              else
+                echo "No platform suffix for: $filename"
                 gh release upload "${{ github.ref_name }}" "$file" --clobber
               fi
             elif [[ "$file" == *.app ]]; then
