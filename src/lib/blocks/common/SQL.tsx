@@ -348,20 +348,25 @@ const SQL = ({
               onPlay={handlePlay}
               cancellable={false}
             />
-            <CodeMirror
-              placeholder={"Write your query here..."}
-              className={cn("!pt-0 max-w-full border border-gray-300 rounded flex-grow", {
-                "h-8 overflow-hidden": collapseQuery,
-              })}
-              basicSetup={true}
-              extensions={[getSqlExtension(), ...extensions]}
-              value={codeMirrorValue.value}
-              onChange={codeMirrorValue.onChange}
-              editable={isEditable}
-              theme={themeObj}
-              maxHeight="100vh"
-              onFocus={onCodeMirrorFocus}
-            />
+            <div className={cn("flex-grow relative transition-all duration-300 ease-in-out", {
+              "max-h-10 overflow-hidden": collapseQuery,
+            })}>
+              <CodeMirror
+                placeholder={"Write your query here..."}
+                className="!pt-0 max-w-full border border-gray-300 rounded"
+                basicSetup={true}
+                extensions={[getSqlExtension(), ...extensions]}
+                value={codeMirrorValue.value}
+                onChange={codeMirrorValue.onChange}
+                editable={isEditable}
+                theme={themeObj}
+                maxHeight="100vh"
+                onFocus={onCodeMirrorFocus}
+              />
+              {collapseQuery && (
+                <div className="absolute bottom-0 left-0 right-0 h-6 bg-gradient-to-t from-white dark:from-gray-900 to-transparent pointer-events-none" />
+              )}
+            </div>
           </div>
         </>
       }
