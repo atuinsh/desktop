@@ -47,6 +47,12 @@ export default createReactBlockSpec(
             props: { ...block.props, outputVisible: visible },
           });
         };
+
+        const setCollapseCode = (collapse: boolean) => {
+          editor.updateBlock(block, {
+            props: { ...block.props, collapseCode: collapse },
+          });
+        };
   
         const setDependency = (dependency: DependencySpec) => {
           editor.updateBlock(block, {
@@ -76,6 +82,8 @@ export default createReactBlockSpec(
             terminal={terminal}
             setDependency={setDependency}
             onCodeMirrorFocus={handleCodeMirrorFocus}
+            collapseCode={block.props.collapseCode}
+            setCollapseCode={setCollapseCode}
           />
         );
       },

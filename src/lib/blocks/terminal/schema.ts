@@ -61,6 +61,9 @@ export const TERMINAL_BLOCK_SCHEMA = {
     outputVisible: {
       default: true,
     },
+    collapseCode: {
+      default: false,
+    },
     dependency: { default: "{}" },
   },
   content: "none",

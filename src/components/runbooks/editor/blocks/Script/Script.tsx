@@ -5,7 +5,7 @@ import { useMemo, useState, useEffect, useRef, useCallback } from "react";
 
 import { useStore } from "@/state/store.ts";
 import { addToast, Button, Input, Tooltip } from "@heroui/react";
-import { FileTerminalIcon, Eye, EyeOff, TriangleAlertIcon } from "lucide-react";
+import { FileTerminalIcon, Eye, EyeOff, TriangleAlertIcon, ArrowDownToLineIcon, ArrowUpToLineIcon } from "lucide-react";
 import EditableHeading from "@/components/EditableHeading/index.tsx";
 
 import { uuidv7 } from "uuidv7";
@@ -37,7 +37,7 @@ import PlayButton from "@/lib/blocks/common/PlayButton.tsx";
 import CodeEditor, { TabAutoComplete } from "@/lib/blocks/common/CodeEditor/CodeEditor.tsx";
 import Block from "@/lib/blocks/common/Block.tsx";
 import InterpreterSelector, { buildInterpreterCommand, supportedShells } from "@/lib/blocks/common/InterpreterSelector.tsx";
-import { exportPropMatter } from "@/lib/utils";
+import { exportPropMatter, cn } from "@/lib/utils";
 import { useCurrentRunbookId } from "@/context/runbook_id_context";
 
 interface ScriptBlockProps {
@@ -51,6 +51,9 @@ interface ScriptBlockProps {
   setOutputVisible: (visible: boolean) => void;
   setDependency: (dependency: DependencySpec) => void;
   onCodeMirrorFocus?: () => void;
+  
+  collapseCode: boolean;
+  setCollapseCode: (collapse: boolean) => void;
 
   script: ScriptBlockType;
 }
@@ -68,6 +71,8 @@ const ScriptBlock = ({
   editor,
   script,
   onCodeMirrorFocus,
+  collapseCode,
+  setCollapseCode,
 }: ScriptBlockProps) => {
   const [isRunning, setIsRunning] = useState<boolean>(false);
   const [hasRun, setHasRun] = useState<boolean>(false);
@@ -479,6 +484,19 @@ const ScriptBlock = ({
                   {script.outputVisible ? <Eye size={20} /> : <EyeOff size={20} />}
                 </Button>
               </Tooltip>
+
+              <Tooltip
+                content={collapseCode ? "Expand code" : "Collapse code"}
+              >
+                <Button
+                  onPress={() => setCollapseCode(!collapseCode)}
+                  size="sm"
+                  variant="flat"
+                  isIconOnly
+                >
+                  {collapseCode ? <ArrowDownToLineIcon size={20} /> : <ArrowUpToLineIcon size={20} />}
+                </Button>
+              </Tooltip>
             </div>
           </div>
 
@@ -499,7 +517,9 @@ const ScriptBlock = ({
               </div>
             </Tooltip>
 
-            <div className="min-w-0 flex-1 overflow-x-auto">
+            <div className={cn("min-w-0 flex-1 overflow-x-auto transition-all duration-300 ease-in-out relative", {
+              "max-h-10 overflow-hidden": collapseCode,
+            })}>
               <CodeEditor
                 id={script.id}
                 code={script.code}
@@ -516,6 +536,9 @@ const ScriptBlock = ({
                   },
                 ]}
               />
+              {collapseCode && (
+                <div className="absolute bottom-0 left-0 right-0 h-6 bg-gradient-to-t from-white dark:from-gray-900 to-transparent pointer-events-none" />
+              )}
             </div>
           </div>
         </>
@@ -542,6 +565,9 @@ export default createReactBlockSpec(
       code: { default: "" },
       outputVisible: {
         default: true,
+      },
+      collapseCode: {
+        default: false,
       },
       dependency: {
         default: "{}",
@@ -611,6 +637,12 @@ export default createReactBlockSpec(
         });
       };
 
+      const setCollapseCode = (collapse: boolean) => {
+        editor.updateBlock(block, {
+          props: { ...block.props, collapseCode: collapse },
+        });
+      };
+
       const setDependency = (dependency: DependencySpec) => {
         editor.updateBlock(block, {
           props: { ...block.props, dependency: dependency.serialize() },
@@ -652,6 +684,8 @@ export default createReactBlockSpec(
           setOutputVisible={setOutputVisible}
           setDependency={setDependency}
           onCodeMirrorFocus={handleCodeMirrorFocus}
+          collapseCode={block.props.collapseCode}
+          setCollapseCode={setCollapseCode}
         />
       );
     },
