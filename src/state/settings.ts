@@ -10,6 +10,8 @@ const SCRIPT_INTERPRETERS = "settings.runbooks.script.interpreters";
 const EDITOR_VIM_MODE = "settings.editor.vim_mode";
 const AI_ENABLED = "settings.ai.enabled";
 const AI_API_KEY = "settings.ai.api_key";
+const SHELLCHECK_ENABLED = "settings.editor.shellcheck.enabled";
+const SHELLCHECK_PATH = "settings.editor.shellcheck.path";
 
 export class Settings {
   public static DEFAULT_FONT = "FiraCode";
@@ -123,5 +125,27 @@ export class Settings {
     }
 
     return await store.get(AI_API_KEY);
+  }
+
+  public static async shellCheckEnabled(val: boolean | null = null): Promise<boolean> {
+    let store = await KVStore.open_default();
+
+    if (val !== null) {
+      await store.set(SHELLCHECK_ENABLED, val);
+      return val;
+    }
+
+    return (await store.get(SHELLCHECK_ENABLED)) || false;
+  }
+
+  public static async shellCheckPath(val: string | null = null): Promise<string | null> {
+    let store = await KVStore.open_default();
+
+    if (val || val === "") {
+      await store.set(SHELLCHECK_PATH, val);
+      return val;
+    }
+
+    return await store.get(SHELLCHECK_PATH);
   }
 }

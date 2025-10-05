@@ -88,6 +88,7 @@ toml = "0.9.2"
 ts-rs = { version = "11.0.1", features = ["serde-json-impl", "uuid-impl"] }
 json-digest = "0.0.16"
 trash = "5.2.2"
+tempfile = "3.10"
 
 
 [dependencies.sqlx]
@@ -111,7 +112,6 @@ features = ["sqlite"] # or "postgres", or "mysql"
 version = "2.3.0"
 
 [dev-dependencies]
-tempfile = "3.10"
 
 [target."cfg(target_os = \"macos\")".dependencies]
 cocoa = "0.26"

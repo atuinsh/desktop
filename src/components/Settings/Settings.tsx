@@ -189,6 +189,30 @@ const GeneralSettings = () => {
     useStore.getState().setVimModeEnabled(enabled);
   }
 
+  const [shellCheckEnabled, setShellCheckEnabledState, shellCheckEnabledLoading] = useSettingsState(
+    "shellcheck_enabled",
+    false,
+    Settings.shellCheckEnabled,
+    Settings.shellCheckEnabled,
+  );
+
+  const [shellCheckPath, setShellCheckPathState, shellCheckPathLoading] = useSettingsState(
+    "shellcheck_path",
+    "",
+    Settings.shellCheckPath,
+    Settings.shellCheckPath,
+  );
+
+  function setShellCheckEnabled(enabled: boolean) {
+    setShellCheckEnabledState(enabled);
+    useStore.getState().setShellCheckEnabled(enabled);
+  }
+
+  function setShellCheckPath(path: string) {
+    setShellCheckPathState(path);
+    useStore.getState().setShellCheckPath(path);
+  }
+
   const themes = [
     ["Abcdef", "abcdef"],
     ["Abyss", "abyss"],
@@ -272,7 +296,12 @@ const GeneralSettings = () => {
     promptToRestart();
   }
 
-  if (isLoading || vimModeLoading) return <Spinner />;
+  if (
+    isLoading ||
+    vimModeLoading ||
+    shellCheckEnabledLoading ||
+    shellCheckPathLoading
+  ) return <Spinner />;
 
   return (
     <>
@@ -405,6 +434,27 @@ const GeneralSettings = () => {
             onValueChange={setVimModeEnabled}
             description="Enable Vim key bindings in code editors"
           />
+
+          <SettingSwitch
+            className="mt-4"
+            label="Enable ShellCheck"
+            isSelected={shellCheckEnabled}
+            onValueChange={setShellCheckEnabled}
+            description="Enable ShellCheck static analysis for shell scripts in code editors"
+          />
+
+          {shellCheckEnabled && (
+            <div className="mt-4">
+              <SettingInput
+                type="text"
+                label="ShellCheck path"
+                value={shellCheckPath || ""}
+                onChange={setShellCheckPath}
+                placeholder=""
+                description="(Optional) Path to the ShellCheck command line tool if it's not allready in PATH"
+              />
+            </div>
+          )}
 
           <div className="mt-2 ml-1">
             <Link

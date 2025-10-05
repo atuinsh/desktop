@@ -8,6 +8,7 @@ import { useCodeMirrorValue } from "@/lib/hooks/useCodeMirrorValue";
 import { indentLess, indentMore } from "@codemirror/commands";
 import { vim } from "@replit/codemirror-vim";
 import { useStore } from "@/state/store";
+import { makeShellCheckLinter, supportedShells } from "./shellcheck";
 
 
 interface CodeEditorProps {
@@ -47,6 +48,10 @@ export default function CodeEditor({
   onFocus,
 }: CodeEditorProps) {
   const vimModeEnabled = useStore((state) => state.vimModeEnabled);
+
+  const shellCheckEnabled = useStore((state) => state.shellCheckEnabled);
+  const shellCheckPath = useStore((state) => state.shellCheckPath || "shellcheck");
+
   let editorLanguage = useMemo(() => {
     // Do the best we can with the interpreter name - get the language
     // TODO: consider dropdown to override this
@@ -86,6 +91,18 @@ export default function CodeEditor({
   const themeObj = (themes as any)[theme];
   const codeMirrorValue = useCodeMirrorValue(code, onChange);
 
+  const shellCheckShell = useMemo(() => {
+    for (const shell of supportedShells) {
+      if (language.indexOf(shell) != -1) {
+        return shell;
+      }
+    }
+
+    return null;
+  }, [language]);
+
+  const shellCheckOn = (shellCheckShell !== null) && shellCheckEnabled;
+
   let editorExtensions: any[] = useMemo(() => {
     const ext = [...extensions(), customKeymap];
     if (vimModeEnabled) {
@@ -94,8 +111,18 @@ export default function CodeEditor({
     if (editorLanguage) {
       ext.push(editorLanguage);
     }
+    if (shellCheckOn) {
+      ext.push(makeShellCheckLinter(shellCheckPath, shellCheckShell));
+    }
     return ext;
-  }, [editorLanguage, customKeymap, vimModeEnabled]);
+  }, [
+    editorLanguage,
+    customKeymap,
+    vimModeEnabled,
+    shellCheckOn,
+    shellCheckShell,
+    shellCheckPath,
+  ]);
 
   return (
     <CodeMirror

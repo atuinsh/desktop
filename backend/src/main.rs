@@ -25,6 +25,7 @@ mod runbooks;
 mod runtime;
 mod secret;
 mod shared_state;
+mod shellcheck;
 mod sqlite;
 mod state;
 mod stats;
@@ -510,6 +511,7 @@ fn main() {
             shared_state::update_shared_state_document,
             shared_state::delete_shared_state_document,
             shared_state::remove_optimistic_updates,
+            shellcheck::shellcheck,
         ])
         .plugin(tauri_plugin_sql::Builder::default().build())
         .plugin(tauri_plugin_http::init())

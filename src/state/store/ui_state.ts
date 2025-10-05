@@ -65,6 +65,8 @@ export interface AtuinUiState {
   lightModeEditorTheme: string;
   darkModeEditorTheme: string;
   vimModeEnabled: boolean;
+  shellCheckEnabled: boolean;
+  shellCheckPath: string;
 
   setAppVersion: (version: string) => void;
   setFocused: (focused: boolean) => void;
@@ -99,6 +101,8 @@ export interface AtuinUiState {
   setLightModeEditorTheme: (theme: string) => void;
   setDarkModeEditorTheme: (theme: string) => void;
   setVimModeEnabled: (enabled: boolean) => void;
+  setShellCheckEnabled: (enabled: boolean) => void;
+  setShellCheckPath: (path: string) => void;
 
   getFolderState: (workspaceId: string) => Option<Record<string, boolean>>;
   toggleFolder: (workspaceId: string, folderId: string) => void;
@@ -119,6 +123,7 @@ export const persistUiKeys: (keyof AtuinUiState)[] = [
   "lightModeEditorTheme",
   "darkModeEditorTheme",
   "vimModeEnabled",
+  "shellCheckEnabled",
   "hiddenWorkspaces",
   "tabs",
   "currentTabId",
@@ -154,6 +159,8 @@ export const createUiState: StateCreator<AtuinUiState> = (set, get, _store): Atu
   lightModeEditorTheme: "githubLight",
   darkModeEditorTheme: "githubDark",
   vimModeEnabled: false,
+  shellCheckEnabled: false,
+  shellCheckPath: "",
 
   setAppVersion: (version: string) => set(() => ({ appVersion: Some(version) })),
   setFocused: (focused: boolean) => set(() => ({ focused })),
@@ -353,6 +360,8 @@ export const createUiState: StateCreator<AtuinUiState> = (set, get, _store): Atu
   setLightModeEditorTheme: (theme: string) => set(() => ({ lightModeEditorTheme: theme })),
   setDarkModeEditorTheme: (theme: string) => set(() => ({ darkModeEditorTheme: theme })),
   setVimModeEnabled: (enabled: boolean) => set(() => ({ vimModeEnabled: enabled })),
+  setShellCheckEnabled: (enabled: boolean) => set(() => ({ shellCheckEnabled: enabled })),
+  setShellCheckPath: (path: string) => set(() => ({ shellCheckPath: path }) ),
 
   getFolderState: (workspaceId: string) => Some(get().folderState[workspaceId]),
   toggleFolder: (workspaceId: string, folderId: string) => {
