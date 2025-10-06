@@ -43,7 +43,7 @@ sha2 = "0.10"
 bigdecimal = "0.4"
 
 tauri = { version = "2.5.1", features = ["tray-icon", "devtools"] }
-tauri-plugin-http = "2.4.4"
+tauri-plugin-http = { version = "2.4.4", features = ["rustls-tls-native-roots"] }
 tauri-plugin-deep-link = "2.3.0"
 tauri-plugin-single-instance = { version = "2.2.4", features = ["deep-link"] }
 tauri-plugin-os = "2.2.1"
@@ -94,7 +94,7 @@ trash = "5.2.2"
 version = "0.8"
 features = [
     "runtime-tokio",
-    "tls-native-tls",
+    "tls-rustls-ring-native-roots",
     "time",
     "postgres",
     "mysql",
