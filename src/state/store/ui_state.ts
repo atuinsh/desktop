@@ -64,6 +64,7 @@ export interface AtuinUiState {
 
   lightModeEditorTheme: string;
   darkModeEditorTheme: string;
+  vimModeEnabled: boolean;
 
   setAppVersion: (version: string) => void;
   setFocused: (focused: boolean) => void;
@@ -97,6 +98,7 @@ export interface AtuinUiState {
 
   setLightModeEditorTheme: (theme: string) => void;
   setDarkModeEditorTheme: (theme: string) => void;
+  setVimModeEnabled: (enabled: boolean) => void;
 
   getFolderState: (workspaceId: string) => Option<Record<string, boolean>>;
   toggleFolder: (workspaceId: string, folderId: string) => void;
@@ -116,6 +118,7 @@ export const persistUiKeys: (keyof AtuinUiState)[] = [
   "sidebarClickStyle",
   "lightModeEditorTheme",
   "darkModeEditorTheme",
+  "vimModeEnabled",
   "hiddenWorkspaces",
   "tabs",
   "currentTabId",
@@ -150,6 +153,7 @@ export const createUiState: StateCreator<AtuinUiState> = (set, get, _store): Atu
 
   lightModeEditorTheme: "githubLight",
   darkModeEditorTheme: "githubDark",
+  vimModeEnabled: false,
 
   setAppVersion: (version: string) => set(() => ({ appVersion: Some(version) })),
   setFocused: (focused: boolean) => set(() => ({ focused })),
@@ -348,6 +352,7 @@ export const createUiState: StateCreator<AtuinUiState> = (set, get, _store): Atu
 
   setLightModeEditorTheme: (theme: string) => set(() => ({ lightModeEditorTheme: theme })),
   setDarkModeEditorTheme: (theme: string) => set(() => ({ darkModeEditorTheme: theme })),
+  setVimModeEnabled: (enabled: boolean) => set(() => ({ vimModeEnabled: enabled })),
 
   getFolderState: (workspaceId: string) => Some(get().folderState[workspaceId]),
   toggleFolder: (workspaceId: string, folderId: string) => {

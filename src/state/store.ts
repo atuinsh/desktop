@@ -22,6 +22,7 @@ import { AtuinQueryState, createQueryState, persistQueryKeys } from "./store/que
 import { createChildState, persistChildKeys } from "./store/child_state";
 import { AtuinChildState } from "./store/child_state";
 import { AtuinDialogState, createDialogState, persistDialogKeys } from "./store/dialog_state";
+import { Settings } from "./settings";
 const logger = new Logger("AtuinStore", "purple", "pink");
 
 // To add a new state slice to the store:
@@ -102,7 +103,7 @@ const middleware = (f: StateCreator<AtuinState>) =>
       },
 
       onRehydrateStorage: () => {
-        return (state: AtuinState | undefined) => {
+        return async (state: AtuinState | undefined) => {
           if (!state) return state;
 
           // In order for cached user data to work correctly, we need to
@@ -111,6 +112,12 @@ const middleware = (f: StateCreator<AtuinState>) =>
           if (user) {
             const userObj = new User(user.username!, user.email!, user.bio!, user.avatar_url!);
             state.user = userObj;
+          }
+
+          // Initialize vim mode from persistent settings if not already set
+          const enabled = await Settings.editorVimMode();
+          if (state.vimModeEnabled !== enabled) {
+            state.setVimModeEnabled(enabled);
           }
         };
       },

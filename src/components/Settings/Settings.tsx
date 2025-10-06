@@ -177,12 +177,17 @@ const GeneralSettings = () => {
   const backgroundSync = useStore((state) => state.backgroundSync);
   const syncConcurrency = useStore((state) => state.syncConcurrency);
 
-  const [vimModeEnabled, setVimModeEnabled, vimModeLoading] = useSettingsState(
+  const [vimModeEnabled, setVimModeEnabledState, vimModeLoading] = useSettingsState(
     "editor_vim_mode",
     false,
     Settings.editorVimMode,
     Settings.editorVimMode,
   );
+
+  function setVimModeEnabled(enabled: boolean) {
+    setVimModeEnabledState(enabled);
+    useStore.getState().setVimModeEnabled(enabled);
+  }
 
   const themes = [
     ["Abcdef", "abcdef"],
