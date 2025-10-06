@@ -119,6 +119,12 @@ cocoa = "0.26"
 [target."cfg(not(any(target_os = \"android\", target_os = \"ios\")))".dependencies]
 tauri-plugin-updater = "2.7.1"
 
+[profile.release]
+codegen-units = 1    # Allows LLVM to perform better optimization
+lto = true          # Enables link-time optimizations
+opt-level = 3       # Prioritizes speed over size
+strip = true        # Ensures debug symbols are removed
+
 [features]
 # this feature is used for production builds or when `devPath` points to the filesystem
 # DO NOT REMOVE!!
