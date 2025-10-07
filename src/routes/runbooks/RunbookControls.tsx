@@ -8,11 +8,13 @@ import { useMemo, useReducer, useRef } from "react";
 import * as api from "@/api/api";
 import { cn } from "@/lib/utils";
 import CollaborationManager from "@/routes/runbooks/CollaborationManager";
+import { open } from "@tauri-apps/plugin-shell";
 
 interface RunbookControlsProps {
   runbook: Runbook;
   remoteRunbook?: RemoteRunbook;
   isOrgOwned: boolean;
+  isOfflineRunbook: boolean;
   onClose: () => void;
 }
 
@@ -216,6 +218,11 @@ export default function RunbookControls(props: RunbookControlsProps) {
     visibilityApi.setValue(keys.currentKey as RunbookVisibility);
   }
 
+  function handleLearnMore(e: React.MouseEvent<HTMLAnchorElement>) {
+    e.preventDefault();
+    open("https://man.atuin.sh/workspaces/");
+  }
+
   return (
     <div className="flex flex-col w-full p-2 border-b">
       <div className="flex items-center justify-between select-none">
@@ -228,7 +235,19 @@ export default function RunbookControls(props: RunbookControlsProps) {
         </Button>
       </div>
 
-      {disabled && (
+      {props.isOfflineRunbook && (
+        <p className="text-sm text-gray-500 dark:text-gray-400 italic ml-5 mt-1 select-none cursor-default">
+          Runbooks in offline workspaces exist only on your device, and cannot be shared.{" "}
+          <a
+            href="https://man.atuin.sh/workspaces/"
+            className="text-blue-500"
+            onClick={handleLearnMore}
+          >
+            Learn more
+          </a>
+        </p>
+      )}
+      {disabled && !props.isOfflineRunbook && (
         <p className="text-sm text-gray-500 dark:text-gray-400 italic ml-5 mt-1 select-none cursor-default">
           Runbook slug, visibility, and other sharing settings can only be modified while online and
           logged in to Atuin Hub

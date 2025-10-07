@@ -453,6 +453,9 @@ export default function Runbooks() {
                 runbook={currentRunbook}
                 remoteRunbook={remoteRunbook || undefined}
                 isOrgOwned={runbookWorkspace.isOrgOwned()}
+                isOfflineRunbook={
+                  !runbookWorkspace.isOnline() && !runbookWorkspace.isLegacyHybrid()
+                }
                 onClose={() => setShowSettings(false)}
               />
             )}
