@@ -37,7 +37,7 @@ jobs:
         uses: orhun/git-cliff-action@v4
         with:
           version: latest
-          args: -vv --latest --no-exec --github-repo ${{ github.repository }} --tag-pattern "v.*"
+          args: -vv --latest --no-exec --github-repo ${{ github.repository }} --tag-pattern "v.*" --github-token ${{ github.token }}
 
   draft:
     name: Draft releases
