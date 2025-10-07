@@ -10,7 +10,7 @@ import track_event from "@/tracking";
 import CodeMirror, { Extension } from "@uiw/react-codemirror";
 
 import "@xterm/xterm/css/xterm.css";
-import { ChevronDownIcon, CodeIcon, RefreshCwIcon, RefreshCwOffIcon, ArrowDownToLineIcon, ArrowUpToLineIcon } from "lucide-react";
+import { ChevronDownIcon, CodeIcon, RefreshCwIcon, RefreshCwOffIcon, ArrowDownToLineIcon, ArrowUpToLineIcon, ClipboardIcon } from "lucide-react";
 import {
   Dropdown,
   DropdownTrigger,
@@ -20,6 +20,7 @@ import {
   Input,
   Switch,
   Tooltip,
+  addToast,
 } from "@heroui/react";
 import EditableHeading from "@/components/EditableHeading/index.tsx";
 
@@ -151,6 +152,15 @@ const EditorBlock = ({
 
   const themeObj = useCodemirrorTheme();
 
+  const handleCopyCode = () => {
+    navigator.clipboard.writeText(code);
+    addToast({
+      title: "Code copied to clipboard",
+      color: "success",
+      radius: "sm",
+    });
+  };
+
   return (
     <Block
       name={name}
@@ -186,6 +196,16 @@ const EditorBlock = ({
                   isDisabled={!isEditable || variableName.trim() === ""}
                 />
               </Tooltip>
+               <Tooltip content={"Copy code"}>
+                 <Button
+                   onPress={handleCopyCode}
+                   size="sm"
+                   variant="flat"
+                   isIconOnly
+                 >
+                   <ClipboardIcon size={20} />
+                 </Button>
+               </Tooltip>
               <Tooltip content={collapseCode ? "Expand code" : "Collapse code"}>
                 <Button
                   onPress={() => setCollapseCode(!collapseCode)}
