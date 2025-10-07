@@ -15,30 +15,40 @@ env:
 
 jobs:
   create-release:
-    name: Create edge release
+    name: Ensure edge release exists
     runs-on: ubuntu-latest
     permissions:
       contents: write
-    outputs:
-      upload_url: ${{ steps.create_release.outputs.upload_url }}
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Create edge release
-        id: create_release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: edge-${{ github.sha }}
-          name: "Edge Release (Commit ${{ github.sha }})"
-          body: |
-            Nightly edge build from commit ${{ github.sha }}
+      - name: Create or update edge release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Check if edge release already exists
+          if gh release view edge >/dev/null 2>&1; then
+            echo "Edge release already exists, updating body..."
+            gh release edit edge --notes "**Rolling edge build** - updated with commit ${{ github.sha }}
+
+          **⚠️ This is an unstable development build - use at your own risk**
+          
+          Latest commit: ${{ github.event.head_commit.message }}
+          Built from: ${{ github.sha }}"
+          else
+            echo "Creating new edge release..."
+            gh release create edge \
+              --title "Edge Release (Rolling)" \
+              --notes "**Rolling edge build** - updated with commit ${{ github.sha }}
 
             **⚠️ This is an unstable development build - use at your own risk**
-
-            Built from: ${{ github.event.head_commit.message }}
-          prerelease: true
-          make_latest: false
+            
+            Latest commit: ${{ github.event.head_commit.message }}
+            Built from: ${{ github.sha }}" \
+              --prerelease \
+              --latest=false
+          fi
 
   build-edge:
     name: Build edge release
@@ -106,14 +116,15 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           NODE_OPTIONS: "--max-old-space-size=5120"
         with:
-          tagName: edge-${{ github.sha }}
-          releaseName: "Edge Release (Commit ${{ github.sha }})"
+          tagName: edge
+          releaseName: "Edge Release (Rolling)"
           releaseBody: |
-            Nightly edge build from commit ${{ github.sha }}
-
+            **Rolling edge build** - updated with commit ${{ github.sha }}
+            
             **⚠️ This is an unstable development build - use at your own risk**
-
-            Built from: ${{ github.event.head_commit.message }}
+            
+            Latest commit: ${{ github.event.head_commit.message }}
+            Built from: ${{ github.sha }}
           releaseDraft: false
           prerelease: true
           args: ${{ matrix.args }}
@@ -154,10 +165,10 @@ jobs:
                 new_path="$dir/$new_filename"
                 echo "Renaming: $file -> $new_path"
                 mv "$file" "$new_path"
-                gh release upload "edge-${{ github.sha }}" "$new_path" --clobber
+                gh release upload "edge" "$new_path" --clobber
               else
                 echo "No rename needed for: $filename"
-                gh release upload "edge-${{ github.sha }}" "$file" --clobber
+                gh release upload "edge" "$file" --clobber
               fi
             elif [[ "$file" == *.app.tar.gz ]] || [[ "$file" == *.app.tar.gz.sig ]]; then
               # Rename macOS files to include platform suffix
@@ -175,9 +186,9 @@ jobs:
                 new_path="$dir/$new_filename"
                 echo "Renaming: $file -> $new_path"
                 mv "$file" "$new_path"
-                gh release upload "edge-${{ github.sha }}" "$new_path" --clobber
+                gh release upload "edge" "$new_path" --clobber
               else
-                gh release upload "edge-${{ github.sha }}" "$file" --clobber
+                gh release upload "edge" "$file" --clobber
               fi
             elif [[ "$file" == *.app ]]; then
               # skip this file
@@ -186,6 +197,6 @@ jobs:
               # skip AppImage files
               echo "Skipping AppImage: $file"
             else
-              gh release upload "edge-${{ github.sha }}" "$file" --clobber
+              gh release upload "edge" "$file" --clobber
             fi
           done
