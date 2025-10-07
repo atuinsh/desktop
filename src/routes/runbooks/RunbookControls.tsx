@@ -237,7 +237,7 @@ export default function RunbookControls(props: RunbookControlsProps) {
 
       {props.isOfflineRunbook && (
         <p className="text-sm text-gray-500 dark:text-gray-400 italic ml-5 mt-1 select-none cursor-default">
-          Runbooks in offline workspaces exist only on your device, and cannot be shared.{" "}
+          Runbooks in offline workspaces exist only on your device, and cannot be shared via the Hub.{" "}
           <a
             href="https://man.atuin.sh/workspaces/"
             className="text-blue-500"
