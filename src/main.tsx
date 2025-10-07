@@ -180,3 +180,26 @@ async function setup() {
   ReactDOM.createRoot(document.getElementById("root")!).render(<Application />);
   invoke("show_window");
 })();
+
+// Whelp, this is a weird one.
+// We were finding that pressing "esc" inside a codemirror editor would collapse the *entire blocknote block*
+// to some unprintable character. This could be undone with ctrl+z, but otherwise was unrecoverable.
+// Capturing the escape key inside the codemirror editor prevented the issue, but then if you clicked
+// inside another block and pressed escape, either the original block or the newly clicked block would
+// collapse in the same way.
+//
+// This gross hack seems to fix that issue. ¯\_(ツ)_/¯
+window.addEventListener(
+  "keydown",
+  (event) => {
+    const blocknoteBlock = (event.target as Element).closest(".bn-block");
+
+    if (blocknoteBlock && event.key === "Escape") {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+  },
+  {
+    capture: true,
+  },
+);
