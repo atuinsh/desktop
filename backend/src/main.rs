@@ -411,11 +411,27 @@ fn main() {
         }))
     };
 
+    let update_channel = env!("APP_CHANNEL");
+
+    let update_endpoints = if update_channel == "edge" {
+        vec![format!("https://hub.atuin.sh/api/updates/{update_channel}/{{target}}/{{arch}}/{{current_version}}")]
+    } else {
+        vec![
+            "https://releases.atuin.sh/{{target}}/{{arch}}/{{current_version}}",
+            "https://github.com/atuinsh/desktop/releases/latest/download/latest.json",
+            "https://cdn.crabnebula.app/update/atuin/atuin-desktop/{{target}}-{{arch}}/{{current_version}}",
+        ]
+    };
+
     let app = builder
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_process::init())
-        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(
+            tauri_plugin_updater::Builder::new()
+                .endpoints(update_endpoints)
+                .build(),
+        )
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_shell::init())
