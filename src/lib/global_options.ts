@@ -27,6 +27,6 @@ export function getGlobalOptions(): GlobalOptions {
     customTitleBar: params.get("os") === "macos",
     devPrefix: params.get("devPrefix") || "dev",
     noSync: params.get("noSync") === "true",
-    channel: params.get("channel") as "stable" | "edge",
+    channel: (params.get("channel") as "stable" | "edge") || "stable",
   } as const;
 }
