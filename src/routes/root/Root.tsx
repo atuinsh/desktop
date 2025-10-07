@@ -75,6 +75,10 @@ import Tabs from "./Tabs";
 import { TabIcon, TabUri } from "@/state/store/ui_state";
 import * as commands from "@/lib/workspaces/commands";
 import FeedbackModal from "./FeedbackModal";
+import { getGlobalOptions } from "@/lib/global_options";
+
+const globalOptions = getGlobalOptions();
+const UPDATE_CHECK_INTERVAL = globalOptions.channel === "edge" ? 1000 * 60 * 5 : 1000 * 60 * 60;
 
 const Onboarding = React.lazy(() => import("@/components/Onboarding/Onboarding"));
 const UpdateNotifier = React.lazy(() => import("./UpdateNotifier"));
@@ -330,7 +334,7 @@ function App() {
         await checkForAppUpdates(false);
       })();
 
-      setTimeout(check, 1000 * 60 * 60);
+      setTimeout(check, UPDATE_CHECK_INTERVAL);
     };
 
     check();
