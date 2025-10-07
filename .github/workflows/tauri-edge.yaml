@@ -1,0 +1,191 @@
+name: edge
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_ENV: production
+
+jobs:
+  create-release:
+    name: Create edge release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      upload_url: ${{ steps.create_release.outputs.upload_url }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create edge release
+        id: create_release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: edge-${{ github.sha }}
+          name: "Edge Release (Commit ${{ github.sha }})"
+          body: |
+            Nightly edge build from commit ${{ github.sha }}
+
+            **⚠️ This is an unstable development build - use at your own risk**
+
+            Built from: ${{ github.event.head_commit.message }}
+          prerelease: true
+          make_latest: false
+
+  build-edge:
+    name: Build edge release
+    needs: create-release
+    permissions:
+      contents: write
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: "macos-latest"
+            args: "--target aarch64-apple-darwin"
+          - platform: "ubuntu-22.04"
+            args: ""
+
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.TS_CLONE_DEPLOY_KEY }}
+
+      - name: install dependencies (ubuntu only)
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: latest
+
+      - name: setup node
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: "pnpm"
+
+      - name: install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin' || '' }}
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "./backend -> target"
+
+      - name: install frontend dependencies
+        run: pnpm install
+
+      - uses: tauri-apps/tauri-action@v0
+        id: tauri-action
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY}}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          NODE_OPTIONS: "--max-old-space-size=5120"
+        with:
+          tagName: edge-${{ github.sha }}
+          releaseName: "Edge Release (Commit ${{ github.sha }})"
+          releaseBody: |
+            Nightly edge build from commit ${{ github.sha }}
+
+            **⚠️ This is an unstable development build - use at your own risk**
+
+            Built from: ${{ github.event.head_commit.message }}
+          releaseDraft: false
+          prerelease: true
+          args: ${{ matrix.args }}
+          includeUpdaterJson: false
+
+      - name: Rename platform-specific files and upload to GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Get the artifact paths from tauri-action output
+          echo "Artifact paths: ${{ steps.tauri-action.outputs.artifactPaths }}"
+
+          # Remove brackets and read into array
+          paths_str=$(echo "${{ steps.tauri-action.outputs.artifactPaths }}" | sed 's/^\[//;s/\]$//')
+          IFS=',' read -ra paths <<< "$paths_str"
+
+          # Determine platform suffix based on matrix args
+          platform_suffix=""
+          if [[ "${{ matrix.args }}" == *"aarch64-apple-darwin"* ]]; then
+            platform_suffix="-aarch64"
+          elif [[ "${{ matrix.args }}" == *"x86_64-apple-darwin"* ]]; then
+            platform_suffix="-x86_64"
+          fi
+
+          # Rename files and upload to GitHub release
+          for file in "${paths[@]}"; do
+            echo "Checking file: $file"
+            if [[ "$file" == *.deb ]] || [[ "$file" == *.rpm ]]; then
+              # Extract directory and filename
+              dir=$(dirname "$file")
+              filename=$(basename "$file")
+
+              echo "Processing file: $filename"
+              new_filename=$(echo "$filename" | sed 's/Atuin Desktop/Atuin_Desktop/g')
+              echo "New filename: $new_filename"
+
+              if [[ "$filename" != "$new_filename" ]]; then
+                new_path="$dir/$new_filename"
+                echo "Renaming: $file -> $new_path"
+                mv "$file" "$new_path"
+                gh release upload "edge-${{ github.sha }}" "$new_path" --clobber
+              else
+                echo "No rename needed for: $filename"
+                gh release upload "edge-${{ github.sha }}" "$file" --clobber
+              fi
+            elif [[ "$file" == *.app.tar.gz ]] || [[ "$file" == *.app.tar.gz.sig ]]; then
+              # Rename macOS files to include platform suffix
+              if [[ -n "$platform_suffix" ]]; then
+                dir=$(dirname "$file")
+                filename=$(basename "$file")
+                
+                echo "Processing macOS file: $filename"
+                if [[ "$file" == *.app.tar.gz.sig ]]; then
+                  new_filename=$(echo "$filename" | sed "s/\.app\.tar\.gz\.sig$/${platform_suffix}.app.tar.gz.sig/")
+                elif [[ "$file" == *.app.tar.gz ]]; then
+                  new_filename=$(echo "$filename" | sed "s/\.app\.tar\.gz$/${platform_suffix}.app.tar.gz/")
+                fi
+                
+                new_path="$dir/$new_filename"
+                echo "Renaming: $file -> $new_path"
+                mv "$file" "$new_path"
+                gh release upload "edge-${{ github.sha }}" "$new_path" --clobber
+              else
+                gh release upload "edge-${{ github.sha }}" "$file" --clobber
+              fi
+            elif [[ "$file" == *.app ]]; then
+              # skip this file
+              echo "Skipping raw .app bundle: $file"
+            elif [[ "$file" == *.AppImage ]]; then
+              # skip AppImage files
+              echo "Skipping AppImage: $file"
+            else
+              gh release upload "edge-${{ github.sha }}" "$file" --clobber
+            fi
+          done
