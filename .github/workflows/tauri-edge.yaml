@@ -33,7 +33,7 @@ jobs:
             gh release edit edge --notes "**Rolling edge build** - updated with commit ${{ github.sha }}
 
           **⚠️ This is an unstable development build - use at your own risk**
-          
+
           Latest commit: ${{ github.event.head_commit.message }}
           Built from: ${{ github.sha }}"
           else
@@ -116,19 +116,7 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           NODE_OPTIONS: "--max-old-space-size=5120"
         with:
-          tagName: edge
-          releaseName: "Edge Release (Rolling)"
-          releaseBody: |
-            **Rolling edge build** - updated with commit ${{ github.sha }}
-            
-            **⚠️ This is an unstable development build - use at your own risk**
-            
-            Latest commit: ${{ github.event.head_commit.message }}
-            Built from: ${{ github.sha }}
-          releaseDraft: false
-          prerelease: true
           args: ${{ matrix.args }}
-          includeUpdaterJson: false
 
       - name: Rename platform-specific files and upload to GitHub release
         env:
