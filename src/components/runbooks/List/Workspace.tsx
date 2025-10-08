@@ -880,25 +880,67 @@ export default function WorkspaceComponent(props: WorkspaceProps) {
               can locate the workspace folder to continue.
             </p>
           </div>
-          <div>
+          <div className="flex flex-row flex-wrap gap-2 justify-center">
             <Button variant="flat" size="sm" color="primary" onPress={handleLocateWorkspace}>
               Locate Workspace
+            </Button>
+            <Button
+              variant="flat"
+              size="sm"
+              color="danger"
+              onPress={async () => {
+                const answer = await new DialogBuilder<"yes" | "no">()
+                  .title("Delete Workspace")
+                  .message("Are you sure you want to delete this workspace?")
+                  .action({ label: "Delete", value: "yes", variant: "flat", color: "danger" })
+                  .action({ label: "Cancel", value: "no", variant: "flat" })
+                  .build();
+
+                if (answer === "yes") {
+                  handleDeleteWorkspace();
+                }
+              }}
+            >
+              Delete Workspace
             </Button>
           </div>
         </div>
       );
     } else {
       errorElem = (
-        <div
-          className="border rounded-md w-full p-3 flex gap-2 cursor-pointer"
-          onClick={() => showWorkspaceError(errorType, errorText, helpText)}
-        >
-          <div>
-            <CircleAlertIcon className="w-8 h-8 stroke-gray-500 dark:stroke-gray-400" />
+        <div className="flex flex-col gap-2 mb-2">
+          <div
+            className="border rounded-md w-full p-3 flex gap-2 cursor-pointer"
+            onClick={() => showWorkspaceError(errorType, errorText, helpText)}
+          >
+            <div>
+              <CircleAlertIcon className="w-8 h-8 stroke-gray-500 dark:stroke-gray-400" />
+            </div>
+            <p className="text-sm text-muted-foreground">
+              There is an error with this workspace. Click to see more information.
+            </p>
           </div>
-          <p className="text-sm text-muted-foreground">
-            There is an error with this workspace. Click to see more information.
-          </p>
+          <div className="flex flex-row flex-wrap gap-2 justify-center">
+            <Button
+              variant="flat"
+              size="sm"
+              color="danger"
+              onPress={async () => {
+                const answer = await new DialogBuilder<"yes" | "no">()
+                  .title("Delete Workspace")
+                  .message("Are you sure you want to delete this workspace?")
+                  .action({ label: "Delete", value: "yes", variant: "flat", color: "danger" })
+                  .action({ label: "Cancel", value: "no", variant: "flat" })
+                  .build();
+
+                if (answer === "yes") {
+                  handleDeleteWorkspace();
+                }
+              }}
+            >
+              Delete Workspace
+            </Button>
+          </div>
         </div>
       );
     }
