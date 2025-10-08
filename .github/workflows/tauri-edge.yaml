@@ -37,6 +37,11 @@ jobs:
 
           Latest commit: ${{ github.event.head_commit.message }}
           Built from: ${{ github.sha }}"
+            gh release view edge --json assets | jq -r '.assets[].name' | \
+              while read name; do \
+                echo Deleting existing asset: "$name"
+                gh release delete-asset edge "$name" -y
+              done
           else
             echo "Creating new edge release..."
             gh release create edge \
