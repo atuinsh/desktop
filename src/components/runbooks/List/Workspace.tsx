@@ -865,6 +865,19 @@ export default function WorkspaceComponent(props: WorkspaceProps) {
         errorText = `An unknown error occurred: ${error.data.message}`;
     }
 
+    async function confirmDeleteWorkspace() {
+      const answer = await new DialogBuilder<"yes" | "no">()
+        .title("Delete Workspace")
+        .message("Are you sure you want to delete this workspace?")
+        .action({ label: "Delete", value: "yes", variant: "flat", color: "danger" })
+        .action({ label: "Cancel", value: "no", variant: "flat" })
+        .build();
+
+      if (answer === "yes") {
+        handleDeleteWorkspace();
+      }
+    }
+
     if (error.type === "WorkspaceReadError") {
       errorElem = (
         <div className="flex flex-col gap-2 items-center mb-2">
@@ -884,23 +897,7 @@ export default function WorkspaceComponent(props: WorkspaceProps) {
             <Button variant="flat" size="sm" color="primary" onPress={handleLocateWorkspace}>
               Locate Workspace
             </Button>
-            <Button
-              variant="flat"
-              size="sm"
-              color="danger"
-              onPress={async () => {
-                const answer = await new DialogBuilder<"yes" | "no">()
-                  .title("Delete Workspace")
-                  .message("Are you sure you want to delete this workspace?")
-                  .action({ label: "Delete", value: "yes", variant: "flat", color: "danger" })
-                  .action({ label: "Cancel", value: "no", variant: "flat" })
-                  .build();
-
-                if (answer === "yes") {
-                  handleDeleteWorkspace();
-                }
-              }}
-            >
+            <Button variant="flat" size="sm" color="danger" onPress={confirmDeleteWorkspace}>
               Delete Workspace
             </Button>
           </div>
@@ -921,23 +918,7 @@ export default function WorkspaceComponent(props: WorkspaceProps) {
             </p>
           </div>
           <div className="flex flex-row flex-wrap gap-2 justify-center">
-            <Button
-              variant="flat"
-              size="sm"
-              color="danger"
-              onPress={async () => {
-                const answer = await new DialogBuilder<"yes" | "no">()
-                  .title("Delete Workspace")
-                  .message("Are you sure you want to delete this workspace?")
-                  .action({ label: "Delete", value: "yes", variant: "flat", color: "danger" })
-                  .action({ label: "Cancel", value: "no", variant: "flat" })
-                  .build();
-
-                if (answer === "yes") {
-                  handleDeleteWorkspace();
-                }
-              }}
-            >
+            <Button variant="flat" size="sm" color="danger" onPress={confirmDeleteWorkspace}>
               Delete Workspace
             </Button>
           </div>
