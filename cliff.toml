@@ -15,7 +15,7 @@ body = """
     Special thanks to our contributors who made their first contribution this release:
 
         {%- for contrib in first_time_contributors %}
-            - [@{{ contrib.username }}](https://github.com/{{ contrib.username }})
+            - @{{ contrib.username }}
         {%- endfor %}
     {% endif %}
     ### 🔗 Downloads
@@ -35,7 +35,7 @@ body = """
             {% if commit.breaking %}[**breaking**] {% endif %}\
             {{ commit.message | upper_first }}\
             {% if commit.remote.username and commit.remote.username not in ignored_contributors and commit.remote.username is not ending_with("[bot]") %} \
-            by [@{{ commit.remote.username }}](https://github.com/{{ commit.remote.username }})\
+            by @{{ commit.remote.username }}\
             {% endif %}\
     {% endfor %}
 {% endfor %}
