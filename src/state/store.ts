@@ -87,7 +87,7 @@ const middleware = (f: StateCreator<AtuinState>) =>
         ),
 
       /**
-       * Verisons:
+       * Versions:
        * 0: initial version
        * 1: Moved currentRunbook to currentRunbookId, dropped runbooks from storage
        */
@@ -107,7 +107,7 @@ const middleware = (f: StateCreator<AtuinState>) =>
           if (!state) return state;
 
           // In order for cached user data to work correctly, we need to
-          // rehydrate the data into an actual User model intance
+          // rehydrate the data into an actual User model instance
           const user = state.user as User;
           if (user) {
             const userObj = new User(user.username!, user.email!, user.bio!, user.avatar_url!);
