@@ -6,7 +6,8 @@
 use std::path::PathBuf;
 use std::{env, fs};
 
-use tauri::{App, AppHandle, Manager, RunEvent};
+use tauri::path::BaseDirectory;
+use tauri::{http, App, AppHandle, Manager, RunEvent};
 use time::format_description::well_known::Rfc3339;
 
 mod blocks;
@@ -24,11 +25,13 @@ mod runbooks;
 mod runtime;
 mod secret;
 mod shared_state;
+mod shellcheck;
 mod sqlite;
 mod state;
 mod stats;
 mod store;
 mod templates;
+mod workspaces;
 
 // If this works out ergonomically, we should move all the commands into a single module
 // Separate the implementation from the command as much as we can
@@ -253,10 +256,12 @@ async fn history_calendar(
     // probs don't want to iterate _this_ many times, but it's only the last year. so 365
     // iterations at max. should be quick.
 
+    // Handle case where calendar is empty (can happen on Linux with XDG dir issues)
+    let default_entry = (String::new(), 0);
     let max = calendar
         .iter()
         .max_by_key(|d| d.1)
-        .expect("Can't find max count");
+        .unwrap_or(&default_entry);
 
     let ret = calendar
         .iter()
@@ -415,6 +420,7 @@ fn main() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             list,
             search,
@@ -479,20 +485,80 @@ fn main() {
             commands::stats::command_stats,
             commands::template::set_template_var,
             commands::template::get_template_var,
+            commands::feedback::send_feedback,
             commands::mysql::mysql_query,
             commands::mysql::mysql_execute,
             commands::kubernetes::kubernetes_get_execute,
             commands::blocks::execute_block,
             commands::blocks::cancel_block_execution,
             commands::events::subscribe_to_events,
+            commands::updates::check_for_updates,
+            commands::workspaces::copy_welcome_workspace,
+            commands::workspaces::reset_workspaces,
+            commands::workspaces::watch_workspace,
+            commands::workspaces::unwatch_workspace,
+            commands::workspaces::create_workspace,
+            commands::workspaces::rename_workspace,
+            commands::workspaces::read_dir,
+            commands::workspaces::get_workspace_id_by_folder,
+            commands::workspaces::create_runbook,
+            commands::workspaces::delete_runbook,
+            commands::workspaces::save_runbook,
+            commands::workspaces::get_runbook,
+            commands::workspaces::create_folder,
+            commands::workspaces::rename_folder,
+            commands::workspaces::delete_folder,
+            commands::workspaces::move_items,
+            commands::workspaces::move_items_between_workspaces,
             shared_state::get_shared_state_document,
             shared_state::push_optimistic_update,
             shared_state::update_shared_state_document,
             shared_state::delete_shared_state_document,
             shared_state::remove_optimistic_updates,
+            shellcheck::shellcheck,
         ])
         .plugin(tauri_plugin_sql::Builder::default().build())
         .plugin(tauri_plugin_http::init())
+        .register_uri_scheme_protocol("resources", |ctx, request| {
+            let filename = request.uri().path()[1..].to_string();
+            let filename = if filename.is_empty() {
+                request
+                    .uri()
+                    .host()
+                    .expect("Resource URI must have a host")
+                    .to_string()
+            } else {
+                format!(
+                    "{}/{}",
+                    request.uri().host().expect("Resource URI must have a host"),
+                    filename
+                )
+            };
+
+            let resources_dir = ctx
+                .app_handle()
+                .path()
+                .resolve("resources", BaseDirectory::Resource);
+
+            if let Err(e) = resources_dir {
+                eprintln!("Failed to resolve resources directory: {}", e);
+                return http::Response::builder()
+                    .status(500)
+                    .header(http::header::CONTENT_TYPE, "text/plain")
+                    .body(b"Internal server error".to_vec())
+                    .unwrap();
+            }
+
+            if let Ok(data) = fs::read(resources_dir.unwrap().join(&filename)) {
+                http::Response::builder().body(data).unwrap()
+            } else {
+                http::Response::builder()
+                    .status(404)
+                    .header(http::header::CONTENT_TYPE, "text/plain")
+                    .body(b"Not found".to_vec())
+                    .unwrap()
+            }
+        })
         .setup(|app| {
             backup_databases(app)?;
 
@@ -543,10 +609,9 @@ fn main() {
 }
 
 /// Allows blocking on async code without creating a nested runtime.
-fn run_async_command<F: std::future::Future>(cmd: F) -> F::Output {
-    if tokio::runtime::Handle::try_current().is_ok() {
-        tokio::task::block_in_place(|| tokio::runtime::Handle::current().block_on(cmd))
-    } else {
-        tauri::async_runtime::block_on(cmd)
+pub fn run_async_command<F: std::future::Future>(cmd: F) -> F::Output {
+    match tokio::runtime::Handle::try_current() {
+        Ok(runtime) => tokio::task::block_in_place(|| runtime.block_on(cmd)),
+        _ => tauri::async_runtime::block_on(cmd),
     }
 }

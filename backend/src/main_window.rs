@@ -47,6 +47,7 @@ fn get_os() -> String {
 
 pub(crate) async fn create_main_window(app: &AppHandle) -> Result<(), String> {
     let dev_prefix = app.state::<state::AtuinState>().dev_prefix.clone();
+    let channel = env!("APP_CHANNEL");
 
     // To calculate the physical size of the window, we need to know the scale factor of the monitor.
     // To determine which monitor the window is on, we need to know the position of the window.
@@ -79,6 +80,7 @@ pub(crate) async fn create_main_window(app: &AppHandle) -> Result<(), String> {
     let mut query_elems: Vec<(&str, String)> = vec![
         ("os", get_os()),
         ("devPrefix", dev_prefix.clone().unwrap_or("dev".to_string())),
+        ("channel", channel.to_string()),
     ];
 
     if std::env::var("NO_SYNC").is_ok() {
@@ -93,10 +95,16 @@ pub(crate) async fn create_main_window(app: &AppHandle) -> Result<(), String> {
 
     let app_url = WebviewUrl::App(format!("index.html?{query_string}").into());
 
-    let title = if dev_prefix.is_some() && dev_prefix.as_ref().unwrap() != "dev" {
+    let title = if dev_prefix.is_some() {
         format!("Atuin - {}", dev_prefix.unwrap())
     } else {
         "Atuin".to_string()
+    };
+
+    let title = if channel != "stable" {
+        format!("{title} ({channel})")
+    } else {
+        title
     };
 
     let mut builder = WebviewWindowBuilder::new(app, "main", app_url)

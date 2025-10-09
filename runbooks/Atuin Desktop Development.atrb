@@ -1,0 +1,234 @@
+id: 01997ccb-a5d5-76f2-af09-5a5131d86582
+name: Atuin Desktop Development
+version: 1
+content:
+- id: f6596d68-4414-48f3-b502-eb54c9a00b17
+  type: heading
+  props:
+    textColor: default
+    backgroundColor: default
+    textAlignment: left
+    level: 1
+    isToggleable: false
+  content:
+  - type: text
+    text: Atuin Desktop Development
+    styles: {}
+  children: []
+- id: 8c274860-0918-485c-8366-8182fd56ec63
+  type: paragraph
+  props:
+    textColor: default
+    backgroundColor: default
+    textAlignment: left
+  content:
+  - type: text
+    text: Choose the path to your cloned Atuin Desktop repository
+    styles: {}
+  children: []
+- id: 8ea80183-937a-4d77-bc2a-bdd9729464c0
+  type: local-directory
+  props: {}
+  children: []
+- id: e1e209e2-a436-463f-a8b1-f1937e223ea4
+  type: paragraph
+  props:
+    textColor: default
+    backgroundColor: default
+    textAlignment: left
+  content: []
+  children: []
+- id: d50ec704-8687-4732-9522-e98b47104e1c
+  type: paragraph
+  props:
+    textColor: default
+    backgroundColor: default
+    textAlignment: left
+  content:
+  - type: text
+    text: 'Ensure you have the development dependencies installed; '
+    styles: {}
+  - type: link
+    href: https://github.com/atuinsh/desktop/blob/main/CONTRIBUTING.md
+    content:
+    - type: text
+      text: see the CONTRIBUTING.md file in the repository
+      styles: {}
+  - type: text
+    text: ' for more information.'
+    styles: {}
+  children: []
+- id: 04c4a3d4-6cd3-4449-a845-60fe11f03066
+  type: heading
+  props:
+    textColor: default
+    backgroundColor: default
+    textAlignment: left
+    level: 2
+    isToggleable: false
+  content:
+  - type: text
+    text: Start the app in development mode
+    styles: {}
+  children: []
+- id: 45e75266-b94c-4cda-ae20-b7763dcc7db6
+  type: paragraph
+  props:
+    textColor: default
+    backgroundColor: default
+    textAlignment: left
+  content:
+  - type: text
+    text: 'You can start the app with another profile by setting a profile here or launching '
+    styles: {}
+  - type: text
+    text: ./script/dev
+    styles:
+      code: true
+  - type: text
+    text: ' with the '
+    styles: {}
+  - type: text
+    text: -p <profilename>
+    styles:
+      code: true
+  - type: text
+    text: ' flag. The default is “dev”. Passing '
+    styles: {}
+  - type: text
+    text: -d
+    styles:
+      code: true
+  - type: text
+    text: ' starts the app with devtools open.'
+    styles: {}
+  children: []
+- id: 352e0ec7-e30a-4ee8-b136-7a99ce1ce879
+  type: var
+  props:
+    name: profile_name
+    value: dev
+  children: []
+- id: 32481663-5638-451f-b3c2-b1a0c3e5ad4d
+  type: run
+  props:
+    type: bash
+    name: Start application
+    code: ./script/dev -d -p {{ var.profile_name }}
+    pty: ''
+    global: false
+    outputVisible: true
+    dependency: '{}'
+  children: []
+- id: bb30519d-9d25-4526-b87f-22214e316603
+  type: paragraph
+  props:
+    textColor: default
+    backgroundColor: default
+    textAlignment: left
+  content: []
+  children: []
+- id: 30bd3f34-0288-43fe-9045-c58b71305e9d
+  type: heading
+  props:
+    textColor: default
+    backgroundColor: default
+    textAlignment: left
+    level: 2
+    isToggleable: false
+  content:
+  - type: text
+    text: Run Rust tests
+    styles: {}
+  children: []
+- id: d9739ce8-7819-463d-8705-bc00ce1665d6
+  type: run
+  props:
+    type: bash
+    name: Rust tests
+    code: cd backend && cargo test
+    pty: ''
+    global: false
+    outputVisible: true
+    dependency: '{}'
+  children: []
+- id: 51b26691-3a80-4c0a-b420-149d839d394b
+  type: paragraph
+  props:
+    textColor: default
+    backgroundColor: default
+    textAlignment: left
+  content: []
+  children: []
+- id: 04047a62-c42e-461f-9c18-8a2cbe7334c3
+  type: heading
+  props:
+    textColor: default
+    backgroundColor: default
+    textAlignment: left
+    level: 2
+    isToggleable: false
+  content:
+  - type: text
+    text: Run JavaScript tests
+    styles: {}
+  children: []
+- id: b61919e4-6956-415b-8b29-0ebec9691b50
+  type: run
+  props:
+    type: bash
+    name: JS tests
+    code: pnpm test
+    pty: ''
+    global: false
+    outputVisible: true
+    dependency: '{}'
+  children: []
+- id: b534a45a-c2fd-49d4-aaca-025682d093b3
+  type: paragraph
+  props:
+    textColor: default
+    backgroundColor: default
+    textAlignment: left
+  content: []
+  children: []
+- id: 487d88bf-d2fc-41fd-bf07-3755ec2d0c73
+  type: heading
+  props:
+    textColor: default
+    backgroundColor: default
+    textAlignment: left
+    level: 2
+    isToggleable: false
+  content:
+  - type: text
+    text: Regenerate TS types based on Rust structs (via ts-rs)
+    styles: {}
+  children: []
+- id: a7258512-b71d-4c74-b2c5-2aa3996c5bf7
+  type: run
+  props:
+    type: bash
+    name: Regenerate bindings
+    code: pnpm generate-bindings
+    pty: ''
+    global: false
+    outputVisible: true
+    dependency: '{}'
+  children: []
+- id: 01fb8fdf-62bb-4070-85ed-02ac21bb1fab
+  type: paragraph
+  props:
+    textColor: default
+    backgroundColor: default
+    textAlignment: left
+  content: []
+  children: []
+- id: 38947d27-a48b-4e4b-86ab-5cb235993a6e
+  type: paragraph
+  props:
+    textColor: default
+    backgroundColor: default
+    textAlignment: left
+  content: []
+  children: []

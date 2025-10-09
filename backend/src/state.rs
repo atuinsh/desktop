@@ -26,6 +26,7 @@ use crate::{
     },
     shared_state::SharedStateHandle,
     sqlite::DbInstances,
+    workspaces::manager::WorkspaceManager,
 };
 
 pub(crate) struct AtuinState {
@@ -44,6 +45,9 @@ pub(crate) struct AtuinState {
 
     // Shared state
     shared_state: Mutex<Option<SharedStateHandle>>,
+
+    // File-based workspaces
+    pub workspaces: Arc<tokio::sync::Mutex<Option<WorkspaceManager>>>,
 
     executor: Mutex<Option<ExecutorHandle>>,
     event_sender: Mutex<Option<broadcast::Sender<WorkflowEvent>>>,
@@ -91,6 +95,7 @@ impl AtuinState {
             ssh_pool: Mutex::new(None),
             db_instances: DbInstances::new(app_path.clone(), dev_prefix.clone()),
             shared_state: Mutex::new(None),
+            workspaces: Arc::new(tokio::sync::Mutex::new(None)),
             executor: Mutex::new(None),
             event_sender: Mutex::new(None),
             gc_event_sender: Mutex::new(None),
@@ -126,6 +131,9 @@ impl AtuinState {
         let shared_state =
             SharedStateHandle::new(self.db_instances.get_pool("shared_state").await?).await;
         self.shared_state.lock().unwrap().replace(shared_state);
+
+        let workspaces = WorkspaceManager::new();
+        self.workspaces.lock().await.replace(workspaces);
 
         // New receivers are created by calling .subscribe() on the sender
         // Hence, we pass in the sender and not a receiver
@@ -208,6 +216,10 @@ impl AtuinState {
 
         if let Some(shared_state) = shared_state {
             shared_state.shutdown().await?;
+        }
+
+        if let Some(mut workspaces) = self.workspaces.lock().await.take() {
+            workspaces.shutdown().await;
         }
 
         self.db_instances.shutdown().await?;

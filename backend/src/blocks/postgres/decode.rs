@@ -12,142 +12,102 @@ pub(crate) fn to_json(v: PgValueRef) -> Result<JsonValue> {
     let res = match v.type_info().name() {
         // Weirdly we get "CHAR" as the type, quoted, sometimes.
         "CHAR" | "VARCHAR" | "TEXT" | "NAME" | "citext" | "\"CHAR\"" => {
-            if let Ok(v) = ValueRef::to_owned(&v).try_decode() {
-                JsonValue::String(v)
-            } else {
-                JsonValue::Null
+            match ValueRef::to_owned(&v).try_decode() {
+                Ok(v) => JsonValue::String(v),
+                _ => JsonValue::Null,
             }
         }
-        "FLOAT4" => {
-            if let Ok(v) = ValueRef::to_owned(&v).try_decode::<f32>() {
-                JsonValue::from(v)
-            } else {
-                JsonValue::Null
-            }
-        }
-        "FLOAT8" => {
-            if let Ok(v) = ValueRef::to_owned(&v).try_decode::<f64>() {
-                JsonValue::from(v)
-            } else {
-                JsonValue::Null
-            }
-        }
-        "INT2" => {
-            if let Ok(v) = ValueRef::to_owned(&v).try_decode::<i16>() {
-                JsonValue::Number(v.into())
-            } else {
-                JsonValue::Null
-            }
-        }
-        "INT4" => {
-            if let Ok(v) = ValueRef::to_owned(&v).try_decode::<i32>() {
-                JsonValue::Number(v.into())
-            } else {
-                JsonValue::Null
-            }
-        }
-        "INT8" => {
-            if let Ok(v) = ValueRef::to_owned(&v).try_decode::<i64>() {
-                JsonValue::Number(v.into())
-            } else {
-                JsonValue::Null
-            }
-        }
-        "BOOL" => {
-            if let Ok(v) = ValueRef::to_owned(&v).try_decode() {
-                JsonValue::Bool(v)
-            } else {
-                JsonValue::Null
-            }
-        }
-        "DATE" => {
-            if let Ok(v) = ValueRef::to_owned(&v).try_decode::<Date>() {
-                JsonValue::String(v.to_string())
-            } else {
-                JsonValue::Null
-            }
-        }
-        "TIME" => {
-            if let Ok(v) = ValueRef::to_owned(&v).try_decode::<Time>() {
-                JsonValue::String(v.to_string())
-            } else {
-                JsonValue::Null
-            }
-        }
-        "TIMESTAMP" => {
-            if let Ok(v) = ValueRef::to_owned(&v).try_decode::<PrimitiveDateTime>() {
-                JsonValue::String(v.to_string())
-            } else {
-                JsonValue::Null
-            }
-        }
-        "TIMESTAMPTZ" => {
-            if let Ok(v) = ValueRef::to_owned(&v).try_decode::<OffsetDateTime>() {
-                JsonValue::String(v.to_string())
-            } else {
-                JsonValue::Null
-            }
-        }
+        "FLOAT4" => match ValueRef::to_owned(&v).try_decode::<f32>() {
+            Ok(v) => JsonValue::from(v),
+            _ => JsonValue::Null,
+        },
+        "FLOAT8" => match ValueRef::to_owned(&v).try_decode::<f64>() {
+            Ok(v) => JsonValue::from(v),
+            _ => JsonValue::Null,
+        },
+        "INT2" => match ValueRef::to_owned(&v).try_decode::<i16>() {
+            Ok(v) => JsonValue::Number(v.into()),
+            _ => JsonValue::Null,
+        },
+        "INT4" => match ValueRef::to_owned(&v).try_decode::<i32>() {
+            Ok(v) => JsonValue::Number(v.into()),
+            _ => JsonValue::Null,
+        },
+        "INT8" => match ValueRef::to_owned(&v).try_decode::<i64>() {
+            Ok(v) => JsonValue::Number(v.into()),
+            _ => JsonValue::Null,
+        },
+        "BOOL" => match ValueRef::to_owned(&v).try_decode() {
+            Ok(v) => JsonValue::Bool(v),
+            _ => JsonValue::Null,
+        },
+        "DATE" => match ValueRef::to_owned(&v).try_decode::<Date>() {
+            Ok(v) => JsonValue::String(v.to_string()),
+            _ => JsonValue::Null,
+        },
+        "TIME" => match ValueRef::to_owned(&v).try_decode::<Time>() {
+            Ok(v) => JsonValue::String(v.to_string()),
+            _ => JsonValue::Null,
+        },
+        "TIMESTAMP" => match ValueRef::to_owned(&v).try_decode::<PrimitiveDateTime>() {
+            Ok(v) => JsonValue::String(v.to_string()),
+            _ => JsonValue::Null,
+        },
+        "TIMESTAMPTZ" => match ValueRef::to_owned(&v).try_decode::<OffsetDateTime>() {
+            Ok(v) => JsonValue::String(v.to_string()),
+            _ => JsonValue::Null,
+        },
         "JSON" | "JSONB" => ValueRef::to_owned(&v).try_decode().unwrap_or_default(),
-        "BYTEA" => {
-            if let Ok(v) = ValueRef::to_owned(&v).try_decode::<Vec<u8>>() {
-                JsonValue::Array(v.into_iter().map(|n| JsonValue::Number(n.into())).collect())
-            } else {
-                JsonValue::Null
-            }
-        }
+        "BYTEA" => match ValueRef::to_owned(&v).try_decode::<Vec<u8>>() {
+            Ok(v) => JsonValue::Array(v.into_iter().map(|n| JsonValue::Number(n.into())).collect()),
+            _ => JsonValue::Null,
+        },
         "VOID" => JsonValue::Null,
-        "UUID" => {
-            if let Ok(v) = ValueRef::to_owned(&v).try_decode::<uuid::Uuid>() {
-                JsonValue::String(v.to_string())
-            } else {
-                JsonValue::Null
-            }
-        }
+        "UUID" => match ValueRef::to_owned(&v).try_decode::<uuid::Uuid>() {
+            Ok(v) => JsonValue::String(v.to_string()),
+            _ => JsonValue::Null,
+        },
         "INTERVAL" => {
-            if let Ok(v) = ValueRef::to_owned(&v).try_decode::<PgInterval>() {
-                // TODO: Figure out how many seconds are in a month? wtf postgres?
-                // Ok note to future me, but it looks like postgres just assumes a month has 30
-                // days? bruh?
-                // https://github.com/postgres/postgres/blob/9ca67658d19e6c258eb4021a326ed7d38b3ab75f/src/include/datatype/timestamp.h#L116
-                let _months = v.months;
+            match ValueRef::to_owned(&v).try_decode::<PgInterval>() {
+                Ok(v) => {
+                    // TODO: Figure out how many seconds are in a month? wtf postgres?
+                    // Ok note to future me, but it looks like postgres just assumes a month has 30
+                    // days? bruh?
+                    // https://github.com/postgres/postgres/blob/9ca67658d19e6c258eb4021a326ed7d38b3ab75f/src/include/datatype/timestamp.h#L116
+                    let _months = v.months;
 
-                let days_as_secs = i64::from(v.days)
-                    .checked_mul(24 * 60 * 60)
-                    .expect("pginterval day overflow"); // 24 hours * 60 minutes * 60 seconds
+                    let days_as_secs = i64::from(v.days)
+                        .checked_mul(24 * 60 * 60)
+                        .expect("pginterval day overflow"); // 24 hours * 60 minutes * 60 seconds
 
-                // Convert microseconds to seconds and nanoseconds
-                let micros_as_secs = v.microseconds.div_euclid(1_000_000);
-                let remaining_nanos = (v.microseconds.rem_euclid(1_000_000) * 1000) as u32;
+                    // Convert microseconds to seconds and nanoseconds
+                    let micros_as_secs = v.microseconds.div_euclid(1_000_000);
+                    let remaining_nanos = (v.microseconds.rem_euclid(1_000_000) * 1000) as u32;
 
-                // Combine all seconds
-                let total_secs = days_as_secs
-                    .checked_add(micros_as_secs)
-                    .expect("pginterval day/second overflow");
+                    // Combine all seconds
+                    let total_secs = days_as_secs
+                        .checked_add(micros_as_secs)
+                        .expect("pginterval day/second overflow");
 
-                let duration = std::time::Duration::new(total_secs as u64, remaining_nanos);
+                    let duration = std::time::Duration::new(total_secs as u64, remaining_nanos);
 
-                JsonValue::String(humantime::format_duration(duration).to_string())
-            } else {
-                JsonValue::Null
+                    JsonValue::String(humantime::format_duration(duration).to_string())
+                }
+                _ => JsonValue::Null,
             }
         }
-        "OID" => {
-            if let Ok(v) = ValueRef::to_owned(&v).try_decode::<Oid>() {
-                JsonValue::Number(v.0.into())
-            } else {
-                JsonValue::Null
-            }
-        }
+        "OID" => match ValueRef::to_owned(&v).try_decode::<Oid>() {
+            Ok(v) => JsonValue::Number(v.0.into()),
+            _ => JsonValue::Null,
+        },
         "NUMERIC" => {
             // Numeric is a bigdecimal, ie very high precision. It is likely used for things like financial data.
             // If we cast it to an integer or a float, we lose precision.
             // Seeing a we are using JSON (kinda), we do not have built-in bigdecimal support. So, for now at least,
             // we just convert it to a string.
-            if let Ok(v) = ValueRef::to_owned(&v).try_decode::<bigdecimal::BigDecimal>() {
-                JsonValue::from(v.to_string())
-            } else {
-                JsonValue::Null
+            match ValueRef::to_owned(&v).try_decode::<bigdecimal::BigDecimal>() {
+                Ok(v) => JsonValue::from(v.to_string()),
+                _ => JsonValue::Null,
             }
         }
         _ => {

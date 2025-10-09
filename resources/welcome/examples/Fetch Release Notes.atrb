@@ -1,0 +1,198 @@
+id: 01998c07-fd5c-76c2-8307-38705d872242
+name: Fetch Release Notes
+version: 1
+content:
+- id: f6596d68-4414-48f3-b502-eb54c9a00b17
+  type: heading
+  props:
+    textColor: default
+    backgroundColor: default
+    textAlignment: left
+    level: 1
+    isToggleable: false
+  content:
+  - type: text
+    text: Fetch Release Notes
+    styles: {}
+  children: []
+- id: 513b2ab6-5977-4b2f-8adc-37fb518f7925
+  type: paragraph
+  props:
+    textColor: default
+    backgroundColor: default
+    textAlignment: left
+  content:
+  - type: text
+    text: This example demonstrates using a Dropdown block populated with command output (click the button on the left of the Dropdown block to see the command). The selected release is then used by the Script block to fetch the release notes, and populate the Editor block with the contents.
+    styles: {}
+  children: []
+- id: 8a6fe381-5810-42ed-a20e-d3682352253e
+  type: paragraph
+  props:
+    textColor: default
+    backgroundColor: default
+    textAlignment: left
+  content: []
+  children: []
+- id: 3abd9849-3fa7-486b-8b4b-591134f6f2d6
+  type: paragraph
+  props:
+    textColor: default
+    backgroundColor: default
+    textAlignment: left
+  content:
+  - type: text
+    text: 'This runbook requires the following dependencies:'
+    styles: {}
+  children: []
+- id: 32062fc4-d632-4d4a-9c69-c167ee200eb7
+  type: bulletListItem
+  props:
+    textColor: default
+    backgroundColor: default
+    textAlignment: left
+  content:
+  - type: text
+    text: 'gh: '
+    styles: {}
+  - type: link
+    href: https://cli.github.com/
+    content:
+    - type: text
+      text: https://cli.github.com/
+      styles: {}
+  children: []
+- id: b2f9b5ea-88d8-42c7-8658-5becb693356d
+  type: bulletListItem
+  props:
+    textColor: default
+    backgroundColor: default
+    textAlignment: left
+  content:
+  - type: text
+    text: 'jq: '
+    styles: {}
+  - type: link
+    href: https://jqlang.org/
+    content:
+    - type: text
+      text: https://jqlang.org/
+      styles: {}
+  children: []
+- id: d66cc915-c11d-4717-87d4-1b4089e785d0
+  type: paragraph
+  props:
+    textColor: default
+    backgroundColor: default
+    textAlignment: left
+  content: []
+  children: []
+- id: b9cd3b50-3515-498f-8026-4acd3342acae
+  type: paragraph
+  props:
+    textColor: default
+    backgroundColor: default
+    textAlignment: left
+  content:
+  - type: text
+    text: '---'
+    styles: {}
+  children: []
+- id: 5d88bb6b-90cf-4924-b211-b0e24ab6ae97
+  type: paragraph
+  props:
+    textColor: default
+    backgroundColor: default
+    textAlignment: left
+  content: []
+  children: []
+- id: 8ff23c9c-79f7-4c8c-9395-d98642021cbb
+  type: paragraph
+  props:
+    textColor: default
+    backgroundColor: default
+    textAlignment: left
+  content:
+  - type: text
+    text: Choose a path to a Git repository with a remote on GitHub that contains GitHub releases.
+    styles: {}
+  children: []
+- id: 799c35a8-085f-46cb-bb32-5d278acd4ea2
+  type: directory
+  props:
+    path: /Users/binarymuse/src/desktop
+  children: []
+- id: e735a40d-70d3-4c51-86df-beddcbafa83a
+  type: paragraph
+  props:
+    textColor: default
+    backgroundColor: default
+    textAlignment: left
+  content: []
+  children: []
+- id: 30d08cff-9cf1-48e2-bf5f-b16614b47609
+  type: paragraph
+  props:
+    textColor: default
+    backgroundColor: default
+    textAlignment: left
+  content:
+  - type: text
+    text: 'Select a release:'
+    styles: {}
+  children: []
+- id: e4ad84fd-ed24-45eb-8dae-5a68d31a55dd
+  type: dropdown
+  props:
+    name: release
+    options: gh release list --json name,tagName --jq '.[] | .name + ":" + .tagName'
+    fixedOptions: ''
+    variableOptions: ''
+    commandOptions: gh release list --json name,tagName --jq '.[] | .name + ":" + .tagName'
+    value: v0.0.106
+    optionsType: command
+    interpreter: bash
+  children: []
+- id: 493536c0-c6a2-47d1-bfd8-b0ebd045c40a
+  type: paragraph
+  props:
+    textColor: default
+    backgroundColor: default
+    textAlignment: left
+  content: []
+  children: []
+- id: 886834fe-ae21-454a-b825-8bb57d5c55d9
+  type: script
+  props:
+    interpreter: zsh
+    outputVariable: release_notes
+    name: Fetch release notes
+    code: 'gh release view {{ var.release }} --json body | jq -r .body '
+    outputVisible: false
+    dependency: '{}'
+  children: []
+- id: a0fff244-e8da-4ece-a887-eabcb1433d77
+  type: editor
+  props:
+    name: Release notes
+    code: ''
+    language: markdown
+    variableName: release_notes
+    syncVariable: true
+  children: []
+- id: 30bd3f34-0288-43fe-9045-c58b71305e9d
+  type: paragraph
+  props:
+    textColor: default
+    backgroundColor: default
+    textAlignment: left
+  content: []
+  children: []
+- id: fb958cb0-babc-423a-be42-c29e3ec890cc
+  type: paragraph
+  props:
+    textColor: default
+    backgroundColor: default
+    textAlignment: left
+  content: []
+  children: []

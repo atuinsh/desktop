@@ -22,16 +22,19 @@ pub fn flatten_document(doc: &[serde_json::Value]) -> Vec<serde_json::Value> {
     flattened
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PtyTemplateState {
     pub id: String,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RunbookTemplateState {
     pub id: String,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AtuinTemplateState {
     pub runbook: RunbookTemplateState,
@@ -57,7 +60,7 @@ pub struct DocumentTemplateState {
     /// only really makes sense if we're running a template from a Pty.
     /// We can use the pty map to lookup the metadata for the pty, and from there figure
     /// out the block ID
-    pub previous: BlockState,
+    pub previous: Option<BlockState>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -227,6 +230,13 @@ pub async fn template_str(
     let mut env = Environment::new();
     env.set_trim_blocks(true);
 
+    // Add custom filter for shell escaping
+    env.add_filter("shellquote", |value: String| -> String {
+        // Use POSIX shell single-quote escaping:
+        // wrap in single quotes and escape any single quotes as '\''
+        format!("'{}'", value.replace('\'', "'\\''"))
+    });
+
     // Iterate through the flattened doc, and find the block previous to the current one
     // If the previous block is an empty paragraph, skip it. Its content array will have 0
     // length
@@ -280,7 +290,7 @@ pub async fn template_str(
         })
         .collect();
 
-    let previous = previous.unwrap_or_default();
+    let previous = previous.map(serialized_block_to_state);
     let var = output_vars
         .get(&runbook)
         .map_or(HashMap::new(), |v| v.clone());
@@ -292,7 +302,7 @@ pub async fn template_str(
 
     let doc_state = if !doc.is_empty() {
         Some(DocumentTemplateState {
-            previous: serialized_block_to_state(previous),
+            previous,
             first: serialized_block_to_state(doc.first().unwrap().clone()),
             last: serialized_block_to_state(doc.last().unwrap().clone()),
             content: doc.into_iter().map(serialized_block_to_state).collect(),
@@ -478,5 +488,51 @@ mod tests {
         .unwrap();
 
         assert_eq!(result, "Variable: test_value");
+
+    }
+
+    #[test]
+    fn test_shellquote_filter() {
+        use minijinja::Environment;
+
+        let mut env = Environment::new();
+        env.add_filter("shellquote", |value: String| -> String {
+            format!("'{}'", value.replace('\'', "'\\''"))
+        });
+
+        // Test simple string
+        let result = env.render_str(
+            "{{ text | shellquote }}",
+            minijinja::context! { text => "hello" },
+        );
+        assert_eq!(result.unwrap(), "'hello'");
+
+        // Test string with single quotes
+        let result = env.render_str(
+            "{{ text | shellquote }}",
+            minijinja::context! { text => "it's working" },
+        );
+        assert_eq!(result.unwrap(), "'it'\\''s working'");
+
+        // Test string with double quotes
+        let result = env.render_str(
+            "{{ text | shellquote }}",
+            minijinja::context! { text => "say \"hello\"" },
+        );
+        assert_eq!(result.unwrap(), "'say \"hello\"'");
+
+        // Test string with special shell characters
+        let result = env.render_str(
+            "{{ text | shellquote }}",
+            minijinja::context! { text => "$PATH and `whoami`" },
+        );
+        assert_eq!(result.unwrap(), "'$PATH and `whoami`'");
+
+        // Test empty string
+        let result = env.render_str(
+            "{{ text | shellquote }}",
+            minijinja::context! { text => "" },
+        );
+        assert_eq!(result.unwrap(), "''");
     }
 }

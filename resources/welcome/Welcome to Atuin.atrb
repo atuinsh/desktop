@@ -1,0 +1,788 @@
+id: 01998818-ecf4-7993-817b-cc7dcfa180c4
+name: Welcome to Atuin!
+version: 1
+content:
+- id: 82ba0486-0f20-4164-b032-66ff99b7e44e
+  type: heading
+  props:
+    textColor: default
+    backgroundColor: default
+    textAlignment: left
+    level: 1
+    isToggleable: false
+  content:
+  - type: text
+    text: Welcome to Atuin!
+    styles: {}
+  children: []
+- id: e42bcb17-62de-4bb7-86a3-b2d9e8319ab3
+  type: paragraph
+  props:
+    textColor: default
+    backgroundColor: default
+    textAlignment: left
+  content:
+  - type: text
+    text: Hey there! Welcome to Atuin Runbooks!
+    styles: {}
+  children: []
+- id: 063f3a36-a336-4636-b95e-4f7028c8d65b
+  type: paragraph
+  props:
+    textColor: default
+    backgroundColor: default
+    textAlignment: left
+  content:
+  - type: text
+    text: 'This serves as an overview of the functionality we provide, and should help you get started. Please note that we’re currently in beta, and moving rapidly - features might change, and bugs will be fixed fast. You can also check out the '
+    styles: {}
+  - type: link
+    href: https://man.atuin.sh
+    content:
+    - type: text
+      text: documentation
+      styles: {}
+  - type: text
+    text: .
+    styles: {}
+  children: []
+- id: 7b5b96b2-80d8-407b-af62-d9fdd73ef4e9
+  type: paragraph
+  props:
+    textColor: default
+    backgroundColor: default
+    textAlignment: left
+  content: []
+  children: []
+- id: 858a7936-69fb-4ef3-9ac0-1839972c92ac
+  type: heading
+  props:
+    textColor: default
+    backgroundColor: default
+    textAlignment: left
+    level: 2
+    isToggleable: false
+  content:
+  - type: text
+    text: Sync
+    styles: {}
+  children: []
+- id: 91f15d4f-023c-4f11-81a0-66e5d1af40b9
+  type: paragraph
+  props:
+    textColor: default
+    backgroundColor: default
+    textAlignment: left
+  content:
+  - type: text
+    text: 'Register with '
+    styles: {}
+  - type: link
+    href: https://hub.atuin.sh/settings/desktop-connect
+    content:
+    - type: text
+      text: Atuin Hub
+      styles: {}
+  - type: text
+    text: ' to sync your runbooks!'
+    styles: {}
+  children: []
+- id: 48c04c33-4821-40fd-a9af-01fe04c03c14
+  type: bulletListItem
+  props:
+    textColor: default
+    backgroundColor: default
+    textAlignment: left
+  content:
+  - type: text
+    text: Share runbooks either privately, or publicly with the world
+    styles: {}
+  children: []
+- id: c9cc4b08-9180-463e-8b84-6975a72071e6
+  type: bulletListItem
+  props:
+    textColor: default
+    backgroundColor: default
+    textAlignment: left
+  content:
+  - type: text
+    text: Invite others to collaborate in real time
+    styles: {}
+  children: []
+- id: 33387225-7e0a-4c22-9876-6b183d082e2a
+  type: bulletListItem
+  props:
+    textColor: default
+    backgroundColor: default
+    textAlignment: left
+  content:
+  - type: text
+    text: Keep a backup in case of emergency
+    styles: {}
+  children: []
+- id: 80b44ea5-0baf-4968-b90b-b3644677aa12
+  type: paragraph
+  props:
+    textColor: default
+    backgroundColor: default
+    textAlignment: left
+  content: []
+  children: []
+- id: 0eccedfe-ca17-4a6f-bf5b-4431b0328de1
+  type: heading
+  props:
+    textColor: default
+    backgroundColor: default
+    textAlignment: left
+    level: 2
+    isToggleable: false
+  content:
+  - type: text
+    text: Teams
+    styles: {}
+  children: []
+- id: f8a9aacc-78e2-467a-85e1-39d840bc5e4c
+  type: paragraph
+  props:
+    textColor: default
+    backgroundColor: default
+    textAlignment: left
+  content:
+  - type: text
+    text: We support team collaboration via the creation of organizations. Create an org via the dropdown on the left sidebar after you’ve logged in. Orgs allow realtime sharing between many users.
+    styles: {}
+  children: []
+- id: f0eface2-6f4e-4b3c-b9b2-221ab69ef367
+  type: paragraph
+  props:
+    textColor: default
+    backgroundColor: default
+    textAlignment: left
+  content:
+  - type: text
+    text: 'Read more in the '
+    styles: {}
+  - type: link
+    href: https://man.atuin.sh/hub/getting-started/
+    content:
+    - type: text
+      text: docs
+      styles: {}
+  - type: text
+    text: .
+    styles: {}
+  children: []
+- id: 59c2adcf-f97d-48a8-ad5e-c3bda6e9023c
+  type: paragraph
+  props:
+    textColor: default
+    backgroundColor: default
+    textAlignment: left
+  content: []
+  children: []
+- id: 8e185fb9-a3c0-4d9e-b59a-1c067d8e9f1a
+  type: heading
+  props:
+    textColor: default
+    backgroundColor: default
+    textAlignment: left
+    level: 2
+    isToggleable: false
+  content:
+  - type: text
+    text: Terminals
+    styles: {}
+  children: []
+- id: 1ec609c7-e6da-4b60-ba54-69a4173675a7
+  type: paragraph
+  props:
+    textColor: default
+    backgroundColor: default
+    textAlignment: left
+  content:
+  - type: text
+    text: This is the primary feature we provide - “runbooks that run” wouldn’t make sense without it.
+    styles: {}
+  children: []
+- id: 6e89394a-eb2a-46cd-97ce-e97d3b3c43fa
+  type: paragraph
+  props:
+    textColor: default
+    backgroundColor: default
+    textAlignment: left
+  content:
+  - type: text
+    text: 'To create a terminal block, type '
+    styles: {}
+  - type: text
+    text: /
+    styles:
+      code: true
+  - type: text
+    text: ', and then filter to “terminal”. This will embed a code editor into your document, like the following:'
+    styles: {}
+  children: []
+- id: 14eda08f-5b91-4119-ae9f-e31e195b0041
+  type: paragraph
+  props:
+    textColor: default
+    backgroundColor: default
+    textAlignment: left
+  content: []
+  children: []
+- id: 13a1d471-16bf-45aa-b4f6-0b06a4b920fa
+  type: run
+  props:
+    type: bash
+    name: My first terminal
+    code: |-
+      echo 'Welcome to Atuin!'
+      echo 'This is a terminal block'
+      echo 'Try clicking the green play button on the left'
+    pty: ''
+    global: false
+    outputVisible: true
+    dependency: '{}'
+  children: []
+- id: a02b722f-4b26-4cd0-8b84-7034ee828364
+  type: paragraph
+  props:
+    textColor: default
+    backgroundColor: default
+    textAlignment: left
+  content: []
+  children: []
+- id: 1ac8138e-9f31-451f-a1ff-27dff9dc8a0a
+  type: paragraph
+  props:
+    textColor: default
+    backgroundColor: default
+    textAlignment: left
+  content:
+  - type: text
+    text: Upon clicking “play”, you should see the bash snippet executed in your shell! This all happens on your local system, with your local config.
+    styles: {}
+  children: []
+- id: 37148291-c461-4916-b219-b76dd58833e0
+  type: paragraph
+  props:
+    textColor: default
+    backgroundColor: default
+    textAlignment: left
+  content:
+  - type: text
+    text: 'Give it a try:'
+    styles: {}
+  children: []
+- id: 9d66c1bb-94ba-4f9b-b5ce-67ba96b4ba1a
+  type: paragraph
+  props:
+    textColor: default
+    backgroundColor: default
+    textAlignment: left
+  content: []
+  children: []
+- id: c94c8cd3-33a3-4b12-8c3c-c3bb0c36bd97
+  type: run
+  props:
+    type: bash
+    name: Enter your command
+    code: ''
+    pty: ''
+    global: false
+    outputVisible: true
+    dependency: '{}'
+  children: []
+- id: 905a4591-ebd9-441e-870b-54f865de507a
+  type: paragraph
+  props:
+    textColor: default
+    backgroundColor: default
+    textAlignment: left
+  content: []
+  children: []
+- id: c069eadd-a6ad-43df-a5c0-9415d95ce61f
+  type: paragraph
+  props:
+    textColor: default
+    backgroundColor: default
+    textAlignment: left
+  content:
+  - type: text
+    text: These blocks are a full terminal - you can interact with them, type in them, whatever you want. When they are stopped, all resources are cleaned up. Feel free to navigate to other documents and explore - your terminal will stay running in the background.
+    styles: {}
+  children: []
+- id: 2faf8d0f-8852-4235-806f-401b297a0d89
+  type: paragraph
+  props:
+    textColor: default
+    backgroundColor: default
+    textAlignment: left
+  content: []
+  children: []
+- id: 96182268-900f-4ab0-8a39-b19e5ae68ac6
+  type: heading
+  props:
+    textColor: default
+    backgroundColor: default
+    textAlignment: left
+    level: 2
+    isToggleable: false
+  content:
+  - type: text
+    text: Scripts
+    styles: {}
+  children: []
+- id: 2f93a5fc-d037-4c46-a21e-5ce0048338c8
+  type: paragraph
+  props:
+    textColor: default
+    backgroundColor: default
+    textAlignment: left
+  content:
+  - type: text
+    text: Alongside terminals, we also have scripts. While terminals run in a fully interactive login session, scripts run differently. They behave more like a normal bash script, and can have their output captured as a variable. This can be useful for fetching secrets, etc.
+    styles: {}
+  children: []
+- id: c7e437bf-feea-4124-a9bd-f939d8586d9b
+  type: paragraph
+  props:
+    textColor: default
+    backgroundColor: default
+    textAlignment: left
+  content:
+  - type: text
+    text: 'We support the following interpreters, with more to come:'
+    styles: {}
+  children: []
+- id: b50d072c-8cb5-49da-bc7b-818d2f853fec
+  type: numberedListItem
+  props:
+    textColor: default
+    backgroundColor: default
+    textAlignment: left
+  content:
+  - type: text
+    text: zsh
+    styles: {}
+  children: []
+- id: 68a1ad98-8063-4ec6-9460-c873e2e21e4f
+  type: numberedListItem
+  props:
+    textColor: default
+    backgroundColor: default
+    textAlignment: left
+  content:
+  - type: text
+    text: bash
+    styles: {}
+  children: []
+- id: ce8d9555-5f53-461e-bb68-2aa329931e9b
+  type: numberedListItem
+  props:
+    textColor: default
+    backgroundColor: default
+    textAlignment: left
+  content:
+  - type: text
+    text: nodejs
+    styles: {}
+  children: []
+- id: 5cbdb826-7b03-4589-a8cf-4bc3a290a099
+  type: numberedListItem
+  props:
+    textColor: default
+    backgroundColor: default
+    textAlignment: left
+  content:
+  - type: text
+    text: python3
+    styles: {}
+  children: []
+- id: fc29a95f-5c61-4f5f-949a-596a0e5a3c01
+  type: paragraph
+  props:
+    textColor: default
+    backgroundColor: default
+    textAlignment: left
+  content: []
+  children: []
+- id: 555957a2-f0f2-499d-89ae-b169a719f6e1
+  type: script
+  props:
+    interpreter: zsh
+    outputVariable: ''
+    name: Script 1
+    code: echo "hello world"
+    outputVisible: true
+    dependency: '{}'
+  children: []
+- id: 6b8ea35c-2f6a-4193-a39b-037a7cccedef
+  type: paragraph
+  props:
+    textColor: default
+    backgroundColor: default
+    textAlignment: left
+  content: []
+  children: []
+- id: a5265842-71f5-47df-b161-45df0536ef74
+  type: heading
+  props:
+    textColor: default
+    backgroundColor: default
+    textAlignment: left
+    level: 3
+    isToggleable: false
+  content:
+  - type: text
+    text: Directories
+    styles: {}
+  children: []
+- id: ff5e2860-aa7c-4605-8b86-947e6341ad26
+  type: paragraph
+  props:
+    textColor: default
+    backgroundColor: default
+    textAlignment: left
+  content:
+  - type: text
+    text: Sometimes, you may want to set the directory we should use. While you could cd in a block, that can get repetitive.
+    styles: {}
+  children: []
+- id: 052b352b-6cba-45b6-ab16-c6c43c162327
+  type: paragraph
+  props:
+    textColor: default
+    backgroundColor: default
+    textAlignment: left
+  content:
+  - type: text
+    text: 'Atuin supports '
+    styles: {}
+  - type: text
+    text: directory blocks
+    styles:
+      italic: true
+  - type: text
+    text: . These set the directory that all subsequent code blocks should use. Try changing directory, and then running the terminal block.
+    styles: {}
+  children: []
+- id: 54026936-c018-4a20-a4d3-1db5c6ff5e03
+  type: paragraph
+  props:
+    textColor: default
+    backgroundColor: default
+    textAlignment: left
+  content: []
+  children: []
+- id: fe9793d8-5a52-4ed6-8ef6-f94c5e1d76df
+  type: directory
+  props:
+    path: ''
+  children: []
+- id: 30ab2ca8-bc93-4522-8be9-dadd54cc6041
+  type: run
+  props:
+    type: bash
+    name: See the directory change
+    code: pwd
+    pty: ''
+    global: false
+    outputVisible: true
+    dependency: '{}'
+  children: []
+- id: d3f6b1ca-5342-4b72-95f1-62abb4966f1a
+  type: paragraph
+  props:
+    textColor: default
+    backgroundColor: default
+    textAlignment: left
+  content: []
+  children: []
+- id: 735016f0-01df-4caa-b289-d13a15db3b05
+  type: heading
+  props:
+    textColor: default
+    backgroundColor: default
+    textAlignment: left
+    level: 3
+    isToggleable: false
+  content:
+  - type: text
+    text: Env
+    styles: {}
+  children: []
+- id: 35fcf226-ed86-40f5-b774-38f8b78d628a
+  type: paragraph
+  props:
+    textColor: default
+    backgroundColor: default
+    textAlignment: left
+  content:
+  - type: text
+    text: Much like the directory block, these set the env for all subsequent blocks
+    styles: {}
+  children: []
+- id: fbf2824d-bf71-4c26-87a7-623342add7d9
+  type: paragraph
+  props:
+    textColor: default
+    backgroundColor: default
+    textAlignment: left
+  content: []
+  children: []
+- id: c83b458c-8caf-4e04-bb1f-cb505f36540e
+  type: env
+  props:
+    name: FOO
+    value: BAR
+  children: []
+- id: 787d9d19-9460-4321-89b8-04f207fa0da4
+  type: run
+  props:
+    type: bash
+    name: Check environment variables
+    code: echo $FOO
+    pty: ''
+    global: false
+    outputVisible: true
+    dependency: '{}'
+  children: []
+- id: 62443f1f-c3b3-4e77-94c9-d65571550f75
+  type: paragraph
+  props:
+    textColor: default
+    backgroundColor: default
+    textAlignment: left
+  content: []
+  children: []
+- id: a4edf55f-c57e-411e-bd27-3a0bf8aa799e
+  type: heading
+  props:
+    textColor: default
+    backgroundColor: default
+    textAlignment: left
+    level: 3
+    isToggleable: false
+  content:
+  - type: text
+    text: Template system
+    styles: {}
+  children: []
+- id: ab387b33-6a39-4d93-bed3-1a88b19f5988
+  type: paragraph
+  props:
+    textColor: default
+    backgroundColor: default
+    textAlignment: left
+  content:
+  - type: text
+    text: 'This is super powerful. Every input in the runbook is first processed by our template system - the syntax is very similar to Jinja, and you can read more '
+    styles: {}
+  - type: link
+    href: https://man.atuin.sh/templating
+    content:
+    - type: text
+      text: here
+      styles: {}
+  - type: text
+    text: .
+    styles: {}
+  children: []
+- id: b4d3f9ee-ed7e-4da8-b0fd-7ecc343fd0d3
+  type: paragraph
+  props:
+    textColor: default
+    backgroundColor: default
+    textAlignment: left
+  content: []
+  children: []
+- id: 1fac6109-3a74-43fd-bb37-ebe9b34e8367
+  type: var
+  props:
+    name: example_template_var
+    value: example template value
+  children: []
+- id: 7ebfd208-5a77-4b74-a829-2b8ab5dba253
+  type: run
+  props:
+    type: bash
+    name: Variables and templating
+    code: echo "{{ var.example_template_var }}"
+    pty: ''
+    global: false
+    outputVisible: true
+    dependency: '{}'
+  children: []
+- id: c72a5e24-4a10-434b-802b-a24504beeb51
+  type: paragraph
+  props:
+    textColor: default
+    backgroundColor: default
+    textAlignment: left
+  content: []
+  children: []
+- id: b0f906c1-b657-416f-a171-4737f0e8c6a4
+  type: paragraph
+  props:
+    textColor: default
+    backgroundColor: default
+    textAlignment: left
+  content:
+  - type: text
+    text: 'Template variables can also be set by the output of a script block, for instance:'
+    styles: {}
+  children: []
+- id: 9a6d0d2c-a647-4e51-b786-35aa4397c1ee
+  type: paragraph
+  props:
+    textColor: default
+    backgroundColor: default
+    textAlignment: left
+  content: []
+  children: []
+- id: fdc08794-3856-4994-a555-0bbfaf950283
+  type: script
+  props:
+    interpreter: zsh
+    outputVariable: script_variable
+    name: Script 2
+    code: echo "hello template system! coming from $(hostname)"
+    outputVisible: true
+    dependency: '{}'
+  children: []
+- id: 9539ebcd-17f4-43c1-8ed0-4b1969d132d4
+  type: run
+  props:
+    type: bash
+    name: Terminal 6
+    code: echo "{{ var.script_variable }}"
+    pty: 68f1351c-92e3-4f6e-bd0c-7018a3f2c67a
+    global: false
+    outputVisible: true
+    dependency: '{}'
+  children: []
+- id: 7cb65386-2918-4dca-91fc-007966960b21
+  type: paragraph
+  props:
+    textColor: default
+    backgroundColor: default
+    textAlignment: left
+  content: []
+  children: []
+- id: dcf2f88a-c0f2-44f2-a43d-be586a3a7c1e
+  type: heading
+  props:
+    textColor: default
+    backgroundColor: default
+    textAlignment: left
+    level: 2
+    isToggleable: false
+  content:
+  - type: text
+    text: What else?
+    styles: {}
+  children: []
+- id: ca4d6b75-daf7-4a01-bca3-020818f6a5e1
+  type: paragraph
+  props:
+    textColor: default
+    backgroundColor: default
+    textAlignment: left
+  content:
+  - type: text
+    text: We also have
+    styles: {}
+  - type: link
+    href: https://man.atuin.sh/blocks/databases
+    content:
+    - type: text
+      text: ' database clients'
+      styles: {}
+  - type: text
+    text: ', an '
+    styles: {}
+  - type: link
+    href: https://man.atuin.sh/blocks/network/ssh
+    content:
+    - type: text
+      text: SSH integration
+      styles: {}
+  - type: text
+    text: ', and more! Be sure to check out the '
+    styles: {}
+  - type: link
+    href: https://man.atuin.sh
+    content:
+    - type: text
+      text: docs
+      styles: {}
+  - type: text
+    text: ', and explore the examples we’ve included in the examples folder of this workspace to get an idea of what Atuin Desktop is capable of:'
+    styles: {}
+  children: []
+- id: afc02783-c9f5-4770-adbc-efa94b73fe9f
+  type: paragraph
+  props:
+    textColor: default
+    backgroundColor: default
+    textAlignment: left
+  content: []
+  children: []
+- id: e415f49b-2048-4e30-b012-7cf5d66dab11
+  type: bulletListItem
+  props:
+    textColor: default
+    backgroundColor: default
+    textAlignment: left
+  content:
+  - type: runbook-link
+    props:
+      runbookId: 01998c07-fd5c-76c2-8307-38705d872242
+      runbookName: Fetch Release Notes
+  - type: text
+    text: ' '
+    styles: {}
+  children: []
+- id: e41ad742-0708-465a-84ca-c0caabde23c2
+  type: bulletListItem
+  props:
+    textColor: default
+    backgroundColor: default
+    textAlignment: left
+  content:
+  - type: runbook-link
+    props:
+      runbookId: 01998822-b94b-74a3-bdf6-c2ddefa03d02
+      runbookName: Atuin Desktop Release
+  - type: text
+    text: ' '
+    styles: {}
+  children: []
+- id: ddedef89-b538-43b0-a104-024b042c1d54
+  type: paragraph
+  props:
+    textColor: default
+    backgroundColor: default
+    textAlignment: left
+  content: []
+  children: []
+- id: 241b6ba9-8eea-4463-8984-a485be29ff76
+  type: paragraph
+  props:
+    textColor: default
+    backgroundColor: default
+    textAlignment: left
+  content:
+  - type: text
+    text: 'If you have any feedback, don''t hesitate to contact us via the feedback button in the left-most sidebar. '
+    styles: {}
+  children: []
+- id: cc3042ef-f720-436d-a352-ba7ceefe0943
+  type: paragraph
+  props:
+    textColor: default
+    backgroundColor: default
+    textAlignment: left
+  content: []
+  children: []

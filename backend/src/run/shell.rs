@@ -99,6 +99,7 @@ pub async fn shell_exec(
     // Spawn a task to listen to the output channel and write to the buffer
     let props_clone = props.clone();
     let block_clone = block.clone();
+    let app_clone = app.clone();
     let _output_handle = tokio::spawn(async move {
         // Create a string buffer to store the output
         let mut output = String::new();
@@ -121,9 +122,14 @@ pub async fn shell_exec(
                 output_vars
                     .write()
                     .await
-                    .entry(runbook)
+                    .entry(runbook.clone())
                     .or_insert(HashMap::new())
-                    .insert(output_variable, output);
+                    .insert(output_variable.clone(), output);
+
+                let _ = app_clone.emit(
+                    "variable-changed",
+                    format!("{}:{}", runbook, output_variable),
+                );
             }
         }
     });

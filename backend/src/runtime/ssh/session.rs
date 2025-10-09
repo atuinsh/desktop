@@ -4,14 +4,15 @@
 use bytes::Bytes;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::mpsc;
 use tokio::sync::{mpsc::Sender, oneshot};
+use tokio::time::timeout;
 
 use eyre::Result;
 use russh::client::Handle;
 use russh::*;
 use russh_config::*;
-use russh_keys::*;
 
 use crate::runtime::ssh_pool::SshPoolHandle;
 
@@ -42,13 +43,12 @@ pub enum Authentication {
 /// SSH client implementation for russh
 pub struct Client;
 
-#[async_trait::async_trait]
 impl russh::client::Handler for Client {
     type Error = russh::Error;
 
     async fn check_server_key(
         &mut self,
-        _server_public_key: &key::PublicKey,
+        _server_public_key: &russh::keys::PublicKey,
     ) -> Result<bool, Self::Error> {
         // For now, accept all server keys
         // In production, you'd want to implement proper host key verification
@@ -57,6 +57,42 @@ impl russh::client::Handler for Client {
 }
 
 impl Session {
+    /// Send a keepalive to test if the SSH connection is still active and responsive
+    /// Uses a lightweight exec command that actually tests network connectivity
+    pub async fn send_keepalive(&self) -> bool {
+        const KEEPALIVE_TIMEOUT: Duration = Duration::from_secs(5);
+
+        let keepalive_check = async {
+            let mut channel = self.session.channel_open_session().await.ok()?;
+            channel.exec(true, "true").await.ok()?;
+
+            let mut success = false;
+            while let Some(msg) = channel.wait().await {
+                match msg {
+                    ChannelMsg::ExitStatus { .. } => {
+                        success = true;
+                        break;
+                    }
+                    ChannelMsg::Close => break,
+                    ChannelMsg::Eof => break,
+                    _ => continue,
+                }
+            }
+
+            let _ = channel.close().await;
+            Some(success)
+        };
+
+        match timeout(KEEPALIVE_TIMEOUT, keepalive_check).await {
+            Ok(Some(success)) => success,
+            Ok(None) => false,
+            Err(_) => {
+                log::debug!("SSH keepalive timed out");
+                false
+            }
+        }
+    }
+
     /// Parse IdentityAgent from SSH config manually (since russh-config doesn't support it)
     fn parse_identity_agent(host: &str) -> Option<String> {
         Self::parse_identity_agent_from_path(host, &dirs::home_dir()?.join(".ssh").join("config"))
@@ -286,7 +322,7 @@ impl Session {
             .authenticate_password(username, password)
             .await?;
 
-        if !auth_res {
+        if !matches!(auth_res, russh::client::AuthResult::Success) {
             return Err(eyre::eyre!("Password authentication failed"));
         }
 
@@ -295,14 +331,17 @@ impl Session {
 
     /// Public key authentication
     pub async fn key_auth(&mut self, username: &str, key_path: PathBuf) -> Result<()> {
-        let key_pair = load_secret_key(&key_path, None)?;
+        let key_pair = russh::keys::load_secret_key(&key_path, None)?;
 
         let auth_res = self
             .session
-            .authenticate_publickey(username, Arc::new(key_pair))
+            .authenticate_publickey(
+                username,
+                russh::keys::PrivateKeyWithHashAlg::new(Arc::new(key_pair), None),
+            )
             .await?;
 
-        if !auth_res {
+        if !matches!(auth_res, russh::client::AuthResult::Success) {
             return Err(eyre::eyre!("Public key authentication failed"));
         }
 
@@ -314,13 +353,14 @@ impl Session {
         let agent_result = if let Some(ref identity_agent) = self.ssh_config.identity_agent {
             log::debug!("Using custom IdentityAgent: {identity_agent}");
             // Connect to custom agent socket
-            match tokio::net::UnixStream::connect(identity_agent).await {
-                Ok(stream) => Ok(russh_keys::agent::client::AgentClient::connect(stream)),
-                Err(e) => Err(russh_keys::Error::IO(e)),
-            }
+            russh::keys::agent::client::AgentClient::connect_uds(identity_agent)
+                .await
+                .map_err(|_| russh::Error::NotAuthenticated)
         } else {
             // Use default SSH agent from environment
-            russh_keys::agent::client::AgentClient::connect_env().await
+            russh::keys::agent::client::AgentClient::connect_env()
+                .await
+                .map_err(|_| russh::Error::NotAuthenticated)
         };
 
         match agent_result {
@@ -328,16 +368,16 @@ impl Session {
                 Ok(keys) => {
                     log::debug!("Found {} keys in SSH agent", keys.len());
                     for key in keys {
-                        let (returned_agent, auth_result) =
-                            self.session.authenticate_future(username, key, agent).await;
-                        agent = returned_agent;
-
-                        match auth_result {
-                            Ok(true) => {
+                        match self
+                            .session
+                            .authenticate_publickey_with(username, key.clone(), None, &mut agent)
+                            .await
+                        {
+                            Ok(russh::client::AuthResult::Success) => {
                                 log::debug!("Successfully authenticated with SSH agent key");
                                 return Ok(true);
                             }
-                            Ok(false) => {
+                            Ok(_) => {
                                 log::debug!("SSH agent key rejected by server");
                                 continue;
                             }
@@ -559,11 +599,16 @@ impl Session {
         output_stream: Sender<String>,
         mut cancel_rx: oneshot::Receiver<()>,
     ) -> Result<()> {
-        let mut channel = self.session.channel_open_session().await?;
+        const SSH_OPERATION_TIMEOUT: Duration = Duration::from_secs(10);
+
+        let mut channel = timeout(SSH_OPERATION_TIMEOUT, self.session.channel_open_session())
+            .await
+            .map_err(|_| eyre::eyre!("Timeout opening SSH channel for PTY"))??;
 
         // Request PTY
-        channel
-            .request_pty(
+        timeout(
+            SSH_OPERATION_TIMEOUT,
+            channel.request_pty(
                 true,
                 "xterm-256color",
                 width as u32,
@@ -571,11 +616,15 @@ impl Session {
                 0,
                 0,
                 &[],
-            )
-            .await?;
+            ),
+        )
+        .await
+        .map_err(|_| eyre::eyre!("Timeout requesting PTY"))??;
 
         // Start shell
-        channel.request_shell(true).await?;
+        timeout(SSH_OPERATION_TIMEOUT, channel.request_shell(true))
+            .await
+            .map_err(|_| eyre::eyre!("Timeout starting shell"))??;
 
         tokio::task::spawn(async move {
             loop {

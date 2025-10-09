@@ -115,15 +115,18 @@ impl Executor {
                 }
                 ExecutorMessage::StopWorkflow { id } => {
                     println!("stopping workflow: {id:?}");
-                    if let Some(handle) = self.workflow_store.remove(&id) {
-                        // If the cancel channel is still open, cancel the workflow. Otherwise, it has already finished
-                        if !handle.cancel_channel.is_closed() {
-                            if let Err(e) = handle.cancel_channel.send(()) {
-                                println!("error sending cancel signal: {e:?}");
+                    match self.workflow_store.remove(&id) {
+                        Some(handle) => {
+                            // If the cancel channel is still open, cancel the workflow. Otherwise, it has already finished
+                            if !handle.cancel_channel.is_closed() {
+                                if let Err(e) = handle.cancel_channel.send(()) {
+                                    println!("error sending cancel signal: {e:?}");
+                                }
                             }
                         }
-                    } else {
-                        println!("workflow not found, skipping");
+                        _ => {
+                            println!("workflow not found, skipping");
+                        }
                     }
                 }
             }

@@ -27,123 +27,90 @@ pub(crate) fn to_json(v: MySqlValueRef) -> Result<JsonValue> {
 
     let res = match v.type_info().name() {
         "VARCHAR" | "CHAR" | "TEXT" | "TINYTEXT" | "MEDIUMTEXT" | "LONGTEXT" => {
-            if let Ok(v) = ValueRef::to_owned(&v).try_decode::<String>() {
-                JsonValue::String(v)
-            } else {
-                JsonValue::Null
+            match ValueRef::to_owned(&v).try_decode::<String>() {
+                Ok(v) => JsonValue::String(v),
+                _ => JsonValue::Null,
             }
         }
         // Handle the SQLx bug where VARCHAR with binary collation shows as VARBINARY
         "VARBINARY" | "BINARY" => {
-            if let Ok(bytes) = ValueRef::to_owned(&v).try_decode::<Vec<u8>>() {
-                // Try to detect if it's actually text
-                if is_likely_text(&bytes) {
-                    // Convert as latin1
-                    let text: String = bytes.iter().map(|&b| b as char).collect();
-                    JsonValue::String(text)
-                } else {
-                    // Actually binary data
-                    JsonValue::Array(
-                        bytes
-                            .into_iter()
-                            .map(|n| JsonValue::Number(n.into()))
-                            .collect(),
-                    )
+            match ValueRef::to_owned(&v).try_decode::<Vec<u8>>() {
+                Ok(bytes) => {
+                    // Try to detect if it's actually text
+                    if is_likely_text(&bytes) {
+                        // Convert as latin1
+                        let text: String = bytes.iter().map(|&b| b as char).collect();
+                        JsonValue::String(text)
+                    } else {
+                        // Actually binary data
+                        JsonValue::Array(
+                            bytes
+                                .into_iter()
+                                .map(|n| JsonValue::Number(n.into()))
+                                .collect(),
+                        )
+                    }
                 }
-            } else {
-                JsonValue::Null
+                _ => JsonValue::Null,
             }
         }
-        "FLOAT" => {
-            if let Ok(v) = ValueRef::to_owned(&v).try_decode::<f32>() {
-                JsonValue::from(v)
-            } else {
-                JsonValue::Null
-            }
-        }
-        "DOUBLE" => {
-            if let Ok(v) = ValueRef::to_owned(&v).try_decode::<f64>() {
-                JsonValue::from(v)
-            } else {
-                JsonValue::Null
-            }
-        }
-        "TINYINT" => {
-            if let Ok(v) = ValueRef::to_owned(&v).try_decode::<i8>() {
-                JsonValue::Number(v.into())
-            } else {
-                JsonValue::Null
-            }
-        }
-        "SMALLINT" => {
-            if let Ok(v) = ValueRef::to_owned(&v).try_decode::<i16>() {
-                JsonValue::Number(v.into())
-            } else {
-                JsonValue::Null
-            }
-        }
-        "INT" | "MEDIUMINT" => {
-            if let Ok(v) = ValueRef::to_owned(&v).try_decode::<i32>() {
-                JsonValue::Number(v.into())
-            } else {
-                JsonValue::Null
-            }
-        }
-        "BIGINT" => {
-            if let Ok(v) = ValueRef::to_owned(&v).try_decode::<i64>() {
-                JsonValue::Number(v.into())
-            } else {
-                JsonValue::Null
-            }
-        }
-        "BOOLEAN" => {
-            if let Ok(v) = ValueRef::to_owned(&v).try_decode::<bool>() {
-                JsonValue::Bool(v)
-            } else {
-                JsonValue::Null
-            }
-        }
-        "DATE" => {
-            if let Ok(v) = ValueRef::to_owned(&v).try_decode::<Date>() {
-                JsonValue::String(v.to_string())
-            } else {
-                JsonValue::Null
-            }
-        }
-        "TIME" => {
-            if let Ok(v) = ValueRef::to_owned(&v).try_decode::<Time>() {
-                JsonValue::String(v.to_string())
-            } else {
-                JsonValue::Null
-            }
-        }
-        "DATETIME" => {
-            if let Ok(v) = ValueRef::to_owned(&v).try_decode::<PrimitiveDateTime>() {
-                JsonValue::String(v.to_string())
-            } else {
-                JsonValue::Null
-            }
-        }
-        "TIMESTAMP" => {
-            if let Ok(v) = ValueRef::to_owned(&v).try_decode::<OffsetDateTime>() {
-                JsonValue::String(v.to_string())
-            } else {
-                JsonValue::Null
-            }
-        }
+        "FLOAT" => match ValueRef::to_owned(&v).try_decode::<f32>() {
+            Ok(v) => JsonValue::from(v),
+            _ => JsonValue::Null,
+        },
+        "DOUBLE" => match ValueRef::to_owned(&v).try_decode::<f64>() {
+            Ok(v) => JsonValue::from(v),
+            _ => JsonValue::Null,
+        },
+        "TINYINT" => match ValueRef::to_owned(&v).try_decode::<i8>() {
+            Ok(v) => JsonValue::Number(v.into()),
+            _ => JsonValue::Null,
+        },
+        "SMALLINT" => match ValueRef::to_owned(&v).try_decode::<i16>() {
+            Ok(v) => JsonValue::Number(v.into()),
+            _ => JsonValue::Null,
+        },
+        "INT" | "MEDIUMINT" => match ValueRef::to_owned(&v).try_decode::<i32>() {
+            Ok(v) => JsonValue::Number(v.into()),
+            _ => JsonValue::Null,
+        },
+        "BIGINT" => match ValueRef::to_owned(&v).try_decode::<i64>() {
+            Ok(v) => JsonValue::Number(v.into()),
+            _ => JsonValue::Null,
+        },
+        "BOOLEAN" => match ValueRef::to_owned(&v).try_decode::<bool>() {
+            Ok(v) => JsonValue::Bool(v),
+            _ => JsonValue::Null,
+        },
+        "DATE" => match ValueRef::to_owned(&v).try_decode::<Date>() {
+            Ok(v) => JsonValue::String(v.to_string()),
+            _ => JsonValue::Null,
+        },
+        "TIME" => match ValueRef::to_owned(&v).try_decode::<Time>() {
+            Ok(v) => JsonValue::String(v.to_string()),
+            _ => JsonValue::Null,
+        },
+        "DATETIME" => match ValueRef::to_owned(&v).try_decode::<PrimitiveDateTime>() {
+            Ok(v) => JsonValue::String(v.to_string()),
+            _ => JsonValue::Null,
+        },
+        "TIMESTAMP" => match ValueRef::to_owned(&v).try_decode::<OffsetDateTime>() {
+            Ok(v) => JsonValue::String(v.to_string()),
+            _ => JsonValue::Null,
+        },
         "JSON" => ValueRef::to_owned(&v).try_decode().unwrap_or_default(),
         "BLOB" | "TINYBLOB" | "MEDIUMBLOB" | "LONGBLOB" => {
-            if let Ok(v) = ValueRef::to_owned(&v).try_decode::<Vec<u8>>() {
-                JsonValue::Array(v.into_iter().map(|n| JsonValue::Number(n.into())).collect())
-            } else {
-                JsonValue::Null
+            match ValueRef::to_owned(&v).try_decode::<Vec<u8>>() {
+                Ok(v) => {
+                    JsonValue::Array(v.into_iter().map(|n| JsonValue::Number(n.into())).collect())
+                }
+                _ => JsonValue::Null,
             }
         }
         "DECIMAL" | "NUMERIC" => {
-            if let Ok(v) = ValueRef::to_owned(&v).try_decode::<bigdecimal::BigDecimal>() {
-                JsonValue::from(v.to_string())
-            } else {
-                JsonValue::Null
+            match ValueRef::to_owned(&v).try_decode::<bigdecimal::BigDecimal>() {
+                Ok(v) => JsonValue::from(v.to_string()),
+                _ => JsonValue::Null,
             }
         }
         _ => {

@@ -47,6 +47,10 @@
           "width": 660
         }
       }
+    },
+    "resources": {
+      "../resources/welcome/": "resources/welcome/",
+      "../resources/images/": "resources/images/"
     }
   },
   "identifier": "sh.atuin.app",
@@ -58,6 +62,9 @@
       "desktop": {
         "schemes": ["atuin"]
       }
+    },
+    "fs": {
+      "requireLiteralLeadingDot": false
     },
     "updater": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDlGNUQ5Rjc5NDhCRkY2RjkKUldUNTlyOUllWjlkbjNVMlVoYWJJaGxOZ3FqdWkycE1TSzhTVERYWUdIekFYQ0FtUGc2UTh2a1kK",

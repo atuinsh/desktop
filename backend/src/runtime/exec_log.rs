@@ -20,6 +20,7 @@ pub struct ExecLogBlock {
     pub uuid: Uuid,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ExecLogEntry {
     pub id: u64,

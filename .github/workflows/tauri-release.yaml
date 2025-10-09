@@ -1,7 +1,15 @@
 name: publish
 
 on:
-  workflow_dispatch:
+  push:
+    tags:
+      - "v*.*.*"
+      - "!v0.0.101"
+      - "!v0.0.102"
+      - "!v0.0.103"
+      - "!v0.0.104"
+      - "!v0.0.105"
+      - "!v0.0.106"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -12,8 +20,33 @@ env:
   NODE_ENV: production
 
 jobs:
-  draft:
+  generate-changelog:
+    name: Generate changelog
     runs-on: depot-ubuntu-24.04
+    outputs:
+      release_body: ${{ steps.git-cliff.outputs.content }}
+
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: generate changelog
+        id: git-cliff
+        uses: orhun/git-cliff-action@v4
+        with:
+          version: latest
+          args: -vv --latest --no-exec --github-repo ${{ github.repository }} --tag-pattern "v.*" --github-token ${{ github.token }}
+
+  draft:
+    name: Draft releases
+    runs-on: depot-ubuntu-24.04
+    needs: generate-changelog
+    permissions:
+      contents: write
+    outputs:
+      upload_url: ${{ steps.create_gh_release.outputs.upload_url }}
 
     steps:
       - uses: actions/checkout@v4
@@ -24,7 +57,15 @@ jobs:
           command: release draft ${{ env.CN_APP_SLUG }} --framework tauri
           api-key: ${{ secrets.CN_API_KEY }}
 
+      - name: create draft github release
+        uses: softprops/action-gh-release@v2
+        id: create_gh_release
+        with:
+          draft: true
+          body: ${{ needs.generate-changelog.outputs.release_body }}
+
   build:
+    name: Build releases
     needs: draft
 
     permissions:
@@ -34,9 +75,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - platform: "macos-14" # for Arm based macs (M1 and above).
+          - platform: "macos-latest" # for Arm based macs (M1 and above).
             args: "--target aarch64-apple-darwin"
-          - platform: "macos-13" # for Intel based macs.
+          - platform: "macos-15-intel"
             args: "--target x86_64-apple-darwin"
           - platform: "depot-ubuntu-22.04-4"
             args: ""
@@ -69,7 +110,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable # Set this to dtolnay/rust-toolchain@nightly
         with:
           # Those targets are only used on macos runners so it's in an `if` to slightly speed up windows and linux builds.
-          targets: ${{ (matrix.platform == 'macos-14' || matrix.platform == 'macos-13') && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+          targets: ${{ (matrix.platform == 'macos-latest' || matrix.platform == 'macos-15-intel') && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
 
       - name: Rust cache
         uses: swatinem/rust-cache@v2
@@ -91,12 +132,13 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          NODE_OPTIONS: "--max-old-space-size=4096"
+          NODE_OPTIONS: "--max-old-space-size=5120"
         with:
           args: ${{ matrix.args }}
 
-      - name: Rename Linux files
-        if: matrix.platform == 'depot-ubuntu-22.04-4'
+      - name: Rename platform-specific files and upload to GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           # Get the artifact paths from tauri-action output
           echo "Artifact paths: ${{ steps.tauri-action.outputs.artifactPaths }}"
@@ -105,7 +147,15 @@ jobs:
           paths_str=$(echo "${{ steps.tauri-action.outputs.artifactPaths }}" | sed 's/^\[//;s/\]$//')
           IFS=',' read -ra paths <<< "$paths_str"
 
-          # Rename .deb and .rpm files to remove spaces
+          # Determine platform suffix based on matrix args
+          platform_suffix=""
+          if [[ "${{ matrix.args }}" == *"aarch64-apple-darwin"* ]]; then
+            platform_suffix="-aarch64"
+          elif [[ "${{ matrix.args }}" == *"x86_64-apple-darwin"* ]]; then
+            platform_suffix="-x86_64"
+          fi
+
+          # Rename files and upload to GitHub release
           for file in "${paths[@]}"; do
             echo "Checking file: $file"
             if [[ "$file" == *.deb ]] || [[ "$file" == *.rpm ]]; then
@@ -121,13 +171,40 @@ jobs:
                 new_path="$dir/$new_filename"
                 echo "Renaming: $file -> $new_path"
                 mv "$file" "$new_path"
+                gh release upload "${{ github.ref_name }}" "$new_path" --clobber
               else
                 echo "No rename needed for: $filename"
+                gh release upload "${{ github.ref_name }}" "$file" --clobber
               fi
+            elif [[ "$file" == *.app.tar.gz ]] || [[ "$file" == *.app.tar.gz.sig ]]; then
+              # Rename macOS files to include platform suffix
+              if [[ -n "$platform_suffix" ]]; then
+                dir=$(dirname "$file")
+                filename=$(basename "$file")
+                
+                echo "Processing macOS file: $filename"
+                if [[ "$file" == *.app.tar.gz.sig ]]; then
+                  new_filename=$(echo "$filename" | sed "s/\.app\.tar\.gz\.sig$/${platform_suffix}.app.tar.gz.sig/")
+                elif [[ "$file" == *.app.tar.gz ]]; then
+                  new_filename=$(echo "$filename" | sed "s/\.app\.tar\.gz$/${platform_suffix}.app.tar.gz/")
+                fi
+                
+                new_path="$dir/$new_filename"
+                echo "Renaming: $file -> $new_path"
+                mv "$file" "$new_path"
+                gh release upload "${{ github.ref_name }}" "$new_path" --clobber
+              else
+                gh release upload "${{ github.ref_name }}" "$file" --clobber
+              fi
+            elif [[ "$file" == *.app ]]; then
+              # skip this file
+              echo "Skipping raw .app bundle: $file"
+            else
+              gh release upload "${{ github.ref_name }}" "$file" --clobber
             fi
           done
 
-      - name: upload assets
+      - name: upload assets to cloudnebula
         uses: crabnebula-dev/cloud-release@v0.1.0
         with:
           command: release upload ${{ env.CN_APP_SLUG }} --framework tauri

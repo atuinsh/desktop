@@ -1,0 +1,95 @@
+site_name: Atuin Desktop Docs
+site_url: https://man.atuin.sh
+
+# Repository information
+repo_name: atuinsh/desktop
+repo_url: https://github.com/atuinsh/desktop
+edit_uri: edit/main/docs/docs/
+
+extra:
+  homepage: https://atuin.sh
+extra_css:
+  - style.css
+
+nav:
+  - "Home": index.md
+  - "Getting Started": getting-started.md
+  - "Workspaces": workspaces.md
+  - "Templating": templating.md
+  - "Secrets": secrets.md
+  - "Blocks":
+      - blocks/index.md
+      - "Executable":
+          - blocks/executable/README.md
+          - "Directory": blocks/executable/directory.md
+          - "Dropdown": blocks/executable/dropdown.md
+          - "Environment": blocks/executable/env.md
+          - "Kubernetes": blocks/executable/kubernetes.md
+          - "Script": blocks/executable/script.md
+          - "Terminal": blocks/executable/terminal.md
+          - "Variable": blocks/executable/variable.md
+      - "Databases":
+          - blocks/databases/index.md
+          - "ClickHouse": blocks/databases/clickhouse.md
+          - "MySQL": blocks/databases/mysql.md
+          - "PostgreSQL": blocks/databases/postgresql.md
+          - "SQLite": blocks/databases/sqlite.md
+      - "Monitoring":
+          - blocks/monitoring/README.md
+          - "Prometheus": blocks/monitoring/prometheus.md
+      - "Network":
+          - blocks/network/README.md
+          - "HTTP": blocks/network/http.md
+          - "SSH": blocks/network/ssh.md
+  - "Atuin Hub":
+      - hub/getting-started.md
+      - "Sharing Runbooks": hub/sharing-runbooks.md
+      - "Collaborative Editing": hub/collaborative-editing.md
+
+theme:
+  logo: ./images/icon.svg
+  name: material
+  features:
+    - navigation.sections
+    - search.highlight
+    - content.action.edit
+    - content.action.view
+  palette:
+    - scheme: default
+      primary: blue-grey
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+
+plugins:
+  - search
+  - social
+  - glightbox
+  - git-revision-date-localized:
+      enable_creation_date: true
+      type: timeago
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - pymdownx.blocks.caption
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg

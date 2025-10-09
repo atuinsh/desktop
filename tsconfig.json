@@ -28,7 +28,7 @@
       "@/*": ["./src/*"],
       "@rust/*": ["./src/rs-bindings/*"]
     },
-    "types": ["vitest/importMeta"]
+    "types": ["vitest/importMeta", "./src/global.d.ts"]
   },
   "include": ["src"],
   "references": [{ "path": "./tsconfig.node.json" }]

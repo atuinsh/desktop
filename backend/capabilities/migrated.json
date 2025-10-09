@@ -57,9 +57,28 @@
     "updater:default",
     "process:default",
     "process:allow-restart",
+    "deep-link:default",
     "fs:default",
     "fs:allow-app-write",
-    "deep-link:default"
+    "fs:read-all",
+    "fs:write-all",
+    "fs:allow-rename",
+    "fs:allow-mkdir",
+    "fs:allow-exists",
+    "fs:allow-watch",
+    "fs:read-dirs",
+    {
+      "identifier": "fs:scope",
+      "allow": ["**/*"]
+    },
+    {
+      "identifier": "opener:allow-open-path",
+      "allow": [
+        {
+          "path": "**/*"
+        }
+      ]
+    }
   ],
   "platforms": ["linux", "macOS", "windows"]
 }

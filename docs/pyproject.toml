@@ -1,0 +1,11 @@
+[project]
+name = "docs"
+version = "0.1.0"
+description = "Documentation site"
+requires-python = ">=3.12"
+dependencies = [
+    "mkdocs-material",
+    "mkdocs-material[imaging]",
+    "mkdocs-glightbox",
+    "mkdocs-git-revision-date-localized-plugin",
+]
