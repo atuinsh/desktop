@@ -95,7 +95,7 @@
     "framer-motion": "^11.18.2",
     "highlight.js": "^11.11.1",
     "jsondiffpatch": "^0.6.0",
-    "lib0": "^0.2.99",
+    "lib0": "^0.2.114",
     "lodash": "^4.17.21",
     "lodash.debounce": "^4.0.8",
     "lucide-react": "^0.544.0",
