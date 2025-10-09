@@ -402,9 +402,9 @@ pub fn template_with_context(
                 .map(|b| serialized_block_to_state(b.clone()))
                 .collect(),
             named,
-            previous: serialized_block_to_state(
+            previous: Some(serialized_block_to_state(
                 previous.unwrap_or_else(|| serde_json::Value::Null),
-            ),
+            )),
         })
     } else {
         None
@@ -488,7 +488,6 @@ mod tests {
         .unwrap();
 
         assert_eq!(result, "Variable: test_value");
-
     }
 
     #[test]
