@@ -75,7 +75,7 @@
     "@uiw/codemirror-extensions-langs": "^4.23.10",
     "@uiw/codemirror-themes-all": "^4.23.10",
     "@uiw/react-codemirror": "^4.23.10",
-    "@uiw/react-json-view": "2.0.0-alpha.27",
+    "@uiw/react-json-view": "2.0.0-alpha.39",
     "@xterm/addon-canvas": "^0.7.0",
     "@xterm/addon-fit": "^0.10.0",
     "@xterm/addon-webgl": "^0.18.0",
