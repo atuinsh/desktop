@@ -1,6 +1,7 @@
 use super::handler::{BlockHandler, BlockOutput, ExecutionContext, ExecutionHandle};
 use super::handlers::{
-    ClickhouseHandler, MySQLHandler, PostgresHandler, PrometheusHandler, SQLiteHandler, ScriptHandler, TerminalHandler,
+    ClickhouseHandler, MySQLHandler, PostgresHandler, PrometheusHandler, SQLiteHandler,
+    ScriptHandler, TerminalHandler,
 };
 use super::Block;
 use crate::runtime::workflow::event::WorkflowEvent;

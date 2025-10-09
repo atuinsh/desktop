@@ -166,19 +166,19 @@ impl PrometheusHandler {
     /// Calculate step size for Prometheus range queries based on time period
     fn calculate_step_size(period: &str) -> u32 {
         match period {
-            "5m" => 10,    // 5 minutes -> 10 second step
-            "15m" => 30,   // 15 minutes -> 30 second step
-            "30m" => 60,   // 30 minutes -> 1 minute step
-            "1h" => 60,    // 1 hour -> 1 minute step
-            "3h" => 300,   // 3 hours -> 5 minute step
-            "6h" => 600,   // 6 hours -> 10 minute step
-            "24h" => 1800, // 24 hours -> 30 minute step
-            "2d" => 3600,  // 2 days -> 1 hour step
-            "7d" => 3600,  // 7 days -> 1 hour step
-            "30d" => 14400, // 30 days -> 4 hour step
-            "90d" => 86400, // 90 days -> 1 day step
+            "5m" => 10,      // 5 minutes -> 10 second step
+            "15m" => 30,     // 15 minutes -> 30 second step
+            "30m" => 60,     // 30 minutes -> 1 minute step
+            "1h" => 60,      // 1 hour -> 1 minute step
+            "3h" => 300,     // 3 hours -> 5 minute step
+            "6h" => 600,     // 6 hours -> 10 minute step
+            "24h" => 1800,   // 24 hours -> 30 minute step
+            "2d" => 3600,    // 2 days -> 1 hour step
+            "7d" => 3600,    // 7 days -> 1 hour step
+            "30d" => 14400,  // 30 days -> 4 hour step
+            "90d" => 86400,  // 90 days -> 1 day step
             "180d" => 86400, // 180 days -> 1 day step
-            _ => 60,       // Default to 1 minute step
+            _ => 60,         // Default to 1 minute step
         }
     }
 
@@ -212,7 +212,7 @@ impl PrometheusHandler {
         output_channel: &Option<Channel<BlockOutput>>,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let url = format!("{}/api/v1/query_range", endpoint.trim_end_matches('/'));
-        
+
         let params = [
             ("query", query),
             ("start", &start.to_string()),
@@ -267,7 +267,7 @@ impl PrometheusHandler {
 
         // Convert Prometheus result to ECharts-compatible format (similar to frontend logic)
         let mut series = Vec::new();
-        
+
         if let Some(result_array) = result.as_array() {
             for series_data in result_array {
                 if let (Some(metric), Some(values)) = (
@@ -294,7 +294,10 @@ impl PrometheusHandler {
                         if let Some(pair) = value_pair.as_array() {
                             if pair.len() == 2 {
                                 let timestamp = pair[0].as_f64().unwrap_or(0.0) * 1000.0; // Convert to milliseconds
-                                let value = pair[1].as_str().and_then(|s| s.parse::<f64>().ok()).unwrap_or(0.0);
+                                let value = pair[1]
+                                    .as_str()
+                                    .and_then(|s| s.parse::<f64>().ok())
+                                    .unwrap_or(0.0);
                                 data_points.push(json!([timestamp, value]));
                             }
                         }
@@ -359,7 +362,10 @@ impl PrometheusHandler {
         let query = Self::template_prometheus_query(&prometheus.query, &context, prometheus.id)
             .await
             .unwrap_or_else(|e| {
-                eprintln!("Template error in Prometheus query {}: {}", prometheus.id, e);
+                eprintln!(
+                    "Template error in Prometheus query {}: {}",
+                    prometheus.id, e
+                );
                 prometheus.query.clone() // Fallback to original query
             });
 
@@ -418,7 +424,7 @@ impl PrometheusHandler {
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_secs();
-        
+
         let period_seconds = Self::parse_period_to_seconds(&prometheus.period);
         let start = now - period_seconds as u64;
         let end = now;
@@ -641,10 +647,8 @@ mod tests {
             .variables
             .insert("job".to_string(), "prometheus".to_string());
 
-        let prometheus = create_test_prometheus(
-            "up{job=\"{{ var.job }}\"}",
-            "http://localhost:9090"
-        );
+        let prometheus =
+            create_test_prometheus("up{job=\"{{ var.job }}\"}", "http://localhost:9090");
 
         let handler = PrometheusHandler;
         let handle = handler
@@ -718,7 +722,10 @@ mod tests {
         let prometheus_id = prometheus.id;
 
         let handler = PrometheusHandler;
-        let handle = handler.execute(prometheus, context, tx, None).await.unwrap();
+        let handle = handler
+            .execute(prometheus, context, tx, None)
+            .await
+            .unwrap();
 
         // Wait for execution to complete
         loop {
@@ -750,16 +757,27 @@ mod tests {
 
         // Check BlockFinished or BlockFailed event
         match &events[1] {
-            GCEvent::BlockFinished { block_id, runbook_id: rb_id, success: _ } => {
+            GCEvent::BlockFinished {
+                block_id,
+                runbook_id: rb_id,
+                success: _,
+            } => {
                 assert_eq!(*block_id, prometheus_id);
                 assert_eq!(*rb_id, runbook_id);
                 // Could be success or failure depending on which error occurs first
             }
-            GCEvent::BlockFailed { block_id, runbook_id: rb_id, error: _ } => {
+            GCEvent::BlockFailed {
+                block_id,
+                runbook_id: rb_id,
+                error: _,
+            } => {
                 assert_eq!(*block_id, prometheus_id);
                 assert_eq!(*rb_id, runbook_id);
             }
-            _ => panic!("Expected BlockFinished or BlockFailed event, got: {:?}", events[1]),
+            _ => panic!(
+                "Expected BlockFinished or BlockFailed event, got: {:?}",
+                events[1]
+            ),
         }
     }
 }

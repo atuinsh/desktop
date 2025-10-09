@@ -393,7 +393,10 @@ mod tests {
         .unwrap();
 
         // Should have the variable set
-        assert_eq!(context.variables.get("MY_VAR"), Some(&"my_value".to_string()));
+        assert_eq!(
+            context.variables.get("MY_VAR"),
+            Some(&"my_value".to_string())
+        );
     }
 
     #[tokio::test]
@@ -448,7 +451,9 @@ mod tests {
         // Should fail due to invalid variable name
         assert!(result.is_err());
         if let Err(e) = result {
-            assert!(e.to_string().contains("can only contain letters, numbers, and underscores"));
+            assert!(e
+                .to_string()
+                .contains("can only contain letters, numbers, and underscores"));
         }
     }
 }

@@ -423,4 +423,3 @@ mod tests {
         assert_eq!(context.document, original_document);
     }
 }
-
