@@ -27,7 +27,12 @@ export function PromLineChart({ data }: PromLineChartProps) {
       boundaryGap: [0, "30%"],
     },
     series: data,
-    replaceMerge: ["series", "yAxis", "xAxis", "grid"],
+
+    animation: false,
+    animationDurationUpdate: 0,
+    animationEasing: "linear",
+    animationEasingUpdate: "linear",
+    animationDuration: 0,
   });
 
   return <div className="flex h-full w-full" ref={ref}></div>;

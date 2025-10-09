@@ -5,7 +5,7 @@ import "./index.css";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { invoke, Channel } from "@tauri-apps/api/core";
+import { invoke } from "@tauri-apps/api/core";
 import { platform } from "@tauri-apps/plugin-os";
 
 import { useBlockNoteEditor } from "@blocknote/react";
@@ -13,25 +13,32 @@ import { useBlockNoteEditor } from "@blocknote/react";
 import "@xterm/xterm/css/xterm.css";
 import { AtuinState, useStore } from "@/state/store.ts";
 import { addToast, Button, Chip, Spinner, Tooltip } from "@heroui/react";
-import { formatDuration } from "@/lib/utils.ts";
+import { formatDuration, cn } from "@/lib/utils.ts";
+import { usePtyStore } from "@/state/ptyStore.ts";
 import track_event from "@/tracking.ts";
-import { Clock, Eye, EyeOff, Maximize2, Minimize2 } from "lucide-react";
+import { Clock, Eye, EyeOff, Maximize2, Minimize2, ArrowDownToLineIcon, ArrowUpToLineIcon } from "lucide-react";
 import EditableHeading from "@/components/EditableHeading/index.tsx";
+import { templateString } from "@/state/templates.ts";
 import CodeEditor, { TabAutoComplete } from "../common/CodeEditor/CodeEditor.tsx";
 import { Command } from "@codemirror/view";
 import { TerminalBlock } from "./schema.ts";
+import { logExecution } from "@/lib/exec_log.ts";
 import { DependencySpec } from "@/lib/workflow/dependency.ts";
+import { convertBlocknoteToAtuin } from "@/lib/workflow/blocks/convert.ts";
+import BlockBus from "@/lib/workflow/block_bus.ts";
 import {
   useBlockBusRunSubscription,
   useBlockBusStopSubscription,
 } from "@/lib/hooks/useBlockBus.ts";
+import { uuidv7 } from "uuidv7";
 import { useBlockDeleted, useBlockInserted } from "@/lib/buses/editor.ts";
-import TerminalComponent from "./components/terminal.tsx";
-import { findFirstParentOfType } from "../exec.ts";
+import { Settings } from "@/state/settings";
+import Terminal from "./components/terminal.tsx";
+import { findAllParentsOfType, findFirstParentOfType, getCurrentDirectory } from "../exec.ts";
 import Block from "../common/Block.tsx";
+import { default as BlockType } from "@/lib/workflow/blocks/block.ts";
 import PlayButton from "../common/PlayButton.tsx";
-import { BlockOutput } from "@/rs-bindings/BlockOutput";
-import { useTerminalEvents } from "./useTerminalEvents";
+import { useCurrentRunbookId } from "@/context/runbook_id_context.ts";
 
 interface RunBlockProps {
   onChange: (val: string) => void;
@@ -44,6 +51,9 @@ interface RunBlockProps {
   setOutputVisible: (visible: boolean) => void;
   setDependency: (dependency: DependencySpec) => void;
   onCodeMirrorFocus?: () => void;
+  
+  collapseCode: boolean;
+  setCollapseCode: (collapse: boolean) => void;
 
   terminal: TerminalBlock;
 }
@@ -58,22 +68,30 @@ export const RunBlock = ({
   terminal,
   setDependency,
   onCodeMirrorFocus,
+  collapseCode,
+  setCollapseCode,
 }: RunBlockProps) => {
   let editor = useBlockNoteEditor();
   const colorMode = useStore((state) => state.functionalColorMode);
+  const cleanupPtyTerm = useStore((store: AtuinState) => store.cleanupPtyTerm);
+  const terminals = useStore((store: AtuinState) => store.terminals);
 
-  // TerminalData is the single source of truth
-  const [terminalData, setTerminalData] = useState<any | null>(null);
+  // isRunning = a terminal is running
+  const [isRunning, setIsRunning] = useState<boolean>(false);
+  // isLoading - we're waiting for a pty to open. usually network related
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+
+  // commandRunning = an individual command is running
+  const [commandRunning, setCommandRunning] = useState<boolean>(false);
+  const [exitCode, setExitCode] = useState<number | null>(null);
+  const [commandDuration, setCommandDuration] = useState<number | null>(null);
+  const [commandStart, setCommandStart] = useState<number | null>(null);
+  const [parentBlock, setParentBlock] = useState<BlockType | null>(null);
   const elementRef = useRef<HTMLDivElement>(null);
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
 
-  // Use custom hook for event handling and state management
-  const { isLoading, setIsLoading, isRunning, exitCode, commandDuration } = useTerminalEvents(terminalData, terminal);
-  
-  // Don't show spinner during terminal session, only during loading
-  const commandRunning = false;
-
-
+  const unsubscribeNameChanged = useRef<(() => void) | null>(null);
+  const unsubscribeDependencyChanged = useRef<(() => void) | null>(null);
 
   const lightModeEditorTheme = useStore((state) => state.lightModeEditorTheme);
   const darkModeEditorTheme = useStore((state) => state.darkModeEditorTheme);
@@ -81,22 +99,12 @@ export const RunBlock = ({
     return colorMode === "dark" ? darkModeEditorTheme : lightModeEditorTheme;
   }, [colorMode, lightModeEditorTheme, darkModeEditorTheme]);
 
-  const [currentRunbookId] = useStore((store: AtuinState) => [store.currentRunbookId]);
 
+
+  const currentRunbookId = useCurrentRunbookId();
+
+  const pty = usePtyStore((store) => store.ptyForBlock(terminal.id));
   const [sshParent, setSshParent] = useState<any | null>(null);
-
-  // Connect to existing TerminalData
-  useEffect(() => {
-    const { terminals } = useStore.getState();
-    const existingTerminal = terminals[terminal.id];
-    
-    if (existingTerminal) {
-      console.log("Found existing terminal data for", terminal.id);
-      setTerminalData(existingTerminal);
-    }
-  }, [terminal.id]);
-
-  // Event handling is now managed by useTerminalEvents hook
 
   const updateSshParent = useCallback(() => {
     let host = findFirstParentOfType(editor, terminal.id, ["ssh-connect", "host-select"]);
@@ -114,96 +122,174 @@ export const RunBlock = ({
   useBlockDeleted("ssh-connect", updateSshParent);
   useBlockDeleted("host-select", updateSshParent);
 
-  // Event cleanup is handled by useTerminalEvents hook
-
   const sshBorderClass = useMemo(() => {
     if (!sshParent) return "";
 
     return "border-2 border-blue-400 shadow-[0_0_10px_rgba(59,130,246,0.4)] rounded-md transition-all duration-300";
   }, [sshParent]);
 
+  useEffect(() => {
+    setIsRunning(pty != null);
+
+    if (pty) {
+      setCommandStart(Date.now() * 1000000);
+
+      if (elementRef.current) {
+        elementRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    }
+
+    if (!pty && commandStart) {
+      logExecution(terminal, terminal.typeName, commandStart, Date.now() * 1000000, "");
+      BlockBus.get().blockFinished(terminal);
+      setCommandStart(null);
+    }
+  }, [pty]);
+
   const handleStop = useCallback(async () => {
-    console.log("handleStop", terminalData?.executionId);
-    if (!terminalData?.executionId) return;
+    console.log("handleStop", pty);
+    if (pty === null) return;
+
+    await invoke("pty_kill", { pid: pty.pid, runbook: currentRunbookId });
+
+    terminals[pty.pid].dispose();
+    cleanupPtyTerm(pty.pid);
+
+    if (onStop) onStop(pty.pid);
+
+    setCommandRunning(false);
+    setExitCode(null);
+    setCommandDuration(null);
+  }, [pty, currentRunbookId, terminal.id, terminals, cleanupPtyTerm, onStop]);
+
+  const openPty = async (): Promise<string> => {
+    let cwd = await getCurrentDirectory(editor, terminal.id, currentRunbookId);
+
+    let vars = findAllParentsOfType(editor, terminal.id, "env");
+    let env: { [key: string]: string } = {};
+
+    for (var i = 0; i < vars.length; i++) {
+      let name = await templateString(
+        terminal.id,
+        vars[i].props.name,
+        editor.document,
+        currentRunbookId,
+      );
+      let value = await templateString(
+        terminal.id,
+        vars[i].props.value,
+        editor.document,
+        currentRunbookId,
+      );
+      env[name] = value;
+    }
+
+    // Check for SSH block or Host block, prioritizing SSH if both exist
+    let connectionBlock = findFirstParentOfType(editor, terminal.id, [
+      "ssh-connect",
+      "host-select",
+    ]);
+
+    // If SSH block found, use SSH connection
+    if (connectionBlock && connectionBlock.type === "ssh-connect") {
+      let pty = uuidv7();
+      let user: string | undefined;
+      let host: string;
+
+      // Handle both "user@host" and just "host" formats
+      if (connectionBlock.props.userHost.includes("@")) {
+        [user, host] = connectionBlock.props.userHost.split("@");
+      } else {
+        // No username specified, let SSH config determine it
+        user = undefined;
+        host = connectionBlock.props.userHost;
+      }
+
+      try {
+        await invoke<void>("ssh_open_pty", {
+          host: host,
+          username: user,
+          channel: pty,
+          runbook: currentRunbookId,
+          block: terminal.id,
+          width: 80,
+          height: 24,
+        });
+      } catch (error) {
+        console.error(error);
+        setIsLoading(false);
+        addToast({
+          title: `ssh ${connectionBlock.props.userHost}`,
+          description: `${error}`,
+          color: "danger",
+        });
+      }
+      return pty;
+    }
+
+    // Default to local execution if Host block found or no connection block found
+    // Get the custom shell from settings if available
+    const customShell = await Settings.terminalShell();
 
     try {
-      // Cancel the block execution
-      await invoke("cancel_block_execution", { 
-        executionId: terminalData.executionId 
+      let pty = await invoke<string>("pty_open", {
+        cwd,
+        env,
+        runbook: currentRunbookId,
+        block: terminal.id,
+        shell: customShell,
       });
+      return pty;
     } catch (error) {
-      console.error("Error stopping terminal:", error);
+      console.error(error);
+      setIsLoading(false);
+      addToast({
+        title: `Terminal error`,
+        description: `${error}`,
+        color: "danger",
+      });
+      throw error;
     }
-    
-    if (onStop) onStop(terminal.id);
-
-    // TerminalData will handle state updates via events
-  }, [terminalData, terminal.id, currentRunbookId, onStop]);
+  };
 
   const handlePlay = useCallback(
     async (force: boolean = false) => {
       if (isRunning && !force) return;
       if (!terminal.code) return;
 
-      setIsLoading(true);
-      
-      try {
-        // Create channel for BlockOutput
-        const outputChannel = new Channel<BlockOutput>();
-        console.log("Created channel with ID:", outputChannel.id);
-        
-        // Create or get TerminalData and set up BlockOutput handling
-        const { newPtyTerm } = useStore.getState();
-        const td = await newPtyTerm(terminal.id, outputChannel);
-        
-        // Set up event listeners immediately on the TerminalData object
-        const handleExecutionStarted = () => {
-          console.log("Terminal execution started (immediate)");
-          setIsLoading(false);
-        };
-        
-        td.on('execution_started', handleExecutionStarted);
-        
-        // Set TerminalData for the custom hook to manage other events
-        setTerminalData(td);
-        
-        const executionIdResult = await invoke<string>('execute_block', {
-          blockId: terminal.id,
-          runbookId: currentRunbookId,
-          editorDocument: editor.document,
-          outputChannel: outputChannel
-        });
-        
-        td.setExecutionId(executionIdResult);
+      await invoke("workflow_block_start_event", {
+        workflow: currentRunbookId,
+        block: terminal.id,
+      });
 
-        if (onRun) onRun(terminal.id);
-        
-      } catch (error) {
-        console.error("Error starting terminal:", error);
+      setIsLoading(true);
+      try {
+        let p = await openPty();
         setIsLoading(false);
-        addToast({
-          title: "Terminal error",
-          description: `${error}`,
-          color: "danger",
-        });
+
+        if (onRun) onRun(p);
+      } catch (error) {
+        // Error is already handled in openPty
+        setIsLoading(false);
       }
 
       track_event("runbooks.block.execute", { type: "terminal" });
     },
-    [isRunning, terminal.code, terminal.id, currentRunbookId, onRun, editor.document]
+    [isRunning, terminal.code, terminal.id, currentRunbookId, onRun, openPty],
   );
 
   const handleRefresh = async () => {
     if (!isRunning) return;
+    if (pty === null) return;
+
+    let terminalData = terminals[pty.pid];
 
     let isWindows = platform() == "windows";
     let cmdEnd = isWindows ? "\r\n" : "\n";
     let val = !terminal.code.endsWith("\n") ? terminal.code + cmdEnd : terminal.code;
-    
-    await invoke('pty_write', {
-      pid: terminal.id,
-      data: val
-    });
+
+    terminalData.terminal.clear();
+    terminalData.write(terminal.id, val, editor.document, currentRunbookId);
   };
 
   const handleCmdEnter: Command = useCallback(() => {
@@ -214,7 +300,62 @@ export const RunBlock = ({
     }
 
     return true;
-  }, [isRunning, handlePlay, handleStop]);
+  }, [isRunning]);
+
+  const refreshParentBlock = () => {
+    if (!terminal.dependency.parent) {
+      setParentBlock(null);
+      return;
+    }
+
+    if (parentBlock && parentBlock.id === terminal.dependency.parent) {
+      return;
+    }
+
+    let bnb = editor.document.find((b: any) => b.id === terminal.dependency.parent);
+    if (bnb) {
+      let block = convertBlocknoteToAtuin(bnb);
+      setParentBlock(block);
+    }
+  };
+
+  useEffect(() => {
+    if (!terminal.dependency.parent) {
+      setParentBlock(null);
+      return;
+    }
+
+    if (parentBlock && parentBlock.id === terminal.dependency.parent) {
+      return;
+    }
+
+    if (unsubscribeDependencyChanged.current) {
+      unsubscribeDependencyChanged.current();
+    }
+    if (unsubscribeNameChanged.current) {
+      unsubscribeNameChanged.current();
+    }
+
+    unsubscribeDependencyChanged.current = BlockBus.get().subscribeDependencyChanged(
+      terminal.dependency.parent,
+      refreshParentBlock,
+    );
+    unsubscribeNameChanged.current = BlockBus.get().subscribeNameChanged(
+      terminal.dependency.parent,
+      refreshParentBlock,
+    );
+
+    refreshParentBlock();
+
+    return () => {
+      if (unsubscribeDependencyChanged.current) {
+        unsubscribeDependencyChanged.current();
+      }
+      if (unsubscribeNameChanged.current) {
+        unsubscribeNameChanged.current();
+      }
+    };
+  }, [terminal.dependency.parent]);
 
   useBlockBusRunSubscription(terminal.id, handlePlay);
   useBlockBusStopSubscription(terminal.id, handleStop);
@@ -291,6 +432,14 @@ export const RunBlock = ({
                   {isFullscreen ? <Minimize2 size={20} /> : <Maximize2 size={20} />}
                 </button>
               </Tooltip>
+              <Tooltip content={collapseCode ? "Expand code" : "Collapse code"}>
+                <button
+                  onClick={() => setCollapseCode(!collapseCode)}
+                  className="p-2 hover:bg-default-100 rounded-md"
+                >
+                  {collapseCode ? <ArrowDownToLineIcon size={20} /> : <ArrowUpToLineIcon size={20} />}
+                </button>
+              </Tooltip>
             </div>
           </div>
 
@@ -304,46 +453,53 @@ export const RunBlock = ({
               onRefresh={handleRefresh}
               alwaysStop
             />
-            <CodeEditor
-              id={terminal.id}
-              code={terminal.code}
-              onChange={onChange}
-              isEditable={isEditable}
-              language="bash"
-              theme={theme}
-              onFocus={onCodeMirrorFocus}
-              keyMap={[
-                TabAutoComplete,
-                {
-                  key: "Mod-Enter",
-                  run: handleCmdEnter,
-                },
-              ]}
-            />
+            <div className={cn("min-w-0 flex-1 overflow-x-auto transition-all duration-300 ease-in-out relative", {
+              "max-h-10 overflow-hidden": collapseCode,
+            })}>
+              <CodeEditor
+                id={terminal.id}
+                code={terminal.code}
+                onChange={onChange}
+                isEditable={isEditable}
+                language="bash"
+                theme={theme}
+                onFocus={onCodeMirrorFocus}
+                keyMap={[
+                  TabAutoComplete,
+                  {
+                    key: "Mod-Enter",
+                    run: handleCmdEnter,
+                  },
+                ]}
+              />
+              {collapseCode && (
+                <div className="absolute bottom-0 left-0 right-0 h-6 bg-gradient-to-t from-white dark:from-gray-900 to-transparent pointer-events-none" />
+              )}
+            </div>
           </div>
         </>
       }
     >
       {terminal.outputVisible && (
         <>
-          {!isFullscreen && isRunning && (
-            <TerminalComponent
-              block_id={terminal.id}
-              pty={terminal.id}
-              script={terminal.code}
-              runScript={false}
-              setCommandRunning={() => {}} // No-op: state managed by TerminalData
-              setExitCode={() => {}} // No-op: state managed by TerminalData
-              setCommandDuration={() => {}} // No-op: state managed by TerminalData
-              editor={editor}
-              isFullscreen={false}
-            />
+          {!isFullscreen && pty && isRunning && (
+            <div className="overflow-hidden transition-all duration-300 ease-in-out min-w-0 max-h-[400px]">
+              <Terminal
+                block_id={terminal.id}
+                pty={pty.pid}
+                script={terminal.code}
+                setCommandRunning={setCommandRunning}
+                setExitCode={setExitCode}
+                setCommandDuration={setCommandDuration}
+                editor={editor}
+              />
+            </div>
           )}
         </>
       )}
 
       {/* Fullscreen Terminal Modal */}
-      {isFullscreen && isRunning && (
+      {isFullscreen && pty && (
         <div
           className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md z-[9999]"
           onClick={(e) => {
@@ -383,14 +539,13 @@ export const RunBlock = ({
 
             {/* Fullscreen Terminal Content */}
             <div className="bg-black min-h-0 flex-1 overflow-hidden">
-              <TerminalComponent
+              <Terminal
                 block_id={terminal.id}
-                pty={terminal.id}
+                pty={pty.pid}
                 script={terminal.code}
-                runScript={false}
-                setCommandRunning={() => {}} // No-op: state managed by TerminalData
-                setExitCode={() => {}} // No-op: state managed by TerminalData
-                setCommandDuration={() => {}} // No-op: state managed by TerminalData
+                setCommandRunning={setCommandRunning}
+                setExitCode={setExitCode}
+                setCommandDuration={setCommandDuration}
                 editor={editor}
                 isFullscreen={true}
               />

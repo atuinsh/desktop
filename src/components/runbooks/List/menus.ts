@@ -1,13 +1,15 @@
+/** @ts-ignore */
+
+import { getGlobalOptions } from "@/lib/global_options";
 import { MenuBuilder, ItemBuilder, AtuinMenuItem } from "@/lib/menu_builder";
 import Workspace from "@/state/runbooks/workspace";
 import { ArboristNode, ArboristTree } from "@/state/runbooks/workspace_folders";
-import { MenuOptions } from "@tauri-apps/api/menu";
+import { Menu, MenuOptions } from "@tauri-apps/api/menu";
 
 type Handler = () => void;
 
 type Actions = {
   onNewRunbook: (workspaceId: string, parentFolderId: string | null) => void;
-  onImportRunbook: (workspaceId: string | null, parentFolderId: string | null) => void;
   onNewWorkspace: () => void;
 };
 
@@ -36,10 +38,6 @@ export async function createNewRunbookMenu(
               .text("New Runbook Here")
               .action(() => actions.onNewRunbook(workspaceId, parentFolderId))
               .build(),
-            new ItemBuilder()
-              .text("Import Runbooks Here")
-              .action(() => actions.onImportRunbook(workspaceId, parentFolderId))
-              .build(),
           ];
         }),
       )
@@ -47,13 +45,6 @@ export async function createNewRunbookMenu(
   });
 
   const menu = await new MenuBuilder()
-    .item(
-      new ItemBuilder()
-        .text("Import Runbook")
-        .action(() => actions.onImportRunbook(null, null))
-        .accelerator("CmdOrCtrl+I"),
-    )
-    .separator()
     .items(workspaceItems)
     .separator()
     .item(
@@ -139,6 +130,13 @@ export async function createFolderMenu(
   const menu = await new MenuBuilder()
     .item(
       new ItemBuilder()
+        .text("New Runbook")
+        .action(() => actions.onNewRunbook())
+        .accelerator("Shift+N"),
+    )
+    .separator()
+    .item(
+      new ItemBuilder()
         .text("New Folder")
         .action(() => actions.onNewFolder())
         .accelerator("N"),
@@ -160,13 +158,6 @@ export async function createFolderMenu(
         .text("Move To...")
         .items(moveToItems as AtuinMenuItem[])
         .build(),
-    )
-    .separator()
-    .item(
-      new ItemBuilder()
-        .text("New Runbook")
-        .action(() => actions.onNewRunbook())
-        .accelerator("Shift+N"),
     )
     .build();
 
@@ -242,15 +233,9 @@ export async function createWorkspaceMenu(actions: {
   onNewWorkspace: Handler;
   onRenameWorkspace: Handler;
   onDeleteWorkspace: Handler;
+  onOpenFolder?: Handler;
 }) {
   const menu = await new MenuBuilder()
-    .item(
-      new ItemBuilder()
-        .text("New Folder")
-        .action(() => actions.onNewFolder())
-        .accelerator("N"),
-    )
-    .separator()
     .item(
       new ItemBuilder()
         .text("New Runbook")
@@ -260,20 +245,36 @@ export async function createWorkspaceMenu(actions: {
     .separator()
     .item(
       new ItemBuilder()
+        .text("New Folder")
+        .action(() => actions.onNewFolder())
+        .accelerator("N"),
+    )
+    .separator()
+    .item(
+      new ItemBuilder()
         .text("Rename Workspace")
         .action(() => actions.onRenameWorkspace())
         .accelerator("R"),
     )
-    .separator()
     .item(
       new ItemBuilder()
         .text("Delete Workspace")
         .action(() => actions.onDeleteWorkspace())
         .accelerator("CmdOrCtrl+Delete"),
-    )
-    .build();
+    );
 
-  return menu;
+  if (actions.onOpenFolder) {
+    const opts = getGlobalOptions();
+
+    menu.separator().item(
+      new ItemBuilder()
+        .text(opts.os === "macos" ? "Show in Finder" : "Show in File Explorer")
+        .action(() => actions.onOpenFolder!())
+        .accelerator("CmdOrCtrl+O"),
+    );
+  }
+
+  return menu.build();
 }
 
 function createMoveToMenu(
@@ -354,6 +355,84 @@ export async function createRootMenu(actions: { onNewWorkspace: Handler }) {
         .text("New Workspace")
         .action(() => actions.onNewWorkspace())
         .accelerator("CmdOrCtrl+N"),
+    )
+    .build();
+
+  return menu;
+}
+
+export type TabMenuActions = {
+  type:
+    | "close_tab"
+    | "close_other_tabs"
+    | "close_left_tabs"
+    | "close_right_tabs"
+    | "undo_close_tab"
+    | "close_all_tabs";
+};
+
+export async function createTabMenu(callback: (action: TabMenuActions) => void): Promise<Menu> {
+  const menu = await new MenuBuilder()
+    .item(
+      new ItemBuilder()
+        .text("Close Tab")
+        .action(() => callback({ type: "close_tab" }))
+        .accelerator("CmdOrCtrl+W"),
+    )
+    .separator()
+    .item(
+      new ItemBuilder()
+        .text("Close All Tabs")
+        .action(() => callback({ type: "close_all_tabs" }))
+        .accelerator("CmdOrCtrl+Shift+W"),
+    )
+    .item(
+      new ItemBuilder()
+        .text("Close Other Tabs")
+        .action(() => callback({ type: "close_other_tabs" })),
+    )
+    .item(
+      new ItemBuilder()
+        .text("Close Tabs to the Left")
+        .action(() => callback({ type: "close_left_tabs" })),
+    )
+    .item(
+      new ItemBuilder()
+        .text("Close Tabs to the Right")
+        .action(() => callback({ type: "close_right_tabs" })),
+    )
+    .separator()
+    .item(
+      new ItemBuilder()
+        .text("Undo Close Tab")
+        .action(() => callback({ type: "undo_close_tab" }))
+        .accelerator("CmdOrCtrl+Shift+T"),
+    )
+    .build();
+
+  return menu;
+}
+
+export type TabBarMenuActions = {
+  type: "undo_close_tab" | "close_all_tabs";
+};
+
+export async function createTabBarMenu(
+  callback: (action: TabBarMenuActions) => void,
+): Promise<Menu> {
+  const menu = await new MenuBuilder()
+    .item(
+      new ItemBuilder()
+        .text("Close All Tabs")
+        .action(() => callback({ type: "close_all_tabs" }))
+        .accelerator("CmdOrCtrl+W"),
+    )
+    .separator()
+    .item(
+      new ItemBuilder()
+        .text("Undo Close Tab")
+        .action(() => callback({ type: "undo_close_tab" }))
+        .accelerator("CmdOrCtrl+Shift+T"),
     )
     .build();
 

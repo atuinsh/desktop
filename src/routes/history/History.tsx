@@ -56,7 +56,7 @@ export default function Search() {
 
   return (
     <>
-      <div className="w-full flex-1 flex-col">
+      <div className="h-full w-full flex-1 flex-col overflow-y-hidden">
         <div
           className={clsx({
             "flex shrink-0 items-center gap-x-4 border-b border-t": true,

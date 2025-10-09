@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import Runbook from "@/state/runbooks/runbook";
+import Runbook, { OnlineRunbook } from "@/state/runbooks/runbook";
 import { useQuery } from "@tanstack/react-query";
 import { RemoteRunbook } from "@/state/models";
 import { remoteRunbook } from "./queries/runbooks";
@@ -10,19 +10,20 @@ export default function useRemoteRunbook(
   const query = useQuery(remoteRunbook(runbook));
 
   useEffect(() => {
-    if (!runbook || !query.isFetched) return;
+    if (!runbook || !query.isFetched || !runbook.isOnline()) return;
+    const rb = runbook as OnlineRunbook;
 
     if (query.isSuccess) {
       const newRemoteInfo = query.data ? JSON.stringify(query.data) : null;
-      const currentRemoteInfo = runbook.remoteInfo ? JSON.stringify(runbook.remoteInfo) : null;
+      const currentRemoteInfo = rb.remoteInfo ? JSON.stringify(rb.remoteInfo) : null;
 
       if (newRemoteInfo != currentRemoteInfo) {
-        runbook.remoteInfo = newRemoteInfo;
-        runbook.save();
+        rb.remoteInfo = newRemoteInfo;
+        rb.save();
       }
-    } else if (query.isError && runbook.remoteInfo !== null) {
-      runbook.remoteInfo = null;
-      runbook.save();
+    } else if (query.isError && rb.remoteInfo !== null) {
+      rb.remoteInfo = null;
+      rb.save();
     }
   }, [runbook?.id, query.isSuccess, query.isFetched, query.data]);
 

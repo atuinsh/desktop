@@ -52,6 +52,9 @@ export default function TagSelector(props: TagSelectorProps) {
   const [isDebounced, resetDebounce, clearDebounce] = useDebounce(1000);
   const tagMenuRef = useRef<HTMLDivElement>(null);
   const serialExecution = useStore((store) => store.serialExecution);
+  const serialExecutionActive = useMemo(() => {
+    return serialExecution.includes(props.runbookId);
+  }, [serialExecution, props.runbookId]);
 
   let tag = props.currentTag;
   let currentTagNames = useMemo(() => {
@@ -126,8 +129,8 @@ export default function TagSelector(props: TagSelectorProps) {
             className={cn(
               "flex flex-row justify-between hover:bg-gray-300 hover:cursor-pointer px-2 mb-1 py-1 rounded-md dark:hover:bg-content3",
               {
-                "hover:cursor-pointer": !serialExecution,
-                "hover:cursor-not-allowed": serialExecution,
+                "hover:cursor-pointer": !serialExecutionActive,
+                "hover:cursor-not-allowed": serialExecutionActive,
               },
             )}
             onClick={() => props.onSelectTag(value)}
@@ -167,10 +170,10 @@ export default function TagSelector(props: TagSelectorProps) {
             "bg-gray-200 mt-[-5px] truncate": true,
             "dark:bg-content2 dark:border-default-300 hover:dark:bg-content3": true,
             "sm:grow md:grow-0": true,
-            "cursor-pointer": !serialExecution,
-            "cursor-not-allowed": serialExecution,
-            "text-gray-400 dark:text-gray-500": serialExecution,
-            "text-gray-700 dark:text-gray-300": !serialExecution,
+            "cursor-pointer": !serialExecutionActive,
+            "cursor-not-allowed": serialExecutionActive,
+            "text-gray-400 dark:text-gray-500": serialExecutionActive,
+            "text-gray-700 dark:text-gray-300": !serialExecutionActive,
           })}
         >
           <span className="w-full truncate overflow-ellipsis">@ {tagLabel}</span>

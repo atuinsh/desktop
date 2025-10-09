@@ -4,6 +4,7 @@ export interface InlineInputProps {
   value: string;
   onSubmit: (value: string) => void;
   onCancel: () => void;
+  className?: string;
 }
 
 export default function InlineInput(props: InlineInputProps) {
@@ -34,6 +35,7 @@ export default function InlineInput(props: InlineInputProps) {
       value={value}
       onChange={(e) => setValue(e.target.value)}
       onKeyDown={handleKeyDown}
+      className={props.className}
     />
   );
 }

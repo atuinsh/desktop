@@ -2,12 +2,15 @@ import CodeMirror, { KeyBinding, keymap, Prec } from "@uiw/react-codemirror";
 import * as themes from "@uiw/codemirror-themes-all";
 import { langs } from "@uiw/codemirror-extensions-langs";
 import { extensions } from "./extensions";
-import { useMemo, useEffect, useState } from "react";
+import { useMemo, useState } from "react";
 import { acceptCompletion, completionStatus } from "@codemirror/autocomplete";
 import { useCodeMirrorValue } from "@/lib/hooks/useCodeMirrorValue";
 import { indentLess, indentMore } from "@codemirror/commands";
 import { vim } from "@replit/codemirror-vim";
-import { Settings } from "@/state/settings";
+import { useStore } from "@/state/store";
+import { makeShellCheckLinter, supportedShells } from "./shellcheck";
+import { Button, Tooltip, addToast } from "@heroui/react";
+import { ClipboardIcon } from "lucide-react";
 
 
 interface CodeEditorProps {
@@ -46,11 +49,13 @@ export default function CodeEditor({
   keyMap,
   onFocus,
 }: CodeEditorProps) {
-  const [vimModeEnabled, setVimModeEnabled] = useState(false);
+  const vimModeEnabled = useStore((state) => state.vimModeEnabled);
 
-  useEffect(() => {
-    Settings.editorVimMode().then(setVimModeEnabled);
-  }, []);
+  const shellCheckEnabled = useStore((state) => state.shellCheckEnabled);
+  const shellCheckPath = useStore((state) => state.shellCheckPath || "shellcheck");
+
+  const [isFocused, setIsFocused] = useState(false);
+  
   let editorLanguage = useMemo(() => {
     // Do the best we can with the interpreter name - get the language
     // TODO: consider dropdown to override this
@@ -90,6 +95,18 @@ export default function CodeEditor({
   const themeObj = (themes as any)[theme];
   const codeMirrorValue = useCodeMirrorValue(code, onChange);
 
+  const shellCheckShell = useMemo(() => {
+    for (const shell of supportedShells) {
+      if (language.indexOf(shell) != -1) {
+        return shell;
+      }
+    }
+
+    return null;
+  }, [language]);
+
+  const shellCheckOn = (shellCheckShell !== null) && shellCheckEnabled;
+
   let editorExtensions: any[] = useMemo(() => {
     const ext = [...extensions(), customKeymap];
     if (vimModeEnabled) {
@@ -98,22 +115,77 @@ export default function CodeEditor({
     if (editorLanguage) {
       ext.push(editorLanguage);
     }
+    if (shellCheckOn) {
+      ext.push(makeShellCheckLinter(shellCheckPath, shellCheckShell));
+    }
     return ext;
-  }, [editorLanguage, customKeymap, vimModeEnabled]);
+  }, [
+    editorLanguage,
+    customKeymap,
+    vimModeEnabled,
+    shellCheckOn,
+    shellCheckShell,
+    shellCheckPath,
+  ]);
+
+  const handleCopyCode = async () => {
+    try {
+      await navigator.clipboard.writeText(code);
+      addToast({
+        title: "Code copied to clipboard",
+        color: "success",
+        radius: "sm",
+      });
+    } catch (err) {
+      console.error("Failed to copy to clipboard:", err);
+      addToast({
+        title: "Failed to copy code",
+        color: "danger",
+        radius: "sm",
+      });
+    }
+  };
+
+  const handleFocus = () => {
+    setIsFocused(true);
+    onFocus?.();
+  };
+
+  const handleBlur = () => {
+    setIsFocused(false);
+  };
 
   return (
-    <CodeMirror
-      id={id}
-      placeholder={"Write your code here..."}
-      className="!pt-0 max-w-full border border-gray-300 rounded flex-grow"
-      value={codeMirrorValue.value}
-      editable={isEditable}
-      onChange={codeMirrorValue.onChange}
-      onFocus={onFocus}
-      extensions={editorExtensions}
-      basicSetup={false}
-      indentWithTab={false}
-      theme={themeObj}
-    />
+    <div className="relative">
+      <CodeMirror
+        id={id}
+        placeholder={"Write your code here..."}
+        className="!pt-0 max-w-full border border-gray-300 rounded flex-grow"
+        value={codeMirrorValue.value}
+        editable={isEditable}
+        onChange={codeMirrorValue.onChange}
+        onFocus={handleFocus}
+        onBlur={handleBlur}
+        extensions={editorExtensions}
+        basicSetup={false}
+        indentWithTab={false}
+        theme={themeObj}
+      />
+      {code.trim() && (
+        <div className={`absolute top-[4px] right-[4px] transition-opacity duration-200 ${isFocused ? 'opacity-100' : 'opacity-50'}`}>
+          <Tooltip content="Copy code">
+            <Button
+              onPress={handleCopyCode}
+              size="sm"
+              variant="light"
+              isIconOnly
+              className="bg-gray-100 dark:bg-gray-700 backdrop-blur-sm shadow-sm border border-gray-200 dark:border-gray-600 min-w-6 h-6"
+            >
+              <ClipboardIcon size={12} />
+            </Button>
+          </Tooltip>
+        </div>
+      )}
+    </div>
   );
 }

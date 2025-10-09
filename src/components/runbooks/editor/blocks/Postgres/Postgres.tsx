@@ -1,26 +1,22 @@
 import { DatabaseIcon } from "lucide-react";
-import { useCallback } from "react";
-import { invoke, Channel } from "@tauri-apps/api/core";
 
 // @ts-ignore
 import { createReactBlockSpec } from "@blocknote/react";
 
 import { langs } from "@uiw/codemirror-extensions-langs";
 
+import { runQuery } from "./query";
+
 import { PostgresBlock } from "@/lib/workflow/blocks/postgres";
 import { DependencySpec } from "@/lib/workflow/dependency";
 import track_event from "@/tracking";
 import SQL from "@/lib/blocks/common/SQL";
 import { exportPropMatter } from "@/lib/utils";
-import { BlockOutput } from "@/rs-bindings/BlockOutput";
-// import { BlockLifecycleEvent } from "@/rs-bindings/BlockLifecycleEvent";
-import { useStore } from "@/state/store";
 
 interface SQLProps {
   isEditable: boolean;
   collapseQuery: boolean;
   postgres: PostgresBlock;
-  editor: any;
 
   setCollapseQuery: (collapseQuery: boolean) => void;
   setQuery: (query: string) => void;
@@ -33,7 +29,6 @@ interface SQLProps {
 
 const Postgres = ({
   postgres,
-  editor,
   setName,
   setQuery,
   setUri,
@@ -44,68 +39,6 @@ const Postgres = ({
   setDependency,
   onCodeMirrorFocus,
 }: SQLProps) => {
-  const [currentRunbookId] = useStore((state) => [state.currentRunbookId]);
-
-  // Custom runQuery function - clean version without Promise wrapper
-  const runQuery = useCallback(
-    async (onResult: any, onError: any) => {
-      // Create a channel for output streaming
-      const outputChannel = new Channel<BlockOutput>();
-
-      // Set up output handler
-      outputChannel.onmessage = (output: BlockOutput) => {
-        console.log("Postgres output:", output);
-
-        // Handle lifecycle events
-        if (output.lifecycle) {
-          switch (output.lifecycle.type) {
-            case "started":
-              console.log("Postgres execution started");
-              break;
-            case "finished":
-              console.log(`Postgres execution finished, success: ${output.lifecycle.data.success}`);
-              break;
-            case "cancelled":
-              console.log("Postgres execution was cancelled");
-              break;
-            case "error":
-              console.error("Postgres execution error:", output.lifecycle.data.message);
-              onError(output.lifecycle.data.message);
-              return; // Don't continue processing after error
-          }
-        }
-        
-        // Handle structured JSON object data (success case)
-        if (output.object && typeof output.object === "object" && output.object !== null) {
-          const parsed = output.object as any;
-          let queryResult = {
-            time: new Date(),
-            columns: parsed.columns?.map((col: string) => ({ name: col, type: "" })) || null,
-            rows: parsed.rows || null,
-            rowsAffected: parsed?.rowsAffected,
-            lastInsertID: parsed?.lastInsertId,
-            duration: 0,
-          };
-          onResult(queryResult);
-        }
-      };
-
-      try {
-        // Execute the block using the generic command
-        await invoke<string>("execute_block", {
-          blockId: postgres.id,
-          runbookId: currentRunbookId || "",
-          editorDocument: editor.document,
-          outputChannel,
-        });
-      } catch (err: any) {
-        console.error("Failed to execute Postgres query:", err);
-        onError(err.message || "Failed to execute query");
-      }
-    },
-    [postgres.id, currentRunbookId, editor],
-  );
-
   return (
     <SQL
       block={postgres}
@@ -207,7 +140,6 @@ export default createReactBlockSpec(
       return (
         <Postgres
           postgres={postgres}
-          editor={editor}
           setName={setName}
           setQuery={setQuery}
           setUri={setUri}

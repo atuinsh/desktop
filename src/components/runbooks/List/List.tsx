@@ -20,16 +20,8 @@ import {
   PlusIcon,
   UsersIcon,
 } from "lucide-react";
-import Runbook from "@/state/runbooks/runbook";
 import { AtuinState, useStore } from "@/state/store";
-import {
-  forwardRef,
-  useContext,
-  useEffect,
-  useImperativeHandle,
-  useRef,
-  useState,
-} from "react";
+import { forwardRef, useContext, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { PendingInvitations } from "./PendingInvitations";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -51,12 +43,56 @@ import track_event from "@/tracking";
 import { open } from "@tauri-apps/plugin-shell";
 import AtuinEnv from "@/atuin_env";
 
+const scrollWorkspaceIntoViewGenerator =
+  (elRef: React.RefObject<HTMLDivElement | null>) => async (workspaceId: string) => {
+    const getElPromise = new Promise<HTMLElement | null>((resolve, reject) => {
+      let start = performance.now();
+      let el: HTMLElement | null = null;
+      const tryGetEl = () => {
+        el = document.getElementById(`workspace-el-${workspaceId}`);
+        if (el) {
+          resolve(el);
+        } else if (performance.now() - start < 1000) {
+          setTimeout(tryGetEl, 100);
+        } else {
+          reject(new Error("Element not found"));
+        }
+      };
+      tryGetEl();
+    });
+
+    const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    try {
+      const el = await getElPromise;
+      if (el) {
+        // Check if element is completely outside the container
+        const rect = el.getBoundingClientRect();
+        const containerRect = elRef.current?.getBoundingClientRect();
+
+        if (containerRect) {
+          const isCompletelyOutsideViewport =
+            rect.bottom <= containerRect.top || // element is entirely above container
+            rect.top >= containerRect.bottom || // element is entirely below container
+            rect.right <= containerRect.left || // element is entirely to the left of container
+            rect.left >= containerRect.right; // element is entirely to the right of container
+
+          // Only scroll if the element is completely outside the container
+          if (isCompletelyOutsideViewport) {
+            el.scrollIntoView({ behavior: prefersReducedMotion ? "instant" : "smooth" });
+          }
+        }
+      }
+    } catch (_e) {
+      //
+    }
+  };
+
 export type ListApi = {
   scrollWorkspaceIntoView: (workspaceId: string) => void;
 };
 
 interface NotesSidebarProps {
-  importRunbooks: (workspaceId: string, parentFolderId: string | null) => Promise<void>;
+  onStartCreateRunbook: (workspaceId: string, parentFolderId: string | null) => void;
   onStartCreateWorkspace: () => void;
   moveItemsToWorkspace: (
     items: string[],
@@ -76,93 +112,42 @@ const NoteSidebar = forwardRef((props: NotesSidebarProps, ref: React.ForwardedRe
   const [pendingWorkspaceMigration, setPendingWorkspaceMigration] = useState<boolean>(true);
   const [focusedWorkspaceId, setFocusedWorkspaceId] = useState<string | null>(null);
 
-  const currentRunbookId = useStore((state: AtuinState) => state.currentRunbookId);
   const currentWorkspaceId = useStore((state: AtuinState) => state.currentWorkspaceId);
 
-
-
   const elRef = useRef<HTMLDivElement>(null);
+  const scrollWorkspaceIntoView = scrollWorkspaceIntoViewGenerator(elRef);
   const user = useStore((state: AtuinState) => state.user);
   const userOrgs = useStore((state: AtuinState) => state.userOrgs);
   const selectedOrg = useStore((state: AtuinState) => state.selectedOrg);
   const setSelectedOrg = useStore((state: AtuinState) => state.setSelectedOrg);
 
-  const { data: workspaces } = useQuery(
-    selectedOrg ? orgWorkspaces(selectedOrg) : userOwnedWorkspaces(),
-  );
+  const { data: workspaces } = useQuery(orgWorkspaces(selectedOrg || null));
 
-
-
-  const { activateRunbook, promptDeleteRunbook, runbookCreated } = useContext(RunbookContext);
+  const { activateRunbook, promptDeleteRunbook } = useContext(RunbookContext);
 
   const queryClient = useQueryClient();
 
   useImperativeHandle(ref, () => {
     return {
-      scrollWorkspaceIntoView: async (workspaceId: string) => {
-        const getElPromise = new Promise<HTMLElement | null>((resolve, reject) => {
-          let start = performance.now();
-          let el: HTMLElement | null = null;
-          const tryGetEl = () => {
-            el = document.getElementById(`workspace-el-${workspaceId}`);
-            if (el) {
-              resolve(el);
-            } else if (performance.now() - start < 1000) {
-              setTimeout(tryGetEl, 100);
-            } else {
-              reject(new Error("Element not found"));
-            }
-          };
-          tryGetEl();
-        });
-
-        const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-        try {
-          const el = await getElPromise;
-          if (el) {
-            // Check if element is completely outside the container
-            const rect = el.getBoundingClientRect();
-            const containerRect = elRef.current?.getBoundingClientRect();
-
-            if (containerRect) {
-              const isCompletelyOutsideViewport =
-                rect.bottom <= containerRect.top || // element is entirely above container
-                rect.top >= containerRect.bottom || // element is entirely below container
-                rect.right <= containerRect.left || // element is entirely to the left of container
-                rect.left >= containerRect.right; // element is entirely to the right of container
-
-              // Only scroll if the element is completely outside the container
-              if (isCompletelyOutsideViewport) {
-                el.scrollIntoView({ behavior: prefersReducedMotion ? "instant" : "smooth" });
-              }
-            }
-          }
-        } catch (_e) {
-          //
-        }
-      },
+      scrollWorkspaceIntoView,
     };
   });
 
   useEffect(() => {
+    if (useStore.getState().didSidebarSetup) {
+      setPendingWorkspaceMigration(false);
+      return;
+    }
+
     doWorkspaceSetup().then(() => {
+      useStore.setState({ didSidebarSetup: true });
       queryClient.invalidateQueries(userOwnedWorkspaces());
       setPendingWorkspaceMigration(false);
     });
   }, []);
 
   const handleNewRunbook = async (workspaceId: string, parentFolderId: string | null) => {
-    const workspace = workspaces?.find((ws) => ws.get("id") === workspaceId);
-    if (!workspace) return;
-
-    const rb = await Runbook.createUntitled(workspace, true);
-
-    runbookCreated(rb.id, workspaceId, parentFolderId, true);
-  };
-
-  const handleImportRunbook = async (workspaceId: string | null, parentFolderId: string | null) => {
-    const wsId = workspaceId ?? currentWorkspaceId;
-    props.importRunbooks(wsId, parentFolderId);
+    props.onStartCreateRunbook(workspaceId, parentFolderId);
   };
 
   const handleOpenSearch = async () => {
@@ -252,9 +237,6 @@ const NoteSidebar = forwardRef((props: NotesSidebarProps, ref: React.ForwardedRe
       {
         onNewRunbook: (workspaceId: string, parentFolderId: string | null) => {
           handleNewRunbook(workspaceId, parentFolderId);
-        },
-        onImportRunbook: (workspaceId: string | null, parentFolderId: string | null) => {
-          handleImportRunbook(workspaceId, parentFolderId);
         },
         onNewWorkspace: () => {
           props.onStartCreateWorkspace();
@@ -463,7 +445,7 @@ const NoteSidebar = forwardRef((props: NotesSidebarProps, ref: React.ForwardedRe
                 <Button
                   size="sm"
                   variant="flat"
-                  onPress={() => handleNewRunbook(workspaces?.[0]?.get("id")!, null)}
+                  onPress={() => handleNewRunbook(currentWorkspaceId, null)}
                 >
                   <Plus size={18} /> New Runbook
                 </Button>
@@ -496,7 +478,7 @@ const NoteSidebar = forwardRef((props: NotesSidebarProps, ref: React.ForwardedRe
             </div>
           </div>
           <div
-            className="p-1 flex-grow overflow-y-scroll cursor-default"
+            className="p-1 flex-grow overflow-y-auto cursor-default"
             onContextMenu={handleBaseContextMenu}
           >
             <DndProvider backend={HTML5Backend}>
@@ -514,7 +496,6 @@ const NoteSidebar = forwardRef((props: NotesSidebarProps, ref: React.ForwardedRe
                           workspace={workspace}
                           focused={focusedWorkspaceId === workspace.get("id")}
                           sortBy={sortBy}
-                          currentRunbookId={currentRunbookId}
                           onActivateRunbook={activateRunbook}
                           onStartCreateRunbook={(
                             workspaceId: string,
@@ -535,7 +516,6 @@ const NoteSidebar = forwardRef((props: NotesSidebarProps, ref: React.ForwardedRe
           </div>
         </>
       )}
-
     </div>
   );
 });

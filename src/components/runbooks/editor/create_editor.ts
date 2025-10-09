@@ -1,5 +1,10 @@
 import CodeEditor from "@/components/runbooks/editor/blocks/Editor/Editor";
-import { BlockNoteEditor, BlockNoteSchema, defaultBlockSpecs, defaultInlineContentSpecs } from "@blocknote/core";
+import {
+  BlockNoteEditor,
+  BlockNoteSchema,
+  defaultBlockSpecs,
+  defaultInlineContentSpecs,
+} from "@blocknote/core";
 import { en } from "@blocknote/core/locales";
 import Directory from "./blocks/Directory";
 import Env from "./blocks/Env";
@@ -75,6 +80,25 @@ export const schema = BlockNoteSchema.create({
 export function createBasicEditor(content: any) {
   let editor = BlockNoteEditor.create({
     schema,
+    initialContent: content,
+  });
+
+  DevConsole.addAppObject("editor", editor);
+  return editor;
+}
+
+export function createLocalOnlyEditor(content: any) {
+  let editor = BlockNoteEditor.create({
+    schema,
+    _tiptapOptions: {
+      editorProps: {
+        scrollThreshold: 200,
+        scrollMargin: 200,
+      },
+    },
+    dictionary: {
+      ...en,
+    },
     initialContent: content,
   });
 

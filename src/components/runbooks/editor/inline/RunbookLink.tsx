@@ -1,7 +1,6 @@
 import { createReactInlineContentSpec } from "@blocknote/react";
 import { cn } from "@/lib/utils";
 import { useContext, useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import RunbookContext from "@/context/runbook_context";
 import { LinkIcon } from "lucide-react";
 import Runbook from "@/state/runbooks/runbook";
@@ -22,7 +21,6 @@ export const RunbookLink = createReactInlineContentSpec(
   {
     render: (props) => {
       const { runbookId, runbookName } = props.inlineContent.props;
-      const navigate = useNavigate();
       const { activateRunbook } = useContext(RunbookContext);
       const [linkedRunbook, setLinkedRunbook] = useState<Runbook | null>(null);
 
@@ -42,14 +40,8 @@ export const RunbookLink = createReactInlineContentSpec(
           });
         }
       }, [runbookId]);
-      
+
       const handleClick = () => {
-        // Navigate to runbooks if not already there
-        if (window.location.pathname !== "/runbooks") {
-          navigate("/runbooks");
-        }
-        
-        // Use the same activation pattern as CommandMenu
         activateRunbook(runbookId);
       };
 
@@ -71,5 +63,5 @@ export const RunbookLink = createReactInlineContentSpec(
         </span>
       );
     },
-  }
+  },
 );

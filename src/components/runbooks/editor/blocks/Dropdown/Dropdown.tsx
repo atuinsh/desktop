@@ -27,6 +27,7 @@ import InterpreterSelector, {
   buildInterpreterCommand,
 } from "@/lib/blocks/common/InterpreterSelector.tsx";
 import RunbookBus from "@/lib/app/runbook_bus";
+import { useCurrentRunbookId } from "@/context/runbook_id_context";
 
 // Helper to parse and display option nicely
 const parseOption = (option: string) => {
@@ -262,7 +263,7 @@ const Dropdown = ({
   isEditable,
   onCodeMirrorFocus,
 }: DropdownProps) => {
-  const currentRunbookId = useStore((store) => store.currentRunbookId);
+  const currentRunbookId = useCurrentRunbookId();
   const [selected, setSelected] = useState(value);
   const { isOpen, onOpen, onOpenChange } = useDisclosure();
   const [comboboxOpen, setComboboxOpen] = useState(false);
@@ -475,7 +476,7 @@ const Dropdown = ({
 
         <div className="flex-1">
           <Input
-            placeholder="Output variable name"
+            placeholder="Template variable name"
             value={name}
             onChange={handleKeyChange}
             style={{ fontFamily: "monospace" }}
@@ -623,10 +624,7 @@ export default createReactBlockSpec(
     toExternalHTML: ({ block }) => {
       const props = block.props;
 
-      let propsToExport = [
-        "name",
-        "optionsType",
-      ];
+      let propsToExport = ["name", "optionsType"];
 
       if (props.optionsType === "fixed") propsToExport.push("fixedOptions");
       if (props.optionsType === "variable") propsToExport.push("variableOptions");
@@ -634,11 +632,11 @@ export default createReactBlockSpec(
 
       let propMatter = exportPropMatter("dropdown", props, propsToExport);
 
-        return (
-          <div>
-            <pre lang="dropdown">{propMatter}</pre>
-          </div>
-        );
+      return (
+        <div>
+          <pre lang="dropdown">{propMatter}</pre>
+        </div>
+      );
     },
     // @ts-ignore
     render: ({ block, editor }) => {

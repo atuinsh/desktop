@@ -6,12 +6,11 @@ import { createReactBlockSpec } from "@blocknote/react";
 import * as LanguageData from "@codemirror/language-data";
 import EditorBlockType from "@/lib/workflow/blocks/editor.ts";
 import track_event from "@/tracking";
-import { useStore } from "@/state/store";
 
 import CodeMirror, { Extension } from "@uiw/react-codemirror";
 
 import "@xterm/xterm/css/xterm.css";
-import { ChevronDownIcon, CodeIcon } from "lucide-react";
+import { ChevronDownIcon, CodeIcon, RefreshCwIcon, RefreshCwOffIcon, ArrowDownToLineIcon, ArrowUpToLineIcon } from "lucide-react";
 import {
   Dropdown,
   DropdownTrigger,
@@ -19,6 +18,8 @@ import {
   DropdownMenu,
   DropdownItem,
   Input,
+  Switch,
+  Tooltip,
 } from "@heroui/react";
 import EditableHeading from "@/components/EditableHeading/index.tsx";
 
@@ -30,8 +31,10 @@ import { DependencySpec } from "@/lib/workflow/dependency.ts";
 import useCodemirrorTheme from "@/lib/hooks/useCodemirrorTheme.ts";
 import { useCodeMirrorValue } from "@/lib/hooks/useCodeMirrorValue";
 import Block from "@/lib/blocks/common/Block";
-import { setTemplateVar } from "@/state/templates";
-import { exportPropMatter } from "@/lib/utils";
+import { getTemplateVar, setTemplateVar } from "@/state/templates";
+import { exportPropMatter, cn } from "@/lib/utils";
+import { useCurrentRunbookId } from "@/context/runbook_id_context";
+import RunbookBus from "@/lib/app/runbook_bus";
 
 interface LanguageLoader {
   name: string;
@@ -70,11 +73,16 @@ interface CodeBlockProps {
   onChange: (val: string) => void;
   onLanguageChange: (val: string) => void;
   onVariableNameChange: (val: string) => void;
+  onSyncVariableChange: (val: boolean) => void;
   code: string;
   language: string;
   variableName: string;
+  syncVariable: boolean;
   isEditable: boolean;
   onCodeMirrorFocus?: () => void;
+  
+  collapseCode: boolean;
+  setCollapseCode: (collapse: boolean) => void;
 }
 
 const EditorBlock = ({
@@ -83,14 +91,19 @@ const EditorBlock = ({
   language,
   onLanguageChange,
   onVariableNameChange,
+  onSyncVariableChange,
   variableName,
+  syncVariable,
   isEditable,
   name,
   setName,
   editor,
   onCodeMirrorFocus,
+  collapseCode,
+  setCollapseCode,
 }: CodeBlockProps) => {
   const languages: LanguageLoader[] = useMemo(() => languageLoaders(), []);
+  const currentRunbookId = useCurrentRunbookId();
 
   const codeMirrorValue = useCodeMirrorValue(code, onChange);
 
@@ -125,6 +138,17 @@ const EditorBlock = ({
     })();
   }, [language]);
 
+  useEffect(() => {
+    if (syncVariable && currentRunbookId && variableName) {
+      const bus = RunbookBus.get(currentRunbookId);
+      return bus.onVariableChanged((name, value) => {
+        if (name === variableName) {
+          onChange(value);
+        }
+      });
+    }
+  }, [syncVariable, currentRunbookId, variableName, onChange]);
+
   const themeObj = useCodemirrorTheme();
 
   return (
@@ -141,6 +165,10 @@ const EditorBlock = ({
             <EditableHeading initialText={name} onTextChange={setName} />
             <div className="flex flex-row gap-2 items-center">
               <Input
+                autoComplete="off"
+                autoCapitalize="off"
+                autoCorrect="off"
+                spellCheck="false"
                 size="sm"
                 placeholder="Variable"
                 value={variableName}
@@ -148,6 +176,26 @@ const EditorBlock = ({
                 disabled={!isEditable}
                 className="font-mono text-xs"
               />
+              <Tooltip content="When on, the editor content will update when the variable content changes">
+                <Switch
+                  isSelected={syncVariable}
+                  onValueChange={(val) => onSyncVariableChange(val)}
+                  thumbIcon={
+                    syncVariable ? <RefreshCwIcon size={16} /> : <RefreshCwOffIcon size={16} />
+                  }
+                  isDisabled={!isEditable || variableName.trim() === ""}
+                />
+              </Tooltip>
+              <Tooltip content={collapseCode ? "Expand code" : "Collapse code"}>
+                <Button
+                  onPress={() => setCollapseCode(!collapseCode)}
+                  size="sm"
+                  variant="flat"
+                  isIconOnly
+                >
+                  {collapseCode ? <ArrowDownToLineIcon size={20} /> : <ArrowUpToLineIcon size={20} />}
+                </Button>
+              </Tooltip>
               <Dropdown
                 isOpen={isOpen}
                 onOpenChange={(open) => setIsOpen(open)}
@@ -157,7 +205,7 @@ const EditorBlock = ({
                   <Button
                     variant="flat"
                     size="sm"
-                    className="capitalize"
+                    className="capitalize min-w-[200px]"
                     endContent={<ChevronDownIcon size={16} />}
                   >
                     {selected ? selected.name : "Select a language"}
@@ -203,17 +251,24 @@ const EditorBlock = ({
         </div>
       }
     >
-      <CodeMirror
-        className="!pt-0 max-w-full border border-gray-300 rounded flex-grow max-h-1/2 overflow-scroll"
-        placeholder={"Write some code..."}
-        value={codeMirrorValue.value}
-        readOnly={!isEditable}
-        onChange={codeMirrorValue.onChange}
-        onFocus={onCodeMirrorFocus}
-        extensions={extension ? [extension] : []}
-        basicSetup={true}
-        theme={themeObj}
-      />
+      <div className={cn("w-full transition-all duration-300 ease-in-out relative", {
+        "max-h-10 overflow-hidden": collapseCode,
+      })}>
+        <CodeMirror
+          className="!pt-0 max-w-full border border-gray-300 rounded flex-grow max-h-1/2 overflow-scroll"
+          placeholder={"Write some code..."}
+          value={codeMirrorValue.value}
+          readOnly={!isEditable}
+          onChange={codeMirrorValue.onChange}
+          onFocus={onCodeMirrorFocus}
+          extensions={extension ? [extension] : []}
+          basicSetup={true}
+          theme={themeObj}
+        />
+        {collapseCode && (
+          <div className="absolute bottom-0 left-0 right-0 h-6 bg-gradient-to-t from-white dark:from-gray-900 to-transparent pointer-events-none" />
+        )}
+      </div>
     </Block>
   );
 };
@@ -226,6 +281,8 @@ export default createReactBlockSpec(
       code: { default: "" },
       language: { default: "" },
       variableName: { default: "" },
+      syncVariable: { default: false },
+      collapseCode: { default: false },
     },
     content: "none",
   },
@@ -243,7 +300,7 @@ export default createReactBlockSpec(
     },
     // @ts-ignore
     render: ({ block, editor, code, type }) => {
-      const { currentRunbookId } = useStore();
+      const currentRunbookId = useCurrentRunbookId();
 
       const handleCodeMirrorFocus = () => {
         // Ensure BlockNote knows which block contains the focused CodeMirror
@@ -276,9 +333,28 @@ export default createReactBlockSpec(
         });
       };
 
+      const onSyncVariableChange = async (sync: boolean) => {
+        if (sync && currentRunbookId && block.props.variableName) {
+          const value = await getTemplateVar(currentRunbookId, block.props.variableName);
+          editor.updateBlock(block, {
+            props: { ...block.props, code: value || "", syncVariable: sync },
+          });
+        } else {
+          editor.updateBlock(block, {
+            props: { ...block.props, syncVariable: sync },
+          });
+        }
+      };
+
       const setName = (name: string) => {
         editor.updateBlock(block, {
           props: { ...block.props, name: name },
+        });
+      };
+
+      const setCollapseCode = (collapse: boolean) => {
+        editor.updateBlock(block, {
+          props: { ...block.props, collapseCode: collapse },
         });
       };
 
@@ -300,11 +376,15 @@ export default createReactBlockSpec(
           onChange={onCodeChange}
           onLanguageChange={onLanguageChange}
           onVariableNameChange={onVariableNameChange}
+          onSyncVariableChange={onSyncVariableChange}
           code={block.props.code}
           language={block.props.language}
           variableName={block.props.variableName}
+          syncVariable={block.props.syncVariable}
           isEditable={editor.isEditable}
           onCodeMirrorFocus={handleCodeMirrorFocus}
+          collapseCode={block.props.collapseCode}
+          setCollapseCode={setCollapseCode}
         />
       );
     },

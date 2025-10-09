@@ -41,13 +41,13 @@ import {
 import { useInterval } from "usehooks-ts";
 import { useBlockNoteEditor } from "@blocknote/react";
 import { templateString } from "@/state/templates";
-import { AtuinState, useStore } from "@/state/store";
 import useCodemirrorTheme from "@/lib/hooks/useCodemirrorTheme";
 import { useCodeMirrorValue } from "@/lib/hooks/useCodeMirrorValue";
 import PlayButton from "@/lib/blocks/common/PlayButton";
 import Block from "@/lib/blocks/common/Block";
 import { cn } from "@/lib/utils";
 import { KubernetesBlock } from "./schema";
+import { useCurrentRunbookId } from "@/context/runbook_id_context";
 
 type KubernetesMode = "preset" | "custom";
 
@@ -103,8 +103,8 @@ export function KubernetesComponent({
   const [error, setError] = useState<string | null>(null);
   const [collapseQuery, setCollapseQuery] = useState<boolean>(false);
   const [expandedFooter, setExpandedFooter] = useState<boolean>(false);
-  const [currentRunbookId] = useStore((store: AtuinState) => [store.currentRunbookId]);
-  
+  const currentRunbookId = useCurrentRunbookId();
+
   const elementRef = useRef<HTMLDivElement>(null);
 
   const themeObj = useCodemirrorTheme();

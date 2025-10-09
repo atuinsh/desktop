@@ -2,14 +2,16 @@ window.addEventListener("unhandledrejection", (event) => {
   console.error("Unhandled rejection", event);
 });
 
+// Initialize global types
+import "./global";
+
 // import sentry before anything else
 import { init_tracking } from "./tracking";
 import track_event from "./tracking";
 
 import { event } from "@tauri-apps/api";
-import React, { useEffect } from "react";
+import { useEffect } from "react";
 import ReactDOM from "react-dom/client";
-import { createHashRouter, RouterProvider } from "react-router-dom";
 import { HeroUIProvider, ToastProvider } from "@heroui/react";
 import { QueryClientProvider } from "@tanstack/react-query";
 import "./styles.css";
@@ -20,15 +22,12 @@ import WorkspaceSyncManager from "./lib/sync/workspace_sync_manager";
 import { useStore } from "@/state/store";
 import ServerNotificationManager from "./server_notification_manager";
 import { trackOnlineStatus } from "./lib/online_tracker";
-import AtuinEnv from "./atuin_env";
 import { setupColorModes } from "./lib/color_modes";
 import { setupServerEvents } from "./lib/server_events";
 import { invoke } from "@tauri-apps/api/core";
 import debounce from "lodash.debounce";
-import { getGlobalOptions } from "./lib/global_options";
 import Workspace from "./state/runbooks/workspace";
 import { SharedStateManager } from "./lib/shared_state/manager";
-import { AtuinSharedStateAdapter } from "./lib/shared_state/adapter";
 import { startup as startupOperationProcessor } from "./state/runbooks/operation_processor";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 
@@ -41,7 +40,9 @@ import Operation from "./state/runbooks/operation";
 import EditorBus from "./lib/buses/editor";
 import BlockBus from "./lib/workflow/block_bus";
 import { generateBlocks } from "./lib/ai/block_generator";
-import { grandCentral } from "./lib/events/grand_central";
+import WorkspaceManager from "./lib/workspaces/manager";
+import Root from "./routes/root/Root";
+import RunbookBus from "./lib/app/runbook_bus";
 
 (async () => {
   try {
@@ -60,6 +61,7 @@ const notificationManager = ServerNotificationManager.get();
 const workspaceSyncManager = WorkspaceSyncManager.get(useStore);
 const queryClient = useStore.getState().queryClient;
 const serverObserver = new ServerObserver(useStore, notificationManager);
+RunbookBus.initialize();
 
 const stateProxy = new Proxy(
   {},
@@ -92,6 +94,7 @@ DevConsole.addAppObject("invoke", invoke)
   .addAppObject("socketManager", socketManager)
   .addAppObject("notificationManager", notificationManager)
   .addAppObject("workspaceSyncManager", workspaceSyncManager)
+  .addAppObject("workspaceManager", WorkspaceManager.getInstance())
   .addAppObject("queryClient", queryClient)
   .addAppObject("AppBus", AppBus.get())
   .addAppObject("SSHBus", SSHBus.get())
@@ -99,7 +102,6 @@ DevConsole.addAppObject("invoke", invoke)
   .addAppObject("BlockBus", BlockBus.get())
   .addAppObject("SharedStateManager", SharedStateManager)
   .addAppObject("generateBlocks", generateBlocks)
-  .addAppObject("grandCentral", grandCentral)
   .addAppObject("models", {
     Runbook,
     Workspace,
@@ -128,46 +130,6 @@ trackOnlineStatus();
 socketManager.onConnect(() => trackOnlineStatus());
 socketManager.onDisconnect(() => trackOnlineStatus());
 
-const LazyRoot = React.lazy(() => import("@/routes/root/Root"));
-const LazyHome = React.lazy(() => import("@/routes/home/Home"));
-const LazyRunbooks = React.lazy(() => import("@/routes/runbooks/Runbooks"));
-const LazyHistory = React.lazy(() => import("@/routes/history/History"));
-const LazyStats = React.lazy(() => import("@/routes/stats/Stats"));
-const LazySettingsPanel = React.lazy(() => import("@/components/Settings/Settings"));
-
-const router = createHashRouter([
-  {
-    path: "/",
-    element: <LazyRoot />,
-    children: [
-      {
-        index: true,
-        element: <LazyHome />,
-      },
-
-      {
-        path: "runbooks",
-        element: <LazyRunbooks />,
-      },
-
-      {
-        path: "history",
-        element: <LazyHistory />,
-      },
-
-      {
-        path: "stats",
-        element: <LazyStats />,
-      },
-
-      {
-        path: "settings",
-        element: <LazySettingsPanel />,
-      },
-    ],
-  },
-]);
-
 const debouncedSaveWindowInfo = debounce(async () => {
   invoke("save_window_info");
 }, 500);
@@ -177,7 +139,6 @@ event.listen("tauri://resize", debouncedSaveWindowInfo);
 
 function Application() {
   const { refreshUser, refreshCollaborations, online, user } = useStore();
-  const globalOptions = getGlobalOptions();
 
   useEffect(() => {
     if (online) {
@@ -192,23 +153,6 @@ function Application() {
   }, [online, user]);
 
   useEffect(() => {
-    // Start up listeners for all known workspaces
-    Workspace.all()
-      .then((workspaces) => {
-        for (const workspace of workspaces) {
-          SharedStateManager.startInstance(
-            `workspace-folder:${workspace.get("id")}`,
-            new AtuinSharedStateAdapter(`workspace-folder:${workspace.get("id")}`),
-          );
-        }
-      })
-      .catch((err: any) => {
-        console.error("Error starting shared state managers");
-        console.error(err);
-      });
-  }, []);
-
-  useEffect(() => {
     startupOperationProcessor();
   }, []);
 
@@ -217,20 +161,8 @@ function Application() {
       <ToastProvider placement="bottom-center" toastOffset={40} />
       <QueryClientProvider client={queryClient}>
         <ReactQueryDevtools initialIsOpen={false} buttonPosition="bottom-right" />
-        <main className="text-foreground bg-background overflow-hidden">
-          {AtuinEnv.isProd && globalOptions.customTitleBar && (
-            <div data-tauri-drag-region className="w-full min-h-8 z-10 border-b-1" />
-          )}
-          {AtuinEnv.isDev && globalOptions.customTitleBar && (
-            <div
-              data-tauri-drag-region
-              className="w-full min-h-8 z-10 border-b-1 bg-striped dark:bg-dark-striped bg-[length:7px_7px]"
-            />
-          )}
-
-          <div className="z-20 relative">
-            <RouterProvider router={router} />
-          </div>
+        <main className="text-foreground bg-background overflow-hidden z-20 relative">
+          <Root />
         </main>
       </QueryClientProvider>
     </HeroUIProvider>
@@ -238,16 +170,9 @@ function Application() {
 }
 
 async function setup() {
+  invoke<void>("reset_workspaces");
   const currentVersion = await invoke<string>("get_app_version");
   useStore.getState().setCurrentVersion(currentVersion);
-  
-  // Initialize Grand Central event system
-  try {
-    await grandCentral.startListening();
-    console.log("Grand Central event system initialized");
-  } catch (error) {
-    console.error("Failed to initialize Grand Central event system:", error);
-  }
 }
 
 (async () => {
@@ -255,3 +180,26 @@ async function setup() {
   ReactDOM.createRoot(document.getElementById("root")!).render(<Application />);
   invoke("show_window");
 })();
+
+// Whelp, this is a weird one.
+// We were finding that pressing "esc" inside a codemirror editor would collapse the *entire blocknote block*
+// to some unprintable character. This could be undone with ctrl+z, but otherwise was unrecoverable.
+// Capturing the escape key inside the codemirror editor prevented the issue, but then if you clicked
+// inside another block and pressed escape, either the original block or the newly clicked block would
+// collapse in the same way.
+//
+// This gross hack seems to fix that issue. ¯\_(ツ)_/¯
+window.addEventListener(
+  "keydown",
+  (event) => {
+    const blocknoteBlock = (event.target as Element).closest(".bn-block");
+
+    if (blocknoteBlock && event.key === "Escape") {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+  },
+  {
+    capture: true,
+  },
+);

@@ -4,6 +4,7 @@ import { ScriptBlock } from "./script";
 import { SQLiteBlock } from "./sqlite";
 import { ClickhouseBlock } from "./clickhouse";
 import { PostgresBlock } from "./postgres";
+import { MySqlBlock } from "./mysql";
 import { HttpBlock } from "@/lib/blocks/http/schema";
 import { PrometheusBlock } from "./prometheus";
 import { TerminalBlock } from "@/lib/blocks/terminal/schema";
@@ -32,6 +33,10 @@ export function convertBlocknoteToAtuin(bnb: any): Block | null {
 
     if (bnb.type === "postgres") {
         return new PostgresBlock(bnb.id, bnb.props.name, bnb.props.dependency, bnb.props.query, bnb.props.uri, bnb.props.autoRefresh);
+    }
+
+    if (bnb.type === "mysql") {
+        return new MySqlBlock(bnb.id, bnb.props.name, bnb.props.dependency, bnb.props.query, bnb.props.uri, bnb.props.autoRefresh);
     }
 
     if (bnb.type === "http"){

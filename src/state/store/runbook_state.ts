@@ -5,34 +5,36 @@ const logger = new Logger("RunbookStore", "purple", "pink");
 
 import { StateCreator } from "zustand";
 
-export const SET_RUNBOOK_TAG = Symbol("set_runbook_tag");
-
 export interface AtuinRunbookState {
   runbooks: Runbook[];
 
   // The ID of the runbook that is currently being executed
   // Right now we do not support concurrent or background runbook execution
-  serialExecution: string | null;
-  currentRunbookId: string | null;
+  serialExecution: string[];
   lastTagForRunbook: { [key: string]: string };
+  backgroundSync: boolean;
+  syncConcurrency: number;
 
   importRunbooks: () => Promise<string[]>;
   refreshRunbooks: () => Promise<void>;
-  deleteRunbookFromCache: (runbookId: string) => void;
 
-  setSerialExecution: (id: string | null) => void;
-  setCurrentRunbookId: (id: string | null, tag?: typeof SET_RUNBOOK_TAG) => void;
+  startSerialExecution: (id: string) => void;
+  stopSerialExecution: (id: string) => void;
   selectTag: (runbookId: string, tag: string | null) => void;
   getLastTagForRunbook: (runbookId: string) => string | null;
 
   currentWorkspaceId: string;
   setCurrentWorkspaceId: (id: string) => void;
+
+  setBackgroundSync: (backgroundSync: boolean) => void;
+  setSyncConcurrency: (syncConcurrency: number) => void;
 }
 
 export const persistRunbookKeys: (keyof AtuinRunbookState)[] = [
-  "currentRunbookId",
   "lastTagForRunbook",
   "currentWorkspaceId",
+  "backgroundSync",
+  "syncConcurrency",
 ];
 
 export const createRunbookState: StateCreator<AtuinRunbookState> = (
@@ -41,9 +43,10 @@ export const createRunbookState: StateCreator<AtuinRunbookState> = (
   _store,
 ): AtuinRunbookState => ({
   runbooks: [],
-  currentRunbookId: null,
   lastTagForRunbook: {},
-  serialExecution: null,
+  serialExecution: [],
+  backgroundSync: true,
+  syncConcurrency: 1,
 
   importRunbooks: async (): Promise<string[]> => {
     let filePath = await open({
@@ -66,24 +69,9 @@ export const createRunbookState: StateCreator<AtuinRunbookState> = (
   refreshRunbooks: async () => {
     logger.debug("loading runbooks for WS", get().currentWorkspaceId);
 
-    let runbooks = await Runbook.all(get().currentWorkspaceId!);
+    let runbooks = await Runbook.allFromWorkspace(get().currentWorkspaceId!);
 
     set({ runbooks });
-  },
-
-  deleteRunbookFromCache: (runbookId: string) => {
-    const { runbooks, currentRunbookId } = get();
-    const newRunbookId = currentRunbookId === runbookId ? null : currentRunbookId;
-    const newRunbooks = runbooks.filter((rb) => rb.id !== runbookId);
-    set({ runbooks: newRunbooks, currentRunbookId: newRunbookId });
-  },
-
-  setCurrentRunbookId: async (id: string | null, tag?: typeof SET_RUNBOOK_TAG) => {
-    if (tag === SET_RUNBOOK_TAG) {
-      set({ currentRunbookId: id });
-    } else {
-      throw new Error("calling setCurrentRunbookId directly is not supported; use RunbookContext");
-    }
   },
 
   selectTag: (runbookId: string, tag: string | null) => {
@@ -106,11 +94,27 @@ export const createRunbookState: StateCreator<AtuinRunbookState> = (
 
   currentWorkspaceId: "",
 
-  setSerialExecution: (id: string | null) => {
-    set({ serialExecution: id });
+  startSerialExecution: (id: string) => {
+    if (get().serialExecution.includes(id)) {
+      return;
+    }
+
+    set({ serialExecution: [...get().serialExecution, id] });
+  },
+
+  stopSerialExecution: (id: string) => {
+    set({ serialExecution: get().serialExecution.filter((sid) => sid !== id) });
   },
 
   setCurrentWorkspaceId: (id: string) => {
     set({ currentWorkspaceId: id });
+  },
+
+  setBackgroundSync: (backgroundSync: boolean) => {
+    set({ backgroundSync });
+  },
+
+  setSyncConcurrency: (syncConcurrency: number) => {
+    set({ syncConcurrency });
   },
 });

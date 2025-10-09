@@ -1,5 +1,6 @@
 import { User } from "@/state/models";
-import Runbook from "@/state/runbooks/runbook";
+import Runbook, { OfflineRunbook, OnlineRunbook } from "@/state/runbooks/runbook";
+import untitledRunbook from "@/state/runbooks/untitled.json";
 import { BlockNoteEditor } from "@blocknote/core";
 import track_event from "@/tracking";
 import * as Y from "yjs";
@@ -7,6 +8,7 @@ import PhoenixProvider, { PresenceUserInfo } from "./phoenix_provider";
 import {
   createBasicEditor,
   createCollaborativeEditor,
+  createLocalOnlyEditor,
 } from "@/components/runbooks/editor/create_editor";
 import { randomColor } from "./colors";
 import Logger from "./logger";
@@ -28,10 +30,12 @@ export default class RunbookEditor {
   public runbook: Runbook;
   private user: User;
   private selectedTag: string;
+  private isOnline: boolean;
   private onPresenceJoin: (user: PresenceUserInfo) => void;
   private onPresenceLeave: (user: PresenceUserInfo) => void;
   private onClearPresences: () => void;
   private yDoc: Y.Doc;
+  private hashes: string[] = [];
 
   private editor: Promise<BlockNoteEditor> | null = null;
   private provider: PhoenixProvider | null = null;
@@ -46,6 +50,7 @@ export default class RunbookEditor {
     runbook: Runbook,
     user: User,
     selectedTag: string | null,
+    isOnline: boolean,
     onPresenceJoin: (user: PresenceUserInfo) => void,
     onPresenceLeave: (user: PresenceUserInfo) => void,
     onClearPresences: () => void,
@@ -54,11 +59,21 @@ export default class RunbookEditor {
     this.runbook = runbook;
     this.user = user;
     this.selectedTag = selectedTag || "latest";
+    this.isOnline = isOnline;
     this.onPresenceJoin = onPresenceJoin;
     this.onPresenceLeave = onPresenceLeave;
     this.onClearPresences = onClearPresences;
     this.yDoc = new Y.Doc();
-    if (this.runbook.ydoc && this.runbook.ydoc.byteLength > 0) {
+
+    if (this.runbook instanceof OfflineRunbook) {
+      this.hashes.push(this.runbook.contentHash);
+    }
+
+    if (
+      this.runbook instanceof OnlineRunbook &&
+      this.runbook.ydoc &&
+      this.runbook.ydoc.byteLength > 0
+    ) {
       Y.applyUpdate(this.yDoc, this.runbook.ydoc);
       // If the runbook had any bytes at all in its ydoc field, then the content
       // is already in the YJS document and we won't need to convert it.
@@ -100,6 +115,24 @@ export default class RunbookEditor {
     this.selectedTag = tag;
   }
 
+  runbookUpdatedExternally(runbook: OfflineRunbook, contentHash: string) {
+    if (runbook.id !== this.runbook.id) {
+      return;
+    }
+
+    if (this.hashes.length > 0 && this.hashes[this.hashes.length - 1] === contentHash) {
+      return;
+    }
+
+    this.editor?.then((editor) => {
+      editor.replaceBlocks(editor.document, JSON.parse(runbook.content));
+    });
+  }
+
+  setOnline(isOnline: boolean) {
+    this.isOnline = isOnline;
+  }
+
   resetEditor() {
     this.flushSave();
     this.onClearPresences();
@@ -125,19 +158,34 @@ export default class RunbookEditor {
         }
       }
 
-      const presenceColor = randomColor();
-
-      const provider = new PhoenixProvider(this.runbook.id, this.yDoc, presenceColor);
-      this.provider = provider;
-      const editor = createCollaborativeEditor(provider, this.user, presenceColor);
-
-      const content = JSON.parse(this.runbook.content || "[]");
+      let content = JSON.parse(this.runbook.content || "[]");
       // convert any block of type sql -> sqlite
       for (var i = 0; i < content.length; i++) {
         if (content[i].type == "sql") {
           content[i].type = "sqlite";
         }
       }
+
+      if (!this.isOnline) {
+        let needsSave = false;
+        if (content.length == 0) {
+          content = untitledRunbook;
+          needsSave = true;
+        }
+
+        const editor = createLocalOnlyEditor(content);
+        if (needsSave) {
+          this.runbook.content = JSON.stringify(content);
+          this.save(this.runbook, editor as any as BlockNoteEditor);
+        }
+        resolve(editor as any as BlockNoteEditor);
+        return;
+      }
+
+      const presenceColor = randomColor();
+      const provider = new PhoenixProvider(this.runbook.id, this.yDoc, presenceColor);
+      this.provider = provider;
+      const editor = createCollaborativeEditor(provider, this.user, presenceColor);
 
       provider.on("remote_update", () => {
         this.save(this.runbook, editor as any as BlockNoteEditor);
@@ -248,12 +296,23 @@ export default class RunbookEditor {
     this.runbook.name = this.fetchName(editor.document);
     this.runbook.content = JSON.stringify(editor.document);
 
-    if (this.provider) {
+    if (this.provider && this.runbook instanceof OnlineRunbook) {
       this.runbook.ydoc = Y.encodeStateAsUpdate(this.provider.doc);
     }
 
-    this.runbook.save();
-    if (previousName !== this.runbook.name) {
+    // Hashes are only returned from `save` for offline runbooks
+    const maybeHash = await this.runbook.save();
+    if (
+      maybeHash &&
+      (this.hashes.length === 0 || this.hashes[this.hashes.length - 1] !== maybeHash)
+    ) {
+      this.hashes.push(maybeHash);
+      if (this.hashes.length > 5) {
+        this.hashes.shift();
+      }
+    }
+
+    if (previousName !== this.runbook.name && this.isOnline) {
       const op = new Operation({
         operation: {
           type: "runbook_name_updated",

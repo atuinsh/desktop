@@ -47,9 +47,13 @@ export default function useSharedState<T extends SharableState>(
       stateId,
       new AtuinSharedStateAdapter<T>(stateId),
     );
-    const unsub = manager.subscribe(setData);
+    const unsub = manager.subscribe((data) => {
+      console.log("folder data", data);
+      setData(data);
+    });
 
     manager.getDataOnce().then((data) => {
+      console.log("folder initial data", data);
       if (!disposed) {
         setData(data);
       }

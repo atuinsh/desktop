@@ -1,23 +1,20 @@
 import { DatabaseIcon } from "lucide-react";
-import { useCallback } from "react";
-import { invoke, Channel } from "@tauri-apps/api/core";
 
 // @ts-ignore
 import { createReactBlockSpec } from "@blocknote/react";
 
+
+import { runQuery } from "./query";
 import { ClickhouseBlock } from "@/lib/workflow/blocks/clickhouse";
 import { DependencySpec } from "@/lib/workflow/dependency";
 import track_event from "@/tracking";
 import SQL from "@/lib/blocks/common/SQL";
 import { exportPropMatter } from "@/lib/utils";
-import { BlockOutput } from "@/rs-bindings/BlockOutput";
-import { useStore } from "@/state/store";
 
 interface SQLProps {
   isEditable: boolean;
   collapseQuery: boolean;
   clickhouse: ClickhouseBlock;
-  editor: any;
 
   setQuery: (query: string) => void;
   setUri: (uri: string) => void;
@@ -30,7 +27,6 @@ interface SQLProps {
 
 const Clickhouse = ({
   clickhouse,
-  editor,
   setQuery,
   setUri,
   setAutoRefresh,
@@ -41,68 +37,6 @@ const Clickhouse = ({
   setDependency,
   onCodeMirrorFocus,
 }: SQLProps) => {
-  const [currentRunbookId] = useStore((state) => [state.currentRunbookId]);
-
-  // Custom runQuery function - clean version without Promise wrapper
-  const runQuery = useCallback(
-    async (onResult: any, onError: any) => {
-      // Create a channel for output streaming
-      const outputChannel = new Channel<BlockOutput>();
-
-      // Set up output handler
-      outputChannel.onmessage = (output: BlockOutput) => {
-        console.log("Clickhouse output:", output);
-
-        // Handle lifecycle events
-        if (output.lifecycle) {
-          switch (output.lifecycle.type) {
-            case "started":
-              console.log("Clickhouse execution started");
-              break;
-            case "finished":
-              console.log(`Clickhouse execution finished, success: ${output.lifecycle.data.success}`);
-              break;
-            case "cancelled":
-              console.log("Clickhouse execution was cancelled");
-              break;
-            case "error":
-              console.error("Clickhouse execution error:", output.lifecycle.data.message);
-              onError(output.lifecycle.data.message);
-              return; // Don't continue processing after error
-          }
-        }
-        
-        // Handle structured JSON object data (success case)
-        if (output.object && typeof output.object === "object" && output.object !== null) {
-          const parsed = output.object as any;
-          let queryResult = {
-            time: new Date(),
-            columns: parsed.columns?.map((col: string) => ({ name: col, type: "" })) || null,
-            rows: parsed.rows || null,
-            rowsAffected: parsed?.rowsAffected,
-            lastInsertID: parsed?.lastInsertId,
-            duration: 0,
-          };
-          onResult(queryResult);
-        }
-      };
-
-      try {
-        // Execute the block using the generic command
-        await invoke<string>("execute_block", {
-          blockId: clickhouse.id,
-          runbookId: currentRunbookId || "",
-          editorDocument: editor.document,
-          outputChannel,
-        });
-      } catch (err: any) {
-        console.error("Failed to execute Clickhouse query:", err);
-        onError(err.message || "Failed to execute query");
-      }
-    },
-    [clickhouse.id, currentRunbookId, editor],
-  );
-
   return (
     <SQL
       block={clickhouse}
@@ -212,7 +146,6 @@ export default createReactBlockSpec(
       return (
         <Clickhouse
           clickhouse={clickhouse}
-          editor={editor}
           setName={setName}
           setUri={setUri}
           setQuery={setQuery}

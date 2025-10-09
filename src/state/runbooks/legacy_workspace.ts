@@ -1,5 +1,5 @@
 import { uuidv7 } from "uuidv7";
-import Runbook from "./runbook";
+import Runbook, { OnlineRunbook } from "./runbook";
 import AtuinDB from "../atuin_db";
 import { dbHook } from "@/lib/db_hooks";
 
@@ -165,7 +165,7 @@ export default class Workspace {
       "select * from runbooks where legacy_workspace_id = ? order by updated desc",
       [this.id],
     );
-    let runbooks = rows.map(Runbook.fromRow);
+    let runbooks = rows.map((row) => OnlineRunbook.fromRow(row));
 
     return runbooks;
   }

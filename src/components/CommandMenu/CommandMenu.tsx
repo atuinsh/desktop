@@ -6,18 +6,18 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
-import { Dialog, DialogContent, DialogPortal } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogPortal, DialogTitle } from "@/components/ui/dialog";
 
 import { type SearchResultItem } from "./data";
 
 import { AtuinState, useStore } from "@/state/store";
-import { useNavigate } from "react-router-dom";
 import { NotebookIcon } from "lucide-react";
 import RunbookIndexService from "@/state/runbooks/search";
 import { useQuery } from "@tanstack/react-query";
 import { allRunbooks } from "@/lib/queries/runbooks";
 import { allWorkspaces } from "@/lib/queries/workspaces";
 import RunbookContext from "@/context/runbook_context";
+import { VisuallyHidden } from "@heroui/react";
 
 interface CommandMenuProps {
   index: RunbookIndexService;
@@ -34,7 +34,6 @@ export default function CommandMenu(props: CommandMenuProps) {
   const currentWorkspaceId = useStore((store: AtuinState) => store.currentWorkspaceId);
   const setCurrentWorkspaceId = useStore((store: AtuinState) => store.setCurrentWorkspaceId);
   const [results, setResults] = useState<SearchResultItem[]>([]);
-  const navigate = useNavigate();
   const { activateRunbook } = useContext(RunbookContext);
 
   const onClose = useCallback(() => {
@@ -96,13 +95,12 @@ export default function CommandMenu(props: CommandMenuProps) {
     (item: SearchResultItem) => {
       onClose();
       setQuery("");
-      navigate("/runbooks");
       if (item.workspaceId) {
         setCurrentWorkspaceId(item.workspaceId);
       }
       activateRunbook(item.id);
     },
-    [onClose, navigate, setCurrentWorkspaceId, activateRunbook],
+    [onClose, setCurrentWorkspaceId, activateRunbook],
   );
 
   const renderSearchItem = useCallback(
@@ -138,6 +136,9 @@ export default function CommandMenu(props: CommandMenuProps) {
     >
       <DialogPortal>
         <DialogContent className="overflow-hidden p-0 data-[state=open]:animate-none data-[state=closed]:animate-none">
+          <VisuallyHidden>
+            <DialogTitle>Search Runbooks</DialogTitle>
+          </VisuallyHidden>
           <Command shouldFilter={false}>
             <CommandInput placeholder="Search Runbooks..." value={query} onValueChange={setQuery} />
             <CommandList>

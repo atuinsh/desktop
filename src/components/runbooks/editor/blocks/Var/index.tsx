@@ -4,9 +4,9 @@ import { TextCursorInputIcon } from "lucide-react";
 
 // @ts-ignore
 import { createReactBlockSpec } from "@blocknote/react";
-import { useStore } from "@/state/store";
 import { setTemplateVar } from "@/state/templates";
 import { exportPropMatter } from "@/lib/utils";
+import { useCurrentRunbookId } from "@/context/runbook_id_context";
 
 interface VarProps {
   name: string;
@@ -95,7 +95,7 @@ export default createReactBlockSpec(
     },
     // @ts-ignore
     render: ({ block, editor }) => {
-      const currentRunbookId = useStore((store) => store.currentRunbookId);
+      const currentRunbookId = useCurrentRunbookId();
 
       const onUpdate = (name: string, value: string): void => {
         // First update the block props

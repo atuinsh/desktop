@@ -1,4 +1,7 @@
-import { useState, useCallback, useEffect } from "react";
+// TODO [mkt]
+// handle isEditable = false
+
+import { useState, useEffect, useCallback } from "react";
 import {
   Button,
   Dropdown,
@@ -9,19 +12,23 @@ import {
   Spinner,
   Switch,
 } from "@heroui/react";
+
 import { ChevronDownIcon, ClockIcon, LineChartIcon } from "lucide-react";
 import CodeMirror from "@uiw/react-codemirror";
 import { PromQLExtension } from "@prometheus-io/codemirror-promql";
+import { PrometheusDriver } from "prometheus-query";
 import { useInterval } from "usehooks-ts";
-import { invoke, Channel } from "@tauri-apps/api/core";
 
 // @ts-ignore
 import { createReactBlockSpec, useBlockNoteEditor } from "@blocknote/react";
 
+// @ts-ignore
+
 import { PromLineChart } from "./lineChart";
 import PromSettings, { PrometheusConfig } from "./promSettings";
 import { Settings } from "@/state/settings";
-import { useStore } from "@/state/store";
+import { templateString } from "@/state/templates";
+import { logExecution } from "@/lib/exec_log";
 import { PrometheusBlock as PrometheusBlockType } from "@/lib/workflow/blocks/prometheus";
 import { DependencySpec } from "@/lib/workflow/dependency";
 import { useBlockBusRunSubscription } from "@/lib/hooks/useBlockBus";
@@ -33,7 +40,7 @@ import ErrorCard from "@/lib/blocks/common/ErrorCard";
 import PlayButton from "@/lib/blocks/common/PlayButton";
 import Block from "@/lib/blocks/common/Block";
 import { exportPropMatter } from "@/lib/utils";
-import { BlockOutput } from "@/rs-bindings/BlockOutput";
+import { useCurrentRunbookId } from "@/context/runbook_id_context";
 
 interface PromProps {
   setName: (name: string) => void;
@@ -68,7 +75,29 @@ const timeOptions: TimeFrame[] = [
   { name: "Last 180 days", seconds: 180 * 24 * 60 * 60, short: "180d" },
 ];
 
+// map prometheus query time frames (eg last 24hrs) to an ideal step value
+const calculateStepSize = (ago: any, maxDataPoints = 11000) => {
+  // Calculate the initial step size
+  let stepSize = Math.ceil(ago / maxDataPoints);
 
+  // Round up to a "nice" number
+  // Don't go below 10s
+  const niceNumbers = [10, 15, 30, 60, 300, 600, 900, 1800, 3600];
+  for (let i = 0; i < niceNumbers.length; i++) {
+    if (stepSize <= niceNumbers[i]) {
+      stepSize = niceNumbers[i];
+      break;
+    }
+  }
+
+  // If we've gone through all nice numbers and step is still larger,
+  // round up to the nearest hour in seconds
+  if (stepSize > 3600) {
+    stepSize = Math.ceil(stepSize / 3600) * 3600;
+  }
+
+  return stepSize;
+};
 
 const Prometheus = ({
   prometheus,
@@ -81,7 +110,7 @@ const Prometheus = ({
   setDependency,
 }: PromProps) => {
   let editor = useBlockNoteEditor();
-  const currentRunbookId = useStore((state) => state.currentRunbookId);
+  const currentRunbookId = useCurrentRunbookId();
 
   const [value, setValue] = useState<string>(prometheus.query);
   const [data, setData] = useState<any[]>([]);
@@ -92,104 +121,111 @@ const Prometheus = ({
   const [isRunning, setIsRunning] = useState<boolean>(false);
 
   const [prometheusUrl, setPrometheusUrl] = useState<string | null>(null);
+  const [promClient, setPromClient] = useState<PrometheusDriver | null>(null);
   const [promExtension, setPromExtension] = useState<PromQLExtension | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const runQuery = useCallback(
-    async (onResult?: (data: any[]) => void, onError?: (error: string) => void) => {
-      // Create a channel for output streaming
-      const outputChannel = new Channel<BlockOutput>();
+    async (val: any) => {
+      if (!promClient) return;
 
-      // Set up output handler
-      outputChannel.onmessage = (output: BlockOutput) => {
-        console.log("Prometheus output:", output);
+      const start = new Date().getTime() - timeFrame.seconds * 1000;
+      const end = new Date();
+      const step = calculateStepSize(timeFrame.seconds);
 
-        // Handle lifecycle events
-        if (output.lifecycle) {
-          switch (output.lifecycle.type) {
-            case "started":
-              console.log("Prometheus execution started");
-              setIsRunning(true);
-              break;
-            case "finished":
-              console.log(`Prometheus execution finished, success: ${output.lifecycle.data.success}`);
-              setIsRunning(false);
-              if (output.lifecycle.data.success) {
-                setError(null);
-              }
-              break;
-            case "cancelled":
-              console.log("Prometheus execution was cancelled");
-              setIsRunning(false);
-              break;
-            case "error":
-              console.error("Prometheus execution error:", output.lifecycle.data.message);
-              setIsRunning(false);
-              setError(output.lifecycle.data.message);
-              if (onError) onError(output.lifecycle.data.message);
-              return;
-          }
-        }
+      let templated = await templateString(prometheus.id, val, editor.document, currentRunbookId);
+      let begin = new Date().getTime() * 1000000;
+      const res = await promClient.rangeQuery(templated, start, end, step);
+      let finish = new Date().getTime() * 1000000;
 
-        // Handle structured JSON object data (chart data)
-        if (output.object && typeof output.object === "object" && output.object !== null) {
-          const parsed = output.object as any;
-          if (parsed.series) {
-            setData(parsed.series);
-            setError(null);
-            if (onResult) onResult(parsed.series);
-            BlockBus.get().blockFinished(prometheus);
-          }
-        }
-      };
+      let logResponse = {};
+      await logExecution(
+        prometheus,
+        prometheus.typeName,
+        begin,
+        finish,
+        JSON.stringify(logResponse),
+      );
+      BlockBus.get().blockFinished(prometheus);
 
-      try {
-        setIsRunning(true);
-        setError(null);
-        
-        // Execute the block using the generic command
-        await invoke<string>("execute_block", {
-          blockId: prometheus.id,
-          runbookId: currentRunbookId || "",
-          editorDocument: editor.document,
-          outputChannel,
-        });
-      } catch (err: any) {
-        console.error("Failed to execute Prometheus query:", err);
-        setIsRunning(false);
-        setError(err.message || "Failed to execute query");
-        if (onError) onError(err.message || "Failed to execute query");
-      }
+      const series = res.result;
+
+      // convert promql response to echarts
+      let data = series.map((s) => {
+        const metric = s.metric;
+        const values = s.values;
+
+        return {
+          type: "line",
+          showSymbol: false,
+          name: metric.toString(),
+          data: values.map((v: any) => {
+            return [v.time, v.value];
+          }),
+        };
+      });
+
+      setData(data);
     },
-    [prometheus.id, editor.document, currentRunbookId],
+    [promClient, prometheus.id, editor.document],
   );
 
-  useBlockBusRunSubscription(prometheus.id, () => runQuery());
+  useBlockBusRunSubscription(prometheus.id, () => runQuery(prometheus.query));
 
-  // Initialize prometheus URL and PromQL extension for autocompletion
-  const initializePrometheus = useCallback(async () => {
-    let url = prometheus.endpoint;
-    if (!url) {
-      url = await Settings.runbookPrometheusUrl();
-    }
-    
-    if (url) {
-      setPrometheusUrl(url);
-      let promExt = new PromQLExtension().setComplete({
-        remote: { url: url },
-      });
-      setPromExtension(promExt);
-    }
-  }, [prometheus.endpoint]);
-
-  // Initialize on component mount and when endpoint changes
   useEffect(() => {
-    initializePrometheus();
-  }, [initializePrometheus]);
+    (async () => {
+      // if have passed in an endpoint via props directly, use it
+      if (prometheus.endpoint) {
+        setPrometheusUrl(prometheus.endpoint);
+        return;
+      }
+
+      // otherwise fetch the default endpoint from settings
+      let url = await Settings.runbookPrometheusUrl();
+
+      setPrometheusUrl(url);
+    })();
+  }, []);
+
+  useEffect(() => {
+    if (!prometheusUrl) return;
+
+    let prom = new PrometheusDriver({
+      endpoint: prometheusUrl,
+      baseURL: "/api/v1", // default value
+    });
+
+    let promExt = new PromQLExtension().setComplete({
+      remote: { url: prometheusUrl },
+    });
+
+    setPromClient(prom);
+    setPromExtension(promExt);
+  }, [prometheusUrl]);
+
+  useEffect(() => {
+    if (!prometheus.query) return;
+
+    (async () => {
+      try {
+        setIsRunning(true);
+
+        await runQuery(prometheus.query);
+
+        setIsRunning(false);
+        setError(null);
+      } catch (e: any) {
+        setError(JSON.stringify(e));
+        setIsRunning(false);
+      }
+    })();
+  }, [timeFrame, promClient]);
 
   useInterval(
     () => {
-      runQuery();
+      (async () => {
+        await runQuery(value);
+      })();
     },
     prometheus.autoRefresh ? 5000 : null,
   );
@@ -215,7 +251,15 @@ const Prometheus = ({
               eventName="runbooks.block.execute"
               eventProps={{ type: "prometheus" }}
               onPlay={async () => {
-                runQuery();
+                try {
+                  setIsRunning(true);
+                  await runQuery(prometheus.query);
+                  setIsRunning(false);
+                  setError(null);
+                } catch (e: any) {
+                  setError(JSON.stringify(e));
+                  setIsRunning(false);
+                }
               }}
               isRunning={isRunning}
               cancellable={false}
@@ -237,7 +281,7 @@ const Prometheus = ({
       <div className="min-h-64 overflow-x-scroll">
         {!prometheusUrl ? (
           <ErrorCard error="No Prometheus endpoint set" />
-        ) : isRunning && data.length === 0 ? (
+        ) : !promClient ? (
           <Spinner />
         ) : error ? (
           <ErrorCard error={error} />

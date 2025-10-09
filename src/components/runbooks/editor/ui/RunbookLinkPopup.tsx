@@ -16,7 +16,12 @@ interface RunbookLinkPopupProps {
   onClose: () => void;
 }
 
-export function RunbookLinkPopup({ isVisible, position, onSelect, onClose }: RunbookLinkPopupProps) {
+export function RunbookLinkPopup({
+  isVisible,
+  position,
+  onSelect,
+  onClose,
+}: RunbookLinkPopupProps) {
   const [query, setQuery] = useState("");
   const [runbooks, setRunbooks] = useState<Runbook[]>([]);
   const [filteredRunbooks, setFilteredRunbooks] = useState<Runbook[]>([]);
@@ -28,13 +33,14 @@ export function RunbookLinkPopup({ isVisible, position, onSelect, onClose }: Run
     if (isVisible) {
       const loadRunbooks = async () => {
         const { selectedOrg } = useStore.getState();
-        const allRunbooks = selectedOrg 
+        // TODO: support offline runbooks
+        const allRunbooks = selectedOrg
           ? await Runbook.allFromOrg(selectedOrg)
           : await Runbook.allFromOrg(null);
-        
+
         setRunbooks(allRunbooks);
         searchIndex.bulkUpdateRunbooks(allRunbooks);
-        
+
         // Show recent runbooks initially
         const recentRunbooks = allRunbooks
           .slice()
@@ -43,10 +49,10 @@ export function RunbookLinkPopup({ isVisible, position, onSelect, onClose }: Run
         setFilteredRunbooks(recentRunbooks);
         setSelectedIndex(0);
       };
-      
+
       loadRunbooks();
       setQuery("");
-      
+
       // Focus input after a short delay
       setTimeout(() => {
         inputRef.current?.focus();
@@ -123,7 +129,7 @@ export function RunbookLinkPopup({ isVisible, position, onSelect, onClose }: Run
       style={{
         left: position.x,
         top: shouldPositionAbove ? position.y - 10 : position.y + 50,
-        transform: shouldPositionAbove ? 'translateY(-100%)' : 'none',
+        transform: shouldPositionAbove ? "translateY(-100%)" : "none",
       }}
     >
       <div className="p-3">
@@ -138,7 +144,7 @@ export function RunbookLinkPopup({ isVisible, position, onSelect, onClose }: Run
           }}
         />
       </div>
-      
+
       <div className="max-h-60 overflow-y-auto">
         {filteredRunbooks.length === 0 ? (
           <div className="p-3 text-sm text-gray-500 dark:text-gray-400 text-center">
@@ -152,7 +158,7 @@ export function RunbookLinkPopup({ isVisible, position, onSelect, onClose }: Run
                 "flex items-center gap-2 px-3 py-2 cursor-pointer text-sm border-b border-gray-100 dark:border-gray-700 last:border-b-0",
                 index === selectedIndex
                   ? "bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400"
-                  : "hover:bg-gray-50 dark:hover:bg-gray-700"
+                  : "hover:bg-gray-50 dark:hover:bg-gray-700",
               )}
               onClick={() => onSelect(runbook.id, runbook.name || "Untitled Runbook")}
             >
@@ -162,7 +168,7 @@ export function RunbookLinkPopup({ isVisible, position, onSelect, onClose }: Run
           ))
         )}
       </div>
-      
+
       <div className="p-2 text-xs text-gray-500 dark:text-gray-400 border-t border-gray-100 dark:border-gray-700">
         ↑↓ to navigate • Enter to select • Esc to cancel
       </div>

@@ -1,7 +1,7 @@
 import { RemoteRunbook, User } from "@/state/models";
 import Logger from "../logger";
 import WorkspaceSyncManager from "./workspace_sync_manager";
-import Runbook from "@/state/runbooks/runbook";
+import { OnlineRunbook } from "@/state/runbooks/runbook";
 import Snapshot from "@/state/runbooks/snapshot";
 import * as api from "@/api/api";
 import * as Y from "yjs";
@@ -29,13 +29,13 @@ export default class RunbookSynchronizer {
   public isSyncing: boolean = false;
   public syncStarted: Date | null = null;
   private currentUser: User;
-  private workspaceId: string;
+  private workspaceId: string | null;
   private provider: PhoenixSynchronizer | null = null;
   private resolve: Function | null = null;
   private reject: Function | null = null;
   private logger: Logger;
 
-  constructor(runbookId: string, workspaceId: string, currentUser: User) {
+  constructor(runbookId: string, workspaceId: string | null, currentUser: User) {
     this.runbookId = runbookId;
     this.workspaceId = workspaceId;
     this.currentUser = currentUser;
@@ -71,7 +71,7 @@ export default class RunbookSynchronizer {
       this.resolve = resolve;
       this.reject = reject;
 
-      let runbook = await Runbook.load(this.runbookId);
+      let runbook = (await OnlineRunbook.load(this.runbookId)) as OnlineRunbook;
       const snapshots = await Snapshot.findByRunbookId(this.runbookId);
 
       let remoteRunbook: RemoteRunbook;
@@ -121,7 +121,7 @@ export default class RunbookSynchronizer {
 
       if (!runbook) {
         created = true;
-        runbook = await Runbook.create(workspace, false);
+        runbook = await OnlineRunbook.create(workspace, false);
         runbook.id = remoteRunbook.id;
         runbook.name = remoteRunbook.name;
         runbook.source = AtuinEnv.hubRunbookSource;
@@ -205,8 +205,12 @@ export default class RunbookSynchronizer {
         } else {
           this.logger.debug("YJS sync completed with type:", syncType);
           runbook.ydoc = Y.encodeStateAsUpdate(doc);
-          const blocks = await ydocToBlocknote(doc);
-          runbook.content = JSON.stringify(blocks);
+          try {
+            const blocks = await ydocToBlocknote(doc);
+            runbook.content = JSON.stringify(blocks);
+          } catch (err) {
+            this.logger.error("Failed to convert YJS document to BlockNote", err);
+          }
         }
       }
 

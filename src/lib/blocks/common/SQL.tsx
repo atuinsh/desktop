@@ -37,9 +37,8 @@ import { QueryResult } from "./database";
 import SQLResults from "./SQLResults";
 import MaskedInput from "@/components/MaskedInput/MaskedInput";
 import Block from "./Block";
-// import { templateString } from "@/state/templates"; // No longer needed for backend execution
+import { templateString } from "@/state/templates";
 import { useBlockNoteEditor } from "@blocknote/react";
-import { AtuinState, useStore } from "@/state/store";
 import { cn, toSnakeCase } from "@/lib/utils";
 import { logExecution } from "@/lib/exec_log";
 import { DependencySpec } from "@/lib/workflow/dependency";
@@ -48,6 +47,7 @@ import BlockBus from "@/lib/workflow/block_bus";
 import useCodemirrorTheme from "@/lib/hooks/useCodemirrorTheme";
 import { useCodeMirrorValue } from "@/lib/hooks/useCodeMirrorValue";
 import EditableHeading from "@/components/EditableHeading/index";
+import { useCurrentRunbookId } from "@/context/runbook_id_context";
 
 interface SQLProps {
   id: string;
@@ -62,7 +62,7 @@ interface SQLProps {
   uri: string;
   query: string;
   autoRefresh: number;
-  runQuery: (setResults: any, onError: any) => Promise<void>;
+  runQuery: (uri: string, query: string) => Promise<QueryResult & { queryCount?: number; executedQueries?: string[] }>;
 
   setCollapseQuery: (collapseQuery: boolean) => void;
   setQuery: (query: string) => void;
@@ -110,22 +110,20 @@ const SQL = ({
   let editor = useBlockNoteEditor();
   const [isRunning, setIsRunning] = useState<boolean>(false);
 
-  const [results, setResults] = useState<
-    (QueryResult & { queryCount?: number; executedQueries?: string[] }) | null
-  >(null);
+  const [results, setResults] = useState<QueryResult & { queryCount?: number; executedQueries?: string[] } | null>(null);
   const [columns, setColumns] = useState<
     { id: string; title: string; grow?: number; width?: number }[]
   >([]);
 
   const [error, setError] = useState<string | null>(null);
-  const [currentRunbookId] = useStore((store: AtuinState) => [store.currentRunbookId]);
+  const currentRunbookId = useCurrentRunbookId();
   const elementRef = useRef<HTMLDivElement>(null);
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
   const [isFullscreenQueryCollapsed, setIsFullscreenQueryCollapsed] = useState<boolean>(false);
 
   const themeObj = useCodemirrorTheme();
   const codeMirrorValue = useCodeMirrorValue(query, setQuery);
-
+  
   // Get SQL language extension based on sqlType
   const getSqlExtension = () => {
     switch (sqlType) {
@@ -148,37 +146,31 @@ const SQL = ({
 
     let startTime = new Date().getTime() * 1000000;
     try {
+      let tUri = await templateString(id, uri, editor.document, currentRunbookId);
+      let tQuery = await templateString(id, query, editor.document, currentRunbookId);
+
       if (elementRef.current) {
         elementRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
       }
 
-      await runQuery(async (res: any) => {
-        let endTime = new Date().getTime() * 1000000;
+      let res = await runQuery(tUri, tQuery);
+      let endTime = new Date().getTime() * 1000000;
 
-        // Don't log the actual data, but log the query and metadata
-        let output = {
-          query,
-          rowCount: res.rows?.length,
-          queryCount: res.queryCount || 1,
-          executedQueries: res.executedQueries || [],
-        };
-        await logExecution(block, block.typeName, startTime, endTime, JSON.stringify(output));
-        BlockBus.get().blockFinished(block);
+      // Don't log the actual data, but log the query and metadata
+      let output = {
+        query,
+        rowCount: res.rows?.length,
+        queryCount: res.queryCount || 1,
+        executedQueries: res.executedQueries || [],
+      };
+      await logExecution(block, block.typeName, startTime, endTime, JSON.stringify(output));
+      BlockBus.get().blockFinished(block);
 
-        setIsRunning(false);
+      setIsRunning(false);
 
-        setResults(res);
-        setColumns(columns);
-        setError(null);
-      }, async (errorMessage: string) => {
-        // Handle errors from the backend via lifecycle events
-        setIsRunning(false);
-        setError(errorMessage);
-        
-        let endTime = new Date().getTime() * 1000000;
-        await logExecution(block, block.typeName, startTime, endTime, JSON.stringify({ error: errorMessage }));
-        BlockBus.get().blockFinished(block);
-      });
+      setColumns(columns);
+      setResults(res);
+      setError(null);
     } catch (e: any) {
       if (e.message) {
         e = e.message;
@@ -356,20 +348,25 @@ const SQL = ({
               onPlay={handlePlay}
               cancellable={false}
             />
-            <CodeMirror
-              placeholder={"Write your query here..."}
-              className={cn("!pt-0 max-w-full border border-gray-300 rounded flex-grow", {
-                "h-8 overflow-hidden": collapseQuery,
-              })}
-              basicSetup={true}
-              extensions={[getSqlExtension(), ...extensions]}
-              value={codeMirrorValue.value}
-              onChange={codeMirrorValue.onChange}
-              editable={isEditable}
-              theme={themeObj}
-              maxHeight="100vh"
-              onFocus={onCodeMirrorFocus}
-            />
+            <div className={cn("flex-grow relative transition-all duration-300 ease-in-out", {
+              "max-h-10 overflow-hidden": collapseQuery,
+            })}>
+              <CodeMirror
+                placeholder={"Write your query here..."}
+                className="!pt-0 max-w-full border border-gray-300 rounded"
+                basicSetup={true}
+                extensions={[getSqlExtension(), ...extensions]}
+                value={codeMirrorValue.value}
+                onChange={codeMirrorValue.onChange}
+                editable={isEditable}
+                theme={themeObj}
+                maxHeight="100vh"
+                onFocus={onCodeMirrorFocus}
+              />
+              {collapseQuery && (
+                <div className="absolute bottom-0 left-0 right-0 h-6 bg-gradient-to-t from-white dark:from-gray-900 to-transparent pointer-events-none" />
+              )}
+            </div>
           </div>
         </>
       }
@@ -424,11 +421,7 @@ const SQL = ({
               onPress={() => setCollapseQuery(!collapseQuery)}
             >
               <Tooltip content={collapseQuery ? "Expand query" : "Collapse query"}>
-                {collapseQuery ? (
-                  <ArrowDownToLineIcon size={16} />
-                ) : (
-                  <ArrowUpToLineIcon size={16} />
-                )}
+                {collapseQuery ? <ArrowDownToLineIcon size={16} /> : <ArrowUpToLineIcon size={16} />}
               </Tooltip>
             </Button>
           </ButtonGroup>
@@ -580,12 +573,10 @@ const SQL = ({
               )}
 
               {/* Results Section - 2/3 height */}
-              <div
-                className={cn("flex-1 min-h-0 overflow-hidden p-4", {
-                  "h-2/3": !isFullscreenQueryCollapsed,
-                  "h-full": isFullscreenQueryCollapsed,
-                })}
-              >
+              <div className={cn("flex-1 min-h-0 overflow-hidden p-4", {
+                "h-2/3": !isFullscreenQueryCollapsed,
+                "h-full": isFullscreenQueryCollapsed
+              })}>
                 {(results || error) && (
                   <SQLResults
                     results={results}

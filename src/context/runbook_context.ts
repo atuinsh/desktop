@@ -7,13 +7,7 @@ function stub() {
 interface API {
   activateRunbook: (runbookId: string | null) => void;
   promptDeleteRunbook: (runbookId: string) => void;
-  runbookDeleted: (workspaceId: string, runbookId: string) => void;
-  runbookCreated: (
-    runbookId: string,
-    workspaceId: string,
-    parentFolderId: string | null,
-    activate?: boolean,
-  ) => void;
+  // runbookDeleted: (workspaceId: string, runbookId: string) => void;
   runbookMoved: (
     runbookId: string,
     newWorkspaceId: string,
@@ -24,8 +18,7 @@ interface API {
 const RunbookContext = createContext<API>({
   activateRunbook: stub,
   promptDeleteRunbook: stub,
-  runbookCreated: stub,
-  runbookDeleted: stub,
+  // runbookDeleted: stub,
   runbookMoved: stub,
 });
 

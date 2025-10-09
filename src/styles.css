@@ -132,3 +132,17 @@ body.resizing, body.resizing a:hover, body.resizing * {
 .dark .cm-editor .cm-scroller::-webkit-scrollbar-thumb:hover {
     background-color: rgba(255, 255, 255, 0.5);
 }
+
+.bn-block-content[data-content-type="checkListItem"] > div > div {
+    align-items: center;
+}
+
+/* Reset all styles to browser default for the release notes so we don't have to implement them all */
+.github-release-notes, .github-release-notes * {
+    all: revert !important;
+}
+
+.github-release-notes > *:first-child {
+    padding-top: 0 !important;
+    margin-top: 0 !important;
+}

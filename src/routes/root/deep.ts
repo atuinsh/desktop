@@ -1,5 +1,5 @@
-import { me, HttpResponseError, getRunbookID } from "@/api/api";
-import RunbookSynchronizer from "@/lib/sync/runbook_synchronizer";
+import { me, HttpResponseError } from "@/api/api";
+import { DialogBuilder } from "@/components/Dialogs/dialog";
 import Runbook from "@/state/runbooks/runbook";
 import { useStore } from "@/state/store";
 
@@ -11,74 +11,23 @@ interface Routes {
   [pattern: string]: RouteHandler;
 }
 
-async function createRunbookFromHub(id: string) {
-  try {
-    await getRunbookID(id);
-    // It exists; kick off a sync
-    const user = useStore.getState().user;
-    const currentWorkspaceId = useStore.getState().currentWorkspaceId;
-    const sync = new RunbookSynchronizer(id, currentWorkspaceId, user);
-    const runbook = await sync.sync();
-    return runbook;
-  } catch (err) {
-    if (err instanceof HttpResponseError) {
-      console.error("Failed to fetch runbook from hub:", err.code);
-    } else {
-      console.error("Failed to fetch runbook from hub:", err);
-    }
-  }
-}
-
-const handleDeepLink = (
-  url: string,
-  runbookCreated: (
-    runbookId: string,
-    workspaceId: string,
-    parentFolderId: string | null,
-    activate?: boolean,
-  ) => void,
-): void | null => {
+const handleDeepLink = (url: string, openRunbook: (id: string) => void): void | null => {
   const routes: Routes = {
-    // Legacy "Open in desktop" from the hub
-    "^atuin://runbook/([\\w-]+)/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$":
-      async (params: string[]) => {
-        const [_username, id] = params;
-
-        let result = await createRunbookFromHub(id);
-
-        if (result && result.runbookId) {
-          let runbook = await Runbook.load(result?.runbookId);
-          if (!runbook) {
-            console.error("Unable to open runbook from hub");
-            return;
-          }
-          runbookCreated(runbook.id, runbook.workspaceId, null, true);
-
-          useStore.getState().refreshRunbooks();
-        } else {
-          console.error("Unable to open runbook from hub");
-        }
-      },
-
     // New "Open in desktop" from the hub
     "^atuin://runbook/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$": async (
       params: string[],
     ) => {
       const [id] = params;
 
-      let result = await createRunbookFromHub(id);
-
-      if (result) {
-        let runbook = await Runbook.load(result?.runbookId);
-        if (!runbook) {
-          console.error("Unable to open runbook from hub");
-          return;
-        }
-        runbookCreated(runbook.id, runbook.workspaceId, null, true);
-
-        useStore.getState().refreshRunbooks();
+      const runbook = await Runbook.load(id);
+      if (runbook) {
+        openRunbook(runbook.id);
       } else {
-        console.error("Unable to open runbook from hub");
+        await new DialogBuilder()
+          .title("Runbook not found")
+          .message("The runbook you are trying to open was not found on this machine.")
+          .action({ label: "OK", value: "ok", variant: "flat" })
+          .build();
       }
     },
 

@@ -27,6 +27,10 @@ const AccountModal = ({ close, isOpen }: { close: () => void; isOpen: boolean })
         {() => (
           <div className="p-4 space-y-4">
             <h1 className="text-3xl font-bold text-center">Create your Atuin Hub Account</h1>
+            <i className="text-center">
+              Atuin Hub is different to existing Atuin shell history sync accounts. In the future,
+              we may merge the two
+            </i>
             <Card>
               <CardBody>
                 <h2 className="text-xl font-semibold mb-2">Why sign up?</h2>

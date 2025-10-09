@@ -3,10 +3,10 @@ import { Input, Button } from "@heroui/react";
 import { CloudOffIcon, LockIcon } from "lucide-react";
 import { createReactBlockSpec } from "@blocknote/react";
 import { invoke } from "@tauri-apps/api/core";
-import { useStore } from "@/state/store";
 import track_event from "@/tracking";
 import { setTemplateVar } from "@/state/templates";
 import { exportPropMatter } from "@/lib/utils";
+import { useCurrentRunbookId } from "@/context/runbook_id_context";
 
 interface LocalVarProps {
   name: string;
@@ -18,7 +18,7 @@ const LocalVar = ({ name = "", onNameUpdate, isEditable }: LocalVarProps) => {
   // Store the value in local React state only, not in props
   // This ensures it doesn't sync to the remote document
   const [localValue, setLocalValue] = useState<string>("");
-  const currentRunbookId = useStore((store) => store.currentRunbookId);
+  const currentRunbookId = useCurrentRunbookId();
 
   // Get the initial value from backend when component mounts or name changes
   useEffect(() => {

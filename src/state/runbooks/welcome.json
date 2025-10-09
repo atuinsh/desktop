@@ -1,1 +1,1168 @@
-[{"id":"7461c6c5-5544-45f0-ab88-b5e540177392","type":"heading","props":{"textColor":"default","backgroundColor":"default","textAlignment":"left","level":1},"content":[{"type":"text","text":"Welcome to Atuin!","styles":{}}],"children":[]},{"id":"e0b27bd5-d8dc-473e-a7a9-2433cc7a4fe6","type":"paragraph","props":{"textColor":"default","backgroundColor":"default","textAlignment":"left"},"content":[{"type":"text","text":"Hey there! Welcome to Atuin Runbooks!","styles":{}}],"children":[]},{"id":"2da7a9bb-5b3a-47e0-a1ba-106367534cb2","type":"paragraph","props":{"textColor":"default","backgroundColor":"default","textAlignment":"left"},"content":[],"children":[]},{"id":"9a2105f1-f11a-471d-9921-b8ca4550a878","type":"paragraph","props":{"textColor":"default","backgroundColor":"default","textAlignment":"left"},"content":[{"type":"text","text":"This serves as an overview of the functionality we provide, and should help you get started. Please note that we’re currently in beta, and moving rapidly - features might change, and bugs will be fixed fast.","styles":{}}],"children":[]},{"id":"7ffb4855-2d48-488a-bd43-9c8eace4bceb","type":"paragraph","props":{"textColor":"default","backgroundColor":"default","textAlignment":"left"},"content":[],"children":[]},{"id":"10459480-ba72-4da8-a62a-d7513f35e09f","type":"heading","props":{"textColor":"default","backgroundColor":"default","textAlignment":"left","level":2},"content":[{"type":"text","text":"Sync","styles":{}}],"children":[]},{"id":"009aa93e-8b5e-457c-b71d-978c53c4a14e","type":"paragraph","props":{"textColor":"default","backgroundColor":"default","textAlignment":"left"},"content":[{"type":"text","text":"Register with ","styles":{}},{"type":"link","href":"https://hub.atuin.sh/settings/desktop-connect","content":[{"type":"text","text":"Atuin Hub","styles":{}}]},{"type":"text","text":" to sync your runbook! ","styles":{}}],"children":[]},{"id":"423375d2-429e-46c3-bce9-01c14bbee7a9","type":"paragraph","props":{"textColor":"default","backgroundColor":"default","textAlignment":"left"},"content":[],"children":[]},{"id":"9171642f-7d69-42d1-9362-bb6466dda3f5","type":"bulletListItem","props":{"textColor":"default","backgroundColor":"default","textAlignment":"left"},"content":[{"type":"text","text":"Share runbooks either privately, or publicly with the world","styles":{}}],"children":[]},{"id":"4574df09-cf0c-475b-abf9-f1f8b2e75c0d","type":"bulletListItem","props":{"textColor":"default","backgroundColor":"default","textAlignment":"left"},"content":[{"type":"text","text":"Invite others to collaborate in real time","styles":{}}],"children":[]},{"id":"323e15cd-5e1b-4517-b703-ca49ec15956b","type":"bulletListItem","props":{"textColor":"default","backgroundColor":"default","textAlignment":"left"},"content":[{"type":"text","text":"Keep a backup in case of emergency","styles":{}}],"children":[]},{"id":"0c2ef3dd-c4ef-4d3b-bd9c-7e862b195a7d","type":"paragraph","props":{"textColor":"default","backgroundColor":"default","textAlignment":"left"},"content":[],"children":[]},{"id":"6372afb0-42b7-4d7d-a56c-524111599497","type":"paragraph","props":{"textColor":"default","backgroundColor":"default","textAlignment":"left"},"content":[{"type":"text","text":"We’re working on team features and will be releasing them soon. If you have thoughts you want to share, please do not hesitate to ","styles":{}},{"type":"link","href":"https://atuin.sh/contact","content":[{"type":"text","text":"get in touch","styles":{}}]}],"children":[]},{"id":"fdc39f30-c28a-40b3-b526-889fc96fd740","type":"paragraph","props":{"textColor":"default","backgroundColor":"default","textAlignment":"left"},"content":[],"children":[]},{"id":"2d6fc25a-4f32-421c-b459-d1b3e1bcc39e","type":"paragraph","props":{"textColor":"default","backgroundColor":"default","textAlignment":"left"},"content":[{"type":"text","text":"Read more in the ","styles":{}},{"type":"link","href":"https://man.atuin.sh/atuin-hub/getting-started","content":[{"type":"text","text":"docs","styles":{}}]}],"children":[]},{"id":"0e734785-0ab8-46ea-ab9c-fcc3833c2e5c","type":"paragraph","props":{"textColor":"default","backgroundColor":"default","textAlignment":"left"},"content":[],"children":[]},{"id":"4d1497cd-5a80-4cf0-a043-78e7895b9e01","type":"heading","props":{"textColor":"default","backgroundColor":"default","textAlignment":"left","level":2},"content":[{"type":"text","text":"Terminals","styles":{}}],"children":[]},{"id":"e0fd15c4-7df6-4474-a28c-e4d9cc38fdb2","type":"paragraph","props":{"textColor":"default","backgroundColor":"default","textAlignment":"left"},"content":[{"type":"text","text":"This is the primary feature we provide - “runbooks that run” wouldn’t make sense without it.","styles":{}}],"children":[]},{"id":"6848f3d8-ddb4-45f9-86a4-9032545d98c2","type":"paragraph","props":{"textColor":"default","backgroundColor":"default","textAlignment":"left"},"content":[],"children":[]},{"id":"5a4d4b2d-c4fa-496a-ae5d-5ebb78d3320f","type":"paragraph","props":{"textColor":"default","backgroundColor":"default","textAlignment":"left"},"content":[{"type":"text","text":"To create a terminal block, type ","styles":{}},{"type":"text","text":"/","styles":{"code":true}},{"type":"text","text":", and then filter to “terminal”. This will embed a code editor into your document, like the following:","styles":{}}],"children":[]},{"id":"95a76951-6958-4d6f-b340-daa6ae4a4741","type":"paragraph","props":{"textColor":"default","backgroundColor":"default","textAlignment":"left"},"content":[],"children":[]},{"id":"84441963-2643-48b7-aa35-23afd35d4d64","type":"run","props":{"type":"bash","name":"My first terminal","code":"echo 'Welcome to Atuin!'\necho 'This is a terminal block'\necho 'Try clicking the green play button on the left'","pty":"","global":false,"outputVisible":true,"dependency":"{}"},"children":[]},{"id":"8e8f3904-f284-42fc-93a6-ba569b255ec2","type":"paragraph","props":{"textColor":"default","backgroundColor":"default","textAlignment":"left"},"content":[],"children":[]},{"id":"ff955f18-1b9e-444c-985b-8d87ecc89998","type":"paragraph","props":{"textColor":"default","backgroundColor":"default","textAlignment":"left"},"content":[{"type":"text","text":"Upon clicking “play”, you should see the bash snippet executed in your shell! This all happens on your local system, with your local config.","styles":{}}],"children":[]},{"id":"f31c2481-6c0e-411e-899b-1cf6181478b6","type":"paragraph","props":{"textColor":"default","backgroundColor":"default","textAlignment":"left"},"content":[],"children":[]},{"id":"d13df67d-a997-4d5c-b8bf-1e145f88cfb0","type":"paragraph","props":{"textColor":"default","backgroundColor":"default","textAlignment":"left"},"content":[{"type":"text","text":"Give it a try:","styles":{}}],"children":[]},{"id":"f1815914-9fda-4d4b-bc7e-e850013a6be5","type":"paragraph","props":{"textColor":"default","backgroundColor":"default","textAlignment":"left"},"content":[],"children":[]},{"id":"18ee6e71-7e47-4b2f-8879-8a2c1d8d48f3","type":"run","props":{"type":"bash","name":"Enter your command","code":"","pty":"","global":false,"outputVisible":true,"dependency":"{}"},"children":[]},{"id":"a4f3f46a-374f-45f7-b40c-2b96d9747050","type":"paragraph","props":{"textColor":"default","backgroundColor":"default","textAlignment":"left"},"content":[],"children":[]},{"id":"54af99b0-05fa-4be4-ad25-5292813914d9","type":"paragraph","props":{"textColor":"default","backgroundColor":"default","textAlignment":"left"},"content":[{"type":"text","text":"These blocks are a full terminal - you can interact with them, type in them, whatever you want. When they are stopped, all resources are cleaned up. Feel free to navigate to other documents and explore - your terminal will stay running in the background.","styles":{}}],"children":[]},{"id":"21453254-e6f4-4a1b-ba54-050c0f72ea5c","type":"paragraph","props":{"textColor":"default","backgroundColor":"default","textAlignment":"left"},"content":[],"children":[]},{"id":"b89edbc1-87a6-4255-89bb-6d5b249b4a8d","type":"heading","props":{"textColor":"default","backgroundColor":"default","textAlignment":"left","level":2},"content":[{"type":"text","text":"Scripts","styles":{}}],"children":[]},{"id":"7f98575c-d6a5-49d8-8fd9-ef15d2f75574","type":"paragraph","props":{"textColor":"default","backgroundColor":"default","textAlignment":"left"},"content":[{"type":"text","text":"Alongside terminals, we also have scripts. While terminals run in a fully interactive login session, scripts run differently. They behave more like a normal bash script, and can have their output captured as a variable. This can be useful for fetching secrets, etc.","styles":{}}],"children":[]},{"id":"e85a7a52-4acb-4cdb-8eda-643ea61c9df7","type":"paragraph","props":{"textColor":"default","backgroundColor":"default","textAlignment":"left"},"content":[],"children":[]},{"id":"56473aff-5af4-4667-8011-7b769ebd0a0a","type":"paragraph","props":{"textColor":"default","backgroundColor":"default","textAlignment":"left"},"content":[{"type":"text","text":"We support the following interpreters, with more to come:","styles":{}}],"children":[]},{"id":"f317ecf4-764c-4b3c-b866-f35a9f239e84","type":"paragraph","props":{"textColor":"default","backgroundColor":"default","textAlignment":"left"},"content":[],"children":[]},{"id":"daf7d7af-1d5b-47f9-9e33-74d3af87593d","type":"numberedListItem","props":{"textColor":"default","backgroundColor":"default","textAlignment":"left"},"content":[{"type":"text","text":"zsh","styles":{}}],"children":[]},{"id":"0ff398e8-2f6e-4e14-af3c-e00a8c84603b","type":"numberedListItem","props":{"textColor":"default","backgroundColor":"default","textAlignment":"left"},"content":[{"type":"text","text":"bash","styles":{}}],"children":[]},{"id":"c826f3ec-fa4c-4db6-92cb-104292b5418b","type":"numberedListItem","props":{"textColor":"default","backgroundColor":"default","textAlignment":"left"},"content":[{"type":"text","text":"nodejs","styles":{}}],"children":[]},{"id":"05b71167-53e5-4c6e-9a8c-ffdec2c09f59","type":"numberedListItem","props":{"textColor":"default","backgroundColor":"default","textAlignment":"left"},"content":[{"type":"text","text":"python3","styles":{}}],"children":[]},{"id":"7c65fde6-5b0f-44f3-89a2-8b1df5e751f2","type":"paragraph","props":{"textColor":"default","backgroundColor":"default","textAlignment":"left"},"content":[],"children":[]},{"id":"0d5b0f9b-bdbf-4883-b8c1-3f16b67d2281","type":"script","props":{"interpreter":"zsh","outputVariable":"","name":"Script 2","code":"echo \"hello world\"","outputVisible":false,"dependency":"{}"},"children":[]},{"id":"f36315c7-41e1-407a-bed6-0f750f7cf3fe","type":"paragraph","props":{"textColor":"default","backgroundColor":"default","textAlignment":"left"},"content":[],"children":[]},{"id":"35312e4b-4de3-42bf-9c80-b58ebd4d8ccd","type":"heading","props":{"textColor":"default","backgroundColor":"default","textAlignment":"left","level":3},"content":[{"type":"text","text":"Directories","styles":{}}],"children":[]},{"id":"c69c9a8b-26bd-4411-9c7b-a8519bb7545a","type":"paragraph","props":{"textColor":"default","backgroundColor":"default","textAlignment":"left"},"content":[{"type":"text","text":"Sometimes, you may want to set the directory we should use. While you could cd in a block, that can get repetitive","styles":{}}],"children":[]},{"id":"32aae71a-318a-44fc-9c93-e34dd5b562f0","type":"paragraph","props":{"textColor":"default","backgroundColor":"default","textAlignment":"left"},"content":[],"children":[]},{"id":"499ebbb2-4e38-445c-8190-3a0cabd56621","type":"directory","props":{"path":""},"children":[]},{"id":"6603521b-c84a-4b3d-bb5f-9cf4a5f005b6","type":"paragraph","props":{"textColor":"default","backgroundColor":"default","textAlignment":"left"},"content":[],"children":[]},{"id":"24e1a755-6fec-4043-9102-f4cdf0b2b603","type":"run","props":{"type":"bash","name":"See the directory change","code":"pwd","pty":"","global":false,"outputVisible":true,"dependency":"{}"},"children":[]},{"id":"bbc872c5-762c-4495-b16f-95d7e8a1c0cc","type":"paragraph","props":{"textColor":"default","backgroundColor":"default","textAlignment":"left"},"content":[],"children":[]},{"id":"17eb17dc-9c22-4935-abca-e37c16bdc958","type":"paragraph","props":{"textColor":"default","backgroundColor":"default","textAlignment":"left"},"content":[{"type":"text","text":"Atuin supports ","styles":{}},{"type":"text","text":"directory blocks","styles":{"italic":true}},{"type":"text","text":". These set the directory that all subsequent code blocks should use. Try changing directory, and then running the terminal block.","styles":{}}],"children":[]},{"id":"6888528a-0ffe-41e4-9633-fba6b62d08ba","type":"paragraph","props":{"textColor":"default","backgroundColor":"default","textAlignment":"left"},"content":[],"children":[]},{"id":"aa6782b7-bef7-4841-9643-6710abfe054c","type":"heading","props":{"textColor":"default","backgroundColor":"default","textAlignment":"left","level":3},"content":[{"type":"text","text":"Env","styles":{}}],"children":[]},{"id":"309b5a6c-4bee-4729-a530-62ef03307b9f","type":"paragraph","props":{"textColor":"default","backgroundColor":"default","textAlignment":"left"},"content":[{"type":"text","text":"Much like the directory block, these set the env for all subsequent blocks","styles":{}}],"children":[]},{"id":"f76cac1c-5ca5-4cb5-ae6c-57699b001c44","type":"paragraph","props":{"textColor":"default","backgroundColor":"default","textAlignment":"left"},"content":[],"children":[]},{"id":"9da5ad0d-9d4b-4484-b082-76861aeb7dc9","type":"env","props":{"name":"FOO","value":"BAR"},"children":[]},{"id":"0c8d3db9-a267-4df2-9f95-6c210af0ff26","type":"paragraph","props":{"textColor":"default","backgroundColor":"default","textAlignment":"left"},"content":[],"children":[]},{"id":"6203f0a8-c4c4-4295-8ecd-03f86644d6b2","type":"run","props":{"type":"bash","name":"","code":"echo $FOO","pty":"","global":false,"outputVisible":true,"dependency":"{}"},"children":[]},{"id":"df162630-e3b6-4698-9488-1761b917f592","type":"paragraph","props":{"textColor":"default","backgroundColor":"default","textAlignment":"left"},"content":[],"children":[]},{"id":"dcb5f822-79d5-4375-8455-baf3e2758dc3","type":"heading","props":{"textColor":"default","backgroundColor":"default","textAlignment":"left","level":3},"content":[{"type":"text","text":"Template system","styles":{}}],"children":[]},{"id":"6ebcea4e-be98-4f6f-8c80-8d49546781d3","type":"paragraph","props":{"textColor":"default","backgroundColor":"default","textAlignment":"left"},"content":[{"type":"text","text":"This is super powerful. Every input in the runbook is first processed by our template system - the syntax is very similar to Jinja, and you can read more ","styles":{}},{"type":"link","href":"https://man.atuin.sh/templating","content":[{"type":"text","text":"here","styles":{}}]},{"type":"text","text":".","styles":{}}],"children":[]},{"id":"59ba9baa-5414-4557-822c-d32e1e0c722a","type":"paragraph","props":{"textColor":"default","backgroundColor":"default","textAlignment":"left"},"content":[],"children":[]},{"id":"9b33d2f3-f537-4c04-890f-1d6973782155","type":"var","props":{"name":"example_template_var","value":"example template value"},"children":[]},{"id":"2ed8558d-4e97-46ce-b7f2-258f8e487573","type":"run","props":{"type":"bash","name":"Terminal 5","code":"echo \"{{ var.example_template_var }}\"","pty":"","global":false,"outputVisible":true,"dependency":"{}"},"children":[]},{"id":"9ca26d8f-eabf-4c8c-9e37-f1f361313666","type":"paragraph","props":{"textColor":"default","backgroundColor":"default","textAlignment":"left"},"content":[],"children":[]},{"id":"c425e756-f521-4743-a769-0986cd63f0fd","type":"paragraph","props":{"textColor":"default","backgroundColor":"default","textAlignment":"left"},"content":[{"type":"text","text":"Template variables can also be set by the output of a script block, for instance:","styles":{}}],"children":[]},{"id":"153e5a69-bfb9-421c-9c91-f18e49e4319f","type":"script","props":{"interpreter":"zsh","outputVariable":"script_variable","name":"Script 1","code":"echo \"hello template system! coming from $(hostname)\"","outputVisible":false,"dependency":"{}"},"children":[]},{"id":"ae8cef0d-a0a3-4ff6-bf25-f222d0a1237c","type":"paragraph","props":{"textColor":"default","backgroundColor":"default","textAlignment":"left"},"content":[],"children":[]},{"id":"def2ba2a-7f14-4499-904d-dd93dbba9263","type":"run","props":{"type":"bash","name":"Terminal 6","code":"echo \"{{ var.script_variable }}\"","pty":"","global":false,"outputVisible":true,"dependency":"{}"},"children":[]},{"id":"946f835d-6060-4823-aa30-5f1cf1736945","type":"paragraph","props":{"textColor":"default","backgroundColor":"default","textAlignment":"left"},"content":[],"children":[]},{"id":"3cb0db1e-9395-499a-811a-41810cbfd808","type":"heading","props":{"textColor":"default","backgroundColor":"default","textAlignment":"left","level":2},"content":[{"type":"text","text":"What else?","styles":{}}],"children":[]},{"id":"12a007bb-a08b-4875-9354-071eb50d2934","type":"paragraph","props":{"textColor":"default","backgroundColor":"default","textAlignment":"left"},"content":[{"type":"text","text":"We also have","styles":{}},{"type":"link","href":"https://man.atuin.sh/blocks/databases","content":[{"type":"text","text":" database clients","styles":{}}]},{"type":"text","text":", an ","styles":{}},{"type":"link","href":"https://man.atuin.sh/blocks/network/ssh","content":[{"type":"text","text":"SSH integration","styles":{}}]},{"type":"text","text":", and more! Be sure to check out the ","styles":{}},{"type":"link","href":"https://man.atuin.sh","content":[{"type":"text","text":"docs","styles":{}}]},{"type":"text","text":", and let us know if there’s anything else that would be helpful.","styles":{}}],"children":[]},{"id":"35c7e959-452e-4ece-8a5e-c4d535ad2558","type":"paragraph","props":{"textColor":"default","backgroundColor":"default","textAlignment":"left"},"content":[],"children":[]}]
+[
+  {
+    "id": "7461c6c5-5544-45f0-ab88-b5e540177392",
+    "type": "heading",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left",
+      "level": 1,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Welcome to Atuin!",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "e0b27bd5-d8dc-473e-a7a9-2433cc7a4fe6",
+    "type": "paragraph",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Hey there! Welcome to Atuin Runbooks!",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "2da7a9bb-5b3a-47e0-a1ba-106367534cb2",
+    "type": "paragraph",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [],
+    "children": []
+  },
+  {
+    "id": "9a2105f1-f11a-471d-9921-b8ca4550a878",
+    "type": "paragraph",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "This serves as an overview of the functionality we provide, and should help you get started. Please note that we’re currently in beta, and moving rapidly - features might change, and bugs will be fixed fast.",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "7ffb4855-2d48-488a-bd43-9c8eace4bceb",
+    "type": "paragraph",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [],
+    "children": []
+  },
+  {
+    "id": "10459480-ba72-4da8-a62a-d7513f35e09f",
+    "type": "heading",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left",
+      "level": 2,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Sync",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "009aa93e-8b5e-457c-b71d-978c53c4a14e",
+    "type": "paragraph",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Register with ",
+        "styles": {}
+      },
+      {
+        "type": "link",
+        "href": "https://hub.atuin.sh/settings/desktop-connect",
+        "content": [
+          {
+            "type": "text",
+            "text": "Atuin Hub",
+            "styles": {}
+          }
+        ]
+      },
+      {
+        "type": "text",
+        "text": " to sync your runbooks! ",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "423375d2-429e-46c3-bce9-01c14bbee7a9",
+    "type": "paragraph",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [],
+    "children": []
+  },
+  {
+    "id": "9171642f-7d69-42d1-9362-bb6466dda3f5",
+    "type": "bulletListItem",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Share runbooks either privately, or publicly with the world",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "4574df09-cf0c-475b-abf9-f1f8b2e75c0d",
+    "type": "bulletListItem",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Invite others to collaborate in real time",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "323e15cd-5e1b-4517-b703-ca49ec15956b",
+    "type": "bulletListItem",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Keep a backup in case of emergency",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "8ee1e389-d406-49c5-ac76-c5ca4fbf6d50",
+    "type": "paragraph",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [],
+    "children": []
+  },
+  {
+    "id": "d6c90a76-09ae-45da-bb96-0a678b1fe958",
+    "type": "heading",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left",
+      "level": 2,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Teams",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "6372afb0-42b7-4d7d-a56c-524111599497",
+    "type": "paragraph",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "We support team collaboration via the creation of organizations. Create an org via the dropdown on the left sidebar. Orgs allow realtime sharing between many users.",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "fdc39f30-c28a-40b3-b526-889fc96fd740",
+    "type": "paragraph",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [],
+    "children": []
+  },
+  {
+    "id": "2d6fc25a-4f32-421c-b459-d1b3e1bcc39e",
+    "type": "paragraph",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Read more in the ",
+        "styles": {}
+      },
+      {
+        "type": "link",
+        "href": "https://man.atuin.sh/atuin-hub/getting-started",
+        "content": [
+          {
+            "type": "text",
+            "text": "docs",
+            "styles": {}
+          }
+        ]
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "0e734785-0ab8-46ea-ab9c-fcc3833c2e5c",
+    "type": "paragraph",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [],
+    "children": []
+  },
+  {
+    "id": "4d1497cd-5a80-4cf0-a043-78e7895b9e01",
+    "type": "heading",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left",
+      "level": 2,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Terminals",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "e0fd15c4-7df6-4474-a28c-e4d9cc38fdb2",
+    "type": "paragraph",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "This is the primary feature we provide - “runbooks that run” wouldn’t make sense without it.",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "6848f3d8-ddb4-45f9-86a4-9032545d98c2",
+    "type": "paragraph",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [],
+    "children": []
+  },
+  {
+    "id": "5a4d4b2d-c4fa-496a-ae5d-5ebb78d3320f",
+    "type": "paragraph",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "To create a terminal block, type ",
+        "styles": {}
+      },
+      {
+        "type": "text",
+        "text": "/",
+        "styles": {
+          "code": true
+        }
+      },
+      {
+        "type": "text",
+        "text": ", and then filter to “terminal”. This will embed a code editor into your document, like the following:",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "95a76951-6958-4d6f-b340-daa6ae4a4741",
+    "type": "paragraph",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [],
+    "children": []
+  },
+  {
+    "id": "84441963-2643-48b7-aa35-23afd35d4d64",
+    "type": "run",
+    "props": {
+      "type": "bash",
+      "name": "My first terminal",
+      "code": "echo 'Welcome to Atuin!'\necho 'This is a terminal block'\necho 'Try clicking the green play button on the left'",
+      "pty": "",
+      "global": false,
+      "outputVisible": true,
+      "dependency": "{}"
+    },
+    "children": []
+  },
+  {
+    "id": "8e8f3904-f284-42fc-93a6-ba569b255ec2",
+    "type": "paragraph",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [],
+    "children": []
+  },
+  {
+    "id": "ff955f18-1b9e-444c-985b-8d87ecc89998",
+    "type": "paragraph",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Upon clicking “play”, you should see the bash snippet executed in your shell! This all happens on your local system, with your local config.",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "f31c2481-6c0e-411e-899b-1cf6181478b6",
+    "type": "paragraph",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [],
+    "children": []
+  },
+  {
+    "id": "d13df67d-a997-4d5c-b8bf-1e145f88cfb0",
+    "type": "paragraph",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Give it a try:",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "f1815914-9fda-4d4b-bc7e-e850013a6be5",
+    "type": "paragraph",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [],
+    "children": []
+  },
+  {
+    "id": "18ee6e71-7e47-4b2f-8879-8a2c1d8d48f3",
+    "type": "run",
+    "props": {
+      "type": "bash",
+      "name": "Enter your command",
+      "code": "",
+      "pty": "",
+      "global": false,
+      "outputVisible": true,
+      "dependency": "{}"
+    },
+    "children": []
+  },
+  {
+    "id": "a4f3f46a-374f-45f7-b40c-2b96d9747050",
+    "type": "paragraph",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [],
+    "children": []
+  },
+  {
+    "id": "54af99b0-05fa-4be4-ad25-5292813914d9",
+    "type": "paragraph",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "These blocks are a full terminal - you can interact with them, type in them, whatever you want. When they are stopped, all resources are cleaned up. Feel free to navigate to other documents and explore - your terminal will stay running in the background.",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "21453254-e6f4-4a1b-ba54-050c0f72ea5c",
+    "type": "paragraph",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [],
+    "children": []
+  },
+  {
+    "id": "b89edbc1-87a6-4255-89bb-6d5b249b4a8d",
+    "type": "heading",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left",
+      "level": 2,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Scripts",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "7f98575c-d6a5-49d8-8fd9-ef15d2f75574",
+    "type": "paragraph",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Alongside terminals, we also have scripts. While terminals run in a fully interactive login session, scripts run differently. They behave more like a normal bash script, and can have their output captured as a variable. This can be useful for fetching secrets, etc.",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "e85a7a52-4acb-4cdb-8eda-643ea61c9df7",
+    "type": "paragraph",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [],
+    "children": []
+  },
+  {
+    "id": "56473aff-5af4-4667-8011-7b769ebd0a0a",
+    "type": "paragraph",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "We support the following interpreters, with more to come:",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "f317ecf4-764c-4b3c-b866-f35a9f239e84",
+    "type": "paragraph",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [],
+    "children": []
+  },
+  {
+    "id": "daf7d7af-1d5b-47f9-9e33-74d3af87593d",
+    "type": "numberedListItem",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "zsh",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "0ff398e8-2f6e-4e14-af3c-e00a8c84603b",
+    "type": "numberedListItem",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "bash",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "c826f3ec-fa4c-4db6-92cb-104292b5418b",
+    "type": "numberedListItem",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "nodejs",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "05b71167-53e5-4c6e-9a8c-ffdec2c09f59",
+    "type": "numberedListItem",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "python3",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "7c65fde6-5b0f-44f3-89a2-8b1df5e751f2",
+    "type": "paragraph",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [],
+    "children": []
+  },
+  {
+    "id": "0d5b0f9b-bdbf-4883-b8c1-3f16b67d2281",
+    "type": "script",
+    "props": {
+      "interpreter": "zsh",
+      "outputVariable": "",
+      "name": "Script 2",
+      "code": "echo \"hello world\"",
+      "outputVisible": false,
+      "dependency": "{}"
+    },
+    "children": []
+  },
+  {
+    "id": "f36315c7-41e1-407a-bed6-0f750f7cf3fe",
+    "type": "paragraph",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [],
+    "children": []
+  },
+  {
+    "id": "35312e4b-4de3-42bf-9c80-b58ebd4d8ccd",
+    "type": "heading",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left",
+      "level": 3,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Directories",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "c69c9a8b-26bd-4411-9c7b-a8519bb7545a",
+    "type": "paragraph",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Sometimes, you may want to set the directory we should use. While you could cd in a block, that can get repetitive",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "32aae71a-318a-44fc-9c93-e34dd5b562f0",
+    "type": "paragraph",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [],
+    "children": []
+  },
+  {
+    "id": "499ebbb2-4e38-445c-8190-3a0cabd56621",
+    "type": "directory",
+    "props": {
+      "path": ""
+    },
+    "children": []
+  },
+  {
+    "id": "6603521b-c84a-4b3d-bb5f-9cf4a5f005b6",
+    "type": "paragraph",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [],
+    "children": []
+  },
+  {
+    "id": "24e1a755-6fec-4043-9102-f4cdf0b2b603",
+    "type": "run",
+    "props": {
+      "type": "bash",
+      "name": "See the directory change",
+      "code": "pwd",
+      "pty": "",
+      "global": false,
+      "outputVisible": true,
+      "dependency": "{}"
+    },
+    "children": []
+  },
+  {
+    "id": "bbc872c5-762c-4495-b16f-95d7e8a1c0cc",
+    "type": "paragraph",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [],
+    "children": []
+  },
+  {
+    "id": "17eb17dc-9c22-4935-abca-e37c16bdc958",
+    "type": "paragraph",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Atuin supports ",
+        "styles": {}
+      },
+      {
+        "type": "text",
+        "text": "directory blocks",
+        "styles": {
+          "italic": true
+        }
+      },
+      {
+        "type": "text",
+        "text": ". These set the directory that all subsequent code blocks should use. Try changing directory, and then running the terminal block.",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "6888528a-0ffe-41e4-9633-fba6b62d08ba",
+    "type": "paragraph",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [],
+    "children": []
+  },
+  {
+    "id": "aa6782b7-bef7-4841-9643-6710abfe054c",
+    "type": "heading",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left",
+      "level": 3,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Env",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "309b5a6c-4bee-4729-a530-62ef03307b9f",
+    "type": "paragraph",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Much like the directory block, these set the env for all subsequent blocks",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "f76cac1c-5ca5-4cb5-ae6c-57699b001c44",
+    "type": "paragraph",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [],
+    "children": []
+  },
+  {
+    "id": "9da5ad0d-9d4b-4484-b082-76861aeb7dc9",
+    "type": "env",
+    "props": {
+      "name": "FOO",
+      "value": "BAR"
+    },
+    "children": []
+  },
+  {
+    "id": "0c8d3db9-a267-4df2-9f95-6c210af0ff26",
+    "type": "paragraph",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [],
+    "children": []
+  },
+  {
+    "id": "6203f0a8-c4c4-4295-8ecd-03f86644d6b2",
+    "type": "run",
+    "props": {
+      "type": "bash",
+      "name": "",
+      "code": "echo $FOO",
+      "pty": "",
+      "global": false,
+      "outputVisible": true,
+      "dependency": "{}"
+    },
+    "children": []
+  },
+  {
+    "id": "df162630-e3b6-4698-9488-1761b917f592",
+    "type": "paragraph",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [],
+    "children": []
+  },
+  {
+    "id": "dcb5f822-79d5-4375-8455-baf3e2758dc3",
+    "type": "heading",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left",
+      "level": 3,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Template system",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "6ebcea4e-be98-4f6f-8c80-8d49546781d3",
+    "type": "paragraph",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "This is super powerful. Every input in the runbook is first processed by our template system - the syntax is very similar to Jinja, and you can read more ",
+        "styles": {}
+      },
+      {
+        "type": "link",
+        "href": "https://man.atuin.sh/templating",
+        "content": [
+          {
+            "type": "text",
+            "text": "here",
+            "styles": {}
+          }
+        ]
+      },
+      {
+        "type": "text",
+        "text": ".",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "59ba9baa-5414-4557-822c-d32e1e0c722a",
+    "type": "paragraph",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [],
+    "children": []
+  },
+  {
+    "id": "9b33d2f3-f537-4c04-890f-1d6973782155",
+    "type": "var",
+    "props": {
+      "name": "example_template_var",
+      "value": "example template value"
+    },
+    "children": []
+  },
+  {
+    "id": "2ed8558d-4e97-46ce-b7f2-258f8e487573",
+    "type": "run",
+    "props": {
+      "type": "bash",
+      "name": "Terminal 5",
+      "code": "echo \"{{ var.example_template_var }}\"",
+      "pty": "",
+      "global": false,
+      "outputVisible": true,
+      "dependency": "{}"
+    },
+    "children": []
+  },
+  {
+    "id": "9ca26d8f-eabf-4c8c-9e37-f1f361313666",
+    "type": "paragraph",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [],
+    "children": []
+  },
+  {
+    "id": "c425e756-f521-4743-a769-0986cd63f0fd",
+    "type": "paragraph",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Template variables can also be set by the output of a script block, for instance:",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "153e5a69-bfb9-421c-9c91-f18e49e4319f",
+    "type": "script",
+    "props": {
+      "interpreter": "zsh",
+      "outputVariable": "script_variable",
+      "name": "Script 1",
+      "code": "echo \"hello template system! coming from $(hostname)\"",
+      "outputVisible": false,
+      "dependency": "{}"
+    },
+    "children": []
+  },
+  {
+    "id": "ae8cef0d-a0a3-4ff6-bf25-f222d0a1237c",
+    "type": "paragraph",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [],
+    "children": []
+  },
+  {
+    "id": "def2ba2a-7f14-4499-904d-dd93dbba9263",
+    "type": "run",
+    "props": {
+      "type": "bash",
+      "name": "Terminal 6",
+      "code": "echo \"{{ var.script_variable }}\"",
+      "pty": "",
+      "global": false,
+      "outputVisible": true,
+      "dependency": "{}"
+    },
+    "children": []
+  },
+  {
+    "id": "946f835d-6060-4823-aa30-5f1cf1736945",
+    "type": "paragraph",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [],
+    "children": []
+  },
+  {
+    "id": "3cb0db1e-9395-499a-811a-41810cbfd808",
+    "type": "heading",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left",
+      "level": 2,
+      "isToggleable": false
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "What else?",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "12a007bb-a08b-4875-9354-071eb50d2934",
+    "type": "paragraph",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "We also have",
+        "styles": {}
+      },
+      {
+        "type": "link",
+        "href": "https://man.atuin.sh/blocks/databases",
+        "content": [
+          {
+            "type": "text",
+            "text": " database clients",
+            "styles": {}
+          }
+        ]
+      },
+      {
+        "type": "text",
+        "text": ", an ",
+        "styles": {}
+      },
+      {
+        "type": "link",
+        "href": "https://man.atuin.sh/blocks/network/ssh",
+        "content": [
+          {
+            "type": "text",
+            "text": "SSH integration",
+            "styles": {}
+          }
+        ]
+      },
+      {
+        "type": "text",
+        "text": ", and more! Be sure to check out the ",
+        "styles": {}
+      },
+      {
+        "type": "link",
+        "href": "https://man.atuin.sh",
+        "content": [
+          {
+            "type": "text",
+            "text": "docs",
+            "styles": {}
+          }
+        ]
+      },
+      {
+        "type": "text",
+        "text": ", and let us know if there’s anything else that would be helpful.",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "35c7e959-452e-4ece-8a5e-c4d535ad2558",
+    "type": "paragraph",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [],
+    "children": []
+  }
+]

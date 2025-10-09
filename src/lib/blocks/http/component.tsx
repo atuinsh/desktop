@@ -22,6 +22,7 @@ import useCodemirrorTheme from "@/lib/hooks/useCodemirrorTheme";
 import { useCodeMirrorValue } from "@/lib/hooks/useCodeMirrorValue";
 import PlayButton from "../common/PlayButton";
 import Block from "../common/Block";
+import { useCurrentRunbookId } from "@/context/runbook_id_context";
 
 interface HttpProps {
   http: HttpBlockType;
@@ -82,7 +83,7 @@ export const Http = ({
   setDependency,
 }: HttpProps) => {
   let editor = useBlockNoteEditor();
-  const currentRunbookId = useStore((state) => state.currentRunbookId);
+  const currentRunbookId = useCurrentRunbookId();
   const colorMode = useStore((state) => state.functionalColorMode);
   const [isRunning, setIsRunning] = useState<boolean>(false);
   const [response, setResponse] = useState<any | null>(null);

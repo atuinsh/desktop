@@ -12,8 +12,8 @@ interface RunbookDocument {
 
 // Define field ranking weights
 const FIELD_RANKS = {
-  title: 2.0,  // Title matches are 2x more important
-  content: 1.0 // Base rank for content matches
+  title: 2.0, // Title matches are 2x more important
+  content: 1.0, // Base rank for content matches
 };
 
 class RunbookIndexService {
@@ -26,14 +26,18 @@ class RunbookIndexService {
       document: {
         id: "id",
         index: [
-          // Create separate indices for title and content
-          { field: "title", tokenize: "full" },
-          { field: "content", tokenize: "full" }
-        ]
+          {
+            field: "title",
+            tokenize: "forward",
+          },
+          {
+            field: "content",
+            tokenize: "strict",
+          },
+        ],
       },
-      preset: "performance",
-      cache: true,
-    });
+      cache: false,
+    } as any);
   }
 
   public bulkUpdateRunbooks(runbooks: Runbook[]): void {
@@ -64,7 +68,7 @@ class RunbookIndexService {
     return {
       id: runbook.id,
       title: runbook.name,
-      content: runbook.content
+      content: runbook.content,
     };
   }
 
@@ -86,24 +90,24 @@ class RunbookIndexService {
   }
 
   public async searchRunbooks(query: string): Promise<string[]> {
-    if (!query || query.trim() === '') {
+    if (!query || query.trim() === "") {
       return [];
     }
 
     // Search in all fields
     const results = await this.document.searchAsync(query, {
       enrich: true,
-      limit: 50
+      limit: 50,
     });
-    
+
     // Track document ranks with a map of id -> rank
     const documentRanks = new Map<string, number>();
-    
+
     // Process results to calculate ranks based on field matches
     results.forEach((result: any) => {
       const fieldName = result.field;
       const fieldRank = FIELD_RANKS[fieldName as keyof typeof FIELD_RANKS] || 1.0;
-      
+
       result.result.forEach((id: string) => {
         // If document already has a rank, add to it (matching multiple fields)
         // Otherwise initialize with the field's rank
@@ -111,12 +115,12 @@ class RunbookIndexService {
         documentRanks.set(id, currentRank + fieldRank);
       });
     });
-    
+
     // Convert to array of [id, rank] pairs and sort by rank (descending)
     const sortedResults = Array.from(documentRanks.entries())
       .sort((a, b) => b[1] - a[1]) // Sort by rank (descending)
       .map(([id]) => id); // Extract just the IDs
-    
+
     return sortedResults;
   }
 }

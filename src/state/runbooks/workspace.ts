@@ -1,8 +1,6 @@
 import { GlobalSpec, Model, Persistence } from "ts-tiny-activerecord";
 import createTauriAdapter, { setTimestamps } from "@/lib/db/tauri-ar-adapter";
 import { DateEncoder, JSONEncoder } from "@/lib/db/encoders";
-import { SharedStateManager } from "@/lib/shared_state/manager";
-import { AtuinSharedStateAdapter } from "@/lib/shared_state/adapter";
 import { dbHook } from "@/lib/db_hooks";
 import { deleteSharedStateDocument } from "@/lib/shared_state/commands";
 
@@ -10,6 +8,8 @@ export type WorkspaceAttrs = {
   id?: string;
   name: string;
   orgId?: string | null;
+  online: 1 | 0;
+  folder?: string;
   permissions?: string[];
 
   created?: Date;
@@ -28,19 +28,14 @@ const fieldSpecs = {
 };
 
 const globalSpecs: GlobalSpec<WorkspaceAttrs> = {
-  preSave: setTimestamps,
+  preSave: async (context, model, _type) => {
+    setTimestamps(context, model);
+  },
   postSave: async (_context, model, type) => {
     dbHook("workspace", type === "insert" ? "create" : "update", model);
-    if (type === "insert") {
-      SharedStateManager.startInstance(
-        `workspace-folder:${model.get("id")}`,
-        new AtuinSharedStateAdapter(`workspace-folder:${model.get("id")}`),
-      );
-    }
   },
   postDelete: async (_context, model) => {
     dbHook("workspace", "delete", model);
-    SharedStateManager.stopInstance(`workspace-folder:${model.get("id")}`);
     deleteSharedStateDocument(`workspace-folder:${model.get("id")}`);
   },
 };
@@ -69,5 +64,13 @@ export default class Workspace extends Model<WorkspaceAttrs> {
 
   isOrgOwned(): boolean {
     return this.get("orgId") !== null;
+  }
+
+  isLegacyHybrid(): boolean {
+    return !this.isOnline() && !this.get("folder");
+  }
+
+  isOnline(): boolean {
+    return this.get("online") === 1;
   }
 }

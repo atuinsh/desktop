@@ -5,6 +5,7 @@ type GlobalOptions = {
   customTitleBar: boolean;
   devPrefix: string;
   noSync: boolean;
+  channel: "stable" | "edge";
 };
 
 export function getGlobalOptions(): GlobalOptions {
@@ -15,6 +16,7 @@ export function getGlobalOptions(): GlobalOptions {
       customTitleBar: true,
       devPrefix: "dev",
       noSync: true,
+      channel: "stable",
     };
   }
 
@@ -25,5 +27,6 @@ export function getGlobalOptions(): GlobalOptions {
     customTitleBar: params.get("os") === "macos",
     devPrefix: params.get("devPrefix") || "dev",
     noSync: params.get("noSync") === "true",
+    channel: (params.get("channel") as "stable" | "edge") || "stable",
   } as const;
 }

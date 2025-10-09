@@ -1,6 +1,6 @@
 import { queryOptions } from "@tanstack/react-query";
 import { localQuery } from "./local_query";
-import Runbook from "@/state/runbooks/runbook";
+import Runbook, { OnlineRunbook } from "@/state/runbooks/runbook";
 import { getRunbookID, HttpResponseError } from "@/api/api";
 import AtuinEnv from "@/atuin_env";
 import { RemoteRunbook } from "@/state/models";
@@ -39,7 +39,8 @@ export function runbooksByLegacyWorkspaceId(legacyWorkspaceId: string | undefine
     queryKey: ["runbooks", "legacy_workspace", legacyWorkspaceId],
     queryFn: () => {
       if (legacyWorkspaceId) {
-        return Runbook.all(legacyWorkspaceId);
+        // Only online runbooks can have a legacy workspace ID
+        return OnlineRunbook.all(legacyWorkspaceId);
       } else {
         return Promise.resolve([]);
       }
@@ -63,22 +64,25 @@ export function allRunbookIds() {
   });
 }
 
-export function remoteRunbook(runbook?: Runbook) {
+export function remoteRunbook(runbookOrId?: Runbook | string) {
   return queryOptions<RemoteRunbook | null>({
     staleTime: 1000 * 30,
-    queryKey: ["remote_runbook", runbook?.id],
+    queryKey: ["remote_runbook", typeof runbookOrId === "string" ? runbookOrId : runbookOrId?.id],
     queryFn: async () => {
-      if (runbook) {
+      if (typeof runbookOrId === "string") {
+        const rb = await getRunbookID(runbookOrId);
+        return rb;
+      } else if (runbookOrId) {
         try {
-          const rb = await getRunbookID(runbook.id);
+          const rb = await getRunbookID(runbookOrId.id);
           return rb;
         } catch (err: any) {
           if (
             (err instanceof HttpResponseError &&
               err.code === 404 &&
               // Only clear out the cache on 404 if the runbook is from our environment or was created locally
-              runbook.source === AtuinEnv.hubRunbookSource) ||
-            runbook.source === "local"
+              runbookOrId.source === AtuinEnv.hubRunbookSource) ||
+            runbookOrId.source === "local"
           ) {
             return null;
           } else {
@@ -89,9 +93,12 @@ export function remoteRunbook(runbook?: Runbook) {
         throw new Error("no runbook ID specified");
       }
     },
-    initialData: runbook?.remoteInfo
-      ? (JSON.parse(runbook.remoteInfo) as RemoteRunbook)
-      : undefined,
+    initialData:
+      typeof runbookOrId !== "string" &&
+      runbookOrId?.isOnline() &&
+      (runbookOrId as OnlineRunbook).remoteInfo
+        ? (JSON.parse((runbookOrId as OnlineRunbook).remoteInfo!) as RemoteRunbook)
+        : undefined,
     refetchOnMount: "always",
   });
 }

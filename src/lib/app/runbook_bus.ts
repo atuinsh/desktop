@@ -1,8 +1,19 @@
+import { getTemplateVar } from "@/state/templates";
 import { Some } from "@binarymuse/ts-stdlib";
+import { listen } from "@tauri-apps/api/event";
 import Emittery from "emittery";
 
 export default class RunbookBus extends Emittery {
   static instances: Map<string, WeakRef<RunbookBus>> = new Map();
+
+  static initialize() {
+    listen<string>("variable-changed", async (event) => {
+      const [runbook, variable] = event.payload.split(":");
+      const bus = RunbookBus.get(runbook);
+      const value = await getTemplateVar(runbook, variable);
+      bus.emitVariableChanged(variable, value);
+    });
+  }
 
   static get(runbookId: string): RunbookBus {
     return Some(RunbookBus.instances.get(runbookId))

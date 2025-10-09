@@ -1,12 +1,11 @@
 import Runbook from "@/state/runbooks/runbook";
 import RelativeTime from "@/components/relative_time.tsx";
-import SharePopover from "./SharePopover";
 import TagSelector from "./TagSelector";
 import ColorAvatar from "@/components/ColorAvatar";
 import { DateTime } from "luxon";
-import { Avatar, AvatarGroup, Button, Tooltip } from "@heroui/react";
+import { addToast, Avatar, AvatarGroup, Button, Tooltip } from "@heroui/react";
 import { RemoteRunbook } from "@/state/models";
-import { BookTextIcon, PencilOffIcon, TrashIcon } from "lucide-react";
+import { BookTextIcon, CopyIcon, PencilOffIcon, SettingsIcon, TrashIcon } from "lucide-react";
 import { PresenceUserInfo } from "@/lib/phoenix_provider";
 import { useQuery } from "@tanstack/react-query";
 import { workspaceById } from "@/lib/queries/workspaces";
@@ -15,6 +14,9 @@ import BlockBus from "@/lib/workflow/block_bus";
 import { invoke } from "@tauri-apps/api/core";
 import track_event from "@/tracking";
 import PlayButton from "@/lib/blocks/common/PlayButton";
+import AtuinEnv from "@/atuin_env";
+import { open } from "@tauri-apps/plugin-shell";
+import { cn } from "@/lib/utils";
 
 type TopbarProps = {
   runbook: Runbook;
@@ -32,13 +34,21 @@ type TopbarProps = {
   onCloseTagMenu: () => void;
   onShareToHub: () => void;
   onDeleteFromHub: () => void;
+  onToggleSettings: () => void;
+  isSettingsOpen: boolean;
 };
+
+function openHubRunbook(e: React.MouseEvent<HTMLAnchorElement>) {
+  e.preventDefault();
+  open(e.currentTarget.href);
+}
 
 export default function Topbar(props: TopbarProps) {
   let runbook = props.runbook;
   let remoteRunbook = props.remoteRunbook;
   let serialExecution = useStore((state) => state.serialExecution);
-  let setSerialExecution = useStore((state) => state.setSerialExecution);
+  let startSerialExecution = useStore((state) => state.startSerialExecution);
+  let stopSerialExecution = useStore((state) => state.stopSerialExecution);
   let { data: workspace } = useQuery(workspaceById(runbook.workspaceId));
 
   let name: string;
@@ -94,13 +104,39 @@ export default function Topbar(props: TopbarProps) {
           )}
           {!remoteRunbook && <BookTextIcon size={24} className="mt-2 mr-2 ml-1 min-w-[26px]" />}
           <div className="flex-col truncate shrink">
-            <div className="hidden md:block mb-[-1px] whitespace-nowrap">{name}</div>
+            <div className="hidden md:flex mb-[-1px] whitespace-nowrap md:flex-row items-center">
+              {remoteRunbook ? (
+                <a href={AtuinEnv.url(remoteRunbook.nwo)} onClick={openHubRunbook}>
+                  {name}
+                </a>
+              ) : (
+                name
+              )}
+              {remoteRunbook && (
+                <Tooltip content="Copy runbook URL" placement="bottom" showArrow>
+                  <CopyIcon
+                    size={16}
+                    className="ml-2 cursor-pointer"
+                    onClick={() => {
+                      navigator.clipboard.writeText(AtuinEnv.url(remoteRunbook.nwo));
+                      addToast({
+                        title: "Runbook URL copied to clipboard",
+                        color: "success",
+                        radius: "sm",
+                        timeout: 2000,
+                        shouldShowTimeoutProgress: false,
+                      });
+                    }}
+                  />
+                </Tooltip>
+              )}
+            </div>
             <div className="hidden md:block text-gray-400 text-xs italic whitespace-nowrap">
               Updated <RelativeTime time={DateTime.fromJSDate(runbook.updated)} />
             </div>
           </div>
           <div className="mt-[7px] inline-block">
-            {(props.tags.length > 0 || props.canEditTags) && (
+            {props.runbook.isOnline() && (props.tags.length > 0 || props.canEditTags) && (
               <TagSelector
                 runbookId={runbook.id}
                 isOpen={props.showTagMenu}
@@ -162,26 +198,32 @@ export default function Topbar(props: TopbarProps) {
               />
             ))}
           </AvatarGroup>
-          {((!remoteRunbook && workspace?.isUserOwned()) || owner?.type === "user") && (
-            <SharePopover
-              onShareToHub={props.onShareToHub}
-              onDeleteFromHub={props.onDeleteFromHub}
-              runbook={runbook}
-              remoteRunbook={props.remoteRunbook}
-            />
-          )}
         </div>
+        <Tooltip content="Toggle runbook settings" placement="left" showArrow>
+          <Button
+            isIconOnly
+            variant="flat"
+            size="sm"
+            className={cn("mt-1 ml-2", props.isSettingsOpen && "bg-gray-400 dark:bg-gray-400")}
+            onPress={props.onToggleSettings}
+          >
+            <SettingsIcon
+              className={cn("h-4 w-4", props.isSettingsOpen && "stroke-white dark:stroke-gray-800")}
+            />
+          </Button>
+        </Tooltip>
         <PlayButton
           className="mt-1 ml-2"
-          isRunning={serialExecution === runbook.id}
+          isRunning={serialExecution.includes(runbook.id)}
+          disabled={serialExecution.length > 0 && !serialExecution.includes(runbook.id)}
           cancellable={true}
           onPlay={() => {
             track_event("runbooks.serial.execute");
             BlockBus.get().startWorkflow(runbook.id);
-            setSerialExecution(runbook.id);
+            startSerialExecution(runbook.id);
 
             const onStop = () => {
-              setSerialExecution(null);
+              stopSerialExecution(runbook.id);
               BlockBus.get().unsubscribeWorkflowFinished(runbook.id, onStop);
             };
 

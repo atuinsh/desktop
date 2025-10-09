@@ -19,9 +19,32 @@ html {
 }
 
 .history-list {
-    height: calc(100dvh - 4rem - 2rem);
+    height: calc(100dvh - 4rem - 4rem);
 }
 
 .history-item {
     height: 90px;
+}
+
+.tab-scrollbar::-webkit-scrollbar {
+    height: 3px;
+    background: transparent;
+}
+
+.tab-scrollbar::-webkit-scrollbar-thumb {
+    height: 3px;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 3px;
+}
+
+html.dark .tab-scrollbar::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.3);
+}
+
+.tab-scrollbar::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.1);
+}
+
+html.dark .tab-scrollbar::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.1);
 }

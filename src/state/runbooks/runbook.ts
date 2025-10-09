@@ -1,17 +1,17 @@
-import { invoke } from "@tauri-apps/api/core";
-import { readTextFile } from "@tauri-apps/plugin-fs";
-import { uuidv7 } from "uuidv7";
 import Logger from "@/lib/logger";
-import Snapshot from "./snapshot";
-import AtuinDB from "../atuin_db";
-import untitledRunbook from "../runbooks/untitled.json";
-import { dbHook } from "@/lib/db_hooks";
 import Workspace from "./workspace";
-const logger = new Logger("Runbook", "green", "green");
+import { uuidv7 } from "uuidv7";
+import untitledRunbook from "../runbooks/untitled.json";
+import AtuinDB from "../atuin_db";
+import { readTextFile } from "@tauri-apps/plugin-fs";
+import { invoke } from "@tauri-apps/api/core";
+import { dbHook } from "@/lib/db_hooks";
+import Snapshot from "./snapshot";
+import * as commands from "@/lib/workspaces/commands";
+import WorkspaceManager from "@/lib/workspaces/manager";
+import { timeoutPromise } from "@/lib/utils";
 
-function camelCaseToSnakeCase(str: string) {
-  return str.replace(/([A-Z])/g, "_$1").toLowerCase();
-}
+const logger = new Logger("Runbook", "green", "green");
 
 // Definition of an atrb file
 // This is JSON encoded for ease of access, and may change in the future
@@ -29,43 +29,28 @@ export interface RunbookFile {
 export type RunbookSource = "local" | "hub" | "hub-dev" | "file";
 export type RunbookVisibility = "private" | "public" | "unlisted";
 
-export interface RunbookAttrs {
+export interface BaseRunbookAttrs {
   id: string;
   name: string;
   content: string;
-  _ydoc: Uint8Array | null;
-  source: RunbookSource;
-  sourceInfo: string | null;
   workspaceId: string;
-  legacyWorkspaceId: string;
-  forkedFrom: string | null;
-  remoteInfo: string | null;
-  viewed_at: Date | null;
-
-  created: Date;
-  updated: Date;
+  created?: Date;
+  updated?: Date;
 }
 
-export default class Runbook {
+export default abstract class Runbook {
   id: string;
-  private _ydoc: Uint8Array | null;
-  source: RunbookSource;
-  sourceInfo: string | null;
-  remoteInfo: string | null;
-  viewed_at: Date | null;
+  workspaceId: string;
+  protected _name: string;
+  protected _content: string;
+
+  protected persisted: boolean = false;
+  abstract viewed_at: Date | null;
 
   created: Date;
   updated: Date;
 
-  workspaceId: string;
-  legacyWorkspaceId: string;
-  forkedFrom: string | null;
-
-  private _name: string;
-  private _content: string;
-
-  private _ydocChanged: boolean = false;
-  private persisted: boolean = false;
+  abstract source: RunbookSource;
 
   set name(value: string) {
     if (value !== this._name) {
@@ -81,13 +66,105 @@ export default class Runbook {
     }
   }
 
+  get name() {
+    return this._name;
+  }
+
   get content() {
     return this._content;
   }
 
-  get name() {
-    return this._name;
+  constructor(attrs: BaseRunbookAttrs, persisted: boolean = false) {
+    this.id = attrs.id;
+    this._name = attrs.name;
+    this._content = attrs.content;
+    this.created = attrs.created || new Date();
+    this.updated = attrs.updated || new Date();
+    this.workspaceId = attrs.workspaceId;
+    this.persisted = persisted;
   }
+
+  public static async allInAllWorkspaces(): Promise<Runbook[]> {
+    const online = await OnlineRunbook.allInAllWorkspaces();
+    const offline = await OfflineRunbook.allInAllWorkspaces();
+    return [...online, ...offline];
+  }
+
+  public static async allIdsInAllWorkspaces(): Promise<string[]> {
+    const online = await OnlineRunbook.allIdsInAllWorkspaces();
+    const offline = await OfflineRunbook.allIdsInAllWorkspaces();
+    return [...online, ...offline];
+  }
+
+  public static async count(): Promise<number> {
+    const online = await OnlineRunbook.count();
+    const offline = await OfflineRunbook.count();
+    return online + offline;
+  }
+
+  public static async load(id: string): Promise<Runbook | null> {
+    const online = await OnlineRunbook.load(id);
+    if (online) {
+      return online;
+    }
+
+    const offline = await OfflineRunbook.load(id);
+    return offline;
+  }
+
+  public static async allFromWorkspace(workspaceId: string): Promise<Runbook[]> {
+    const workspace = await Workspace.get(workspaceId);
+    if (!workspace) {
+      return [];
+    }
+
+    if (workspace.isOnline()) {
+      return OnlineRunbook.allFromWorkspace(workspaceId);
+    } else {
+      return OfflineRunbook.allFromWorkspace(workspaceId);
+    }
+  }
+
+  public static async allFromOrg(orgId: string | null): Promise<Runbook[]> {
+    const online = await OnlineRunbook.allFromOrg(orgId);
+    const offline = await OfflineRunbook.allFromOrg(orgId);
+    return [...online, ...offline];
+  }
+
+  public abstract isOnline(): boolean;
+  public abstract save(): Promise<string | undefined>;
+  public abstract clearRemoteInfo(): Promise<void>;
+  public abstract moveTo(targetWorkspace: Workspace): Promise<void>;
+  public abstract updateRemoteInfo(remoteInfo: string | null): Promise<void>;
+  public abstract markViewed(): Promise<void>;
+  public abstract clone(): Runbook;
+  public abstract delete(): Promise<void>;
+}
+
+//// ONLINE
+
+export interface OnlineRunbookAttrs extends BaseRunbookAttrs {
+  viewed_at: Date | null;
+  _ydoc: Uint8Array | null;
+  source: RunbookSource;
+  sourceInfo: string | null;
+  forkedFrom: string | null;
+  remoteInfo: string | null;
+  legacyWorkspaceId: string | null;
+
+  created: Date;
+  updated: Date;
+}
+
+export class OnlineRunbook extends Runbook {
+  viewed_at: Date | null;
+  _ydoc: Uint8Array | null;
+  _ydocChanged: boolean = false;
+  source: RunbookSource;
+  sourceInfo: string | null;
+  forkedFrom: string | null;
+  remoteInfo: string | null;
+  legacyWorkspaceId: string;
 
   get ydoc() {
     return this._ydoc;
@@ -98,37 +175,30 @@ export default class Runbook {
     this._ydoc = value;
   }
 
-  constructor(attrs: RunbookAttrs, persisted: boolean = false) {
-    this.id = attrs.id;
-    this._name = attrs.name;
-    this.source = attrs.source || "local";
-    this.sourceInfo = attrs.sourceInfo;
-    this._content = attrs.content;
-    this._ydoc = attrs._ydoc || null;
-    this.created = attrs.created;
-    this.updated = attrs.updated;
-    this.forkedFrom = attrs.forkedFrom;
-    this.workspaceId = attrs.workspaceId;
-    this.legacyWorkspaceId = attrs.legacyWorkspaceId;
-    this.remoteInfo = attrs.remoteInfo;
+  constructor(attrs: OnlineRunbookAttrs, persisted: boolean = false) {
+    super(attrs, persisted);
     this.viewed_at = attrs.viewed_at || null;
-    this.persisted = persisted;
+    this._ydoc = attrs._ydoc || null;
+    this.source = attrs.source || "local";
+    this.sourceInfo = attrs.sourceInfo || null;
+    this.forkedFrom = attrs.forkedFrom || null;
+    this.remoteInfo = attrs.remoteInfo || null;
+    this.legacyWorkspaceId = attrs.legacyWorkspaceId || "";
+  }
+
+  public isOnline(): boolean {
+    return true;
   }
 
   /// Create a new Runbook, and automatically generate an ID.
-  public static async create(workspace: Workspace, persist: boolean = true): Promise<Runbook> {
-    if (!workspace || !workspace.get("id") || !workspace.canManageRunbooks()) {
-      throw new Error("Must pass a workspace with manage_runbooks permissions");
-    }
-
+  public static async create(
+    workspace: Workspace,
+    persist: boolean = true,
+  ): Promise<OnlineRunbook> {
     let now = new Date();
 
-    // if (workspace === undefined || workspace === null) {
-    //   workspace = await Workspace.current();
-    // }
-
     // Initialize with the same value for created/updated, to avoid needing null.
-    let runbook = new Runbook({
+    let runbook = new OnlineRunbook({
       id: uuidv7(),
       name: "",
       source: "local",
@@ -152,7 +222,13 @@ export default class Runbook {
   }
 
   public static async createUntitled(workspace: Workspace, markViewed: boolean = false) {
-    let runbook = await Runbook.create(workspace);
+    if (!workspace.isOnline()) {
+      throw new Error(
+        "Creation of runbooks in an offline workspace needs to be done via the WorkspaceStrategy adapter",
+      );
+    }
+
+    let runbook = await OnlineRunbook.create(workspace);
     runbook.name = "Untitled";
     runbook.content = JSON.stringify(untitledRunbook);
     if (markViewed) {
@@ -173,7 +249,7 @@ export default class Runbook {
   public async export(filePath: string) {
     // Load the runbook from the ID. This ensures we have all fields populated properly, and as up-to-date as possible.
     // TODO: we are probably going to be changing stuff here for snapshots
-    let rb = await Runbook.load(this.id);
+    let rb = await OnlineRunbook.load(this.id);
     if (!rb) return;
 
     let runbook = {
@@ -202,7 +278,7 @@ export default class Runbook {
 
     let content = typeof obj.content === "object" ? obj.content : JSON.parse(obj.content);
 
-    let runbook = new Runbook({
+    let runbook = new OnlineRunbook({
       id: obj.id,
       name: obj.name,
       source: source,
@@ -229,7 +305,7 @@ export default class Runbook {
     let file = await readTextFile(filePath);
     let parsed = JSON.parse(file);
 
-    return Runbook.importJSON(parsed, "file", null, null, workspace);
+    return OnlineRunbook.importJSON(parsed, "file", null, null, workspace);
   }
 
   public static async load(id: String): Promise<Runbook | null> {
@@ -245,13 +321,13 @@ export default class Runbook {
 
     let rbRow = res[0];
 
-    const doc: ArrayBuffer | null = await Runbook.loadYDocForRunbook(rbRow.id);
+    const doc: ArrayBuffer | null = await OnlineRunbook.loadYDocForRunbook(rbRow.id);
     rbRow.ydoc = doc;
 
-    return Runbook.fromRow(rbRow);
+    return OnlineRunbook.fromRow(rbRow);
   }
 
-  public static async updateAll(attrs: Partial<RunbookAttrs>) {
+  public static async updateAll(attrs: Partial<BaseRunbookAttrs>) {
     const db = await AtuinDB.load("runbooks");
     const keys = Object.keys(attrs).map(camelCaseToSnakeCase);
     const values = Object.values(attrs);
@@ -272,7 +348,7 @@ export default class Runbook {
     const query = `SELECT * FROM runbooks WHERE ${whereClause}`;
     const rows = await db.select<any[]>(query, bindValues);
 
-    return rows.map(Runbook.fromRow);
+    return rows.map(OnlineRunbook.fromRow);
   }
 
   static fromRow(row: any): Runbook {
@@ -286,7 +362,7 @@ export default class Runbook {
       }
     }
 
-    return new Runbook(
+    return new OnlineRunbook(
       {
         id: row.id,
         name: row.name,
@@ -314,7 +390,7 @@ export default class Runbook {
         "order by updated desc",
     );
 
-    return res.map(Runbook.fromRow);
+    return res.map(OnlineRunbook.fromRow);
   }
 
   static async allIdsInAllWorkspaces(): Promise<string[]> {
@@ -335,7 +411,7 @@ export default class Runbook {
       [workspaceId],
     );
 
-    return res.map(Runbook.fromRow);
+    return res.map(OnlineRunbook.fromRow);
   }
 
   static async allFromWorkspace(workspaceId: string): Promise<Runbook[]> {
@@ -347,7 +423,7 @@ export default class Runbook {
       [workspaceId],
     );
 
-    return res.map(Runbook.fromRow);
+    return res.map(OnlineRunbook.fromRow);
   }
 
   static async allFromOrg(orgId: string | null): Promise<Runbook[]> {
@@ -367,7 +443,7 @@ export default class Runbook {
 
     let res = await db.select<any[]>(query, [orgId]);
 
-    return res.map(Runbook.fromRow);
+    return res.map(OnlineRunbook.fromRow);
   }
 
   static async withNullLegacyWorkspaces(): Promise<Runbook[]> {
@@ -380,13 +456,13 @@ export default class Runbook {
         [],
       );
 
-      return res.map(Runbook.fromRow);
+      return res.map(OnlineRunbook.fromRow);
     });
 
     return runbooks;
   }
 
-  public async save() {
+  public async save(): Promise<string | undefined> {
     const db = await AtuinDB.load("runbooks");
     logger.info("Saving runbook", this.id, this.name, this._ydoc);
 
@@ -427,7 +503,7 @@ export default class Runbook {
     );
 
     if (this._ydocChanged) {
-      await Runbook.saveYDocForRunbook(this.id, this._ydoc);
+      await OnlineRunbook.saveYDocForRunbook(this.id, this._ydoc);
       this._ydocChanged = false;
     }
 
@@ -437,6 +513,8 @@ export default class Runbook {
       dbHook("runbook", "update", this);
     }
     this.persisted = true;
+
+    return undefined;
   }
 
   public async clearRemoteInfo() {
@@ -509,7 +587,7 @@ export default class Runbook {
   }
 
   public clone() {
-    return new Runbook(
+    return new OnlineRunbook(
       {
         id: this.id,
         name: this.name,
@@ -541,4 +619,214 @@ export default class Runbook {
 
     dbHook("runbook", "delete", this);
   }
+}
+
+function camelCaseToSnakeCase(str: string) {
+  return str.replace(/([A-Z])/g, "_$1").toLowerCase();
+}
+
+///// OFFLINE
+
+export interface OfflineRunbookAttrs extends BaseRunbookAttrs {
+  contentHash: string;
+}
+
+export class OfflineRunbook extends Runbook {
+  contentHash: string;
+
+  constructor(attrs: OfflineRunbookAttrs, persisted: boolean = false) {
+    super(attrs, persisted);
+    this.contentHash = attrs.contentHash;
+  }
+
+  get viewed_at(): Date | null {
+    return new Date();
+  }
+
+  public static async allInAllWorkspaces(): Promise<Runbook[]> {
+    const ids = await this.allIdsInAllWorkspaces();
+    const promises = ids.map((id) => this.load(id));
+    const results = await Promise.all(promises);
+    return results.filter((result) => result !== null);
+  }
+
+  public static async allIdsInAllWorkspaces(): Promise<string[]> {
+    const manager = WorkspaceManager.getInstance();
+    const workspaces = manager.getWorkspaces();
+    return workspaces.flatMap((workspace) => {
+      return Object.values(workspace.runbooks).map((runbook) => runbook!.id);
+    });
+  }
+
+  public static async allFromOrg(orgId: string | null): Promise<Runbook[]> {
+    const workspaces = await Workspace.all({ orgId });
+    const promises = workspaces.map((workspace) => {
+      return OfflineRunbook.allFromWorkspace(workspace.get("id")!);
+    });
+
+    const resolved = await Promise.all(promises);
+    return resolved.flat();
+  }
+
+  public static async allFromWorkspace(workspaceId: string): Promise<Runbook[]> {
+    const manager = WorkspaceManager.getInstance();
+    const info = manager.getWorkspaceInfo(workspaceId);
+    const ids = info
+      .andThen((info) => info.ok())
+      .map((info) => info.runbooks)
+      .map((runbooks) => {
+        return Object.values(runbooks).map((runbook) => {
+          return runbook!.id;
+        });
+      })
+      .unwrapOr([] as string[]);
+
+    const runbooks = await Promise.allSettled(ids.map((id) => OfflineRunbook.load(id)));
+    return runbooks
+      .filter((result) => result.status === "fulfilled")
+      .map((result) => result.value)
+      .filter((result) => result !== null);
+  }
+
+  public static async count(): Promise<number> {
+    const manager = WorkspaceManager.getInstance();
+    const workspaces = manager.getWorkspaces();
+    return workspaces.reduce((acc, workspace) => {
+      return acc + Object.values(workspace.runbooks).length;
+    }, 0);
+  }
+
+  public static async create(
+    workspace: Workspace,
+    parentFolderId: string | null,
+    persist: boolean = true,
+    name: string = "Untitled",
+    content: any = [],
+  ): Promise<OfflineRunbook | null> {
+    if (!persist) {
+      throw new Error("Cannot create offline runbook without persisting");
+    }
+
+    const idResult = await commands.createRunbook(
+      workspace.get("id")!,
+      parentFolderId,
+      name,
+      content,
+    );
+    if (idResult.isErr()) {
+      console.error("Failed to create runbook", idResult.unwrapErr());
+      return null;
+    }
+
+    const id = idResult.unwrap();
+
+    // We need to wait for the filesystem event to be processed by the backend
+    // before we can successfully load the runbook.
+    let runbook: OfflineRunbook | null = null;
+    let startAttempts = Date.now();
+    while (runbook === null) {
+      runbook = await OfflineRunbook.load(id);
+      if (runbook) {
+        return runbook;
+      }
+      if (Date.now() - startAttempts > 2000) {
+        console.error("Failed to load runbook after 2 seconds");
+        return null;
+      }
+      await timeoutPromise(50, null);
+    }
+
+    return null;
+  }
+
+  public static async load(id: string): Promise<OfflineRunbook | null> {
+    const runbook = await commands.getRunbook(id);
+    console.log("laoded offline runbook", runbook);
+
+    return runbook
+      .map(
+        (runbook) =>
+          new OfflineRunbook({
+            id: runbook.id,
+            name: runbook.name,
+            content: JSON.stringify(runbook.content),
+            contentHash: runbook.contentHash,
+            workspaceId: runbook.workspaceId,
+            created: convertSystemTime(runbook.created) ?? new Date(),
+            updated: convertSystemTime(runbook.updated) ?? new Date(),
+          }),
+      )
+      .map((runbook) => {
+        return runbook;
+      })
+      .unwrapOr(null);
+  }
+
+  public isOnline(): boolean {
+    return false;
+  }
+
+  public async save(): Promise<string | undefined> {
+    const result = await commands.saveRunbook(
+      this.workspaceId,
+      this.id,
+      this.name,
+      JSON.parse(this.content),
+    );
+    if (result.isErr()) {
+      throw result.unwrapErr();
+    } else {
+      return result.unwrap();
+    }
+  }
+
+  public async clearRemoteInfo(): Promise<void> {
+    // no op
+  }
+
+  public async moveTo(_targetWorkspace: Workspace): Promise<void> {
+    // TODO
+  }
+
+  public async updateRemoteInfo(_remoteInfo: string | null): Promise<void> {
+    // no op
+  }
+
+  public async markViewed(): Promise<void> {
+    // no op
+  }
+
+  public clone(): Runbook {
+    return new OfflineRunbook({
+      id: this.id,
+      name: this.name,
+      content: this.content,
+      contentHash: this.contentHash,
+      workspaceId: this.workspaceId,
+      created: this.created,
+      updated: this.updated,
+    });
+  }
+
+  public async delete(): Promise<void> {
+    const result = await commands.deleteRunbook(this.workspaceId, this.id);
+    if (result.isErr()) {
+      throw result.unwrapErr();
+    } else {
+      return;
+    }
+  }
+
+  get source(): RunbookSource {
+    return "local";
+  }
+}
+
+function convertSystemTime(
+  time: { secs_since_epoch: number; nanos_since_epoch: number } | null,
+): Date | null {
+  if (time === null) {
+    return null;
+  }
+  return new Date(time.secs_since_epoch * 1000 + time.nanos_since_epoch / 1000000);
 }

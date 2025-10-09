@@ -5,9 +5,9 @@ import { invoke } from "@tauri-apps/api/core";
 
 // @ts-ignore
 import { createReactBlockSpec } from "@blocknote/react";
-import { useStore } from "@/state/store";
 import RunbookBus from "@/lib/app/runbook_bus";
 import { exportPropMatter } from "@/lib/utils";
+import { useCurrentRunbookId } from "@/context/runbook_id_context";
 
 /**
  * Props for the VarDisplay component that shows a live preview of a template variable
@@ -25,7 +25,7 @@ interface VarDisplayProps {
 const VarDisplay = ({ name = "", isEditable, onUpdate }: VarDisplayProps) => {
   const [value, setValue] = React.useState<string>("");
   const [loading, setLoading] = React.useState<boolean>(false);
-  const currentRunbookId = useStore((store) => store.currentRunbookId);
+  const currentRunbookId = useCurrentRunbookId();
 
   const handleNameChange = (e: React.FormEvent<HTMLInputElement>) => {
     onUpdate(e.currentTarget.value);

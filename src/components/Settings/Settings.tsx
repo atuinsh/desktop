@@ -22,10 +22,10 @@ import {
   ModalContent,
   Link,
   useDisclosure,
+  addToast,
 } from "@heroui/react";
 import { Settings } from "@/state/settings";
 import { KVStore } from "@/state/kv";
-import { ask } from "@tauri-apps/plugin-dialog";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { useStore } from "@/state/store";
 import { invoke } from "@tauri-apps/api/core";
@@ -128,6 +128,30 @@ const SettingSwitch = ({
 
 // Settings sections
 const GeneralSettings = () => {
+  const [showingPromptToRestart, setShowingPromptToRestart] = useState(false);
+
+  function promptToRestart() {
+    if (showingPromptToRestart) return;
+    setShowingPromptToRestart(true);
+
+    addToast({
+      title: "Restart required",
+      description: "Atuin needs to restart to apply your changes. This won't take long!",
+      color: "primary",
+      radius: "sm",
+      timeout: Infinity,
+      shouldShowTimeoutProgress: false,
+      onClose: () => {
+        setShowingPromptToRestart(false);
+      },
+      endContent: (
+        <Button size="sm" variant="flat" color="primary" className="p-2" onPress={() => relaunch()}>
+          Restart
+        </Button>
+      ),
+    });
+  }
+
   const fonts = useAsyncData(loadFonts, []);
 
   const [trackingOptIn, setTrackingOptIn, isLoading] = useSettingsState(
@@ -140,16 +164,7 @@ const GeneralSettings = () => {
     async (value: boolean) => {
       const db = await KVStore.open_default();
       await db.set("usage_tracking", value);
-      const restart = await ask(
-        "Atuin needs to restart to apply your changes. This won't take long!",
-        {
-          title: "Restart required",
-          kind: "info",
-          okLabel: "Restart",
-          cancelLabel: "Later",
-        },
-      );
-      if (restart) await relaunch();
+      promptToRestart();
     },
   );
 
@@ -159,13 +174,44 @@ const GeneralSettings = () => {
   const sidebarClickStyle = useStore((state) => state.sidebarClickStyle);
   const lightModeEditorTheme = useStore((state) => state.lightModeEditorTheme);
   const darkModeEditorTheme = useStore((state) => state.darkModeEditorTheme);
+  const backgroundSync = useStore((state) => state.backgroundSync);
+  const syncConcurrency = useStore((state) => state.syncConcurrency);
 
-  const [vimModeEnabled, setVimModeEnabled, vimModeLoading] = useSettingsState(
+  const [vimModeEnabled, setVimModeEnabledState, vimModeLoading] = useSettingsState(
     "editor_vim_mode",
     false,
     Settings.editorVimMode,
     Settings.editorVimMode,
   );
+
+  function setVimModeEnabled(enabled: boolean) {
+    setVimModeEnabledState(enabled);
+    useStore.getState().setVimModeEnabled(enabled);
+  }
+
+  const [shellCheckEnabled, setShellCheckEnabledState, shellCheckEnabledLoading] = useSettingsState(
+    "shellcheck_enabled",
+    false,
+    Settings.shellCheckEnabled,
+    Settings.shellCheckEnabled,
+  );
+
+  const [shellCheckPath, setShellCheckPathState, shellCheckPathLoading] = useSettingsState(
+    "shellcheck_path",
+    "",
+    Settings.shellCheckPath,
+    Settings.shellCheckPath,
+  );
+
+  function setShellCheckEnabled(enabled: boolean) {
+    setShellCheckEnabledState(enabled);
+    useStore.getState().setShellCheckEnabled(enabled);
+  }
+
+  function setShellCheckPath(path: string) {
+    setShellCheckPathState(path);
+    useStore.getState().setShellCheckPath(path);
+  }
 
   const themes = [
     ["Abcdef", "abcdef"],
@@ -239,7 +285,23 @@ const GeneralSettings = () => {
     useStore.getState().setDarkModeEditorTheme(keys.currentKey as string);
   }
 
-  if (isLoading || vimModeLoading) return <Spinner />;
+  function setBackgroundSync(backgroundSync: boolean) {
+    useStore.getState().setBackgroundSync(backgroundSync);
+    promptToRestart();
+  }
+
+  function setSyncConcurrency(keys: SharedSelection) {
+    const syncConcurrency = parseInt(keys.currentKey as string, 10);
+    useStore.getState().setSyncConcurrency(syncConcurrency);
+    promptToRestart();
+  }
+
+  if (
+    isLoading ||
+    vimModeLoading ||
+    shellCheckEnabledLoading ||
+    shellCheckPathLoading
+  ) return <Spinner />;
 
   return (
     <>
@@ -308,6 +370,32 @@ const GeneralSettings = () => {
               Click to select, double click to open
             </SelectItem>
           </Select>
+
+          <div className="mt-4 flex flex-row gap-4">
+            <SettingSwitch
+              label="Enable background sync"
+              isSelected={backgroundSync}
+              onValueChange={setBackgroundSync}
+              description="Sync runbooks in the background"
+            />
+            <Select
+              label="Number of runbooks to sync concurrently"
+              value={syncConcurrency.toString()}
+              onSelectionChange={setSyncConcurrency}
+              className="mt-4"
+              placeholder="Select sync concurrency"
+              selectedKeys={[syncConcurrency.toString()]}
+              disabled={!backgroundSync}
+              items={[
+                { label: "1 (no concurrency)", key: "1" },
+                { label: "2", key: "2" },
+                { label: "5", key: "5" },
+                { label: "10", key: "10" },
+              ]}
+            >
+              {(item) => <SelectItem key={item.key}>{item.label}</SelectItem>}
+            </Select>
+          </div>
         </CardBody>
       </Card>
 
@@ -346,6 +434,27 @@ const GeneralSettings = () => {
             onValueChange={setVimModeEnabled}
             description="Enable Vim key bindings in code editors"
           />
+
+          <SettingSwitch
+            className="mt-4"
+            label="Enable ShellCheck"
+            isSelected={shellCheckEnabled}
+            onValueChange={setShellCheckEnabled}
+            description="Enable ShellCheck static analysis for shell scripts in code editors"
+          />
+
+          {shellCheckEnabled && (
+            <div className="mt-4">
+              <SettingInput
+                type="text"
+                label="ShellCheck path"
+                value={shellCheckPath || ""}
+                onChange={setShellCheckPath}
+                placeholder=""
+                description="(Optional) Path to the ShellCheck command line tool if it's not allready in PATH"
+              />
+            </div>
+          )}
 
           <div className="mt-2 ml-1">
             <Link

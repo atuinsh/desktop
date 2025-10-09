@@ -6,6 +6,7 @@ import { HttpBlock } from "@/lib/blocks/http/schema";
 import { PrometheusBlock } from "./prometheus";
 import { SQLiteBlock } from "./sqlite";
 import { PostgresBlock } from "./postgres";
+import { MySqlBlock } from "./mysql";
 import { TerminalBlock } from "@/lib/blocks/terminal";
 
 test("TerminalBlock can be created from blocknote", () => {
@@ -111,6 +112,28 @@ test("PostgresBlock can be created from blocknote", () => {
     expect(block.uri).toBe("postgres://foo/bar");
     expect(block.autoRefresh).toBe(1000);
 }); 
+
+test("MySqlBlock can be created from blocknote", () => {
+    let bnb = {
+        id: "b339887e-746a-4d2c-b344-cee575cda742",
+        type: "mysql",
+        props: {
+            name: "mysql-block",
+            query: "SELECT * FROM users",
+            uri: "mysql://foo/bar",
+            autoRefresh: 1000,
+        },
+        children: [],
+    };
+
+    let block = convertBlocknoteToAtuin(bnb) as MySqlBlock;
+    expect(block).toBeDefined();
+    expect(block.id).toBe("b339887e-746a-4d2c-b344-cee575cda742");
+    expect(block.name).toBe("mysql-block");
+    expect(block.query).toBe("SELECT * FROM users");
+    expect(block.uri).toBe("mysql://foo/bar");
+    expect(block.autoRefresh).toBe(1000);
+});
 
 test("HttpBlock can be created from blocknote", () => {
     let bnb = {

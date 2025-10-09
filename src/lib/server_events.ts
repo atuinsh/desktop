@@ -53,6 +53,7 @@ export function setupServerEvents(
         id: serverWorkspace.id,
         name: serverWorkspace.name,
         orgId: serverWorkspace.owner.id,
+        online: 1,
       });
 
       await newWorkspace.save();

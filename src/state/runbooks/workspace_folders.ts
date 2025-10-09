@@ -1,5 +1,6 @@
 import { Tree, TreeData, Node, DeleteStrategy, TraversalOrder } from "@/lib/tree";
 import { Some, Option } from "@binarymuse/ts-stdlib";
+import { uuidv4 } from "uuidv7";
 
 export type Folder = TreeData<FolderItem>;
 
@@ -26,11 +27,11 @@ export type FolderItem =
 export default class WorkspaceFolder {
   private root: Node<FolderItem>;
 
-  static fromJS(data: TreeData<FolderItem>): WorkspaceFolder {
+  static fromJS(data: Folder): WorkspaceFolder {
     return new WorkspaceFolder(data);
   }
 
-  private constructor(data: TreeData<FolderItem>) {
+  private constructor(data: Folder) {
     this.root = Tree.fromJS<FolderItem>(data);
   }
 
@@ -39,7 +40,7 @@ export default class WorkspaceFolder {
   // by default, `jsondiffpatch` uses reference equality to determine
   // if two objects are the same, so we need to ensure that the same
   // object is returned for the same id unless it's actually changed.
-  public toJS(): TreeData<FolderItem> {
+  public toJS(): Folder {
     return this.root.toJS();
   }
 
@@ -120,23 +121,6 @@ export default class WorkspaceFolder {
     });
   }
 
-  public importRunbooks(runbookIds: string[], parentId: string | null): boolean {
-    const parent = parentId ? this.root.getNode(parentId) : Some(this.root.root());
-
-    return parent
-      .orElse(() => Some(this.root.root()))
-      .map((p) => {
-        for (const id of runbookIds.toReversed()) {
-          p.createChild(id, 0).setData({
-            type: "runbook",
-            id,
-          });
-        }
-      })
-      .map(() => true)
-      .unwrapOr(false);
-  }
-
   public renameFolder(id: string, newName: string): boolean {
     const node = this.root.getNode(id);
     const data = node.andThen((n) => n.getData());
@@ -201,9 +185,17 @@ export default class WorkspaceFolder {
 
     const parentNode = parent.unwrap();
 
+    // Move items to a temporary node in case nodes are moving inside their current parent
+    const tempNode = this.root.createChild(uuidv4(), 0);
+    for (const node of nodes.toReversed()) {
+      node.moveTo(tempNode, 0);
+    }
+
     for (const node of nodes.toReversed()) {
       node.moveTo(parentNode, index);
     }
+
+    tempNode.delete(DeleteStrategy.Cascade);
 
     return true;
   }

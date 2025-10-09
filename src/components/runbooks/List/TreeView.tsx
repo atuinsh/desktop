@@ -28,6 +28,8 @@ interface MoveHandlerArgs<T> {
 interface TreeViewProps {
   data: TreeRowData[];
   workspaceId?: string;
+  workspaceOnline: boolean;
+  workspaceLegacyHybrid: boolean;
   sortBy: SortBy;
   selectedItemId: string | null;
   initialOpenState: Record<string, boolean>;
@@ -49,6 +51,7 @@ export default function TreeView(props: TreeViewProps) {
   const { ref: resizeRef, width } = useResizeObserver();
   const [divElement, setDivElement] = useState<HTMLDivElement | null>(null);
   const treeRef = useRef<TreeApi<TreeRowData> | null>(null);
+  const lastSidebarDragInfo = useStore((state) => state.lastSidebarDragInfo);
 
   // See https://github.com/brimdata/react-arborist/issues/230#issuecomment-2404208311
   const dragDropManager = useDragDropManager();
@@ -178,6 +181,7 @@ export default function TreeView(props: TreeViewProps) {
           preview: innerProps.preview,
           runbookId: innerProps.node.data.id,
           onContextMenu,
+          useProvidedName: !props.workspaceOnline && !props.workspaceLegacyHybrid,
         };
         return <RunbookTreeRow key={innerProps.node.data.id} {...runbookProps} />;
       }
@@ -221,6 +225,13 @@ export default function TreeView(props: TreeViewProps) {
         onRename={handleRename}
         onToggle={handleToggle}
         dndManager={dragDropManager}
+        disableDrag={props.workspaceLegacyHybrid}
+        disableDrop={
+          props.workspaceLegacyHybrid ||
+          lastSidebarDragInfo?.sourceWorkspaceId !== props.workspaceId
+        }
+        disableEdit={props.workspaceLegacyHybrid}
+        disableMultiSelection={props.workspaceLegacyHybrid}
       >
         {TreeRow}
       </Tree>

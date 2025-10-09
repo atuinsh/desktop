@@ -148,7 +148,7 @@ export function useDebounce(
  * Stores the value in a ref and updates it when the value changes. Useful for
  * ensuring that a value is up-to-date in an async callback.
  */
-export function useMemory<T>(value: T): React.MutableRefObject<T> {
+export function useMemory<T>(value: T): React.RefObject<T> {
   const ref = useRef<T>(value);
   useEffect(() => {
     ref.current = value;
