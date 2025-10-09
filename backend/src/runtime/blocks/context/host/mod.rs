@@ -7,30 +7,30 @@
 //! ## Usage
 //!
 //! ```json
- //! {
- //!   "type": "host",
- //!   "props": {
- //!     "host": "localhost"  // or "user@remote.host" or ""
- //!   }
- //! }
+//! {
+//!   "type": "host",
+//!   "props": {
+//!     "host": "localhost"  // or "user@remote.host" or ""
+//!   }
+//! }
 //! ```
 //!
- //! ## Behavior
- //!
- //! - `"localhost"`, `"local"`, or `""` -> Sets context to local execution
- //! - Any other value -> Sets context to SSH execution with that host
+//! ## Behavior
+//!
+//! - `"localhost"`, `"local"`, or `""` -> Sets context to local execution
+//! - Any other value -> Sets context to SSH execution with that host
 //!
 //! ## Examples
 //!
 //! ```json
- //! // Switch to localhost
- //! {"type": "host", "props": {"host": "localhost"}}
- //!
- //! // Switch to SSH
- //! {"type": "host", "props": {"host": "user@server.com"}}
- //!
- //! // Switch back to localhost (empty string)
- //! {"type": "host", "props": {"host": ""}}
+//! // Switch to localhost
+//! {"type": "host", "props": {"host": "localhost"}}
+//!
+//! // Switch to SSH
+//! {"type": "host", "props": {"host": "user@server.com"}}
+//!
+//! // Switch back to localhost (empty string)
+//! {"type": "host", "props": {"host": ""}}
 //! ```
 
 use serde::{Deserialize, Serialize};
@@ -72,7 +72,7 @@ impl ContextProvider for HostHandler {
         context: &mut ExecutionContext,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         // Determine if this should be local or SSH execution
-        let host = block.host.trim();
+        let host = block.host.trim().to_lowercase();
 
         if host.is_empty() || host == "local" || host == "localhost" {
             // Switch to local execution
@@ -107,10 +107,7 @@ impl Host {
             .unwrap_or("localhost") // Default to localhost if not specified
             .to_string();
 
-        Ok(Host::builder()
-            .id(Uuid::parse_str(id)?)
-            .host(host)
-            .build())
+        Ok(Host::builder().id(Uuid::parse_str(id)?).host(host).build())
     }
 }
 
@@ -164,10 +161,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_switch_to_localhost() {
-        let host = Host::builder()
-            .id(Uuid::new_v4())
-            .host("localhost")
-            .build();
+        let host = Host::builder().id(Uuid::new_v4()).host("localhost").build();
 
         let mut context = create_test_context();
         assert!(context.ssh_host.is_some()); // Start with SSH
@@ -249,10 +243,7 @@ mod tests {
         let variations = vec!["localhost", "LOCALHOST", "LocalHost"];
 
         for host_str in variations {
-            let host_block = Host::builder()
-                .id(Uuid::new_v4())
-                .host(host_str)
-                .build();
+            let host_block = Host::builder().id(Uuid::new_v4()).host(host_str).build();
 
             let mut context = create_test_context();
             assert!(context.ssh_host.is_some()); // Start with SSH
@@ -272,10 +263,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_host_context_preserves_other_fields() {
-        let host = Host::builder()
-            .id(Uuid::new_v4())
-            .host("localhost")
-            .build();
+        let host = Host::builder().id(Uuid::new_v4()).host("localhost").build();
 
         let mut context = ExecutionContext {
             runbook_id: Uuid::new_v4(),
@@ -406,10 +394,7 @@ mod tests {
         ];
 
         for (host_str, expected_ssh_host) in test_cases {
-            let host_block = Host::builder()
-                .id(Uuid::new_v4())
-                .host(host_str)
-                .build();
+            let host_block = Host::builder().id(Uuid::new_v4()).host(host_str).build();
 
             let mut context = create_test_context();
             let handler = HostHandler;
@@ -448,10 +433,7 @@ mod tests {
         assert_eq!(context.ssh_host, Some("user@host2.com".to_string()));
 
         // Switch back to local
-        let localhost = Host::builder()
-            .id(Uuid::new_v4())
-            .host("localhost")
-            .build();
+        let localhost = Host::builder().id(Uuid::new_v4()).host("localhost").build();
         handler
             .apply_context(&localhost, &mut context)
             .await
