@@ -105,7 +105,12 @@ features = [
     "mysql",
     "sqlite",
     "uuid",
+    "chrono",
     "postgres",
+    "mysql",
+    "sqlite",
+    "uuid",
+    "bigdecimal",
     "bigdecimal",
 ]
 
