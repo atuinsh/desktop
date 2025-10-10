@@ -76,6 +76,9 @@ import { TabIcon, TabUri } from "@/state/store/ui_state";
 import * as commands from "@/lib/workspaces/commands";
 import FeedbackModal from "./FeedbackModal";
 import { getGlobalOptions } from "@/lib/global_options";
+import SaveBlockModal from "./SaveBlockModal";
+import SavedBlock from "@/state/runbooks/saved_block";
+import { uuidv7 } from "uuidv7";
 
 const globalOptions = getGlobalOptions();
 const UPDATE_CHECK_INTERVAL = globalOptions.channel === "edge" ? 1000 * 60 * 5 : 1000 * 60 * 60;
@@ -146,6 +149,8 @@ function App() {
   const user = useStore((state: AtuinState) => state.user);
   const isLoggedIn = useStore((state: AtuinState) => state.isLoggedIn);
   const showDesktopConnect = useStore((state: AtuinState) => state.proposedDesktopConnectUser);
+  const savingBlock = useStore((state: AtuinState) => state.savingBlock);
+  const clearSavingBlock = useStore((state: AtuinState) => state.clearSavingBlock);
 
   const [showNewWorkspaceDialog, setShowNewWorkspaceDialog] = useState(false);
 
@@ -472,6 +477,27 @@ function App() {
   // ) {
   //   //
   // }
+
+  async function handleSaveBlock(name: string, block: any) {
+    clearSavingBlock();
+
+    const savedBlock = new SavedBlock({
+      id: uuidv7(),
+      name,
+      content: block,
+    });
+
+    try {
+      await savedBlock.save();
+    } catch (err) {
+      await new DialogBuilder()
+        .title("Failed to save block")
+        .icon("error")
+        .message("Failed to save block")
+        .action({ label: "OK", value: "ok", variant: "flat" })
+        .build();
+    }
+  }
 
   async function handleMoveItemsToWorkspace(
     items: string[],
@@ -1157,6 +1183,13 @@ function App() {
             runbookId={runbookIdToDelete}
             onClose={() => setRunbookIdToDelete(null)}
             doDeleteRunbook={doDeleteRunbook}
+          />
+        )}
+        {savingBlock.isSome() && (
+          <SaveBlockModal
+            block={savingBlock.unwrap()}
+            onClose={clearSavingBlock}
+            doSaveBlock={handleSaveBlock}
           />
         )}
       </RunbookContext.Provider>

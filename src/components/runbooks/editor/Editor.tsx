@@ -17,7 +17,14 @@ import { BlockNoteView } from "@blocknote/mantine";
 import "@blocknote/core/fonts/inter.css";
 import "@blocknote/mantine/style.css";
 
-import { FolderOpenIcon, VariableIcon, TextCursorInputIcon, EyeIcon, LinkIcon } from "lucide-react";
+import {
+  FolderOpenIcon,
+  VariableIcon,
+  TextCursorInputIcon,
+  EyeIcon,
+  LinkIcon,
+  BlocksIcon,
+} from "lucide-react";
 
 import { AIGeneratePopup } from "./AIGeneratePopup";
 import AIPopup from "./ui/AIPopup";
@@ -63,6 +70,8 @@ import { calculateAIPopupPosition, calculateLinkPopupPosition } from "./utils/po
 import { useTauriEvent } from "@/lib/tauri";
 import { save } from "@tauri-apps/plugin-dialog";
 import { writeTextFile } from "@tauri-apps/plugin-fs";
+import { SaveBlockItem } from "./ui/SaveBlockItem";
+import { SavedBlockPopup } from "./ui/SavedBlockPopup";
 
 // Fix for react-dnd interference with BlockNote drag-and-drop
 // React-dnd wraps dataTransfer in a proxy that blocks access during drag operations
@@ -171,6 +180,23 @@ const insertRunbookLink = (
   group: "Content",
 });
 
+const insertSavedBlock = (
+  editor: typeof schema.BlockNoteEditor,
+  showSavedBlockPopup: (position: { x: number; y: number }) => void,
+) => ({
+  title: "Saved Block",
+  subtext: "Insert a saved block",
+  onItemClick: () => {
+    track_event("runbooks.block.create", { type: "saved_block" });
+
+    const position = calculateLinkPopupPosition(editor);
+    showSavedBlockPopup(position);
+  },
+  icon: <BlocksIcon size={18} />,
+  aliases: ["saved", "block"],
+  group: "Content",
+});
+
 // AI Generate function
 const insertAIGenerate = (
   editor: any,
@@ -210,6 +236,8 @@ export default function Editor({ runbook, editable, runbookEditor }: EditorProps
   const [isVisible, setIsVisible] = useState(true);
   const [runbookLinkPopupVisible, setRunbookLinkPopupVisible] = useState(false);
   const [runbookLinkPopupPosition, setRunbookLinkPopupPosition] = useState({ x: 0, y: 0 });
+  const [savedBlockPopupVisible, setSavedBlockPopupVisible] = useState(false);
+  const [savedBlockPopupPosition, setSavedBlockPopupPosition] = useState({ x: 0, y: 0 });
 
   // Check AI enabled status
   useEffect(() => {
@@ -230,8 +258,17 @@ export default function Editor({ runbook, editable, runbookEditor }: EditorProps
     setRunbookLinkPopupVisible(true);
   }, []);
 
+  const showSavedBlockPopup = useCallback((position: { x: number; y: number }) => {
+    setSavedBlockPopupPosition(position);
+    setSavedBlockPopupVisible(true);
+  }, []);
+
   const closeRunbookLinkPopup = useCallback(() => {
     setRunbookLinkPopupVisible(false);
+  }, []);
+
+  const closeSavedBlockPopup = useCallback(() => {
+    setSavedBlockPopupVisible(false);
   }, []);
 
   const handleExportMarkdown = async () => {
@@ -285,6 +322,22 @@ export default function Editor({ runbook, editable, runbookEditor }: EditorProps
       }, 10);
     },
     [editor, closeRunbookLinkPopup],
+  );
+
+  const handleSavedBlockSelect = useCallback(
+    (_savedBlockId: string, block: any) => {
+      if (!editor) return;
+
+      editor.insertBlocks([block], editor.getTextCursorPosition().block.id, "after");
+
+      closeSavedBlockPopup();
+
+      // Focus back to the editor and position cursor after the inserted link
+      setTimeout(() => {
+        editor.focus();
+      }, 10);
+    },
+    [editor, closeSavedBlockPopup],
   );
 
   const getEditorContext = useCallback(async () => {
@@ -606,6 +659,7 @@ export default function Editor({ runbook, editable, runbookEditor }: EditorProps
 
                 // Content group
                 insertRunbookLink(editor as any, showRunbookLinkPopup),
+                insertSavedBlock(editor as any, showSavedBlockPopup),
 
                 // Monitoring group
                 insertPrometheus(schema)(editor),
@@ -642,6 +696,7 @@ export default function Editor({ runbook, editable, runbookEditor }: EditorProps
                 <DragHandleMenu {...props}>
                   <RemoveBlockItem {...props}>Delete</RemoveBlockItem>
                   <DuplicateBlockItem {...props} />
+                  <SaveBlockItem {...props} />
                 </DragHandleMenu>
               )}
             ></SideMenu>
@@ -678,6 +733,12 @@ export default function Editor({ runbook, editable, runbookEditor }: EditorProps
         position={runbookLinkPopupPosition}
         onSelect={handleRunbookLinkSelect}
         onClose={closeRunbookLinkPopup}
+      />
+      <SavedBlockPopup
+        isVisible={savedBlockPopupVisible}
+        position={savedBlockPopupPosition}
+        onSelect={handleSavedBlockSelect}
+        onClose={closeSavedBlockPopup}
       />
     </div>
   );
