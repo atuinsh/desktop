@@ -56,6 +56,7 @@ export interface AtuinUiState {
   sidebarClickStyle: "link" | "explorer";
   lastSidebarDragInfo: { itemIds: string[]; sourceWorkspaceId: string } | undefined;
   didSidebarSetup: boolean;
+  savingBlock: Option<any>;
 
   tabs: Tab[];
   currentTabId: string | null;
@@ -97,6 +98,8 @@ export interface AtuinUiState {
   closeRightTabs: (id: string) => void;
   closeTabs: (predicate: (tab: Tab) => boolean) => void;
   registerTabOnClose: (id: string, callback: (tab: Tab) => Promise<boolean>) => void;
+  setSavingBlock: (block: any) => void;
+  clearSavingBlock: () => void;
 
   setLightModeEditorTheme: (theme: string) => void;
   setDarkModeEditorTheme: (theme: string) => void;
@@ -150,6 +153,7 @@ export const createUiState: StateCreator<AtuinUiState> = (set, get, _store): Atu
   sidebarClickStyle: "link",
   lastSidebarDragInfo: undefined,
   didSidebarSetup: false,
+  savingBlock: None,
 
   tabs: [],
   currentTabId: null,
@@ -357,11 +361,14 @@ export const createUiState: StateCreator<AtuinUiState> = (set, get, _store): Atu
     };
   },
 
+  setSavingBlock: (block: any) => set(() => ({ savingBlock: Some(block) })),
+  clearSavingBlock: () => set(() => ({ savingBlock: None })),
+
   setLightModeEditorTheme: (theme: string) => set(() => ({ lightModeEditorTheme: theme })),
   setDarkModeEditorTheme: (theme: string) => set(() => ({ darkModeEditorTheme: theme })),
   setVimModeEnabled: (enabled: boolean) => set(() => ({ vimModeEnabled: enabled })),
   setShellCheckEnabled: (enabled: boolean) => set(() => ({ shellCheckEnabled: enabled })),
-  setShellCheckPath: (path: string) => set(() => ({ shellCheckPath: path }) ),
+  setShellCheckPath: (path: string) => set(() => ({ shellCheckPath: path })),
 
   getFolderState: (workspaceId: string) => Some(get().folderState[workspaceId]),
   toggleFolder: (workspaceId: string, folderId: string) => {
