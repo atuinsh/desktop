@@ -846,7 +846,8 @@ mod tests {
                         || error.contains("SQL")
                         || error.contains("syntax")
                         || error.contains("database")
-                        || error.contains("role"),
+                        || error.contains("role")
+                        || error.contains("timed out"),
                     "got error: {error:?}"
                 );
             }

@@ -845,7 +845,7 @@ mod tests {
 
         assert!(exit_code.is_ok());
         assert_eq!(exit_code.unwrap(), 0);
-        assert!(output.trim().ends_with("tmp"));
+        assert!(output.trim().ends_with("tmp"), "got output: {output:?}");
     }
 
     #[tokio::test]
@@ -1040,8 +1040,11 @@ mod tests {
 
         assert!(exit_code.is_ok());
         assert_eq!(exit_code.unwrap(), 0);
-        assert!(output.contains("from_variable"));
-        assert!(output.contains("First block content"));
+        assert!(output.contains("from_variable"), "got output: {output:?}");
+        assert!(
+            output.contains("First block content"),
+            "got output: {output:?}"
+        );
     }
 
     #[tokio::test]
@@ -1098,9 +1101,9 @@ mod tests {
 
         assert!(exit_code.is_ok());
         assert_eq!(exit_code.unwrap(), 0);
-        assert!(output.contains("测试"));
-        assert!(output.contains("🚀"));
-        assert!(output.contains("émojis"));
+        assert!(output.contains("测试"), "got output: {output:?}");
+        assert!(output.contains("🚀"), "got output {output:?}");
+        assert!(output.contains("émojis"), "got output {output:?}");
     }
 
     // Integration test for SSH execution (would need SSH setup to run)
