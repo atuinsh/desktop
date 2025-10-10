@@ -362,7 +362,7 @@ impl ClickhouseHandler {
         }
 
         // Parse URI and create HTTP client
-        let (endpoint, username, password, http_client) = {
+        let (endpoint, username, password, _http_client) = {
             let connection_task = async {
                 let (endpoint, username, password) = Self::parse_clickhouse_uri(&clickhouse.uri)?;
 

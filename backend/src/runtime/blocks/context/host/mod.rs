@@ -87,6 +87,7 @@ impl ContextProvider for HostHandler {
 }
 
 impl Host {
+    #[allow(dead_code)]
     /// Create a Host block from a document block
     pub fn from_document(
         block: &serde_json::Value,

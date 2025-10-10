@@ -140,7 +140,7 @@ impl PrometheusHandler {
         }
 
         // Try parsing the URL to catch format errors early
-        if let Err(_) = url::Url::parse(endpoint) {
+        if url::Url::parse(endpoint).is_err() {
             return Err("Invalid URL format".to_string());
         }
 

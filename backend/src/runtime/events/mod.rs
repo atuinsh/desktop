@@ -67,6 +67,7 @@ pub trait EventBus: Send + Sync {
 }
 
 /// No-op event bus for testing or when events are not needed
+#[allow(dead_code)]
 pub struct NoOpEventBus;
 
 #[async_trait]
@@ -78,11 +79,13 @@ impl EventBus for NoOpEventBus {
 }
 
 /// Event bus that collects events in memory (useful for testing)
+#[allow(dead_code)]
 #[derive(Default)]
 pub struct MemoryEventBus {
     events: std::sync::Arc<std::sync::Mutex<Vec<GCEvent>>>,
 }
 
+#[allow(dead_code)]
 impl MemoryEventBus {
     pub fn new() -> Self {
         Self::default()

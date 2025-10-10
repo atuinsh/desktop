@@ -11,6 +11,9 @@ use tokio::sync::{broadcast, oneshot, RwLock};
 use ts_rs::TS;
 use uuid::Uuid;
 
+type BlockOutputMap = HashMap<String, HashMap<String, String>>;
+type BlockOutputStore = Arc<RwLock<BlockOutputMap>>;
+
 #[derive(Clone)]
 pub struct ExecutionContext {
     pub runbook_id: Uuid,
@@ -20,7 +23,7 @@ pub struct ExecutionContext {
     pub ssh_host: Option<String>,
     pub document: Vec<serde_json::Value>, // For template resolution
     pub ssh_pool: Option<SshPoolHandle>,  // For SSH execution
-    pub output_storage: Option<Arc<RwLock<HashMap<String, HashMap<String, String>>>>>, // For storing output variables
+    pub output_storage: Option<BlockOutputStore>,
     pub pty_store: Option<PtyStoreHandle>, // For PTY management
     pub event_bus: Option<Arc<dyn EventBus>>, // For emitting events
 }

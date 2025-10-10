@@ -846,7 +846,8 @@ mod tests {
                         || error.contains("SQL")
                         || error.contains("syntax")
                         || error.contains("database")
-                        || error.contains("role")
+                        || error.contains("role"),
+                    "got error: {error:?}"
                 );
             }
             _ => panic!("Expected BlockFailed event, got: {:?}", events[1]),
