@@ -209,7 +209,7 @@ mod tests {
         // Verify events were emitted
         let events = event_bus.events();
 
-        // 4 events - block start/end, pty open/close
+        // 3 events - block start, pty open, block cancelled
         assert!(
             events.len() == 3,
             "Expected 3 events, got: {}",
