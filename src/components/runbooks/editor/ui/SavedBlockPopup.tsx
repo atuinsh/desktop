@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Input } from "@heroui/react";
 import { cn } from "@/lib/utils";
-import { LinkIcon, TrashIcon } from "lucide-react";
+import { BlocksIcon, TrashIcon } from "lucide-react";
 import SavedBlock from "@/state/runbooks/saved_block";
 import { DialogBuilder } from "@/components/Dialogs/dialog";
 
@@ -167,7 +167,7 @@ export function SavedBlockPopup({ isVisible, position, onSelect, onClose }: Save
               onClick={() => onSelect(block.get("id")!, block.get("content")!)}
             >
               <div className="flex items-center gap-2">
-                <LinkIcon size={14} />
+                <BlocksIcon size={14} />
                 <span className="truncate">{block.get("name") || "Untitled Block"}</span>
               </div>
               <TrashIcon
