@@ -1,0 +1,2 @@
+ALTER TABLE saved_blocks
+ADD COLUMN name TEXT NOT NULL;
