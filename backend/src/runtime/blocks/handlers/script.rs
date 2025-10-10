@@ -996,7 +996,7 @@ mod tests {
         );
 
         // Timeout after 1 second
-        let result = timeout(Duration::from_secs(1), script_future).await;
+        let result = timeout(Duration::from_millis(100), script_future).await;
 
         // Should timeout
         assert!(result.is_err());

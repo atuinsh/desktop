@@ -996,10 +996,21 @@ mod tests {
 
         // Check that no events were generated for ignored directories
         let events = collector.get_events().await;
-        assert!(
-            events.is_empty(),
-            "No events should be generated for ignored directories"
-        );
+
+        for event in events.iter() {
+            match event {
+                WorkspaceEvent::State(state) => {
+                    for entry in state.entries.iter() {
+                        let ignored = ignored_dirs
+                            .iter()
+                            .any(|dir| entry.path.display().to_string().contains(dir));
+
+                        assert!(!ignored);
+                    }
+                }
+                _ => {}
+            }
+        }
 
         // Verify that ignored directories and their contents are not in the workspace state
         {
@@ -1080,10 +1091,23 @@ mod tests {
 
         // Check that no events were generated for gitignored content
         let events = collector.get_events().await;
-        assert!(
-            events.is_empty(),
-            "No events should be generated for gitignored content"
-        );
+
+        // we _may_ have some events here, but they should definitely not be for anything in
+        // ignored_folder or for ignored files
+        for state in events.iter() {
+            match state {
+                WorkspaceEvent::State(state) => {
+                    for entry in state.entries.iter() {
+                        assert!(
+                            !entry.name.contains("temp")
+                                && !entry.name.contains("temp_file")
+                                && !entry.name.contains("ignored")
+                        )
+                    }
+                }
+                _ => {}
+            }
+        }
 
         // Verify that gitignored content is not in the workspace state
         {

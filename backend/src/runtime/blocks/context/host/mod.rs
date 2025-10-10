@@ -240,7 +240,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_localhost_variations() {
-        let variations = vec!["localhost", "LOCALHOST", "LocalHost"];
+        let variations = vec!["localhost", "LOCALHOST", "foo.com", "1.2.3.4"];
 
         for host_str in variations {
             let host_block = Host::builder().id(Uuid::new_v4()).host(host_str).build();
@@ -252,8 +252,7 @@ mod tests {
             let result = handler.apply_context(&host_block, &mut context).await;
 
             assert!(result.is_ok());
-            // Only exact "localhost" should switch to local, others should be treated as hosts
-            if host_str == "localhost" {
+            if host_str.to_lowercase() == "localhost" {
                 assert!(context.ssh_host.is_none(), "Failed for: {}", host_str);
             } else {
                 assert!(context.ssh_host.is_some(), "Failed for: {}", host_str);
