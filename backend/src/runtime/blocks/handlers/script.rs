@@ -832,10 +832,10 @@ mod tests {
         let (_tx, _rx) = broadcast::channel::<WorkflowEvent>(16);
 
         let mut context = create_test_context();
-        context.cwd = "/tmp".to_string();
+        context.cwd = "/".to_string();
 
         let (exit_code, output) = ScriptHandler::run_script(
-            &create_test_script("pwd", "bash"),
+            &create_test_script("pwd", "sh"),
             context,
             CancellationToken::new(),
             _tx,
@@ -845,7 +845,7 @@ mod tests {
 
         assert!(exit_code.is_ok());
         assert_eq!(exit_code.unwrap(), 0);
-        assert!(output.trim().ends_with("tmp"), "got output: {output:?}");
+        assert!(output.trim() == "/", "got output: {output:?}");
     }
 
     #[tokio::test]
