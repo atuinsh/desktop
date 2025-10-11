@@ -41,21 +41,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: backend
-          cache-on-failure: true
-
       - name: Install latest rust
         uses: dtolnay/rust-toolchain@master
         with:
           toolchain: stable
           components: ${{ matrix.components }}
 
-      - name: install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+      - uses: awalsh128/cache-apt-pkgs-action@latest
+        with:
+          packages: libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+          version: 1.0
 
       - name: Run sccache-cache
         uses: mozilla-actions/sccache-action@v0.0.7
