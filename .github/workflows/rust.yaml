@@ -22,7 +22,7 @@ env:
 jobs:
   rust-checks:
     name: ${{ matrix.name }}
-    runs-on: depot-ubuntu-22.04
+    runs-on: depot-ubuntu-22.04-4
     strategy:
       matrix:
         include:
