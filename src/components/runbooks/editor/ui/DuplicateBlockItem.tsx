@@ -1,8 +1,5 @@
-import {
-  DragHandleMenuProps,
-  useBlockNoteEditor,
-  useComponentsContext,
-} from "@blocknote/react";
+import { DragHandleMenuProps, useBlockNoteEditor, useComponentsContext } from "@blocknote/react";
+import { CopyIcon } from "lucide-react";
 import { uuidv7 } from "uuidv7";
 
 export function DuplicateBlockItem(props: DragHandleMenuProps) {
@@ -12,6 +9,7 @@ export function DuplicateBlockItem(props: DragHandleMenuProps) {
 
   return (
     <Components.Generic.Menu.Item
+      icon={<CopyIcon size={16} />}
       onClick={() => {
         // HACK [mkt]: For some blocks using CodeMirror, it seems that `props.block`
         // is missing the code in its props. However, `editor.document` has the correct

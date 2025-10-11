@@ -72,6 +72,7 @@ import { save } from "@tauri-apps/plugin-dialog";
 import { writeTextFile } from "@tauri-apps/plugin-fs";
 import { SaveBlockItem } from "./ui/SaveBlockItem";
 import { SavedBlockPopup } from "./ui/SavedBlockPopup";
+import { DeleteBlockItem } from "./ui/DeleteBlockItem";
 
 // Fix for react-dnd interference with BlockNote drag-and-drop
 // React-dnd wraps dataTransfer in a proxy that blocks access during drag operations
@@ -694,7 +695,7 @@ export default function Editor({ runbook, editable, runbookEditor }: EditorProps
               style={{ zIndex: 0 }}
               dragHandleMenu={(props) => (
                 <DragHandleMenu {...props}>
-                  <RemoveBlockItem {...props}>Delete</RemoveBlockItem>
+                  <DeleteBlockItem {...props} />
                   <DuplicateBlockItem {...props} />
                   <SaveBlockItem {...props} />
                 </DragHandleMenu>
