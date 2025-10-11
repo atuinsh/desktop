@@ -12,6 +12,7 @@ import { DependencySpec } from "@/lib/workflow/dependency";
 import track_event from "@/tracking";
 import SQL from "@/lib/blocks/common/SQL";
 import { exportPropMatter } from "@/lib/utils";
+import { useBlockLocalState } from "@/lib/hooks/useBlockLocalState";
 
 interface SQLProps {
   isEditable: boolean;
@@ -71,7 +72,6 @@ export default createReactBlockSpec(
       query: { default: "" },
       uri: { default: "" },
       autoRefresh: { default: 0 },
-      collapseQuery: { default: false },
       dependency: { default: "{}" },
     },
     content: "none",
@@ -90,6 +90,12 @@ export default createReactBlockSpec(
     },
     // @ts-ignore
     render: ({ block, editor, code, type }) => {
+      const [collapseQuery, setCollapseQuery] = useBlockLocalState<boolean>(
+        block.id,
+        "collapsed",
+        false
+      );
+
       const handleCodeMirrorFocus = () => {
         // Ensure BlockNote knows which block contains the focused CodeMirror
         editor.setTextCursorPosition(block.id, "start");
@@ -122,12 +128,6 @@ export default createReactBlockSpec(
         });
       };
 
-      const setCollapseQuery = (collapseQuery: boolean) => {
-        editor.updateBlock(block, {
-          props: { ...block.props, collapseQuery: collapseQuery },
-        });
-      };
-
       const setDependency = (dependency: DependencySpec) => {
         editor.updateBlock(block, {
           props: { ...block.props, dependency: dependency.serialize() },
@@ -145,7 +145,7 @@ export default createReactBlockSpec(
           setUri={setUri}
           setAutoRefresh={setAutoRefresh}
           isEditable={editor.isEditable}
-          collapseQuery={block.props.collapseQuery}
+          collapseQuery={collapseQuery}
           setCollapseQuery={setCollapseQuery}
           setDependency={setDependency}
           onCodeMirrorFocus={handleCodeMirrorFocus}

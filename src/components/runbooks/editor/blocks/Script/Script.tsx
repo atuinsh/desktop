@@ -39,6 +39,7 @@ import Block from "@/lib/blocks/common/Block.tsx";
 import InterpreterSelector, { buildInterpreterCommand, supportedShells } from "@/lib/blocks/common/InterpreterSelector.tsx";
 import { exportPropMatter, cn } from "@/lib/utils";
 import { useCurrentRunbookId } from "@/context/runbook_id_context";
+import { useBlockLocalState } from "@/lib/hooks/useBlockLocalState";
 
 interface ScriptBlockProps {
   onChange: (val: string) => void;
@@ -566,9 +567,6 @@ export default createReactBlockSpec(
       outputVisible: {
         default: true,
       },
-      collapseCode: {
-        default: false,
-      },
       dependency: {
         default: "{}",
       },
@@ -589,6 +587,12 @@ export default createReactBlockSpec(
     },
     // @ts-ignore
     render: ({ block, editor }) => {
+      const [collapseCode, setCollapseCode] = useBlockLocalState<boolean>(
+        block.id,
+        "collapsed",
+        false
+      );
+
       const handleCodeMirrorFocus = () => {
         // Ensure BlockNote knows which block contains the focused CodeMirror
         editor.setTextCursorPosition(block.id, "start");
@@ -637,12 +641,6 @@ export default createReactBlockSpec(
         });
       };
 
-      const setCollapseCode = (collapse: boolean) => {
-        editor.updateBlock(block, {
-          props: { ...block.props, collapseCode: collapse },
-        });
-      };
-
       const setDependency = (dependency: DependencySpec) => {
         editor.updateBlock(block, {
           props: { ...block.props, dependency: dependency.serialize() },
@@ -684,7 +682,7 @@ export default createReactBlockSpec(
           setOutputVisible={setOutputVisible}
           setDependency={setDependency}
           onCodeMirrorFocus={handleCodeMirrorFocus}
-          collapseCode={block.props.collapseCode}
+          collapseCode={collapseCode}
           setCollapseCode={setCollapseCode}
         />
       );
