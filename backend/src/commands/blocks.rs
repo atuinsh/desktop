@@ -1,7 +1,11 @@
+use std::sync::Arc;
+
 use tauri::{ipc::Channel, AppHandle, Manager, State};
+use tokio::sync::RwLock;
 use uuid::Uuid;
 
 use crate::commands::events::ChannelEventBus;
+use crate::runtime::blocks::document::Document;
 use crate::runtime::blocks::handler::BlockOutput;
 use crate::runtime::blocks::registry::BlockRegistry;
 use crate::runtime::blocks::Block;
@@ -95,4 +99,27 @@ pub async fn cancel_block_execution(
     } else {
         Err("State not available".to_string())
     }
+}
+
+#[tauri::command]
+pub async fn open_document(
+    state: State<'_, AtuinState>,
+    document_id: String,
+    document: Vec<serde_json::Value>,
+) -> Result<(), String> {
+    let documents = state.documents.read().await;
+    if let Some(document) = documents.get(&document_id) {
+        // TODO: Update the context
+        // context.update(document);
+    } else {
+        drop(documents);
+        let document = Document::new(document_id.clone(), document).map_err(|e| e.to_string())?;
+        state
+            .documents
+            .write()
+            .await
+            .insert(document_id.clone(), Arc::new(RwLock::new(document)));
+    }
+
+    Ok(())
 }
