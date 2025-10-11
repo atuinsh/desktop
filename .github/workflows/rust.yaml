@@ -57,8 +57,13 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
 
+      - name: Run sccache-cache
+        uses: mozilla-actions/sccache-action@v0.0.7
+
       - name: Run ${{ matrix.name }}
         working-directory: backend
+        env:
+          RUSTC_WRAPPER: sccache
         run: |
           case "${{ matrix.command }}" in
             test)
