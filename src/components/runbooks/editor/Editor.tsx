@@ -10,7 +10,6 @@ import {
   SideMenu,
   SideMenuController,
   DragHandleMenu,
-  RemoveBlockItem,
 } from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/mantine";
 
