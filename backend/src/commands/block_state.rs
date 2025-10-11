@@ -178,4 +178,3 @@ pub async fn delete_block_local_state_all(
 
     Ok(result.rows_affected())
 }
-
