@@ -4,6 +4,8 @@ import { cn } from "@/lib/utils";
 import { BlocksIcon, TrashIcon } from "lucide-react";
 import SavedBlock from "@/state/runbooks/saved_block";
 import { DialogBuilder } from "@/components/Dialogs/dialog";
+import { useQuery } from "@tanstack/react-query";
+import { savedBlocks } from "@/lib/queries/saved_blocks";
 
 interface SavedBlockPopupProps {
   isVisible: boolean;
@@ -14,22 +16,15 @@ interface SavedBlockPopupProps {
 
 export function SavedBlockPopup({ isVisible, position, onSelect, onClose }: SavedBlockPopupProps) {
   const [query, setQuery] = useState("");
-  const [blocks, setBlocks] = useState<SavedBlock[]>([]);
   const [filteredBlocks, setFilteredBlocks] = useState<SavedBlock[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  const { data: blocks } = useQuery(savedBlocks());
+
   // Load runbooks when popup opens
   useEffect(() => {
     if (isVisible) {
-      const loadBlocks = async () => {
-        const blocks = await SavedBlock.all();
-        setBlocks(blocks);
-        setFilteredBlocks(blocks);
-        setSelectedIndex(0);
-      };
-
-      loadBlocks();
       setQuery("");
 
       // Focus input after a short delay
@@ -43,7 +38,7 @@ export function SavedBlockPopup({ isVisible, position, onSelect, onClose }: Save
   useEffect(() => {
     if (!query.trim()) {
       // Show recent runbooks when no query
-      const recentBlocks = blocks
+      const recentBlocks = (blocks || [])
         .slice()
         .sort(
           (a: SavedBlock, b: SavedBlock) =>
@@ -56,7 +51,7 @@ export function SavedBlockPopup({ isVisible, position, onSelect, onClose }: Save
     }
 
     // filter blocks by name
-    const filteredBlocks = blocks.filter((block) => block.get("name")!.includes(query));
+    const filteredBlocks = (blocks || []).filter((block) => block.get("name")!.includes(query));
     setFilteredBlocks(filteredBlocks);
     setSelectedIndex(0);
   }, [query, blocks]);
@@ -118,13 +113,6 @@ export function SavedBlockPopup({ isVisible, position, onSelect, onClose }: Save
     if (answer === "yes") {
       await block.del();
     }
-
-    if (blocks.length === 1) {
-      onClose();
-      return;
-    }
-
-    setBlocks(blocks.filter((b) => b.get("id") !== blockId));
   }
 
   return (

@@ -33,6 +33,9 @@ const globalSpec: GlobalSpec<SavedBlockAttrs> = {
   postSave: async (_context, model, type) => {
     dbHook("saved_block", type === "insert" ? "create" : "update", model);
   },
+  postDelete: async (_context, model) => {
+    dbHook("saved_block", "delete", model);
+  },
 };
 
 @Persistence<SavedBlockAttrs>(adapter, fieldSpecs, globalSpec)
