@@ -197,11 +197,14 @@ impl ContextBuilder {
                 }
             }
             "local-var" => {
-                if let Some(name) = block.props.get("name") {
+                if let (Some(name), Some(value)) =
+                    (block.props.get("name"), block.props.get("value"))
+                {
                     if !name.is_empty() {
                         let local_var_block = LocalVar::builder()
                             .id(uuid::Uuid::parse_str(&block.id)?)
                             .name(name.clone())
+                            .value(value.clone())
                             .build();
                         LocalVarHandler
                             .apply_context(&local_var_block, context)

@@ -1,13 +1,16 @@
 use std::sync::Arc;
 
+use std::ops::DerefMut;
 use tauri::{ipc::Channel, AppHandle, Manager, State};
 use tokio::sync::RwLock;
 use uuid::Uuid;
 
 use crate::commands::events::ChannelEventBus;
-use crate::runtime::blocks::document::Document;
+use crate::runtime::blocks::document::{BlockNoteChange, Document};
 use crate::runtime::blocks::handler::BlockOutput;
-use crate::runtime::blocks::registry::BlockRegistry;
+use crate::runtime::blocks::BlockBehavior;
+use crate::runtime::blocks::BlockExecutionContext;
+// use crate::runtime::blocks::registry::BlockRegistry;
 use crate::runtime::blocks::Block;
 use crate::runtime::workflow::context_builder::ContextBuilder;
 use crate::state::AtuinState;
@@ -26,58 +29,53 @@ pub async fn execute_block(
     editor_document: Vec<serde_json::Value>,
     output_channel: Channel<BlockOutput>,
 ) -> Result<String, String> {
-    // Build execution context
-    let mut context = ContextBuilder::build_context(&block_id, &editor_document, &runbook_id)
-        .await
-        .map_err(|e| e.to_string())?;
+    let block_id = Uuid::parse_str(&block_id).map_err(|e| e.to_string())?;
 
-    // Add SSH pool to context
-    context.ssh_pool = Some(state.ssh_pool());
+    let documents = state.documents.read().await;
+    let document = documents.get(&runbook_id).ok_or("Document not found")?;
+    let mut document = document.write().await;
 
-    // Add output storage to context
-    context.output_storage = Some(state.runbook_output_variables.clone());
+    let document_context = document.context_for(&block_id).ok_or("Block not found")?;
 
-    // Add PTY store to context
-    context.pty_store = Some(state.pty_store());
+    let execution_context = BlockExecutionContext {
+        event_sender: state.event_sender(),
+        output_channel: Some(output_channel),
+        ssh_pool: Some(state.ssh_pool()),
+        pty_store: Some(state.pty_store()),
+        event_bus: Some(Arc::new(ChannelEventBus::new(state.gc_event_sender()))),
+    };
 
-    // Add event bus to context
-    let gc_sender = state.gc_event_sender();
-    let event_bus = std::sync::Arc::new(ChannelEventBus::new(gc_sender));
-    context.event_bus = Some(event_bus);
+    let block = document.get_block_mut(&block_id).ok_or("Block not found")?;
+    let block = block.deref_mut();
 
-    // Find the block in the document
-    let block_data = editor_document
-        .iter()
-        .find(|b| b.get("id").and_then(|v| v.as_str()) == Some(&block_id))
-        .ok_or("Block not found")?;
+    // match block.execute(document_context, execution_context).await {
+    //     Ok(()) => Ok(block_id.to_string()),
+    //     Err(e) => Err(e.to_string()),
+    // }
 
-    // Convert document block to runtime block
-    let block = document_to_block(block_data)?;
+    // // Convert document block to runtime block
+    // let block = document_to_block(block_data)?;
 
-    // Get event sender from state
-    let event_sender = state.event_sender();
+    // match registry
+    //     .execute_block(&block, context, event_sender, Some(output_channel))
+    //     .await
+    // {
+    //     Ok(handle) => {
+    //         let execution_id = handle.id;
+    //         // Store the execution handle for cancellation
+    //         if let Some(state) = app_handle.try_state::<AtuinState>() {
+    //             state
+    //                 .block_executions
+    //                 .write()
+    //                 .await
+    //                 .insert(execution_id, handle.clone());
+    //         }
+    //         Ok(execution_id.to_string())
+    //     }
+    //     Err(e) => Err(format!("Execution failed: {}", e)),
+    // }
 
-    // Create registry and execute
-    let registry = BlockRegistry::new();
-
-    match registry
-        .execute_block(&block, context, event_sender, Some(output_channel))
-        .await
-    {
-        Ok(handle) => {
-            let execution_id = handle.id;
-            // Store the execution handle for cancellation
-            if let Some(state) = app_handle.try_state::<AtuinState>() {
-                state
-                    .block_executions
-                    .write()
-                    .await
-                    .insert(execution_id, handle.clone());
-            }
-            Ok(execution_id.to_string())
-        }
-        Err(e) => Err(format!("Execution failed: {}", e)),
-    }
+    Ok(block_id.to_string()) // TODO: Return execution ID
 }
 
 #[tauri::command]
@@ -121,5 +119,19 @@ pub async fn open_document(
             .insert(document_id.clone(), Arc::new(RwLock::new(document)));
     }
 
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn apply_document_change(
+    state: State<'_, AtuinState>,
+    document_id: String,
+    change: BlockNoteChange,
+) -> Result<(), String> {
+    let mut documents = state.documents.write().await;
+    let document = documents
+        .get_mut(&document_id)
+        .ok_or("Document not found")?;
+    document.write().await.apply_change(change);
     Ok(())
 }

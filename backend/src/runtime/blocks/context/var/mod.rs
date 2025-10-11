@@ -1,4 +1,8 @@
-use crate::runtime::blocks::handler::{ContextProvider, ExecutionContext};
+use crate::runtime::blocks::{
+    document::{BlockContext, DocumentContext, DocumentVar},
+    handler::{ContextProvider, ExecutionContext},
+    BlockBehavior,
+};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use typed_builder::TypedBuilder;
@@ -75,10 +79,37 @@ impl Var {
     }
 }
 
+#[async_trait]
+impl BlockBehavior for Var {
+    fn passive_context(
+        &self,
+        _document: &DocumentContext,
+    ) -> Result<Option<BlockContext>, Box<dyn std::error::Error + Send + Sync>> {
+        let mut context = BlockContext::new();
+        if self.name.is_empty() {
+            return Err("Variable name cannot be empty".into());
+        }
+
+        if self.name.contains('=') || self.name.contains('\0') {
+            return Err("Variable name contains invalid characters".into());
+        }
+
+        context.insert(DocumentVar(self.name.clone(), self.value.clone()));
+        Ok(Some(context))
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use crate::runtime::blocks::document::{Document, DocumentContext};
+
     use super::*;
     use std::collections::HashMap;
+
+    fn create_test_context() -> DocumentContext<'static> {
+        let mut document = Document::new("testing".to_string(), vec![]).unwrap();
+        DocumentContext::new(&mut document, Uuid::new_v4())
+    }
 
     // Basic functionality tests
     #[tokio::test]
@@ -97,6 +128,14 @@ mod tests {
             context.variables.get("TEST_VAR"),
             Some(&"test_value".to_string())
         );
+
+        let context = var
+            .passive_context(&DocumentContext::new(&var, var.id))
+            .unwrap()
+            .unwrap();
+        let var_context = context.get::<DocumentVar>().unwrap();
+        assert_eq!(var_context.0, "TEST_VAR");
+        assert_eq!(var_context.1, "test_value");
     }
 
     #[tokio::test]
