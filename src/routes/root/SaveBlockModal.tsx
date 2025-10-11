@@ -61,7 +61,11 @@ export default function SaveBlockModal(props: SaveBlockModalProps) {
             </ModalBody>
             <ModalFooter>
               <Button onPress={onClose}>Cancel</Button>
-              <Button onPress={confirmSaveBlock} color={hasNameConflict ? "danger" : "primary"}>
+              <Button
+                onPress={confirmSaveBlock}
+                color={hasNameConflict ? "danger" : "primary"}
+                isDisabled={blockName.trim().length === 0}
+              >
                 {hasNameConflict ? "Overwrite" : "Save"}
               </Button>
             </ModalFooter>

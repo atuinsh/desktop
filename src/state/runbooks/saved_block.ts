@@ -23,7 +23,13 @@ const fieldSpecs: FieldSpecs<SavedBlockAttrs> = {
 };
 
 const globalSpec: GlobalSpec<SavedBlockAttrs> = {
-  preSave: setTimestamps,
+  preSave: async (context, model, _type) => {
+    if (model.get("name").trim() === "") {
+      throw new Error("Name cannot be empty");
+    }
+
+    setTimestamps(context, model);
+  },
   postSave: async (_context, model, type) => {
     dbHook("saved_block", type === "insert" ? "create" : "update", model);
   },
