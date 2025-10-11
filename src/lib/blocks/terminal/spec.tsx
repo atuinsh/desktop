@@ -5,12 +5,19 @@ import { RunBlock } from "./component";
 import track_event from "@/tracking";
 import { CodeIcon } from "lucide-react";
 import { exportPropMatter } from "@/lib/utils";
+import { useBlockLocalState } from "@/lib/hooks/useBlockLocalState";
 
 export default createReactBlockSpec(
     TERMINAL_BLOCK_SCHEMA,
     {
       // @ts-ignore
       render: ({ block, editor, code, type }) => {
+        const [collapseCode, setCollapseCode] = useBlockLocalState<boolean>(
+          block.id,
+          "collapsed",
+          false
+        );
+
         const handleCodeMirrorFocus = () => {
           // Ensure BlockNote knows which block contains the focused CodeMirror
           editor.setTextCursorPosition(block.id, "start");
@@ -47,12 +54,6 @@ export default createReactBlockSpec(
             props: { ...block.props, outputVisible: visible },
           });
         };
-
-        const setCollapseCode = (collapse: boolean) => {
-          editor.updateBlock(block, {
-            props: { ...block.props, collapseCode: collapse },
-          });
-        };
   
         const setDependency = (dependency: DependencySpec) => {
           editor.updateBlock(block, {
@@ -82,7 +83,7 @@ export default createReactBlockSpec(
             terminal={terminal}
             setDependency={setDependency}
             onCodeMirrorFocus={handleCodeMirrorFocus}
-            collapseCode={block.props.collapseCode}
+            collapseCode={collapseCode}
             setCollapseCode={setCollapseCode}
           />
         );

@@ -35,6 +35,7 @@ import { getTemplateVar, setTemplateVar } from "@/state/templates";
 import { exportPropMatter, cn } from "@/lib/utils";
 import { useCurrentRunbookId } from "@/context/runbook_id_context";
 import RunbookBus from "@/lib/app/runbook_bus";
+import { useBlockLocalState } from "@/lib/hooks/useBlockLocalState";
 
 interface LanguageLoader {
   name: string;
@@ -282,7 +283,6 @@ export default createReactBlockSpec(
       language: { default: "" },
       variableName: { default: "" },
       syncVariable: { default: false },
-      collapseCode: { default: false },
     },
     content: "none",
   },
@@ -301,6 +301,11 @@ export default createReactBlockSpec(
     // @ts-ignore
     render: ({ block, editor, code, type }) => {
       const currentRunbookId = useCurrentRunbookId();
+      const [collapseCode, setCollapseCode] = useBlockLocalState<boolean>(
+        block.id,
+        "collapsed",
+        false
+      );
 
       const handleCodeMirrorFocus = () => {
         // Ensure BlockNote knows which block contains the focused CodeMirror
@@ -352,12 +357,6 @@ export default createReactBlockSpec(
         });
       };
 
-      const setCollapseCode = (collapse: boolean) => {
-        editor.updateBlock(block, {
-          props: { ...block.props, collapseCode: collapse },
-        });
-      };
-
       // The editor block cannot have a dependency, because it is not runnable.
       // TODO(ellie): a more elegant way of expressing this
       let editorBlock = new EditorBlockType(
@@ -383,7 +382,7 @@ export default createReactBlockSpec(
           syncVariable={block.props.syncVariable}
           isEditable={editor.isEditable}
           onCodeMirrorFocus={handleCodeMirrorFocus}
-          collapseCode={block.props.collapseCode}
+          collapseCode={collapseCode}
           setCollapseCode={setCollapseCode}
         />
       );
