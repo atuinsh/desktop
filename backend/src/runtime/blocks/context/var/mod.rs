@@ -1,4 +1,8 @@
-use crate::runtime::blocks::handler::{ContextProvider, ExecutionContext};
+use crate::runtime::blocks::{
+    document::{BlockContext, DocumentContext, DocumentVar},
+    handler::{ContextProvider, ExecutionContext},
+    BlockBehavior,
+};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use typed_builder::TypedBuilder;
@@ -72,6 +76,25 @@ impl Var {
             .to_string();
 
         Ok(Var::builder().id(id).name(name).value(value).build())
+    }
+}
+
+#[async_trait]
+impl BlockBehavior for Var {
+    async fn passive_context(
+        &self,
+    ) -> Result<Option<BlockContext>, Box<dyn std::error::Error + Send + Sync>> {
+        let mut context = BlockContext::new();
+        if self.name.is_empty() {
+            return Err("Variable name cannot be empty".into());
+        }
+
+        if self.name.contains('=') || self.name.contains('\0') {
+            return Err("Variable name contains invalid characters".into());
+        }
+
+        context.insert(DocumentVar(self.name.clone(), self.value.clone()));
+        Ok(Some(context))
     }
 }
 
