@@ -481,11 +481,16 @@ function App() {
   async function handleSaveBlock(name: string, block: any) {
     clearSavingBlock();
 
-    const savedBlock = new SavedBlock({
-      id: uuidv7(),
-      name,
-      content: block,
-    });
+    let savedBlock = await SavedBlock.getBy({ name });
+    if (savedBlock) {
+      savedBlock.set("content", block);
+    } else {
+      savedBlock = new SavedBlock({
+        id: uuidv7(),
+        name,
+        content: block,
+      });
+    }
 
     try {
       await savedBlock.save();

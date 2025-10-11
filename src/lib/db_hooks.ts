@@ -22,8 +22,10 @@ import Snapshot from "@/state/runbooks/snapshot";
 import { snapshotByRunbookAndTag, snapshotsByRunbook } from "./queries/snapshots";
 import Operation from "@/state/runbooks/operation";
 import Workspace from "@/state/runbooks/workspace";
+import SavedBlock from "@/state/runbooks/saved_block";
+import { savedBlocks } from "./queries/saved_blocks";
 
-export type Model = "runbook" | "workspace" | "legacy_workspace" | "snapshot";
+export type Model = "runbook" | "workspace" | "legacy_workspace" | "snapshot" | "saved_block";
 export type Action = "create" | "update" | "delete";
 
 export async function dbHook(kind: Model, action: Action, model: any) {
@@ -81,6 +83,8 @@ function getQueryKeys(kind: Model, action: Action, model: any): InvalidateQueryF
       return getWorkspaceQueryKeys(action, model as Workspace);
     case "snapshot":
       return getSnapshotQueryKeys(action, model as Snapshot);
+    case "saved_block":
+      return getSavedBlockQueryKeys(action, model as SavedBlock);
   }
 }
 
@@ -178,5 +182,16 @@ function getSnapshotQueryKeys(action: Action, model: Snapshot): InvalidateQueryF
         snapshotsByRunbook(model.runbook_id),
         snapshotByRunbookAndTag(model.runbook_id, model.tag),
       ];
+  }
+}
+
+function getSavedBlockQueryKeys(action: Action, _model: SavedBlock): InvalidateQueryFilters<any>[] {
+  switch (action) {
+    case "create":
+      return [savedBlocks()];
+    case "update":
+      return [savedBlocks()];
+    case "delete":
+      return [savedBlocks()];
   }
 }

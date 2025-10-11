@@ -1,6 +1,7 @@
 import { FieldSpecs, GlobalSpec, Model, Persistence } from "ts-tiny-activerecord";
 import createTauriAdapter, { setTimestamps } from "@/lib/db/tauri-ar-adapter";
 import { DateEncoder, JSONEncoder } from "@/lib/db/encoders";
+import { dbHook } from "@/lib/db_hooks";
 
 export type SavedBlockAttrs = {
   id?: string;
@@ -23,6 +24,9 @@ const fieldSpecs: FieldSpecs<SavedBlockAttrs> = {
 
 const globalSpec: GlobalSpec<SavedBlockAttrs> = {
   preSave: setTimestamps,
+  postSave: async (_context, model, type) => {
+    dbHook("saved_block", type === "insert" ? "create" : "update", model);
+  },
 };
 
 @Persistence<SavedBlockAttrs>(adapter, fieldSpecs, globalSpec)

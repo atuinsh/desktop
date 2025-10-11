@@ -1,3 +1,4 @@
+import { savedBlocks } from "@/lib/queries/saved_blocks";
 import {
   Button,
   Input,
@@ -7,7 +8,8 @@ import {
   ModalFooter,
   ModalHeader,
 } from "@heroui/react";
-import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
 
 interface SaveBlockModalProps {
   block: any;
@@ -17,6 +19,11 @@ interface SaveBlockModalProps {
 
 export default function SaveBlockModal(props: SaveBlockModalProps) {
   const [blockName, setBlockName] = useState("");
+  const { data: fetchedSavedBlocks } = useQuery(savedBlocks());
+
+  const hasNameConflict = useMemo(() => {
+    return fetchedSavedBlocks?.some((savedBlock) => savedBlock.get("name") === blockName);
+  }, [fetchedSavedBlocks, blockName]);
 
   function handleClose() {
     props.onClose();
@@ -48,12 +55,14 @@ export default function SaveBlockModal(props: SaveBlockModalProps) {
                 value={blockName}
                 onValueChange={setBlockName}
                 onKeyDown={handleKeyDown}
+                isInvalid={hasNameConflict}
+                errorMessage="A saved block with this name already exists. Saving with this name will overwrite the existing block."
               />
             </ModalBody>
             <ModalFooter>
               <Button onPress={onClose}>Cancel</Button>
-              <Button onPress={confirmSaveBlock} color="primary">
-                Save
+              <Button onPress={confirmSaveBlock} color={hasNameConflict ? "danger" : "primary"}>
+                {hasNameConflict ? "Overwrite" : "Save"}
               </Button>
             </ModalFooter>
           </>
