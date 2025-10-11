@@ -18,7 +18,7 @@ export function SaveBlockItem(props: DragHandleMenuProps) {
         let block = editor.getBlock(props.block.id) || props.block;
         block = structuredClone(block);
 
-        useStore.getState().setSavingBlock(props.block);
+        useStore.getState().setSavingBlock(block);
       }}
     >
       Save Block
