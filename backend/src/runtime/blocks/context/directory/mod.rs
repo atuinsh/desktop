@@ -1,4 +1,8 @@
-use crate::runtime::blocks::handler::{ContextProvider, ExecutionContext};
+use crate::runtime::blocks::{
+    document::{BlockContext, DocumentContext, DocumentCwd},
+    handler::{ContextProvider, ExecutionContext},
+    BlockBehavior,
+};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use typed_builder::TypedBuilder;
@@ -31,6 +35,18 @@ impl ContextProvider for DirectoryHandler {
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         context.cwd = block.path.clone();
         Ok(())
+    }
+}
+
+#[async_trait]
+impl BlockBehavior for Directory {
+    fn passive_context(
+        &self,
+        _document: &DocumentContext,
+    ) -> Result<Option<BlockContext>, Box<dyn std::error::Error + Send + Sync>> {
+        let mut context = BlockContext::new();
+        context.insert(DocumentCwd(self.path.clone()));
+        Ok(Some(context))
     }
 }
 

@@ -1,4 +1,8 @@
-use crate::runtime::blocks::handler::{ContextProvider, ExecutionContext};
+use crate::runtime::blocks::{
+    document::{BlockContext, DocumentContext, DocumentSshHost},
+    handler::{ContextProvider, ExecutionContext},
+    BlockBehavior,
+};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use typed_builder::TypedBuilder;
@@ -92,6 +96,18 @@ impl SshConnect {
                 (None, self.user_host.clone(), None)
             }
         }
+    }
+}
+
+#[async_trait]
+impl BlockBehavior for SshConnect {
+    fn passive_context(
+        &self,
+        _document: &DocumentContext,
+    ) -> Result<Option<BlockContext>, Box<dyn std::error::Error + Send + Sync>> {
+        let mut context = BlockContext::new();
+        context.insert(DocumentSshHost(None));
+        Ok(Some(context))
     }
 }
 
