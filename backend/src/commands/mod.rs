@@ -1,3 +1,4 @@
+pub(crate) mod block_state;
 pub(crate) mod dependency;
 pub(crate) mod exec_log;
 pub(crate) mod feedback;
