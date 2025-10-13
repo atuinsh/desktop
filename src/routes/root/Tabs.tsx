@@ -20,13 +20,16 @@ import { CSS } from "@dnd-kit/utilities";
 import { createMemoryRouter, RouterProvider } from "react-router-dom";
 import { SyntheticListenerMap } from "@dnd-kit/core/dist/hooks/utilities";
 import { createTabBarMenu, createTabMenu } from "@/components/runbooks/List/menus";
+import { Badge } from "@heroui/react";
 
 export const TabsContext = React.createContext<{
   tab: TabType | null;
   setTitle: (title: string) => void;
+  setBadge: (badge: string | null) => void;
 }>({
   tab: null,
   setTitle: () => {},
+  setBadge: () => {},
 });
 
 export default function Tabs() {
@@ -36,6 +39,7 @@ export default function Tabs() {
     openTab,
     closeTab,
     setTabTitle,
+    setTabBadge,
     moveTab,
     closeAllTabs,
     closeOtherTabs,
@@ -54,6 +58,7 @@ export default function Tabs() {
     closeRightTabs: state.closeRightTabs,
     undoCloseTab: state.undoCloseTab,
     setTabTitle: state.setTabTitle,
+    setTabBadge: state.setTabBadge,
   }));
 
   const listRef = useRef<HTMLUListElement>(null);
@@ -142,6 +147,7 @@ export default function Tabs() {
                 url={tab.url}
                 title={tab.title}
                 icon={tab.icon}
+                badge={tab.badge}
                 index={index}
                 active={tab.id === currentTabId}
                 onActivate={(url) => openTab(url)}
@@ -161,6 +167,7 @@ export default function Tabs() {
                 url={draggedTab.url}
                 title={draggedTab.title}
                 icon={draggedTab.icon}
+                badge={draggedTab.badge}
                 active={false}
                 index={0}
                 onActivate={() => {}}
@@ -185,6 +192,9 @@ export default function Tabs() {
             setTitle: (title: string) => {
               setTabTitle(tab.id, title);
             },
+            setBadge: (badge: string | null) => {
+              setTabBadge(tab.id, badge);
+            },
           }}
         >
           <TabContent key={tab.id} url={tab.url} active={tab.id === currentTabId} />
@@ -201,6 +211,7 @@ interface TabProps {
   url: string;
   title: string;
   icon: TabIcon | null;
+  badge: string | null;
   index: number;
   active: boolean;
   onActivate: (url: string) => void;
@@ -342,7 +353,9 @@ const TabDisplay = React.forwardRef(
         {...props.attributes}
         {...props.listeners}
       >
-        {Icon && <Icon className="w-4 h-4 min-w-4 min-h-4 inline-block" />}
+        <Badge color="primary" size="sm" content={props.badge} isInvisible={!props.badge}>
+          {Icon && <Icon className="w-4 h-4 min-w-4 min-h-4 inline-block" />}
+        </Badge>
         <span
           className="overflow-hidden text-ellipsis whitespace-nowrap"
           style={{ pointerEvents: "none" }}

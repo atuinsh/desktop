@@ -16,6 +16,7 @@ export interface Tab {
   url: string;
   title: string;
   icon: TabIcon | null;
+  badge: string | null;
 }
 
 export class TabUri {
@@ -91,6 +92,7 @@ export interface AtuinUiState {
   moveTab: (id: string, index: number) => void;
   undoCloseTab: () => void;
   setTabTitle: (id: string, title: string) => void;
+  setTabBadge: (id: string, badge: string | null) => void;
   advanceActiveTab: (amount: number) => void;
   closeAllTabs: () => void;
   closeOtherTabs: (id: string) => void;
@@ -196,7 +198,11 @@ export const createUiState: StateCreator<AtuinUiState> = (set, get, _store): Atu
       const tabsAfter = tabs.slice(currentTabIndex + 1);
       const id = uuidv7();
       set(() => ({
-        tabs: [...tabsBefore, { id, url, title: title || url, icon: icon || null }, ...tabsAfter],
+        tabs: [
+          ...tabsBefore,
+          { id, url, title: title || url, icon: icon || null, badge: null },
+          ...tabsAfter,
+        ],
         currentTabId: id,
       }));
     } else {
@@ -286,6 +292,14 @@ export const createUiState: StateCreator<AtuinUiState> = (set, get, _store): Atu
     const tab = tabs.find((tab) => tab.id === id);
     if (tab) {
       tab.title = title;
+      set(() => ({ tabs: tabs }));
+    }
+  },
+  setTabBadge: (id: string, badge: string | null) => {
+    const tabs = get().tabs;
+    const tab = tabs.find((tab) => tab.id === id);
+    if (tab) {
+      tab.badge = badge;
       set(() => ({ tabs: tabs }));
     }
   },

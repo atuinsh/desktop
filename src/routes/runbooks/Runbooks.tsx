@@ -56,9 +56,11 @@ export default function Runbooks() {
   const lastRunbookEditor = useRef<RunbookEditor | null>(runbookEditor);
   const serialExecution = useStore((store) => store.serialExecution);
   const stopSerialExecution = useStore((store) => store.stopSerialExecution);
-  const { setTitle, tab } = useContext(TabsContext);
+  const { setTitle, setBadge, tab } = useContext(TabsContext);
   const registerTabOnClose = useStore((store) => store.registerTabOnClose);
   const setCurrentWorkspaceId = useStore((store) => store.setCurrentWorkspaceId);
+  const ptys = usePtyStore((state) => state.ptys);
+  const activePtyCount = Object.values(ptys).filter((pty) => pty.runbook === runbookId).length;
 
   const [syncingRunbook, setSyncingRunbook] = useState(false);
   const [failedToSyncRunbook, setFailedToSyncRunbook] = useState(false);
@@ -102,6 +104,17 @@ export default function Runbooks() {
     },
     [currentRunbookLoading, currentRunbook, runbookId, user],
   );
+
+  useEffect(() => {
+    if (!currentRunbook) {
+      return;
+    }
+    if (activePtyCount > 0) {
+      setBadge(String(activePtyCount));
+    } else {
+      setBadge(null);
+    }
+  }, [activePtyCount, currentRunbook]);
 
   useEffect(() => {
     if (!tab || !currentRunbook) {
