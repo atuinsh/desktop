@@ -662,6 +662,19 @@ impl WorkspaceManager {
         self.reset();
     }
 
+    /// Find the workspace root path for a given runbook ID
+    /// Returns None if the runbook is not found in any workspace
+    pub fn workspace_root(&self, runbook_id: &str) -> Option<PathBuf> {
+        for workspace in self.workspaces.values() {
+            if let Ok(workspace_state) = &workspace.state {
+                if workspace_state.runbooks.contains_key(runbook_id) {
+                    return Some(workspace_state.root.clone());
+                }
+            }
+        }
+        None
+    }
+
     fn get_workspace(&mut self, id: &str) -> Result<&Workspace, WorkspaceError> {
         self.workspaces
             .get(id)

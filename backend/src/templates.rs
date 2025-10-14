@@ -36,8 +36,17 @@ pub struct RunbookTemplateState {
 
 #[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WorkspaceTemplateState {
+    /// The root path of the workspace containing atuin.toml
+    /// Empty string for online workspaces (no concept of root)
+    pub root: String,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AtuinTemplateState {
     pub runbook: RunbookTemplateState,
+    pub workspace: WorkspaceTemplateState,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -68,6 +77,7 @@ pub struct TemplateState {
     // In the case where a document is empty, we have no document state.
     pub doc: Option<DocumentTemplateState>,
     pub var: HashMap<String, Value>,
+    pub workspace: WorkspaceTemplateState,
 }
 
 impl Object for TemplateState {
@@ -84,12 +94,14 @@ impl Object for TemplateState {
                 .as_ref()
                 .map(|doc| Value::from_serialize(doc.clone())),
 
+            "workspace" => Some(Value::from_serialize(&self.workspace)),
+
             _ => None,
         }
     }
 
     fn enumerate(self: &Arc<Self>) -> Enumerator {
-        Enumerator::Str(&["var", "doc"])
+        Enumerator::Str(&["var", "doc", "workspace"])
     }
 }
 
@@ -172,7 +184,23 @@ pub async fn template_str(
     runbook: String,
     state: tauri::State<'_, AtuinState>,
     doc: Vec<serde_json::Value>,
+    workspace_root: Option<String>,
 ) -> Result<String, String> {
+    // Determine workspace root - try parameter first, then try to get from workspace manager
+    let workspace_root = if let Some(root) = workspace_root {
+        root
+    } else {
+        // Try to get workspace root from the runbook's workspace
+        if let Some(workspace_manager) = state.workspaces.lock().await.as_ref() {
+            workspace_manager
+                .workspace_root(&runbook)
+                .map(|path| path.to_string_lossy().to_string())
+                .unwrap_or_default()
+        } else {
+            String::new()
+        }
+    };
+
     // Fetch the variables from the state
     let mut output_vars = state.runbook_output_variables.read().await.clone();
 
@@ -300,6 +328,9 @@ pub async fn template_str(
     let template_state = TemplateState {
         doc: doc_state,
         var,
+        workspace: WorkspaceTemplateState {
+            root: workspace_root,
+        },
     };
 
     let source = env
@@ -354,5 +385,41 @@ mod tests {
             minijinja::context! { text => "" },
         );
         assert_eq!(result.unwrap(), "''");
+    }
+
+    #[test]
+    fn test_workspace_root_template() {
+        use std::collections::HashMap;
+        use super::{Environment, TemplateState, WorkspaceTemplateState};
+
+        let workspace_state = WorkspaceTemplateState {
+            root: String::from("/Users/test/workspace"),
+        };
+
+        let template_state = TemplateState {
+            doc: None,
+            var: HashMap::new(),
+            workspace: workspace_state,
+        };
+
+        let env = Environment::new();
+        let result = env
+            .render_str("{{ workspace.root }}/src", template_state)
+            .unwrap();
+        assert_eq!(result, "/Users/test/workspace/src");
+
+        // Test empty workspace root (online workspace)
+        let workspace_state = WorkspaceTemplateState {
+            root: String::from(""),
+        };
+
+        let template_state = TemplateState {
+            doc: None,
+            var: HashMap::new(),
+            workspace: workspace_state,
+        };
+
+        let result = env.render_str("{{ workspace.root }}", template_state).unwrap();
+        assert_eq!(result, "");
     }
 }

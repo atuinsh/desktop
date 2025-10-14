@@ -83,6 +83,7 @@ export const getCurrentDirectory = async (editor: any, blockId: string, runbookI
   }
 
   let paths = [path];
+  let foundAbsolute = false;
 
   // If the last parent is a relative path, then we need to keep iterating up the list until we find an absolute path
   // All blocks we find along the way should be included
@@ -92,8 +93,14 @@ export const getCurrentDirectory = async (editor: any, blockId: string, runbookI
     paths = [path, ...paths];
 
     if (path.startsWith("/") || path.startsWith("~")) {
+      foundAbsolute = true;
       break;
     }
+  }
+
+  // If no absolute path was found, prepend ~ to make it relative to home
+  if (!foundAbsolute) {
+    paths = ["~", ...paths];
   }
 
   return paths.join("/");

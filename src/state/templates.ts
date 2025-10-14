@@ -13,6 +13,7 @@ export async function templateString(
   input: string,
   doc: any[],
   runbook: string | null,
+  workspaceRoot?: string | null,
 ): Promise<string> {
   let normalized = normalizeInput(input);
 
@@ -22,6 +23,7 @@ export async function templateString(
       blockId: id,
       doc,
       runbook,
+      workspaceRoot: workspaceRoot || null,
     });
 
     return templated;
