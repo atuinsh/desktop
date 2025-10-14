@@ -8,7 +8,7 @@ import { getBlockLocalState, setBlockLocalState } from "@/state/block_state";
  *
  * This is similar to useState, but the state is stored in SQLite and associated
  * with the block ID, so it persists across page reloads while remaining local to the user.
- *
+  
  * @param blockId The ID of the block
  * @param propertyName The name of the property to store
  * @param defaultValue The default value to use if the property doesn't exist
@@ -16,8 +16,9 @@ import { getBlockLocalState, setBlockLocalState } from "@/state/block_state";
  *
  * @example
  * const [collapsed, setCollapsed] = useBlockLocalState(block.id, "collapsed", false);
+ * const [tabs, setTabs] = useBlockLocalState(block.id, "tabs", { activeTab: "output", history: [] });
  */
-export function useBlockLocalState<T extends string | number | boolean>(
+export function useBlockLocalState<T>(
   blockId: string,
   propertyName: string,
   defaultValue: T,
@@ -41,9 +42,13 @@ export function useBlockLocalState<T extends string | number | boolean>(
         );
 
         if (storedValue !== null) {
-          // Convert the stored string back to the original type
-          const parsedValue = parseValue(storedValue, defaultValue);
-          setValue(parsedValue);
+          // Parse the JSON-encoded value
+          try {
+            const parsedValue = JSON.parse(storedValue) as T;
+            setValue(parsedValue);
+          } catch (parseError) {
+            console.error("Error parsing stored block local state:", parseError);
+          }
         }
       } catch (error) {
         console.error("Error loading block local state:", error);
@@ -64,36 +69,21 @@ export function useBlockLocalState<T extends string | number | boolean>(
         return;
       }
 
-      // Convert the value to a string for storage
-      const stringValue = String(newValue);
-
-      setBlockLocalState(currentRunbookId, blockId, propertyName, stringValue).catch(
-        (error) => {
-          console.error("Error saving block local state:", error);
-        },
-      );
+      // JSON-encode the value for storage
+      try {
+        const stringValue = JSON.stringify(newValue);
+        setBlockLocalState(currentRunbookId, blockId, propertyName, stringValue).catch(
+          (error) => {
+            console.error("Error saving block local state:", error);
+          },
+        );
+      } catch (stringifyError) {
+        console.error("Error stringifying block local state:", stringifyError);
+      }
     },
     [currentRunbookId, blockId, propertyName],
   );
 
   return [value, setValueAndPersist];
-}
-
-/**
- * Helper function to parse a stored string value back to its original type
- */
-function parseValue<T extends string | number | boolean>(
-  storedValue: string,
-  defaultValue: T,
-): T {
-  // Infer the type from the default value
-  if (typeof defaultValue === "boolean") {
-    return (storedValue === "true") as T;
-  } else if (typeof defaultValue === "number") {
-    const parsed = Number(storedValue);
-    return (isNaN(parsed) ? defaultValue : parsed) as T;
-  } else {
-    return storedValue as T;
-  }
 }
 
