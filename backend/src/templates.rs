@@ -389,8 +389,8 @@ mod tests {
 
     #[test]
     fn test_workspace_root_template() {
-        use std::collections::HashMap;
         use super::{Environment, TemplateState, WorkspaceTemplateState};
+        use std::collections::HashMap;
 
         let workspace_state = WorkspaceTemplateState {
             root: String::from("/Users/test/workspace"),
@@ -419,7 +419,9 @@ mod tests {
             workspace: workspace_state,
         };
 
-        let result = env.render_str("{{ workspace.root }}", template_state).unwrap();
+        let result = env
+            .render_str("{{ workspace.root }}", template_state)
+            .unwrap();
         assert_eq!(result, "");
     }
 }
