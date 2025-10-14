@@ -7,7 +7,7 @@ import { createReactBlockSpec } from "@blocknote/react";
 const HorizontalRule = () => {
   return (
     <div className="w-full py-2">
-      <hr className="border-t border-gray-300 dark:border-gray-700" />
+      <hr className="border-t-2 border-gray-300 dark:border-gray-700" />
     </div>
   );
 };
