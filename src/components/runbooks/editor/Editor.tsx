@@ -23,6 +23,7 @@ import {
   EyeIcon,
   LinkIcon,
   BlocksIcon,
+  MinusIcon,
 } from "lucide-react";
 
 import { AIGeneratePopup } from "./AIGeneratePopup";
@@ -194,6 +195,27 @@ const insertSavedBlock = (
   },
   icon: <BlocksIcon size={18} />,
   aliases: ["saved", "block"],
+  group: "Content",
+});
+
+const insertHorizontalRule = (editor: typeof schema.BlockNoteEditor) => ({
+  title: "Horizontal Rule",
+  subtext: "Insert a horizontal divider line",
+  onItemClick: () => {
+    track_event("runbooks.block.create", { type: "horizontal_rule" });
+
+    editor.insertBlocks(
+      [
+        {
+          type: "horizontal_rule",
+        },
+      ],
+      editor.getTextCursorPosition().block.id,
+      "before",
+    );
+  },
+  icon: <MinusIcon size={18} />,
+  aliases: ["hr", "horizontal", "rule", "divider", "separator", "line"],
   group: "Content",
 });
 
@@ -660,6 +682,7 @@ export default function Editor({ runbook, editable, runbookEditor }: EditorProps
                 // Content group
                 insertRunbookLink(editor as any, showRunbookLinkPopup),
                 insertSavedBlock(editor as any, showSavedBlockPopup),
+                insertHorizontalRule(editor as any),
 
                 // Monitoring group
                 insertPrometheus(schema)(editor),
