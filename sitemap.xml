@@ -2,110 +2,110 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
     <url>
          <loc>https://man.atuin.sh/</loc>
-         <lastmod>2025-10-02</lastmod>
+         <lastmod>2025-10-15</lastmod>
     </url>
     <url>
          <loc>https://man.atuin.sh/getting-started/</loc>
-         <lastmod>2025-10-02</lastmod>
+         <lastmod>2025-10-15</lastmod>
     </url>
     <url>
          <loc>https://man.atuin.sh/secrets/</loc>
-         <lastmod>2025-10-02</lastmod>
+         <lastmod>2025-10-15</lastmod>
     </url>
     <url>
          <loc>https://man.atuin.sh/templating/</loc>
-         <lastmod>2025-10-02</lastmod>
+         <lastmod>2025-10-15</lastmod>
     </url>
     <url>
          <loc>https://man.atuin.sh/workspaces/</loc>
-         <lastmod>2025-10-02</lastmod>
+         <lastmod>2025-10-15</lastmod>
     </url>
     <url>
          <loc>https://man.atuin.sh/blocks/</loc>
-         <lastmod>2025-10-02</lastmod>
+         <lastmod>2025-10-15</lastmod>
     </url>
     <url>
          <loc>https://man.atuin.sh/blocks/databases/</loc>
-         <lastmod>2025-10-02</lastmod>
+         <lastmod>2025-10-15</lastmod>
     </url>
     <url>
          <loc>https://man.atuin.sh/blocks/databases/clickhouse/</loc>
-         <lastmod>2025-10-02</lastmod>
+         <lastmod>2025-10-15</lastmod>
     </url>
     <url>
          <loc>https://man.atuin.sh/blocks/databases/mysql/</loc>
-         <lastmod>2025-10-02</lastmod>
+         <lastmod>2025-10-15</lastmod>
     </url>
     <url>
          <loc>https://man.atuin.sh/blocks/databases/postgresql/</loc>
-         <lastmod>2025-10-02</lastmod>
+         <lastmod>2025-10-15</lastmod>
     </url>
     <url>
          <loc>https://man.atuin.sh/blocks/databases/sqlite/</loc>
-         <lastmod>2025-10-02</lastmod>
+         <lastmod>2025-10-15</lastmod>
     </url>
     <url>
          <loc>https://man.atuin.sh/blocks/executable/</loc>
-         <lastmod>2025-10-02</lastmod>
+         <lastmod>2025-10-15</lastmod>
     </url>
     <url>
          <loc>https://man.atuin.sh/blocks/executable/directory/</loc>
-         <lastmod>2025-10-02</lastmod>
+         <lastmod>2025-10-15</lastmod>
     </url>
     <url>
          <loc>https://man.atuin.sh/blocks/executable/dropdown/</loc>
-         <lastmod>2025-10-02</lastmod>
+         <lastmod>2025-10-15</lastmod>
     </url>
     <url>
          <loc>https://man.atuin.sh/blocks/executable/env/</loc>
-         <lastmod>2025-10-02</lastmod>
+         <lastmod>2025-10-15</lastmod>
     </url>
     <url>
          <loc>https://man.atuin.sh/blocks/executable/kubernetes/</loc>
-         <lastmod>2025-10-02</lastmod>
+         <lastmod>2025-10-15</lastmod>
     </url>
     <url>
          <loc>https://man.atuin.sh/blocks/executable/script/</loc>
-         <lastmod>2025-10-02</lastmod>
+         <lastmod>2025-10-15</lastmod>
     </url>
     <url>
          <loc>https://man.atuin.sh/blocks/executable/terminal/</loc>
-         <lastmod>2025-10-02</lastmod>
+         <lastmod>2025-10-15</lastmod>
     </url>
     <url>
          <loc>https://man.atuin.sh/blocks/executable/variable/</loc>
-         <lastmod>2025-10-02</lastmod>
+         <lastmod>2025-10-15</lastmod>
     </url>
     <url>
          <loc>https://man.atuin.sh/blocks/monitoring/</loc>
-         <lastmod>2025-10-02</lastmod>
+         <lastmod>2025-10-15</lastmod>
     </url>
     <url>
          <loc>https://man.atuin.sh/blocks/monitoring/prometheus/</loc>
-         <lastmod>2025-10-02</lastmod>
+         <lastmod>2025-10-15</lastmod>
     </url>
     <url>
          <loc>https://man.atuin.sh/blocks/network/</loc>
-         <lastmod>2025-10-02</lastmod>
+         <lastmod>2025-10-15</lastmod>
     </url>
     <url>
          <loc>https://man.atuin.sh/blocks/network/http/</loc>
-         <lastmod>2025-10-02</lastmod>
+         <lastmod>2025-10-15</lastmod>
     </url>
     <url>
          <loc>https://man.atuin.sh/blocks/network/ssh/</loc>
-         <lastmod>2025-10-02</lastmod>
+         <lastmod>2025-10-15</lastmod>
     </url>
     <url>
          <loc>https://man.atuin.sh/hub/collaborative-editing/</loc>
-         <lastmod>2025-10-02</lastmod>
+         <lastmod>2025-10-15</lastmod>
     </url>
     <url>
          <loc>https://man.atuin.sh/hub/getting-started/</loc>
-         <lastmod>2025-10-02</lastmod>
+         <lastmod>2025-10-15</lastmod>
     </url>
     <url>
          <loc>https://man.atuin.sh/hub/sharing-runbooks/</loc>
-         <lastmod>2025-10-02</lastmod>
+         <lastmod>2025-10-15</lastmod>
     </url>
 </urlset>
