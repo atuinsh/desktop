@@ -22,22 +22,30 @@ env:
 jobs:
   rust-checks:
     name: ${{ matrix.name }}
-    runs-on: depot-ubuntu-22.04-4
+    runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         include:
-          - name: Test
+          - name: Test (Ubuntu)
             command: test
             components: ""
+            os: depot-ubuntu-22.04-4
+          - name: Test (macOS ARM)
+            command: test
+            components: ""
+            os: macos-latest
           - name: Check
             command: check
             components: ""
+            os: depot-ubuntu-22.04-4
           - name: Clippy
             command: clippy
             components: clippy
+            os: depot-ubuntu-22.04-4
           - name: Format
             command: fmt
             components: rustfmt
+            os: depot-ubuntu-22.04-4
     steps:
       - uses: actions/checkout@v4
 
@@ -48,6 +56,7 @@ jobs:
           components: ${{ matrix.components }}
 
       - uses: awalsh128/cache-apt-pkgs-action@latest
+        if: runner.os == 'Linux'
         with:
           packages: libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
           version: 1.0
