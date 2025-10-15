@@ -392,17 +392,26 @@ async fn apply_runbooks_migrations(app: &AppHandle) -> eyre::Result<()> {
 }
 
 fn main() {
-    env_logger::builder()
-        .filter(Some("atuin_desktop"), log::LevelFilter::Trace)
-        .init();
-
     let dev_prefix = if tauri::is_dev() {
         Some(env::var("DEV_PREFIX").unwrap_or("dev".to_string()))
     } else {
         None
     };
 
-    let builder = tauri::Builder::default();
+    let builder = tauri::Builder::default().plugin(
+        tauri_plugin_log::Builder::new()
+            .targets([
+                tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stdout),
+                tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::LogDir {
+                    file_name: None,
+                }),
+            ])
+            .level(log::LevelFilter::Info)
+            .level_for("atuin_desktop", log::LevelFilter::Info)
+            .max_file_size(20_000_000)
+            .rotation_strategy(tauri_plugin_log::RotationStrategy::KeepSome(4))
+            .build(),
+    );
     let builder = if cfg!(debug_assertions) {
         builder
     } else {
