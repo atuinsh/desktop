@@ -1,5 +1,8 @@
 use crate::runtime::blocks::{
-    document::{BlockContext, DocumentContext, DocumentEnvVar},
+    document::{
+        block_context::{BlockContext, DocumentEnvVar},
+        document_context::ContextResolver,
+    },
     handler::{ContextProvider, ExecutionContext},
     BlockBehavior,
 };
@@ -55,7 +58,7 @@ impl ContextProvider for EnvironmentHandler {
 impl BlockBehavior for Environment {
     fn passive_context(
         &self,
-        _resolver: &crate::runtime::blocks::document::ContextResolver,
+        _resolver: &ContextResolver,
     ) -> Result<Option<BlockContext>, Box<dyn std::error::Error + Send + Sync>> {
         let mut context = BlockContext::new();
         if self.name.is_empty() {
