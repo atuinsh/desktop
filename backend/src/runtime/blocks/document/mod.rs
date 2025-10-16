@@ -291,11 +291,11 @@ impl DocumentActor {
 
         // Rebuild passive contexts only for affected blocks
         if let Some(start_index) = rebuild_from {
-            let errors = self
+            let result = self
                 .document
                 .rebuild_passive_contexts(Some(start_index), &self.event_bus);
 
-            if !errors.is_empty() {
+            if let Err(errors) = result {
                 // Log errors but don't fail the entire operation
                 for error in errors {
                     eprintln!("Error rebuilding passive context: {:?}", error);
