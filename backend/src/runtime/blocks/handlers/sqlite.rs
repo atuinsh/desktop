@@ -124,6 +124,7 @@ impl SQLiteHandler {
             &context.variables,
             &context.document,
             Some(&block_id_str),
+            None,
         )?;
         Ok(rendered)
     }

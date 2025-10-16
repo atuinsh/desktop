@@ -38,8 +38,8 @@ pub struct RunbookTemplateState {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorkspaceTemplateState {
     /// The root path of the workspace containing atuin.toml
-    /// Empty string for online workspaces (no concept of root)
-    pub root: String,
+    /// None for online workspaces (no concept of root)
+    pub root: Option<String>,
 }
 
 #[allow(dead_code)]
@@ -344,7 +344,7 @@ pub async fn template_str(
         doc: doc_state,
         var,
         workspace: WorkspaceTemplateState {
-            root: workspace_root,
+            root: Some(workspace_root),
         },
     };
 
@@ -362,6 +362,7 @@ pub fn template_with_context(
     variables: &HashMap<String, String>,
     document: &[serde_json::Value],
     block_id: Option<&str>,
+    workspace_root: Option<String>,
 ) -> Result<String, String> {
     // If no variables and empty document, and source has no template syntax, return original source
     if variables.is_empty() && document.is_empty() && !source.contains("{{") {
@@ -443,7 +444,8 @@ pub fn template_with_context(
 
     let template_state = TemplateState {
         doc: doc_state,
-        var,
+        var: variables.iter().map(|(k, v)| (k.clone(), Value::from(v.clone()))).collect(),
+        workspace: WorkspaceTemplateState { root: workspace_root },
     };
 
     let mut env = Environment::new();
@@ -465,7 +467,8 @@ mod tests {
         let mut variables = HashMap::new();
         variables.insert("name".to_string(), "World".to_string());
 
-        let result = template_with_context("Hello {{ var.name }}!", &variables, &[], None).unwrap();
+        let result =
+            template_with_context("Hello {{ var.name }}!", &variables, &[], None, None).unwrap();
 
         assert_eq!(result, "Hello World!");
     }
@@ -476,9 +479,14 @@ mod tests {
         variables.insert("first".to_string(), "Hello".to_string());
         variables.insert("second".to_string(), "World".to_string());
 
-        let result =
-            template_with_context("{{ var.first }} {{ var.second }}!", &variables, &[], None)
-                .unwrap();
+        let result = template_with_context(
+            "{{ var.first }} {{ var.second }}!",
+            &variables,
+            &[],
+            None,
+            None,
+        )
+        .unwrap();
 
         assert_eq!(result, "Hello World!");
     }
@@ -491,6 +499,7 @@ mod tests {
             "Hello {{ var.missing | default('Default') }}!",
             &variables,
             &[],
+            None,
             None,
         )
         .unwrap();
@@ -515,6 +524,7 @@ mod tests {
             &variables,
             &doc,
             Some("block2"),
+            None,
         )
         .unwrap();
 
