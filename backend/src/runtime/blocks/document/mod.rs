@@ -205,7 +205,10 @@ impl DocumentHandle {
     ) -> Result<(), DocumentError> {
         let (tx, rx) = oneshot::channel();
         self.command_tx
-            .send(DocumentCommand::UpdateDocument { document, reply: tx })
+            .send(DocumentCommand::UpdateDocument {
+                document,
+                reply: tx,
+            })
             .map_err(|_| DocumentError::ActorSendError)?;
         rx.await.map_err(|_| DocumentError::ActorSendError)?
     }
@@ -370,7 +373,8 @@ impl DocumentActor {
         document: Vec<serde_json::Value>,
     ) -> Result<(), DocumentError> {
         // Update the document using put_document, which returns the index to rebuild from
-        let rebuild_from = self.document
+        let rebuild_from = self
+            .document
             .put_document(document)
             .map_err(|e| DocumentError::InvalidStructure(e.to_string()))?;
 
@@ -467,10 +471,8 @@ impl Document {
         let old_block_ids: Vec<Uuid> = self.blocks.iter().map(|b| b.id()).collect();
 
         // Build a map of existing blocks by ID for quick lookup
-        let mut existing_blocks_map: HashMap<Uuid, BlockWithContext> = self.blocks
-            .drain(..)
-            .map(|b| (b.id(), b))
-            .collect();
+        let mut existing_blocks_map: HashMap<Uuid, BlockWithContext> =
+            self.blocks.drain(..).map(|b| (b.id(), b)).collect();
 
         // Track which blocks need context rebuild
         let mut rebuild_from_index: Option<usize> = None;
@@ -499,7 +501,8 @@ impl Document {
                 updated_blocks.push(existing);
             } else {
                 // New block - create it
-                let block_with_context = BlockWithContext::new(new_block.clone(), BlockContext::new());
+                let block_with_context =
+                    BlockWithContext::new(new_block.clone(), BlockContext::new());
                 updated_blocks.push(block_with_context);
 
                 // Mark rebuild from this position
@@ -740,8 +743,7 @@ impl Document {
 
                     // Emit Grand Central event for the error asynchronously
                     let event_bus = event_bus.clone();
-                    let runbook_id = Uuid::parse_str(&self.id)
-                        .unwrap_or_else(|_| Uuid::new_v4());
+                    let runbook_id = Uuid::parse_str(&self.id).unwrap_or_else(|_| Uuid::new_v4());
                     tokio::spawn(async move {
                         let _ = event_bus
                             .emit(GCEvent::BlockFailed {
