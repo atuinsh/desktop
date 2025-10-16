@@ -15,6 +15,7 @@ use uuid::Uuid;
 
 use crate::{
     runtime::{
+        events::GCEvent,
         exec_log::ExecLogHandle,
         pty_store::PtyStoreHandle,
         ssh_pool::SshPoolHandle,
@@ -51,6 +52,10 @@ pub(crate) struct AtuinState {
     executor: Mutex<Option<ExecutorHandle>>,
     event_sender: Mutex<Option<broadcast::Sender<WorkflowEvent>>>,
 
+    // Grand Central event system
+    pub gc_event_sender: Mutex<Option<mpsc::UnboundedSender<GCEvent>>>,
+    pub event_receiver: Arc<tokio::sync::Mutex<Option<mpsc::UnboundedReceiver<GCEvent>>>>,
+
     // the second rwlock could probs be a mutex
     // i cba it works fine
     pub child_processes: Arc<RwLock<HashMap<uuid::Uuid, Arc<RwLock<Child>>>>>,
@@ -79,6 +84,10 @@ pub(crate) struct AtuinState {
     // I'd like to store the output of all executions in a local sqlite next, but
     // to start lets just store the latest value
     pub runbook_output_variables: Arc<RwLock<HashMap<String, HashMap<String, String>>>>,
+
+    // Map of block execution id -> execution handle for cancellation
+    pub block_executions:
+        Arc<RwLock<HashMap<Uuid, crate::runtime::blocks::handler::ExecutionHandle>>>,
 }
 
 impl AtuinState {
@@ -96,10 +105,13 @@ impl AtuinState {
             workspaces: Arc::new(tokio::sync::Mutex::new(None)),
             executor: Mutex::new(None),
             event_sender: Mutex::new(None),
+            gc_event_sender: Mutex::new(None),
+            event_receiver: Arc::new(tokio::sync::Mutex::new(None)),
             child_processes: Default::default(),
             template_state: Default::default(),
             runbooks_api_token: Default::default(),
             runbook_output_variables: Default::default(),
+            block_executions: Default::default(),
             dev_prefix,
             app_path,
             use_hub_updater_service,
@@ -118,7 +130,7 @@ impl AtuinState {
         let exec_log = ExecLogHandle::new(path).expect("Failed to boot exec log");
         self.exec_log.lock().unwrap().replace(exec_log);
 
-        let pty_store = PtyStoreHandle::new();
+        let pty_store = PtyStoreHandle::new_with_app(app.clone());
         self.pty_store.lock().unwrap().replace(pty_store);
 
         let ssh_pool = SshPoolHandle::new();
@@ -169,9 +181,15 @@ impl AtuinState {
                 match event {
                     WorkflowEvent::BlockStarted { id } => {
                         println!("block {id} started");
+                        app_clone
+                            .emit("block-started", id)
+                            .expect("Failed to emit block started event");
                     }
                     WorkflowEvent::BlockFinished { id } => {
                         println!("block {id} finished");
+                        app_clone
+                            .emit("block-finished", id)
+                            .expect("Failed to emit block finished event");
                     }
                     WorkflowEvent::WorkflowStarted { id } => {
                         println!("workflow {id} started");
@@ -192,6 +210,11 @@ impl AtuinState {
 
         self.executor.lock().unwrap().replace(executor);
         self.event_sender.lock().unwrap().replace(event_sender);
+
+        // Initialize Grand Central event system
+        let (gc_sender, gc_receiver) = mpsc::unbounded_channel::<GCEvent>();
+        self.gc_event_sender.lock().unwrap().replace(gc_sender);
+        *self.event_receiver.lock().await = Some(gc_receiver);
 
         Ok(())
     }
@@ -257,6 +280,14 @@ impl AtuinState {
             (*event_sender).clone()
         } else {
             panic!("Event sender not initialized");
+        }
+    }
+
+    pub fn gc_event_sender(&self) -> mpsc::UnboundedSender<GCEvent> {
+        if let Some(gc_event_sender) = self.gc_event_sender.lock().unwrap().as_ref() {
+            gc_event_sender.clone()
+        } else {
+            panic!("GC event sender not initialized");
         }
     }
 }

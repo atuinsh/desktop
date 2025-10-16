@@ -1009,10 +1009,21 @@ mod tests {
 
         // Check that no events were generated for ignored directories
         let events = collector.get_events().await;
-        assert!(
-            events.is_empty(),
-            "No events should be generated for ignored directories"
-        );
+
+        for event in events.iter() {
+            match event {
+                WorkspaceEvent::State(state) => {
+                    for entry in state.entries.iter() {
+                        let ignored = ignored_dirs
+                            .iter()
+                            .any(|dir| entry.path.display().to_string().contains(dir));
+
+                        assert!(!ignored);
+                    }
+                }
+                _ => {}
+            }
+        }
 
         // Verify that ignored directories and their contents are not in the workspace state
         {

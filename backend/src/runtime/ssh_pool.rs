@@ -117,7 +117,7 @@ pub enum SshPoolMessage {
     },
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct SshPoolHandle {
     sender: mpsc::Sender<SshPoolMessage>,
 }

@@ -105,9 +105,23 @@ impl Object for TemplateState {
     }
 }
 
-fn serialized_block_to_state(block: serde_json::Value) -> BlockState {
-    let block = block.as_object().unwrap();
-    let block_type = block.get("type").unwrap().as_str().unwrap();
+pub fn serialized_block_to_state(block: serde_json::Value) -> BlockState {
+    let block = match block.as_object() {
+        Some(obj) => obj,
+        None => {
+            // Return a default block state for non-object values
+            return BlockState {
+                block_type: "unknown".to_string(),
+                content: String::new(),
+                props: HashMap::new(),
+            };
+        }
+    };
+
+    let block_type = block
+        .get("type")
+        .and_then(|t| t.as_str())
+        .unwrap_or("unknown");
 
     // Content is tricky. It's actually an array, that might look something like this
     // ```
@@ -151,12 +165,13 @@ fn serialized_block_to_state(block: serde_json::Value) -> BlockState {
 
     let props: HashMap<String, String> = block
         .get("props")
-        .unwrap()
-        .as_object()
-        .unwrap()
-        .iter()
-        .map(|(k, v)| (k.clone(), v.as_str().unwrap_or_default().to_string()))
-        .collect();
+        .and_then(|p| p.as_object())
+        .map(|obj| {
+            obj.iter()
+                .map(|(k, v)| (k.clone(), v.as_str().unwrap_or_default().to_string()))
+                .collect()
+        })
+        .unwrap_or_default();
 
     // Now for some block-specific stuff
 
@@ -340,8 +355,172 @@ pub async fn template_str(
     Ok(source)
 }
 
+/// Template a string with the given variables and document context
+/// This is a simplified version of template_str that doesn't require Tauri state
+pub fn template_with_context(
+    source: &str,
+    variables: &HashMap<String, String>,
+    document: &[serde_json::Value],
+    block_id: Option<&str>,
+) -> Result<String, String> {
+    // If no variables and empty document, and source has no template syntax, return original source
+    if variables.is_empty() && document.is_empty() && !source.contains("{{") {
+        return Ok(source.to_string());
+    }
+
+    let flattened_doc = flatten_document(document);
+
+    // Convert variables to Minijinja Values
+    let var: HashMap<String, Value> = variables
+        .iter()
+        .map(|(k, v)| (k.clone(), Value::from(v.clone())))
+        .collect();
+
+    // Build document template state if we have a document
+    let doc_state = if !document.is_empty() {
+        // Find the previous block if we have a block_id
+        let previous = if let Some(bid) = block_id {
+            flattened_doc.iter().enumerate().find_map(|(i, block)| {
+                let block_obj = block.as_object()?;
+                if block_obj.get("id")?.as_str()? == bid {
+                    if i == 0 {
+                        None
+                    } else {
+                        // Find the previous non-empty paragraph block
+                        let mut idx = i - 1;
+                        loop {
+                            let prev_block = flattened_doc.get(idx)?.as_object()?;
+                            if prev_block.get("type")?.as_str()? == "paragraph"
+                                && prev_block.get("content")?.as_array()?.is_empty()
+                            {
+                                if idx == 0 {
+                                    return None;
+                                } else {
+                                    idx -= 1;
+                                }
+                            } else {
+                                return Some(flattened_doc.get(idx)?.clone());
+                            }
+                        }
+                    }
+                } else {
+                    None
+                }
+            })
+        } else {
+            None
+        };
+
+        // Build named blocks map
+        let named = flattened_doc
+            .iter()
+            .filter_map(|block| {
+                let name = block
+                    .get("props")?
+                    .as_object()?
+                    .get("name")?
+                    .as_str()?
+                    .to_string();
+                Some((name, serialized_block_to_state(block.clone())))
+            })
+            .collect();
+
+        Some(DocumentTemplateState {
+            first: serialized_block_to_state(document.first().ok_or("Document is empty")?.clone()),
+            last: serialized_block_to_state(document.last().ok_or("Document is empty")?.clone()),
+            content: flattened_doc
+                .iter()
+                .map(|b| serialized_block_to_state(b.clone()))
+                .collect(),
+            named,
+            previous: Some(serialized_block_to_state(
+                previous.unwrap_or_else(|| serde_json::Value::Null),
+            )),
+        })
+    } else {
+        None
+    };
+
+    let template_state = TemplateState {
+        doc: doc_state,
+        var,
+    };
+
+    let mut env = Environment::new();
+    env.set_trim_blocks(true);
+
+    let rendered = env
+        .render_str(source, template_state)
+        .map_err(|e| e.to_string())?;
+
+    Ok(rendered)
+}
+
 #[cfg(test)]
 mod tests {
+    use super::*;
+
+    #[test]
+    fn test_template_with_context_basic() {
+        let mut variables = HashMap::new();
+        variables.insert("name".to_string(), "World".to_string());
+
+        let result = template_with_context("Hello {{ var.name }}!", &variables, &[], None).unwrap();
+
+        assert_eq!(result, "Hello World!");
+    }
+
+    #[test]
+    fn test_template_with_context_multiple_vars() {
+        let mut variables = HashMap::new();
+        variables.insert("first".to_string(), "Hello".to_string());
+        variables.insert("second".to_string(), "World".to_string());
+
+        let result =
+            template_with_context("{{ var.first }} {{ var.second }}!", &variables, &[], None)
+                .unwrap();
+
+        assert_eq!(result, "Hello World!");
+    }
+
+    #[test]
+    fn test_template_with_missing_var() {
+        let variables = HashMap::new();
+
+        let result = template_with_context(
+            "Hello {{ var.missing | default('Default') }}!",
+            &variables,
+            &[],
+            None,
+        )
+        .unwrap();
+
+        assert_eq!(result, "Hello Default!");
+    }
+
+    #[test]
+    fn test_template_with_document_context() {
+        let mut variables = HashMap::new();
+        variables.insert("test_var".to_string(), "test_value".to_string());
+
+        let doc = vec![serde_json::json!({
+            "id": "block1",
+            "type": "paragraph",
+            "props": { "name": "first_block" },
+            "content": [{"type": "text", "text": "First block content"}]
+        })];
+
+        let result = template_with_context(
+            "Variable: {{ var.test_var }}",
+            &variables,
+            &doc,
+            Some("block2"),
+        )
+        .unwrap();
+
+        assert_eq!(result, "Variable: test_value");
+    }
+
     #[test]
     fn test_shellquote_filter() {
         use minijinja::Environment;
