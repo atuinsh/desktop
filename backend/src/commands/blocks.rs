@@ -26,6 +26,7 @@ pub async fn execute_block(
         .map_err(|e| e.to_string())?;
 
     // Start execution and get immutable snapshot
+    // TODO: output_channel
     let exec_view = document
         .start_execution(block_id)
         .await
