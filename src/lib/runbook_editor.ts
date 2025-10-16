@@ -224,6 +224,7 @@ export default class RunbookEditor {
       }
     });
 
+    this.scheduleSendChanges();
     return this.editor;
   }
 
@@ -246,12 +247,7 @@ export default class RunbookEditor {
   }
 
   save(runbook: Runbook | undefined, editor: BlockNoteEditor) {
-    if (!this.sendChangesTimer) {
-      this.sendChangesTimer = setTimeout(() => {
-        this.sendChangesTimer = null;
-        this._sendChanges();
-      }, SEND_CHANGES_DEBOUNCE) as unknown as number;
-    }
+    this.scheduleSendChanges();
 
     // Don't allow `onChange` events from BlockNote to fire a save
     // if we're viewing a tag
@@ -281,11 +277,26 @@ export default class RunbookEditor {
     }
   }
 
+  // Schedule a send changes event to the backend.
+  // Changes get sent every 500ms at most, even if more
+  // changes are made in that time.
+  async scheduleSendChanges() {
+    if (!this.sendChangesTimer) {
+      this.sendChangesTimer = setTimeout(() => {
+        this.sendChangesTimer = null;
+        this._sendChanges();
+      }, SEND_CHANGES_DEBOUNCE) as unknown as number;
+    }
+  }
+
   async _sendChanges() {
     const editor = await this.editor;
     if (!editor) return;
 
-    await invoke("update_document", { runbookId: this.runbook.id, document: editor.document });
+    await invoke("update_document", {
+      documentId: this.runbook.id,
+      documentContent: editor.document,
+    });
   }
 
   async _save(runbookArg: Runbook | undefined, editorArg: BlockNoteEditor) {
