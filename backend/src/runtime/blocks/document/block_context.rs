@@ -31,26 +31,6 @@ impl BlockContext {
             .get(&TypeId::of::<T>())
             .and_then(|boxed| boxed.downcast_ref::<T>())
     }
-
-    /// Get a mutable typed value from this block's context
-    pub fn get_mut<T: Any + Send + Sync>(&mut self) -> Option<&mut T> {
-        self.entries
-            .get_mut(&TypeId::of::<T>())
-            .and_then(|boxed| boxed.downcast_mut::<T>())
-    }
-
-    /// Remove a typed value from this block's context
-    pub fn remove<T: Any + Send + Sync>(&mut self) -> Option<T> {
-        self.entries
-            .remove(&TypeId::of::<T>())
-            .and_then(|boxed| boxed.downcast::<T>().ok())
-            .map(|boxed| *boxed)
-    }
-
-    /// Check if this block's context contains a value of type T
-    pub fn contains<T: Any + Send + Sync>(&self) -> bool {
-        self.entries.contains_key(&TypeId::of::<T>())
-    }
 }
 
 pub struct BlockWithContext {
@@ -87,10 +67,6 @@ impl BlockWithContext {
         self.context = context;
     }
 }
-
-/// Variables defined blocks that can set multiple variables
-#[derive(Clone, Debug, Default)]
-pub struct DocumentVariableMap(pub HashMap<String, String>);
 
 /// Variables defined by Var blocks
 #[derive(Clone, Debug)]

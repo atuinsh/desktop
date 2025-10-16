@@ -13,35 +13,14 @@ pub(crate) mod script;
 pub(crate) mod sqlite;
 pub(crate) mod terminal;
 
-// #[cfg(test)]
-// mod terminal_integration_test;
-
-use std::sync::Arc;
-
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use tauri::ipc::Channel;
-use tokio::sync::broadcast;
 use uuid::Uuid;
 
-use crate::runtime::{
-    blocks::{
-        document::{block_context::BlockContext, document_context::ContextResolver},
-        handler::BlockOutput,
-    },
-    events::EventBus,
-    pty_store::PtyStoreHandle,
-    ssh_pool::SshPoolHandle,
-    workflow::event::WorkflowEvent,
+use crate::runtime::blocks::document::{
+    block_context::BlockContext,
+    document_context::{ContextResolver, DocumentExecutionView},
 };
-
-pub struct BlockExecutionContext {
-    pub event_sender: broadcast::Sender<WorkflowEvent>,
-    pub output_channel: Option<Channel<BlockOutput>>,
-    pub ssh_pool: Option<SshPoolHandle>,
-    pub pty_store: Option<PtyStoreHandle>,
-    pub event_bus: Option<Arc<dyn EventBus>>,
-}
 
 pub trait FromDocument: Sized {
     fn from_document(block_data: &serde_json::Value) -> Result<Self, String>;
@@ -57,7 +36,7 @@ pub trait BlockBehavior {
     }
     async fn execute(
         &self,
-        _execution_context: BlockExecutionContext,
+        _execution_context: DocumentExecutionView,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         Ok(())
     }
