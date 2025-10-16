@@ -140,11 +140,6 @@ impl Document {
         Ok(())
     }
 
-    /// Check if the document contains a block with the given ID
-    pub fn has_block(&self, block_id: &Uuid) -> bool {
-        self.blocks.iter().any(|block| &block.id() == block_id)
-    }
-
     /// Get a block's context
     pub fn get_block(&self, block_id: &Uuid) -> Option<&BlockWithContext> {
         self.blocks.iter().find(|block| &block.id() == block_id)

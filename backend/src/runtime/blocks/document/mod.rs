@@ -18,14 +18,8 @@ pub enum DocumentError {
     #[error("Block not found: {0}")]
     BlockNotFound(Uuid),
 
-    #[error("Document not found: {0}")]
-    DocumentNotFound(String),
-
     #[error("Failed to send command to document actor")]
     ActorSendError,
-
-    #[error("Failed to parse block: {0}")]
-    BlockParseError(String),
 
     #[error("Failed to evaluate passive context: {0}")]
     PassiveContextError(String),
@@ -109,6 +103,7 @@ impl DocumentHandle {
     }
 
     /// Get the runbook ID this document handle is for
+    #[allow(unused)]
     pub fn runbook_id(&self) -> &str {
         &self.runbook_id
     }
@@ -177,6 +172,7 @@ impl DocumentHandle {
     }
 
     /// Get a block by ID (for debugging/inspection)
+    #[allow(unused)]
     pub async fn get_block(&self, block_id: Uuid) -> Option<Block> {
         let (tx, rx) = oneshot::channel();
         self.command_tx
