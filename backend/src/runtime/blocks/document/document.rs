@@ -286,7 +286,7 @@ impl Document {
         &mut self,
         start_index: Option<usize>,
         event_bus: &Arc<dyn EventBus>,
-    ) -> Vec<DocumentError> {
+    ) -> Result<(), Vec<DocumentError>> {
         let mut errors = Vec::new();
         let start = start_index.unwrap_or(0);
 
@@ -324,6 +324,10 @@ impl Document {
             }
         }
 
-        errors
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(errors)
+        }
     }
 }
