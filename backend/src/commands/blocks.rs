@@ -11,7 +11,6 @@ use crate::state::AtuinState;
 #[tauri::command]
 pub async fn execute_block(
     state: State<'_, AtuinState>,
-    app_handle: AppHandle,
     block_id: String,
     runbook_id: String,
     editor_document: Vec<serde_json::Value>,
@@ -21,6 +20,10 @@ pub async fn execute_block(
 
     let documents = state.documents.read().await;
     let document = documents.get(&runbook_id).ok_or("Document not found")?;
+    document
+        .update_document(editor_document)
+        .await
+        .map_err(|e| e.to_string())?;
 
     // Start execution and get immutable snapshot
     let exec_view = document
