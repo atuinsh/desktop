@@ -1102,9 +1102,6 @@ mod tests {
         // Wait a bit to ensure any events would have been processed
         sleep(Duration::from_millis(200)).await;
 
-        // Check that no events were generated for gitignored content
-        let events = collector.get_events().await;
-
         // Verify that gitignored content is not in the workspace state
         {
             let manager_guard = manager_arc.lock().await;

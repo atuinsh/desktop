@@ -444,10 +444,7 @@ pub fn template_with_context(
 
     let template_state = TemplateState {
         doc: doc_state,
-        var: variables
-            .iter()
-            .map(|(k, v)| (k.clone(), Value::from(v.clone())))
-            .collect(),
+        var,
         workspace: WorkspaceTemplateState {
             root: workspace_root,
         },
@@ -587,7 +584,7 @@ mod tests {
         use std::collections::HashMap;
 
         let workspace_state = WorkspaceTemplateState {
-            root: String::from("/Users/test/workspace"),
+            root: Some(String::from("/Users/test/workspace")),
         };
 
         let template_state = TemplateState {
@@ -604,7 +601,7 @@ mod tests {
 
         // Test empty workspace root (online workspace)
         let workspace_state = WorkspaceTemplateState {
-            root: String::from(""),
+            root: Some(String::from("")),
         };
 
         let template_state = TemplateState {
