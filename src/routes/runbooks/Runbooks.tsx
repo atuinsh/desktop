@@ -154,6 +154,15 @@ export default function Runbooks() {
     }
   }, [currentRunbook?.name]);
 
+  useEffect(() => {
+    if (currentRunbook) {
+      invoke("open_document", {
+        documentId: currentRunbook.id,
+        documentContent: [],
+      });
+    }
+  }, [currentRunbook?.id]);
+
   useMarkRunbookRead(currentRunbook || null, refreshRunbooks);
 
   const listenPtyBackend = usePtyStore((state) => state.listenBackend);
