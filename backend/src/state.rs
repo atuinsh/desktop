@@ -15,7 +15,7 @@ use uuid::Uuid;
 
 use crate::{
     runtime::{
-        blocks::document::Document,
+        blocks::document::DocumentHandle,
         events::GCEvent,
         exec_log::ExecLogHandle,
         pty_store::PtyStoreHandle,
@@ -87,8 +87,8 @@ pub(crate) struct AtuinState {
     pub block_executions:
         Arc<RwLock<HashMap<Uuid, crate::runtime::blocks::handler::ExecutionHandle>>>,
 
-    // Map of document contexts per runbook
-    pub documents: Arc<RwLock<HashMap<String, Arc<RwLock<Document>>>>>,
+    // Map of document handles per runbook
+    pub documents: Arc<RwLock<HashMap<String, DocumentHandle>>>,
 }
 
 impl AtuinState {
