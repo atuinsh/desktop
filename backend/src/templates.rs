@@ -444,8 +444,13 @@ pub fn template_with_context(
 
     let template_state = TemplateState {
         doc: doc_state,
-        var: variables.iter().map(|(k, v)| (k.clone(), Value::from(v.clone()))).collect(),
-        workspace: WorkspaceTemplateState { root: workspace_root },
+        var: variables
+            .iter()
+            .map(|(k, v)| (k.clone(), Value::from(v.clone())))
+            .collect(),
+        workspace: WorkspaceTemplateState {
+            root: workspace_root,
+        },
     };
 
     let mut env = Environment::new();
