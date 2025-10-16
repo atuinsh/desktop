@@ -26,10 +26,7 @@ use uuid::Uuid;
 
 use crate::runtime::{
     blocks::{
-        document::{
-            block_context::BlockContext,
-            document_context::{ContextResolver, DocumentContext},
-        },
+        document::{block_context::BlockContext, document_context::ContextResolver},
         handler::BlockOutput,
     },
     events::EventBus,
@@ -60,16 +57,10 @@ pub trait BlockBehavior {
     }
     async fn execute(
         &self,
-        _document: &DocumentContext,
         _execution_context: BlockExecutionContext,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         Ok(())
     }
-}
-
-#[async_trait]
-pub trait BlockHandler<B: BlockBehavior>: Send + Sync {
-    //
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]

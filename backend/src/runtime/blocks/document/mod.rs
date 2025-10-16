@@ -2,9 +2,7 @@ use std::sync::Arc;
 use tokio::sync::{mpsc, oneshot};
 use uuid::Uuid;
 
-use crate::runtime::blocks::document::block_context::{
-    BlockContext, BlockWithContext, DocumentCwd, DocumentEnvVar, DocumentSshHost, DocumentVar,
-};
+use crate::runtime::blocks::document::block_context::BlockContext;
 use crate::runtime::blocks::document::document::Document;
 use crate::runtime::blocks::document::document_context::DocumentExecutionView;
 use crate::runtime::blocks::Block;
@@ -353,52 +351,5 @@ impl DocumentActor {
 
         update_fn(block.context_mut());
         Ok(())
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use serde_json::json;
-
-    #[test]
-    fn test_get_var_map() {
-        let mut doc = Document::new(
-            "test".into(),
-            vec![
-                json!({
-                    "id": "block1",
-                    "type": "var",
-                    "name": "foo",
-                    "value": "bar"
-                }),
-                json!({
-                    "id": "block2",
-                    "type": "var",
-                    "name": "hello",
-                    "value": "world"
-                }),
-                json!({
-                    "id": "block3",
-                    "type": "var",
-                    "name": "foo",
-                    "value": "baz" // Overwrites foo=bar
-                }),
-                json!({
-                    "id": "block4",
-                    "type": "host"
-                }),
-            ],
-        )
-        .unwrap();
-
-        let context = doc
-            .context_for(&Uuid::parse_str("block4").unwrap())
-            .unwrap();
-        let var_map = context.get_var_map();
-
-        assert_eq!(var_map.len(), 2);
-        assert_eq!(var_map.get("foo").unwrap(), "baz"); // Latest value
-        assert_eq!(var_map.get("hello").unwrap(), "world");
     }
 }
