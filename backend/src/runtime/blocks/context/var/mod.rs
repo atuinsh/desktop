@@ -1,5 +1,8 @@
 use crate::runtime::blocks::{
-    document::{BlockContext, DocumentContext, DocumentVar},
+    document::{
+        block_context::{BlockContext, DocumentVar},
+        document_context::ContextResolver,
+    },
     handler::{ContextProvider, ExecutionContext},
     BlockBehavior,
 };
@@ -83,7 +86,7 @@ impl Var {
 impl BlockBehavior for Var {
     fn passive_context(
         &self,
-        resolver: &crate::runtime::blocks::document::ContextResolver,
+        resolver: &ContextResolver,
     ) -> Result<Option<BlockContext>, Box<dyn std::error::Error + Send + Sync>> {
         let mut context = BlockContext::new();
 
@@ -112,8 +115,6 @@ impl BlockBehavior for Var {
 
 #[cfg(test)]
 mod tests {
-    use crate::runtime::blocks::document::{Document, DocumentContext};
-
     use super::*;
     use std::collections::HashMap;
 

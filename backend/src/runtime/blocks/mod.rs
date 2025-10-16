@@ -26,7 +26,10 @@ use uuid::Uuid;
 
 use crate::runtime::{
     blocks::{
-        document::{BlockContext, DocumentContext},
+        document::{
+            block_context::BlockContext,
+            document_context::{ContextResolver, DocumentContext},
+        },
         handler::BlockOutput,
     },
     events::EventBus,
@@ -51,7 +54,7 @@ pub trait FromDocument: Sized {
 pub trait BlockBehavior {
     fn passive_context(
         &self,
-        _resolver: &document::ContextResolver,
+        _resolver: &ContextResolver,
     ) -> Result<Option<BlockContext>, Box<dyn std::error::Error + Send + Sync>> {
         Ok(None)
     }
@@ -177,7 +180,7 @@ impl Block {
 
     pub fn passive_context(
         &self,
-        resolver: &document::ContextResolver,
+        resolver: &ContextResolver,
     ) -> Result<Option<BlockContext>, Box<dyn std::error::Error + Send + Sync>> {
         match self {
             Block::LocalVar(local_var) => local_var.passive_context(resolver),

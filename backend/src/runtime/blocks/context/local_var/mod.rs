@@ -1,5 +1,8 @@
 use crate::runtime::blocks::{
-    document::{BlockContext, DocumentContext, DocumentVar},
+    document::{
+        block_context::{BlockContext, DocumentVar},
+        document_context::ContextResolver,
+    },
     handler::{ContextProvider, ExecutionContext},
     BlockBehavior,
 };
@@ -87,7 +90,7 @@ impl LocalVar {
 impl BlockBehavior for LocalVar {
     fn passive_context(
         &self,
-        _resolver: &crate::runtime::blocks::document::ContextResolver,
+        _resolver: &ContextResolver,
     ) -> Result<Option<BlockContext>, Box<dyn std::error::Error + Send + Sync>> {
         let mut context = BlockContext::new();
         context.insert(DocumentVar(self.name.clone(), self.value.clone()));

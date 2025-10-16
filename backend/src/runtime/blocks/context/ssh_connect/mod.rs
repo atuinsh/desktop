@@ -1,5 +1,8 @@
 use crate::runtime::blocks::{
-    document::{BlockContext, DocumentContext, DocumentSshHost},
+    document::{
+        block_context::{BlockContext, DocumentSshHost},
+        document_context::ContextResolver,
+    },
     handler::{ContextProvider, ExecutionContext},
     BlockBehavior,
 };
@@ -103,7 +106,7 @@ impl SshConnect {
 impl BlockBehavior for SshConnect {
     fn passive_context(
         &self,
-        _resolver: &crate::runtime::blocks::document::ContextResolver,
+        _resolver: &ContextResolver,
     ) -> Result<Option<BlockContext>, Box<dyn std::error::Error + Send + Sync>> {
         let mut context = BlockContext::new();
         context.insert(DocumentSshHost(None));

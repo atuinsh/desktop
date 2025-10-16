@@ -38,7 +38,10 @@ use typed_builder::TypedBuilder;
 use uuid::Uuid;
 
 use crate::runtime::blocks::{
-    document::{BlockContext, DocumentContext, DocumentSshHost},
+    document::{
+        block_context::{BlockContext, DocumentSshHost},
+        document_context::ContextResolver,
+    },
     handler::{ContextProvider, ExecutionContext},
     BlockBehavior,
 };
@@ -121,7 +124,7 @@ impl Host {
 impl BlockBehavior for Host {
     fn passive_context(
         &self,
-        _resolver: &crate::runtime::blocks::document::ContextResolver,
+        _resolver: &ContextResolver,
     ) -> Result<Option<BlockContext>, Box<dyn std::error::Error + Send + Sync>> {
         let mut context = BlockContext::new();
         context.insert(DocumentSshHost(None));

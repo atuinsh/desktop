@@ -1,5 +1,8 @@
 use crate::runtime::blocks::{
-    document::{BlockContext, DocumentContext, DocumentCwd},
+    document::{
+        block_context::{BlockContext, DocumentCwd},
+        document_context::ContextResolver,
+    },
     handler::{ContextProvider, ExecutionContext},
     BlockBehavior,
 };
@@ -42,7 +45,7 @@ impl ContextProvider for DirectoryHandler {
 impl BlockBehavior for Directory {
     fn passive_context(
         &self,
-        _resolver: &crate::runtime::blocks::document::ContextResolver,
+        _resolver: &ContextResolver,
     ) -> Result<Option<BlockContext>, Box<dyn std::error::Error + Send + Sync>> {
         let mut context = BlockContext::new();
         context.insert(DocumentCwd(self.path.clone()));
