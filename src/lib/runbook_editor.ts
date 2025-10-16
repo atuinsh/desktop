@@ -1,7 +1,7 @@
 import { User } from "@/state/models";
 import Runbook, { OfflineRunbook, OnlineRunbook } from "@/state/runbooks/runbook";
 import untitledRunbook from "@/state/runbooks/untitled.json";
-import { BlockNoteEditor, BlocksChanged } from "@blocknote/core";
+import { BlockNoteEditor } from "@blocknote/core";
 import track_event from "@/tracking";
 import * as Y from "yjs";
 import PhoenixProvider, { PresenceUserInfo } from "./phoenix_provider";
