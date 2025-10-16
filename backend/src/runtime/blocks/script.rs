@@ -4,7 +4,7 @@ use uuid::Uuid;
 
 use super::FromDocument;
 
-#[derive(Debug, Serialize, Deserialize, Clone, TypedBuilder)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, TypedBuilder)]
 #[serde(rename_all = "camelCase")]
 pub struct Script {
     #[builder(setter(into))]
@@ -81,7 +81,7 @@ impl FromDocument for Script {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, TypedBuilder)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, TypedBuilder)]
 #[serde(rename_all = "camelCase")]
 pub struct ScriptOutput {
     pub exit_code: i32,

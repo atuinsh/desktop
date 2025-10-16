@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use typed_builder::TypedBuilder;
 use uuid::Uuid;
 
-#[derive(Debug, Serialize, Deserialize, Clone, TypedBuilder)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, TypedBuilder)]
 #[serde(rename_all = "camelCase")]
 pub struct Directory {
     #[builder(setter(into))]
@@ -42,7 +42,7 @@ impl ContextProvider for DirectoryHandler {
 impl BlockBehavior for Directory {
     fn passive_context(
         &self,
-        _document: &DocumentContext,
+        _resolver: &crate::runtime::blocks::document::ContextResolver,
     ) -> Result<Option<BlockContext>, Box<dyn std::error::Error + Send + Sync>> {
         let mut context = BlockContext::new();
         context.insert(DocumentCwd(self.path.clone()));

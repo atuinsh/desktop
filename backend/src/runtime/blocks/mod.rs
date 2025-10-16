@@ -51,7 +51,7 @@ pub trait FromDocument: Sized {
 pub trait BlockBehavior {
     fn passive_context(
         &self,
-        _document: &DocumentContext,
+        _resolver: &document::ContextResolver,
     ) -> Result<Option<BlockContext>, Box<dyn std::error::Error + Send + Sync>> {
         Ok(None)
     }
@@ -69,7 +69,7 @@ pub trait BlockHandler<B: BlockBehavior>: Send + Sync {
     //
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(tag = "type")]
 #[serde(rename_all = "camelCase")]
 pub enum Block {
@@ -177,15 +177,15 @@ impl Block {
 
     pub fn passive_context(
         &self,
-        document: &DocumentContext<'_>,
+        resolver: &document::ContextResolver,
     ) -> Result<Option<BlockContext>, Box<dyn std::error::Error + Send + Sync>> {
         match self {
-            Block::LocalVar(local_var) => local_var.passive_context(document),
-            Block::Var(var) => var.passive_context(document),
-            Block::Environment(environment) => environment.passive_context(document),
-            Block::Directory(directory) => directory.passive_context(document),
-            Block::SshConnect(ssh_connect) => ssh_connect.passive_context(document),
-            Block::Host(host) => host.passive_context(document),
+            Block::LocalVar(local_var) => local_var.passive_context(resolver),
+            Block::Var(var) => var.passive_context(resolver),
+            Block::Environment(environment) => environment.passive_context(resolver),
+            Block::Directory(directory) => directory.passive_context(resolver),
+            Block::SshConnect(ssh_connect) => ssh_connect.passive_context(resolver),
+            Block::Host(host) => host.passive_context(resolver),
 
             // Explicitly listing for exhaustiveness
             Block::Terminal(_) => Ok(None),
