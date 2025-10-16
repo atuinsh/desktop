@@ -1,7 +1,7 @@
 import { User } from "@/state/models";
 import Runbook, { OfflineRunbook, OnlineRunbook } from "@/state/runbooks/runbook";
 import untitledRunbook from "@/state/runbooks/untitled.json";
-import { BlockNoteEditor } from "@blocknote/core";
+import { BlockNoteEditor, BlocksChanged } from "@blocknote/core";
 import track_event from "@/tracking";
 import * as Y from "yjs";
 import PhoenixProvider, { PresenceUserInfo } from "./phoenix_provider";
@@ -14,8 +14,10 @@ import { randomColor } from "./colors";
 import Logger from "./logger";
 import Snapshot from "@/state/runbooks/snapshot";
 import Operation from "@/state/runbooks/operation";
+import { invoke } from "@tauri-apps/api/core";
 
 const SAVE_DEBOUNCE = 1000;
+const SEND_CHANGES_DEBOUNCE = 500;
 
 function isContentBlank(content: any) {
   return (
@@ -42,6 +44,7 @@ export default class RunbookEditor {
 
   private logger: Logger;
   private saveTimer: number | null = null;
+  private sendChangesTimer: number | null = null;
   private saveArgs: [Runbook | undefined, BlockNoteEditor] | null = null;
   private isShutdown = false;
   private maybeNeedsContentConversion = true;
@@ -243,6 +246,13 @@ export default class RunbookEditor {
   }
 
   save(runbook: Runbook | undefined, editor: BlockNoteEditor) {
+    if (!this.sendChangesTimer) {
+      this.sendChangesTimer = setTimeout(() => {
+        this.sendChangesTimer = null;
+        this._sendChanges();
+      }, SEND_CHANGES_DEBOUNCE) as unknown as number;
+    }
+
     // Don't allow `onChange` events from BlockNote to fire a save
     // if we're viewing a tag
     if (this.selectedTag !== "latest") return;
@@ -269,6 +279,13 @@ export default class RunbookEditor {
       this._save(...this.saveArgs);
       this.saveArgs = null;
     }
+  }
+
+  async _sendChanges() {
+    const editor = await this.editor;
+    if (!editor) return;
+
+    await invoke("update_document", { runbookId: this.runbook.id, document: editor.document });
   }
 
   async _save(runbookArg: Runbook | undefined, editorArg: BlockNoteEditor) {
