@@ -200,7 +200,7 @@ impl DocumentHandle {
     }
 
     /// Shutdown the document actor
-    pub async fn shutdown(&self) -> Result<(), DocumentError> {
+    pub fn shutdown(&self) -> Result<(), DocumentError> {
         self.command_tx
             .send(DocumentCommand::Shutdown)
             .map_err(|_| DocumentError::ActorSendError)?;
@@ -211,7 +211,7 @@ impl DocumentHandle {
 impl Drop for DocumentHandle {
     fn drop(&mut self) {
         // Send shutdown command on drop (fire and forget)
-        let _ = self.command_tx.send(DocumentCommand::Shutdown);
+        let _ = self.shutdown();
     }
 }
 
