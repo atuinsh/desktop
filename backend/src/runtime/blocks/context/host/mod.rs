@@ -124,10 +124,18 @@ impl Host {
 impl BlockBehavior for Host {
     fn passive_context(
         &self,
-        _resolver: &ContextResolver,
+        resolver: &ContextResolver,
     ) -> Result<Option<BlockContext>, Box<dyn std::error::Error + Send + Sync>> {
         let mut context = BlockContext::new();
-        context.insert(DocumentSshHost(None));
+        let host = self.host.trim().to_lowercase();
+
+        if host.is_empty() || host == "local" || host == "localhost" {
+            context.insert(DocumentSshHost(None));
+        } else {
+            let resolved_host = resolver.resolve_template(&host)?;
+            context.insert(DocumentSshHost(Some(resolved_host)));
+        }
+
         Ok(Some(context))
     }
 }

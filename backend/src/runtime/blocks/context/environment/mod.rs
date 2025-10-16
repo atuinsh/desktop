@@ -58,7 +58,7 @@ impl ContextProvider for EnvironmentHandler {
 impl BlockBehavior for Environment {
     fn passive_context(
         &self,
-        _resolver: &ContextResolver,
+        resolver: &ContextResolver,
     ) -> Result<Option<BlockContext>, Box<dyn std::error::Error + Send + Sync>> {
         let mut context = BlockContext::new();
         if self.name.is_empty() {
@@ -69,7 +69,9 @@ impl BlockBehavior for Environment {
             return Err("Environment variable name contains invalid characters".into());
         }
 
-        context.insert(DocumentEnvVar(self.name.clone(), self.value.clone()));
+        let resolved_value = resolver.resolve_template(&self.value)?;
+
+        context.insert(DocumentEnvVar(self.name.clone(), resolved_value));
         Ok(Some(context))
     }
 }

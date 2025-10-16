@@ -90,10 +90,11 @@ impl LocalVar {
 impl BlockBehavior for LocalVar {
     fn passive_context(
         &self,
-        _resolver: &ContextResolver,
+        resolver: &ContextResolver,
     ) -> Result<Option<BlockContext>, Box<dyn std::error::Error + Send + Sync>> {
         let mut context = BlockContext::new();
-        context.insert(DocumentVar(self.name.clone(), self.value.clone()));
+        let resolved_value = resolver.resolve_template(&self.value)?;
+        context.insert(DocumentVar(self.name.clone(), resolved_value));
         Ok(Some(context))
     }
 }

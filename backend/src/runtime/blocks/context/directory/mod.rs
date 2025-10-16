@@ -45,10 +45,11 @@ impl ContextProvider for DirectoryHandler {
 impl BlockBehavior for Directory {
     fn passive_context(
         &self,
-        _resolver: &ContextResolver,
+        resolver: &ContextResolver,
     ) -> Result<Option<BlockContext>, Box<dyn std::error::Error + Send + Sync>> {
         let mut context = BlockContext::new();
-        context.insert(DocumentCwd(self.path.clone()));
+        let resolved_path = resolver.resolve_template(&self.path)?;
+        context.insert(DocumentCwd(resolved_path));
         Ok(Some(context))
     }
 }

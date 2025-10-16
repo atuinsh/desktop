@@ -79,7 +79,10 @@ impl ContextResolver {
     }
 
     /// Resolve a template string using minijinja
-    pub fn resolve_template(&self, template: &str) -> Result<String, Box<dyn std::error::Error>> {
+    pub fn resolve_template(
+        &self,
+        template: &str,
+    ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
         // If the string doesn't contain template markers, return it as-is
         if !template.contains("{{") && !template.contains("{%") {
             return Ok(template.to_string());

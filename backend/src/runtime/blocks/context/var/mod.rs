@@ -100,13 +100,7 @@ impl BlockBehavior for Var {
         }
 
         // Resolve template in value if it contains template markers
-        let resolved_value = if self.value.contains("{{") || self.value.contains("{%") {
-            resolver
-                .resolve_template(&self.value)
-                .map_err(|e| format!("Template resolution error: {}", e))?
-        } else {
-            self.value.clone()
-        };
+        let resolved_value = resolver.resolve_template(&self.value)?;
 
         context.insert(DocumentVar(self.name.clone(), resolved_value));
         Ok(Some(context))
