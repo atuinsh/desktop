@@ -10,7 +10,7 @@ use crate::runtime::{
                 BlockContext, BlockWithContext, DocumentCwd, DocumentEnvVar, DocumentSshHost,
                 DocumentVar,
             },
-            document_context::{ContextResolver, DocumentContext, DocumentExecutionView},
+            document_context::{ContextResolver, DocumentExecutionView},
             DocumentError,
         },
         Block,
@@ -138,14 +138,6 @@ impl Document {
         }
 
         Ok(())
-    }
-
-    pub fn context_for(&mut self, block_id: &Uuid) -> Option<DocumentContext> {
-        if self.has_block(block_id) {
-            return Some(DocumentContext::new(self, *block_id));
-        }
-
-        None
     }
 
     /// Check if the document contains a block with the given ID

@@ -13,48 +13,6 @@ use crate::runtime::blocks::document::{DocumentCommand, DocumentError};
 use crate::runtime::blocks::Block;
 use crate::runtime::events::EventBus;
 
-pub struct DocumentContext<'document> {
-    document: &'document mut Document,
-    block_id: Uuid,
-}
-
-impl<'document> DocumentContext<'document> {
-    pub fn new(document: &'document mut Document, block_id: Uuid) -> Self {
-        Self { document, block_id }
-    }
-
-    pub fn insert<T: Any + Send + Sync>(&mut self, value: T) {
-        self.document
-            .get_block_mut(&self.block_id)
-            .unwrap()
-            .context_mut()
-            .insert(value);
-    }
-
-    pub fn get_all_context_above<T: Any + Send + Sync>(&self) -> Vec<&T> {
-        self.document.get_all_context_above::<T>(&self.block_id)
-    }
-
-    pub fn collect_context_above<T, R, F>(&self, init: R, collector: F) -> R
-    where
-        T: Any + Send + Sync,
-        F: FnMut(R, &T) -> R,
-    {
-        self.document
-            .collect_context_above::<T, R, F>(&self.block_id, init, collector)
-    }
-
-    pub fn get_var_map(&self) -> HashMap<String, String> {
-        self.collect_context_above::<DocumentVar, HashMap<String, String>, _>(
-            HashMap::new(),
-            |mut acc, value| {
-                acc.insert(value.0.clone(), value.1.clone());
-                acc
-            },
-        )
-    }
-}
-
 /// Provides read-only access to resolved context for template evaluation
 /// This is built from blocks and passed to passive_context during rebuild
 #[derive(Clone, Debug)]
