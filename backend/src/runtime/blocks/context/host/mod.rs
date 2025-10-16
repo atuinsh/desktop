@@ -45,7 +45,7 @@ use crate::runtime::blocks::{
 use async_trait::async_trait;
 
 /// Host context block for switching between localhost and SSH connections
-#[derive(Debug, Serialize, Deserialize, Clone, TypedBuilder)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, TypedBuilder)]
 #[serde(rename_all = "camelCase")]
 pub struct Host {
     /// Unique identifier for this block
@@ -121,7 +121,7 @@ impl Host {
 impl BlockBehavior for Host {
     fn passive_context(
         &self,
-        _document: &DocumentContext,
+        _resolver: &crate::runtime::blocks::document::ContextResolver,
     ) -> Result<Option<BlockContext>, Box<dyn std::error::Error + Send + Sync>> {
         let mut context = BlockContext::new();
         context.insert(DocumentSshHost(None));

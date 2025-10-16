@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use typed_builder::TypedBuilder;
 use uuid::Uuid;
 
-#[derive(Debug, Serialize, Deserialize, Clone, TypedBuilder)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, TypedBuilder)]
 #[serde(rename_all = "camelCase")]
 pub struct LocalVar {
     #[builder(setter(into))]
@@ -87,7 +87,7 @@ impl LocalVar {
 impl BlockBehavior for LocalVar {
     fn passive_context(
         &self,
-        _document: &DocumentContext,
+        _resolver: &crate::runtime::blocks::document::ContextResolver,
     ) -> Result<Option<BlockContext>, Box<dyn std::error::Error + Send + Sync>> {
         let mut context = BlockContext::new();
         context.insert(DocumentVar(self.name.clone(), self.value.clone()));

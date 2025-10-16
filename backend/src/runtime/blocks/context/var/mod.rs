@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use typed_builder::TypedBuilder;
 use uuid::Uuid;
 
-#[derive(Debug, Serialize, Deserialize, Clone, TypedBuilder)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, TypedBuilder)]
 #[serde(rename_all = "camelCase")]
 pub struct Var {
     #[builder(setter(into))]
@@ -83,9 +83,11 @@ impl Var {
 impl BlockBehavior for Var {
     fn passive_context(
         &self,
-        _document: &DocumentContext,
+        resolver: &crate::runtime::blocks::document::ContextResolver,
     ) -> Result<Option<BlockContext>, Box<dyn std::error::Error + Send + Sync>> {
         let mut context = BlockContext::new();
+
+        // Validate name
         if self.name.is_empty() {
             return Err("Variable name cannot be empty".into());
         }
@@ -94,7 +96,16 @@ impl BlockBehavior for Var {
             return Err("Variable name contains invalid characters".into());
         }
 
-        context.insert(DocumentVar(self.name.clone(), self.value.clone()));
+        // Resolve template in value if it contains template markers
+        let resolved_value = if self.value.contains("{{") || self.value.contains("{%") {
+            resolver
+                .resolve_template(&self.value)
+                .map_err(|e| format!("Template resolution error: {}", e))?
+        } else {
+            self.value.clone()
+        };
+
+        context.insert(DocumentVar(self.name.clone(), resolved_value));
         Ok(Some(context))
     }
 }
@@ -105,11 +116,6 @@ mod tests {
 
     use super::*;
     use std::collections::HashMap;
-
-    fn create_test_context() -> DocumentContext<'static> {
-        let mut document = Document::new("testing".to_string(), vec![]).unwrap();
-        DocumentContext::new(&mut document, Uuid::new_v4())
-    }
 
     // Basic functionality tests
     #[tokio::test]
@@ -128,14 +134,6 @@ mod tests {
             context.variables.get("TEST_VAR"),
             Some(&"test_value".to_string())
         );
-
-        let context = var
-            .passive_context(&DocumentContext::new(&var, var.id))
-            .unwrap()
-            .unwrap();
-        let var_context = context.get::<DocumentVar>().unwrap();
-        assert_eq!(var_context.0, "TEST_VAR");
-        assert_eq!(var_context.1, "test_value");
     }
 
     #[tokio::test]

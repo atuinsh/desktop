@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use typed_builder::TypedBuilder;
 use uuid::Uuid;
 
-#[derive(Debug, Serialize, Deserialize, Clone, TypedBuilder)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, TypedBuilder)]
 #[serde(rename_all = "camelCase")]
 pub struct Environment {
     #[builder(setter(into))]
@@ -55,7 +55,7 @@ impl ContextProvider for EnvironmentHandler {
 impl BlockBehavior for Environment {
     fn passive_context(
         &self,
-        _document: &DocumentContext,
+        _resolver: &crate::runtime::blocks::document::ContextResolver,
     ) -> Result<Option<BlockContext>, Box<dyn std::error::Error + Send + Sync>> {
         let mut context = BlockContext::new();
         if self.name.is_empty() {
