@@ -75,10 +75,6 @@ impl Session {
                     break;
                 };
                 match msg {
-                    // Write data to the terminal
-                    ChannelMsg::Data { data: _ } => {
-                        // we don't really care about the data tbh just the fact it does SOMETHING
-                    }
                     ChannelMsg::ExitStatus { exit_status } => {
                         code = Some(exit_status);
                     }
