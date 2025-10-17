@@ -1,5 +1,10 @@
 import CodeEditor from "@/components/runbooks/editor/blocks/Editor/Editor";
-import { BlockNoteEditor, BlockNoteSchema, defaultInlineContentSpecs } from "@blocknote/core";
+import {
+  BlockNoteEditor,
+  BlockNoteSchema,
+  defaultBlockSpecs,
+  defaultInlineContentSpecs,
+} from "@blocknote/core";
 import { en } from "@blocknote/core/locales";
 import Directory from "./blocks/Directory";
 import Env from "./blocks/Env";
@@ -29,10 +34,20 @@ import { KubernetesBlockSpec } from "@/lib/blocks/kubernetes";
 import { RunbookLink } from "./inline/RunbookLink";
 import HorizontalRule from "./blocks/HorizontalRule";
 
+function withoutProperties<T extends object>(object: T, properties: (keyof T)[]) {
+  const newObj = { ...object };
+  for (const property of properties) {
+    delete newObj[property];
+  }
+  return newObj;
+}
+
 // Our schema with block specs, which contain the configs and implementations for blocks
 // that we want our editor to use.
-export const schema = BlockNoteSchema.create().extend({
+export const schema = BlockNoteSchema.create({
   blockSpecs: {
+    ...withoutProperties(defaultBlockSpecs, ["divider"]),
+
     // Execution
     run: TerminalBlockSpec(),
     "kubernetes-get": KubernetesBlockSpec(),
