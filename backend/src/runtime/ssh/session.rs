@@ -5,6 +5,7 @@ use bytes::Bytes;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
+use tokio::io::AsyncWriteExt;
 use tokio::sync::mpsc;
 use tokio::sync::{mpsc::Sender, oneshot};
 use tokio::time::timeout;
@@ -66,25 +67,31 @@ impl Session {
             let mut channel = self.session.channel_open_session().await.ok()?;
             channel.exec(true, "true").await.ok()?;
 
-            let mut success = false;
-            while let Some(msg) = channel.wait().await {
+            let mut code = None;
+
+            loop {
+                // There's an event available on the session channel
+                let Some(msg) = channel.wait().await else {
+                    break;
+                };
                 match msg {
-                    ChannelMsg::ExitStatus { .. } => {
-                        success = true;
-                        break;
+                    // Write data to the terminal
+                    ChannelMsg::Data { data: _ } => {
+                        // we don't really care about the data tbh just the fact it does SOMETHING
                     }
-                    ChannelMsg::Close => break,
-                    ChannelMsg::Eof => break,
-                    _ => continue,
+                    ChannelMsg::ExitStatus { exit_status } => {
+                        code = Some(exit_status);
+                    }
+                    _ => {}
                 }
             }
 
             let _ = channel.close().await;
-            Some(success)
+            code
         };
 
         match timeout(KEEPALIVE_TIMEOUT, keepalive_check).await {
-            Ok(Some(success)) => success,
+            Ok(Some(success)) => true,
             Ok(None) => false,
             Err(_) => {
                 log::debug!("SSH keepalive timed out");

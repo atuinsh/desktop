@@ -39,10 +39,14 @@ impl Pool {
         let username = username.unwrap_or("root");
         let key = format!("{username}@{host}");
 
+        log::debug!("connecting to {key}");
+
         // Check if we have an existing connection
         if let Some(session) = self.get(host, username) {
+            log::debug!("found existing ssh session in pool");
             // Test if the connection is still alive
             if session.send_keepalive().await {
+                log::debug!("session keepalive success");
                 return Ok(session);
             } else {
                 // Connection is dead, remove it from the pool
