@@ -1,10 +1,5 @@
 import CodeEditor from "@/components/runbooks/editor/blocks/Editor/Editor";
-import {
-  BlockNoteEditor,
-  BlockNoteSchema,
-  defaultBlockSpecs,
-  defaultInlineContentSpecs,
-} from "@blocknote/core";
+import { BlockNoteEditor, BlockNoteSchema, defaultInlineContentSpecs } from "@blocknote/core";
 import { en } from "@blocknote/core/locales";
 import Directory from "./blocks/Directory";
 import Env from "./blocks/Env";
@@ -36,40 +31,37 @@ import HorizontalRule from "./blocks/HorizontalRule";
 
 // Our schema with block specs, which contain the configs and implementations for blocks
 // that we want our editor to use.
-export const schema = BlockNoteSchema.create({
+export const schema = BlockNoteSchema.create().extend({
   blockSpecs: {
-    // Adds all default blocks.
-    ...defaultBlockSpecs,
-
     // Execution
-    run: TerminalBlockSpec,
-    "kubernetes-get": KubernetesBlockSpec,
-    script: Script,
-    directory: Directory,
-    "local-directory": LocalDirectoryBlockSpec,
-    env: Env,
-    var: Var,
-    var_display: VarDisplay,
-    "local-var": LocalVar,
-    dropdown: Dropdown,
+    run: TerminalBlockSpec(),
+    "kubernetes-get": KubernetesBlockSpec(),
+    script: Script(),
+    directory: Directory(),
+    "local-directory": LocalDirectoryBlockSpec(),
+    env: Env(),
+    var: Var(),
+    var_display: VarDisplay(),
+    "local-var": LocalVar(),
+    dropdown: Dropdown(),
 
     // Monitoring
-    prometheus: Prometheus,
+    prometheus: Prometheus(),
 
     // Databases
-    sqlite: SQLite,
-    postgres: Postgres,
-    mysql: MySQL,
-    clickhouse: Clickhouse,
+    sqlite: SQLite(),
+    postgres: Postgres(),
+    mysql: MySQL(),
+    clickhouse: Clickhouse(),
 
     // Network
-    http: HttpBlockSpec,
-    "ssh-connect": SshConnect,
-    "host-select": HostSelect,
+    http: HttpBlockSpec(),
+    "ssh-connect": SshConnect(),
+    "host-select": HostSelect(),
 
     // Misc
-    editor: CodeEditor,
-    horizontal_rule: HorizontalRule,
+    editor: CodeEditor(),
+    horizontal_rule: HorizontalRule(),
   },
   inlineContentSpecs: {
     // Adds all default inline content.

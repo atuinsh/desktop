@@ -20,7 +20,7 @@ export async function ydocToBlocknote(doc: Y.Doc): Promise<Block<any>[]> {
         if (resolved) return;
         resolved = true;
         resolve(editor.document);
-        editor.mount(undefined);
+        editor.unmount();
       }, 100),
     );
 
@@ -29,7 +29,7 @@ export async function ydocToBlocknote(doc: Y.Doc): Promise<Block<any>[]> {
       if (resolved) return;
       resolved = true;
       reject(new Error("Yjs to BlockNote conversation timed out"));
-      editor.mount(undefined);
+      editor.unmount();
     }, 5000);
 
     editor.mount(el);
