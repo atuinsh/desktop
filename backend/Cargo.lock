@@ -1315,14 +1315,15 @@ dependencies = [
 
 [[package]]
 name = "comrak"
-version = "0.39.0"
+version = "0.44.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d5c834ca54c5a20588b358f34d1533b4b498ddb5fd979cec6b22d0e8867a2449"
+checksum = "07fcaf1ac457de7574ce514fd9a68e86e8196165529f48a544ec90cbea840e04"
 dependencies = [
  "bon",
  "caseless",
  "clap",
  "entities",
+ "fmt2io",
  "memchr",
  "shell-words",
  "slug",
@@ -2455,6 +2456,12 @@ dependencies = [
  "futures-sink",
  "spin",
 ]
+
+[[package]]
+name = "fmt2io"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6b6129284da9f7e5296cc22183a63f24300e945e297705dcc0672f7df01d62c8"
 
 [[package]]
 name = "fnv"
