@@ -17,9 +17,12 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::runtime::blocks::document::{
-    block_context::BlockContext,
-    document_context::{ContextResolver, DocumentExecutionView},
+use crate::runtime::blocks::{
+    document::{
+        block_context::BlockContext,
+        document_context::{ContextResolver, DocumentExecutionView},
+    },
+    handler::ExecutionHandle,
 };
 
 pub trait FromDocument: Sized {
@@ -27,7 +30,7 @@ pub trait FromDocument: Sized {
 }
 
 #[async_trait]
-pub trait BlockBehavior {
+pub trait BlockBehavior: Send + Sync {
     fn passive_context(
         &self,
         _resolver: &ContextResolver,
@@ -37,8 +40,8 @@ pub trait BlockBehavior {
     async fn execute(
         &self,
         _execution_context: DocumentExecutionView,
-    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        Ok(())
+    ) -> Result<Option<ExecutionHandle>, Box<dyn std::error::Error + Send + Sync>> {
+        Ok(None)
     }
 }
 
