@@ -36,6 +36,7 @@ import { exportPropMatter, cn } from "@/lib/utils";
 import { useCurrentRunbookId } from "@/context/runbook_id_context";
 import RunbookBus from "@/lib/app/runbook_bus";
 import { useBlockLocalState } from "@/lib/hooks/useBlockLocalState";
+import { createBlockNoteExtension } from "@blocknote/core";
 
 interface LanguageLoader {
   name: string;
@@ -388,6 +389,19 @@ export default createReactBlockSpec(
       );
     },
   },
+  [
+    createBlockNoteExtension({
+      key: "editor-shortcut",
+      inputRules: [
+        {
+          find: new RegExp("^```$"),
+          replace() {
+            return { type: "editor", props: {}, content: [] };
+          },
+        },
+      ],
+    }),
+  ],
 );
 
 export const insertEditor = (schema: any) => (editor: typeof schema.BlockNoteEditor) => ({
