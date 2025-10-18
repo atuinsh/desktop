@@ -21,7 +21,7 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "targets": ["deb", "rpm", "dmg", "app"],
+    "targets": ["deb", "rpm", "dmg", "app", "msi"],
     "createUpdaterArtifacts": true,
     "linux": {
       "deb": {
@@ -29,6 +29,12 @@
       },
       "rpm": {
         "desktopTemplate": "AtuinDesktop.desktop"
+      }
+    },
+    "windows": {
+      "wix": {
+        "version": "3",
+        "language": "en-US"
       }
     },
     "macOS": {
