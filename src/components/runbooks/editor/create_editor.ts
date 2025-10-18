@@ -34,42 +34,49 @@ import { KubernetesBlockSpec } from "@/lib/blocks/kubernetes";
 import { RunbookLink } from "./inline/RunbookLink";
 import HorizontalRule from "./blocks/HorizontalRule";
 
+function withoutProperties<T extends object>(object: T, properties: (keyof T)[]) {
+  const newObj = { ...object };
+  for (const property of properties) {
+    delete newObj[property];
+  }
+  return newObj;
+}
+
 // Our schema with block specs, which contain the configs and implementations for blocks
 // that we want our editor to use.
 export const schema = BlockNoteSchema.create({
   blockSpecs: {
-    // Adds all default blocks.
-    ...defaultBlockSpecs,
+    ...withoutProperties(defaultBlockSpecs, ["divider"]),
 
     // Execution
-    run: TerminalBlockSpec,
-    "kubernetes-get": KubernetesBlockSpec,
-    script: Script,
-    directory: Directory,
-    "local-directory": LocalDirectoryBlockSpec,
-    env: Env,
-    var: Var,
-    var_display: VarDisplay,
-    "local-var": LocalVar,
-    dropdown: Dropdown,
+    run: TerminalBlockSpec(),
+    "kubernetes-get": KubernetesBlockSpec(),
+    script: Script(),
+    directory: Directory(),
+    "local-directory": LocalDirectoryBlockSpec(),
+    env: Env(),
+    var: Var(),
+    var_display: VarDisplay(),
+    "local-var": LocalVar(),
+    dropdown: Dropdown(),
 
     // Monitoring
-    prometheus: Prometheus,
+    prometheus: Prometheus(),
 
     // Databases
-    sqlite: SQLite,
-    postgres: Postgres,
-    mysql: MySQL,
-    clickhouse: Clickhouse,
+    sqlite: SQLite(),
+    postgres: Postgres(),
+    mysql: MySQL(),
+    clickhouse: Clickhouse(),
 
     // Network
-    http: HttpBlockSpec,
-    "ssh-connect": SshConnect,
-    "host-select": HostSelect,
+    http: HttpBlockSpec(),
+    "ssh-connect": SshConnect(),
+    "host-select": HostSelect(),
 
     // Misc
-    editor: CodeEditor,
-    horizontal_rule: HorizontalRule,
+    editor: CodeEditor(),
+    horizontal_rule: HorizontalRule(),
   },
   inlineContentSpecs: {
     // Adds all default inline content.
