@@ -70,6 +70,8 @@ jobs:
             args: "--target aarch64-apple-darwin"
           - platform: "ubuntu-22.04"
             args: ""
+          - platform: "windows-latest"
+            args: ""
 
     runs-on: ${{ matrix.platform }}
 
@@ -136,6 +138,7 @@ jobs:
           args: ${{ matrix.args }}
 
       - name: Rename platform-specific files and upload to GitHub release
+        if: matrix.platform != 'windows-latest'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -205,3 +208,27 @@ jobs:
               gh release upload "edge" "$file" --clobber
             fi
           done
+
+      - name: Upload Windows artifacts to GitHub release
+        if: matrix.platform == 'windows-latest'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: |
+          # Get the artifact paths from tauri-action output
+          Write-Host "Artifact paths: ${{ steps.tauri-action.outputs.artifactPaths }}"
+          
+          # Parse the JSON array
+          $paths_str = "${{ steps.tauri-action.outputs.artifactPaths }}"
+          $paths_str = $paths_str -replace '^\[','' -replace '\]$',''
+          $paths = $paths_str -split ','
+          
+          # Upload each file to GitHub release
+          foreach ($file in $paths) {
+            $file = $file.Trim()
+            if (Test-Path $file) {
+              Write-Host "Uploading file: $file"
+              gh release upload "edge" "$file" --clobber
+            }
+          }
+
