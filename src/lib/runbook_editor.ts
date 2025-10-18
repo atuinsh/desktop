@@ -271,7 +271,8 @@ export default class RunbookEditor {
     }
   }
 
-  async _save(runbookArg: Runbook | undefined, editorArg: BlockNoteEditor) {
+  async _save(runbookArg: Runbook | undefined, _editorArg: BlockNoteEditor) {
+    // Note [MKT]: As of BlockNote 0.0.39, `editorArg` is no longer === to this.editor.
     if (!runbookArg) return;
     if (runbookArg.id !== this.runbook.id) {
       this.logger.warn(
@@ -282,10 +283,7 @@ export default class RunbookEditor {
       return;
     }
     const editor = await this.editor;
-    if (editorArg !== editor) {
-      this.logger.warn("Editor from args not the same as editor from container");
-      return;
-    }
+    if (!editor) return;
     // if (!editable) return; // TODO
 
     Runbook.count().then((num) => {
