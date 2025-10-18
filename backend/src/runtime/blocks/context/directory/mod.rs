@@ -1,10 +1,17 @@
-use crate::runtime::blocks::handler::{ContextProvider, ExecutionContext};
+use crate::runtime::blocks::{
+    document::{
+        block_context::{BlockContext, DocumentCwd},
+        document_context::ContextResolver,
+    },
+    handler::{ContextProvider, ExecutionContext},
+    BlockBehavior,
+};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use typed_builder::TypedBuilder;
 use uuid::Uuid;
 
-#[derive(Debug, Serialize, Deserialize, Clone, TypedBuilder)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, TypedBuilder)]
 #[serde(rename_all = "camelCase")]
 pub struct Directory {
     #[builder(setter(into))]
@@ -31,6 +38,19 @@ impl ContextProvider for DirectoryHandler {
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         context.cwd = block.path.clone();
         Ok(())
+    }
+}
+
+#[async_trait]
+impl BlockBehavior for Directory {
+    fn passive_context(
+        &self,
+        resolver: &ContextResolver,
+    ) -> Result<Option<BlockContext>, Box<dyn std::error::Error + Send + Sync>> {
+        let mut context = BlockContext::new();
+        let resolved_path = resolver.resolve_template(&self.path)?;
+        context.insert(DocumentCwd(resolved_path));
+        Ok(Some(context))
     }
 }
 

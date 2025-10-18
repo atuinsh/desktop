@@ -1,10 +1,17 @@
-use crate::runtime::blocks::handler::{ContextProvider, ExecutionContext};
+use crate::runtime::blocks::{
+    document::{
+        block_context::{BlockContext, DocumentVar},
+        document_context::ContextResolver,
+    },
+    handler::{ContextProvider, ExecutionContext},
+    BlockBehavior,
+};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use typed_builder::TypedBuilder;
 use uuid::Uuid;
 
-#[derive(Debug, Serialize, Deserialize, Clone, TypedBuilder)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, TypedBuilder)]
 #[serde(rename_all = "camelCase")]
 pub struct LocalVar {
     #[builder(setter(into))]
@@ -12,6 +19,9 @@ pub struct LocalVar {
 
     #[builder(setter(into))]
     pub name: String,
+
+    #[builder(setter(into))]
+    pub value: String,
 }
 
 pub struct LocalVarHandler;
@@ -66,7 +76,26 @@ impl LocalVar {
             .ok_or("Missing name")?
             .to_string();
 
-        Ok(LocalVar::builder().id(id).name(name).build())
+        let value = block_data
+            .get("value")
+            .and_then(|v| v.as_str())
+            .unwrap_or("") // Default to empty string if value is missing
+            .to_string();
+
+        Ok(LocalVar::builder().id(id).name(name).value(value).build())
+    }
+}
+
+#[async_trait]
+impl BlockBehavior for LocalVar {
+    fn passive_context(
+        &self,
+        resolver: &ContextResolver,
+    ) -> Result<Option<BlockContext>, Box<dyn std::error::Error + Send + Sync>> {
+        let mut context = BlockContext::new();
+        let resolved_value = resolver.resolve_template(&self.value)?;
+        context.insert(DocumentVar(self.name.clone(), resolved_value));
+        Ok(Some(context))
     }
 }
 
@@ -78,7 +107,11 @@ mod tests {
     #[tokio::test]
     async fn test_local_var_handler_empty_name() {
         let handler = LocalVarHandler;
-        let local_var = LocalVar::builder().id(Uuid::new_v4()).name("").build();
+        let local_var = LocalVar::builder()
+            .id(Uuid::new_v4())
+            .name("")
+            .value("")
+            .build();
 
         let mut context = ExecutionContext::default();
         handler
@@ -96,6 +129,7 @@ mod tests {
         let local_var = LocalVar::builder()
             .id(Uuid::new_v4())
             .name("test_var")
+            .value("test_value")
             .build();
 
         let mut context = ExecutionContext::default();
@@ -104,8 +138,10 @@ mod tests {
             .await
             .unwrap();
 
-        // Should add empty value for the variable (since no stored value in test)
-        assert_eq!(context.variables.get("test_var"), Some(&String::new()));
+        assert_eq!(
+            context.variables.get("test_var"),
+            Some(&"test_value".to_string())
+        );
     }
 
     #[tokio::test]
@@ -119,6 +155,7 @@ mod tests {
         let local_var = LocalVar::builder()
             .id(Uuid::new_v4())
             .name("test_var")
+            .value("test_value")
             .build();
 
         // Test serialization roundtrip
@@ -137,13 +174,17 @@ mod tests {
         let valid_names = vec!["test_var", "TEST123", "var_name_123", "a", "A"];
 
         for name in valid_names {
-            let local_var = LocalVar::builder().id(Uuid::new_v4()).name(name).build();
+            let local_var = LocalVar::builder()
+                .id(Uuid::new_v4())
+                .name(name)
+                .value("test_value")
+                .build();
 
             let mut context = ExecutionContext::default();
             let result = handler.apply_context(&local_var, &mut context).await;
 
             assert!(result.is_ok(), "Should handle valid name: {}", name);
-            assert_eq!(context.variables.get(name), Some(&String::new()));
+            assert_eq!(context.variables.get(name), Some(&"test_value".to_string()));
         }
     }
 }

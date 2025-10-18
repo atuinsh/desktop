@@ -1,10 +1,17 @@
-use crate::runtime::blocks::handler::{ContextProvider, ExecutionContext};
+use crate::runtime::blocks::{
+    document::{
+        block_context::{BlockContext, DocumentSshHost},
+        document_context::ContextResolver,
+    },
+    handler::{ContextProvider, ExecutionContext},
+    BlockBehavior,
+};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use typed_builder::TypedBuilder;
 use uuid::Uuid;
 
-#[derive(Debug, Serialize, Deserialize, Clone, TypedBuilder)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, TypedBuilder)]
 #[serde(rename_all = "camelCase")]
 pub struct SshConnect {
     #[builder(setter(into))]
@@ -92,6 +99,29 @@ impl SshConnect {
                 (None, self.user_host.clone(), None)
             }
         }
+    }
+}
+
+#[async_trait]
+impl BlockBehavior for SshConnect {
+    fn passive_context(
+        &self,
+        resolver: &ContextResolver,
+    ) -> Result<Option<BlockContext>, Box<dyn std::error::Error + Send + Sync>> {
+        let mut context = BlockContext::new();
+        // Basic validation of user_host format
+        if self.user_host.is_empty() {
+            return Err("SSH user_host cannot be empty".into());
+        }
+
+        // Basic format validation (should contain @ or be just hostname)
+        if !self.user_host.contains('@') && self.user_host.contains(' ') {
+            return Err("Invalid SSH user_host format".into());
+        }
+
+        let resolved_user_host = resolver.resolve_template(&self.user_host)?;
+        context.insert(DocumentSshHost(Some(resolved_user_host)));
+        Ok(Some(context))
     }
 }
 

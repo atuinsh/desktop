@@ -505,6 +505,8 @@ fn main() {
             commands::kubernetes::kubernetes_get_execute,
             commands::blocks::execute_block,
             commands::blocks::cancel_block_execution,
+            commands::blocks::open_document,
+            commands::blocks::update_document,
             commands::events::subscribe_to_events,
             commands::updates::check_for_updates,
             commands::workspaces::copy_welcome_workspace,

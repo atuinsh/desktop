@@ -14,8 +14,10 @@ import { randomColor } from "./colors";
 import Logger from "./logger";
 import Snapshot from "@/state/runbooks/snapshot";
 import Operation from "@/state/runbooks/operation";
+import { invoke } from "@tauri-apps/api/core";
 
 const SAVE_DEBOUNCE = 1000;
+const SEND_CHANGES_DEBOUNCE = 500;
 
 function isContentBlank(content: any) {
   return (
@@ -42,6 +44,7 @@ export default class RunbookEditor {
 
   private logger: Logger;
   private saveTimer: number | null = null;
+  private sendChangesTimer: number | null = null;
   private saveArgs: [Runbook | undefined, BlockNoteEditor] | null = null;
   private isShutdown = false;
   private maybeNeedsContentConversion = true;
@@ -221,6 +224,7 @@ export default class RunbookEditor {
       }
     });
 
+    this.scheduleSendChanges();
     return this.editor;
   }
 
@@ -243,6 +247,8 @@ export default class RunbookEditor {
   }
 
   save(runbook: Runbook | undefined, editor: BlockNoteEditor) {
+    this.scheduleSendChanges();
+
     // Don't allow `onChange` events from BlockNote to fire a save
     // if we're viewing a tag
     if (this.selectedTag !== "latest") return;
@@ -271,6 +277,29 @@ export default class RunbookEditor {
     }
   }
 
+  // Schedule a send changes event to the backend.
+  // Changes get sent every 500ms at most, even if more
+  // changes are made in that time.
+  async scheduleSendChanges() {
+    if (!this.sendChangesTimer) {
+      this.sendChangesTimer = setTimeout(() => {
+        this.sendChangesTimer = null;
+        this._sendChanges();
+      }, SEND_CHANGES_DEBOUNCE) as unknown as number;
+    }
+  }
+
+  async _sendChanges() {
+    const editor = await this.editor;
+    if (!editor) return;
+
+    await invoke("update_document", {
+      documentId: this.runbook.id,
+      documentContent: editor.document,
+    });
+  }
+
+  async _save(runbookArg: Runbook | undefined, editorArg: BlockNoteEditor) {
   async _save(runbookArg: Runbook | undefined, _editorArg: BlockNoteEditor) {
     // Note [MKT]: As of BlockNote 0.39.x, `editorArg` is no longer === to this.editor.
     if (!runbookArg) return;

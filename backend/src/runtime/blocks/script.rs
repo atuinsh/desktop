@@ -1,10 +1,15 @@
+use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use typed_builder::TypedBuilder;
 use uuid::Uuid;
 
+use crate::runtime::blocks::{
+    document::document_context::DocumentExecutionView, handler::ExecutionHandle, BlockBehavior,
+};
+
 use super::FromDocument;
 
-#[derive(Debug, Serialize, Deserialize, Clone, TypedBuilder)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, TypedBuilder)]
 #[serde(rename_all = "camelCase")]
 pub struct Script {
     #[builder(setter(into))]
@@ -81,8 +86,18 @@ impl FromDocument for Script {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, TypedBuilder)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, TypedBuilder)]
 #[serde(rename_all = "camelCase")]
 pub struct ScriptOutput {
     pub exit_code: i32,
+}
+
+#[async_trait]
+impl BlockBehavior for Script {
+    async fn execute(
+        &self,
+        execution_context: DocumentExecutionView,
+    ) -> Result<Option<ExecutionHandle>, Box<dyn std::error::Error + Send + Sync>> {
+        Ok(None)
+    }
 }

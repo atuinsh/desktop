@@ -1,10 +1,17 @@
-use crate::runtime::blocks::handler::{ContextProvider, ExecutionContext};
+use crate::runtime::blocks::{
+    document::{
+        block_context::{BlockContext, DocumentVar},
+        document_context::ContextResolver,
+    },
+    handler::{ContextProvider, ExecutionContext},
+    BlockBehavior,
+};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use typed_builder::TypedBuilder;
 use uuid::Uuid;
 
-#[derive(Debug, Serialize, Deserialize, Clone, TypedBuilder)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, TypedBuilder)]
 #[serde(rename_all = "camelCase")]
 pub struct Var {
     #[builder(setter(into))]
@@ -72,6 +79,31 @@ impl Var {
             .to_string();
 
         Ok(Var::builder().id(id).name(name).value(value).build())
+    }
+}
+
+#[async_trait]
+impl BlockBehavior for Var {
+    fn passive_context(
+        &self,
+        resolver: &ContextResolver,
+    ) -> Result<Option<BlockContext>, Box<dyn std::error::Error + Send + Sync>> {
+        let mut context = BlockContext::new();
+
+        // Validate name
+        if self.name.is_empty() {
+            return Err("Variable name cannot be empty".into());
+        }
+
+        if self.name.contains('=') || self.name.contains('\0') {
+            return Err("Variable name contains invalid characters".into());
+        }
+
+        // Resolve template in value if it contains template markers
+        let resolved_value = resolver.resolve_template(&self.value)?;
+
+        context.insert(DocumentVar(self.name.clone(), resolved_value));
+        Ok(Some(context))
     }
 }
 

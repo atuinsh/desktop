@@ -1,10 +1,17 @@
-use crate::runtime::blocks::handler::{ContextProvider, ExecutionContext};
+use crate::runtime::blocks::{
+    document::{
+        block_context::{BlockContext, DocumentEnvVar},
+        document_context::ContextResolver,
+    },
+    handler::{ContextProvider, ExecutionContext},
+    BlockBehavior,
+};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use typed_builder::TypedBuilder;
 use uuid::Uuid;
 
-#[derive(Debug, Serialize, Deserialize, Clone, TypedBuilder)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, TypedBuilder)]
 #[serde(rename_all = "camelCase")]
 pub struct Environment {
     #[builder(setter(into))]
@@ -44,6 +51,28 @@ impl ContextProvider for EnvironmentHandler {
 
         context.env.insert(block.name.clone(), block.value.clone());
         Ok(())
+    }
+}
+
+#[async_trait]
+impl BlockBehavior for Environment {
+    fn passive_context(
+        &self,
+        resolver: &ContextResolver,
+    ) -> Result<Option<BlockContext>, Box<dyn std::error::Error + Send + Sync>> {
+        let mut context = BlockContext::new();
+        if self.name.is_empty() {
+            return Err("Environment variable name cannot be empty".into());
+        }
+
+        if self.name.contains('=') || self.name.contains('\0') {
+            return Err("Environment variable name contains invalid characters".into());
+        }
+
+        let resolved_value = resolver.resolve_template(&self.value)?;
+
+        context.insert(DocumentEnvVar(self.name.clone(), resolved_value));
+        Ok(Some(context))
     }
 }
 

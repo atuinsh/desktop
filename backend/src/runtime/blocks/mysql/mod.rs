@@ -6,7 +6,7 @@ use uuid::Uuid;
 
 use super::FromDocument;
 
-#[derive(Debug, Serialize, Deserialize, Clone, TypedBuilder)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, TypedBuilder)]
 #[serde(rename_all = "camelCase")]
 pub struct Mysql {
     #[builder(setter(into))]

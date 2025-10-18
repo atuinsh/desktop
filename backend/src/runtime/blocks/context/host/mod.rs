@@ -37,11 +37,18 @@ use serde::{Deserialize, Serialize};
 use typed_builder::TypedBuilder;
 use uuid::Uuid;
 
-use crate::runtime::blocks::handler::{ContextProvider, ExecutionContext};
+use crate::runtime::blocks::{
+    document::{
+        block_context::{BlockContext, DocumentSshHost},
+        document_context::ContextResolver,
+    },
+    handler::{ContextProvider, ExecutionContext},
+    BlockBehavior,
+};
 use async_trait::async_trait;
 
 /// Host context block for switching between localhost and SSH connections
-#[derive(Debug, Serialize, Deserialize, Clone, TypedBuilder)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, TypedBuilder)]
 #[serde(rename_all = "camelCase")]
 pub struct Host {
     /// Unique identifier for this block
@@ -89,9 +96,7 @@ impl ContextProvider for HostHandler {
 impl Host {
     #[allow(dead_code)]
     /// Create a Host block from a document block
-    pub fn from_document(
-        block: &serde_json::Value,
-    ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
+    pub fn from_document(block: &serde_json::Value) -> Result<Self, String> {
         let id = block
             .get("id")
             .and_then(|v| v.as_str())
@@ -108,7 +113,30 @@ impl Host {
             .unwrap_or("localhost") // Default to localhost if not specified
             .to_string();
 
-        Ok(Host::builder().id(Uuid::parse_str(id)?).host(host).build())
+        Ok(Host::builder()
+            .id(Uuid::parse_str(id).map_err(|e| e.to_string())?)
+            .host(host)
+            .build())
+    }
+}
+
+#[async_trait]
+impl BlockBehavior for Host {
+    fn passive_context(
+        &self,
+        resolver: &ContextResolver,
+    ) -> Result<Option<BlockContext>, Box<dyn std::error::Error + Send + Sync>> {
+        let mut context = BlockContext::new();
+        let host = self.host.trim().to_lowercase();
+
+        if host.is_empty() || host == "local" || host == "localhost" {
+            context.insert(DocumentSshHost(None));
+        } else {
+            let resolved_host = resolver.resolve_template(&host)?;
+            context.insert(DocumentSshHost(Some(resolved_host)));
+        }
+
+        Ok(Some(context))
     }
 }
 
