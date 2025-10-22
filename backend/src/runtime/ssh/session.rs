@@ -5,7 +5,6 @@ use bytes::Bytes;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::io::AsyncWriteExt;
 use tokio::sync::mpsc;
 use tokio::sync::{mpsc::Sender, oneshot};
 use tokio::time::timeout;
@@ -74,11 +73,8 @@ impl Session {
                 let Some(msg) = channel.wait().await else {
                     break;
                 };
-                match msg {
-                    ChannelMsg::ExitStatus { exit_status } => {
-                        code = Some(exit_status);
-                    }
-                    _ => {}
+                if let ChannelMsg::ExitStatus { exit_status } = msg {
+                    code = Some(exit_status);
                 }
             }
 
@@ -87,7 +83,7 @@ impl Session {
         };
 
         match timeout(KEEPALIVE_TIMEOUT, keepalive_check).await {
-            Ok(Some(success)) => true,
+            Ok(Some(_)) => true,
             Ok(None) => false,
             Err(_) => {
                 log::debug!("SSH keepalive timed out");
