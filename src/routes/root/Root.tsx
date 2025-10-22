@@ -79,6 +79,7 @@ import { getGlobalOptions } from "@/lib/global_options";
 import SaveBlockModal from "./SaveBlockModal";
 import SavedBlock from "@/state/runbooks/saved_block";
 import { uuidv7 } from "uuidv7";
+import DesktopImportModal from "./DesktopImportModal";
 
 const globalOptions = getGlobalOptions();
 const UPDATE_CHECK_INTERVAL = globalOptions.channel === "edge" ? 1000 * 60 * 5 : 1000 * 60 * 60;
@@ -129,6 +130,8 @@ function App() {
   const refreshRunbooks = useStore((state: AtuinState) => state.refreshRunbooks);
   const currentWorkspaceId = useStore((state: AtuinState) => state.currentWorkspaceId);
   const setCurrentWorkspaceId = useStore((state: AtuinState) => state.setCurrentWorkspaceId);
+  const openInDesktopImport = useStore((state: AtuinState) => state.openInDesktopImport);
+  const setOpenInDesktopImport = useStore((state: AtuinState) => state.setOpenInDesktopImport);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [showInviteFriends, setShowInviteFriends] = useState(false);
   const [showFeedback, setShowFeedback] = useState(false);
@@ -1195,6 +1198,14 @@ function App() {
             block={savingBlock.unwrap()}
             onClose={clearSavingBlock}
             doSaveBlock={handleSaveBlock}
+          />
+        )}
+        {openInDesktopImport && (
+          <DesktopImportModal
+            runbookId={openInDesktopImport.id}
+            tag={openInDesktopImport.tag}
+            onClose={() => setOpenInDesktopImport(null)}
+            activateRunbook={navigateToRunbook}
           />
         )}
       </RunbookContext.Provider>

@@ -21,6 +21,9 @@ import { WorkspaceError } from "@/rs-bindings/WorkspaceError";
 import { uuidv7 } from "uuidv7";
 import { NodeApi } from "react-arborist";
 import { TreeRowData } from "@/components/runbooks/List/TreeView";
+import { ydocToBlocknote } from "../ydoc_to_blocknote";
+import * as Y from "yjs";
+import Snapshot from "@/state/runbooks/snapshot";
 
 export default class OnlineStrategy implements WorkspaceStrategy {
   constructor(private workspace: Workspace) {}
@@ -108,6 +111,62 @@ export default class OnlineStrategy implements WorkspaceStrategy {
   ): Promise<Result<string, WorkspaceError>> {
     const rb = await OnlineRunbook.createUntitled(this.workspace, true);
     await this.onRunbookCreated(rb, parentFolderId, activateRunbook);
+    return Ok(rb.id);
+  }
+
+  async importRunbookFromHub(
+    runbookId: string,
+    _tag: string, // since we're online, we import all tags
+    activateRunbook: (runbookId: string) => Promise<void>,
+  ): Promise<Result<string, WorkspaceError>> {
+    const remoteRunbook = await api.getRunbookID(runbookId);
+
+    const latestTagContent = await api.getRunbookYdoc(runbookId);
+    const doc = new Y.Doc();
+    if (latestTagContent) {
+      Y.applyUpdate(doc, latestTagContent);
+    }
+    const blocknoteContent = await ydocToBlocknote(doc);
+
+    const rb = await OnlineRunbook.createUntitled(this.workspace, true);
+    if (remoteRunbook.name) {
+      rb.name = remoteRunbook.name;
+    }
+    rb.ydoc = latestTagContent;
+    rb.source = "local";
+    rb.forkedFrom = runbookId;
+    rb.content = JSON.stringify(blocknoteContent);
+    await rb.save();
+
+    // `onRunbookCreated` also creates the runbook on the server.
+    const success = await this.onRunbookCreated(rb, null, activateRunbook);
+    if (!success) {
+      return Err({
+        type: "RunbookSaveError",
+        data: {
+          runbook_id: rb.id,
+          message: "Failed to create runbook",
+        },
+      } as WorkspaceError);
+    }
+
+    for (const snapshot of remoteRunbook.snapshots) {
+      const remoteSnapshot = await api.getSnapshotById(snapshot.id);
+      const localSnapshot = await Snapshot.create({
+        id: uuidv7(),
+        tag: remoteSnapshot.tag,
+        runbook_id: rb.id,
+        content: JSON.stringify(remoteSnapshot.content),
+      });
+
+      await api.createSnapshot(localSnapshot);
+    }
+
+    track_event("runbooks.import", {
+      workspaceType: "online",
+      forkedFrom: runbookId,
+    });
+
     return Ok(rb.id);
   }
 
@@ -264,7 +323,7 @@ export default class OnlineStrategy implements WorkspaceStrategy {
     runbook: Runbook,
     parentFolderId: string | null,
     activateRunbook: (runbookId: string) => Promise<void>,
-  ): Promise<void> {
+  ): Promise<boolean> {
     // NOTE [mkt]:
     // This API call is made here instead of through the operation processor
     // because we need to wait for the runbook to be created on the server
@@ -280,7 +339,7 @@ export default class OnlineStrategy implements WorkspaceStrategy {
     // runbook provider and prevent the runbook from opening for several seconds.
     const workspace = await Workspace.get(runbook.workspaceId);
     if (!workspace) {
-      return;
+      return false;
     }
 
     let startedSyncIndicator = false;
@@ -308,7 +367,7 @@ export default class OnlineStrategy implements WorkspaceStrategy {
       }
       console.error(err);
       runbook.delete();
-      return;
+      return false;
     } finally {
       if (startedSyncIndicator) {
         useStore.getState().setIsSyncing(false);
@@ -331,5 +390,7 @@ export default class OnlineStrategy implements WorkspaceStrategy {
         }
       },
     );
+
+    return true;
   }
 }

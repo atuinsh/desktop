@@ -185,6 +185,7 @@ export interface RemoteRunbook {
   snapshots: RemoteSnapshot[];
   collaborations: RemoteCollaboration[];
   permissions: string[];
+  content?: any[];
 }
 
 // Define other interfaces (Dialect, Timezone, Style, SearchMode, FilterMode, ExitMode, KeymapMode, CursorStyle, WordJumpMode, RegexSet, Stats) accordingly.

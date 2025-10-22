@@ -14,6 +14,7 @@ export interface AtuinRunbookState {
   lastTagForRunbook: { [key: string]: string };
   backgroundSync: boolean;
   syncConcurrency: number;
+  openInDesktopImport: { id: string; tag: string } | null;
 
   importRunbooks: () => Promise<string[]>;
   refreshRunbooks: () => Promise<void>;
@@ -28,6 +29,8 @@ export interface AtuinRunbookState {
 
   setBackgroundSync: (backgroundSync: boolean) => void;
   setSyncConcurrency: (syncConcurrency: number) => void;
+
+  setOpenInDesktopImport: (toImport: { id: string; tag: string } | null) => void;
 }
 
 export const persistRunbookKeys: (keyof AtuinRunbookState)[] = [
@@ -47,6 +50,7 @@ export const createRunbookState: StateCreator<AtuinRunbookState> = (
   serialExecution: [],
   backgroundSync: true,
   syncConcurrency: 1,
+  openInDesktopImport: null,
 
   importRunbooks: async (): Promise<string[]> => {
     let filePath = await open({
@@ -116,5 +120,9 @@ export const createRunbookState: StateCreator<AtuinRunbookState> = (
 
   setSyncConcurrency: (syncConcurrency: number) => {
     set({ syncConcurrency });
+  },
+
+  setOpenInDesktopImport: (toImport: { id: string; tag: string } | null) => {
+    set({ openInDesktopImport: toImport });
   },
 });

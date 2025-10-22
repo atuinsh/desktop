@@ -391,11 +391,6 @@ export default function Runbooks() {
   }
 
   useEffect(() => {
-    if (lastRunbookEditor.current) {
-      lastRunbookEditor.current.shutdown();
-      setRunbookEditor(null);
-    }
-
     if (!currentRunbook || !runbookWorkspace) {
       return;
     }
@@ -412,6 +407,13 @@ export default function Runbooks() {
     lastRunbookEditor.current = newRunbookEditor;
     setEditorKey((prev) => !prev);
     setRunbookEditor(newRunbookEditor);
+
+    return () => {
+      if (lastRunbookEditor.current) {
+        lastRunbookEditor.current.shutdown();
+        setRunbookEditor(null);
+      }
+    };
   }, [currentRunbook?.id, runbookWorkspace?.get("id")]);
 
   useEffect(() => {

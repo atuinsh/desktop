@@ -30,6 +30,11 @@ export type DoFolderOp = (
  */
 export default interface WorkspaceStrategy {
   createWorkspace(): Promise<Result<Workspace, WorkspaceError>>;
+  importRunbookFromHub(
+    runbookId: string,
+    tag: string,
+    activateRunbook: (runbookId: string) => Promise<void>,
+  ): Promise<Result<string, WorkspaceError>>;
   createRunbook(
     parentFolderId: string | null,
     activateRunbook: (runbookId: string) => Promise<void>,

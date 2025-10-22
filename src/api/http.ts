@@ -22,6 +22,7 @@ type RequestMethod = "GET" | "POST" | "PUT" | "DELETE";
 
 type RequestOpts = {
   token?: string;
+  bodyType?: "json" | "bytes";
 };
 
 async function makeRequest<T>(
@@ -79,7 +80,11 @@ async function makeRequest<T>(
   logger.debug(`${resp.status} (${delta}ms)`);
 
   if (resp.ok && resp.status != 204) {
-    return resp.json();
+    if (options.bodyType == "bytes") {
+      return resp.arrayBuffer() as unknown as T;
+    } else {
+      return resp.json();
+    }
   } else if (resp.status == 204) {
     return {} as T;
   } else {
