@@ -10,7 +10,6 @@ import { AtuinSharedStateAdapter } from "./shared_state/adapter";
 import { uuidv7 } from "uuidv7";
 import Logger from "./logger";
 import { Rc } from "@binarymuse/ts-stdlib";
-import { createWorkspace } from "./workspaces/commands";
 import { TabIcon } from "@/state/store/ui_state";
 import { invoke } from "@tauri-apps/api/core";
 import { DialogBuilder } from "@/components/Dialogs/dialog";
@@ -57,8 +56,9 @@ export default async function doWorkspaceSetup(): Promise<void> {
       logger.info("Unable to fetch workspaces from server; creating default workspace");
 
       let workspacePath: string | null = null;
+      let welcomeWorkspaceId = uuidv7();
       try {
-        workspacePath = await invoke<string>("copy_welcome_workspace");
+        workspacePath = await invoke<string>("copy_welcome_workspace", { id: welcomeWorkspaceId });
       } catch (err) {
         await new DialogBuilder()
           .title("Failed to create welcome workspace")
@@ -72,14 +72,12 @@ export default async function doWorkspaceSetup(): Promise<void> {
       }
 
       let name = "Welcome to Atuin";
-      let id = uuidv7();
       workspace = new Workspace({
-        id: id,
+        id: welcomeWorkspaceId,
         name: name,
         folder: workspacePath,
         online: 0,
       });
-      await createWorkspace(workspacePath, id, name);
       await workspace.save();
     }
 

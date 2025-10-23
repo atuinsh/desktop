@@ -6,13 +6,15 @@ use tauri::{ipc::Channel, path::BaseDirectory, AppHandle, Manager, State};
 use crate::{
     state::AtuinState,
     workspaces::{
-        fs_ops::WorkspaceDirInfo, manager::WorkspaceEvent, offline_runbook::OfflineRunbook,
+        fs_ops::{WorkspaceConfig, WorkspaceDirInfo},
+        manager::WorkspaceEvent,
+        offline_runbook::OfflineRunbook,
         workspace::WorkspaceError,
     },
 };
 
 #[tauri::command]
-pub async fn copy_welcome_workspace(app: AppHandle) -> Result<String, String> {
+pub async fn copy_welcome_workspace(app: AppHandle, id: String) -> Result<String, String> {
     let welcome_path = app
         .path()
         .resolve("resources/welcome", BaseDirectory::Resource)
@@ -38,6 +40,17 @@ pub async fn copy_welcome_workspace(app: AppHandle) -> Result<String, String> {
     }
 
     copy_dir_all(&welcome_path, &target_path).map_err(|e| e.to_string())?;
+
+    // Overwrite the ID in the copied `atuin.toml` file with the given ID
+    let config_path = target_path.join("atuin.toml");
+    let mut config = WorkspaceConfig::from_file(&config_path)
+        .await
+        .map_err(|e| e.to_string())?;
+    config.workspace.id = id;
+    let contents = toml::to_string(&config).map_err(|e| e.to_string())?;
+    tokio::fs::write(config_path, contents)
+        .await
+        .map_err(|e| e.to_string())?;
 
     Ok(target_path.to_string_lossy().to_string())
 }
