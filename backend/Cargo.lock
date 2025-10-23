@@ -516,7 +516,7 @@ dependencies = [
  "lazy_static",
  "log",
  "minijinja",
- "nix 0.29.0",
+ "nix 0.30.1",
  "notify-debouncer-full",
  "open",
  "portable-pty",
@@ -1791,7 +1791,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8d162beedaa69905488a8da94f5ac3edb4dd4788b732fadb7bd120b2625c1976"
 dependencies = [
  "data-encoding",
- "syn 2.0.101",
+ "syn 1.0.109",
 ]
 
 [[package]]
