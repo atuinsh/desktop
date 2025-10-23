@@ -4,8 +4,8 @@ use crate::runtime::ssh_pool::SshPoolHandle;
 use crate::runtime::workflow::event::WorkflowEvent;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::sync::Arc;
+use std::{collections::HashMap, fmt::Debug};
 use tauri::ipc::Channel;
 use tokio::sync::{broadcast, oneshot, RwLock};
 use ts_rs::TS;
@@ -26,6 +26,18 @@ pub struct ExecutionContext {
     pub output_storage: Option<BlockOutputStore>,
     pub pty_store: Option<PtyStoreHandle>, // For PTY management
     pub event_bus: Option<Arc<dyn EventBus>>, // For emitting events
+}
+
+impl Debug for ExecutionContext {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ExecutionContext")
+            .field("runbook_id", &self.runbook_id)
+            .field("cwd", &self.cwd)
+            .field("env", &self.env)
+            .field("variables", &self.variables)
+            .field("ssh_host", &self.ssh_host)
+            .finish()
+    }
 }
 
 impl Default for ExecutionContext {
