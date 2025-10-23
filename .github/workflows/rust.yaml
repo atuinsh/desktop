@@ -7,9 +7,6 @@ concurrency:
 on:
   push:
     branches: [main]
-    paths:
-      - "backend/**"
-      - ".github/**"
 
   pull_request:
     paths:
