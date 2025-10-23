@@ -106,7 +106,7 @@
     "micromark": "^4.0.2",
     "micromark-extension-gfm": "^3.0.0",
     "phoenix": "^1.7.21",
-    "posthog-js": "^1.229.1",
+    "posthog-js": "^1.279.3",
     "prism-react-renderer": "^2.4.1",
     "prismjs": "^1.29.0",
     "prometheus-query": "^3.4.1",
