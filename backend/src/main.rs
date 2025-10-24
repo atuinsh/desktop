@@ -8,6 +8,7 @@ use std::{env, fs};
 
 use tauri::path::BaseDirectory;
 use tauri::{http, App, AppHandle, Manager, RunEvent};
+use tauri_plugin_log::fern::colors::{Color, ColoredLevelConfig};
 use time::format_description::well_known::Rfc3339;
 
 mod blocks;
@@ -398,18 +399,53 @@ fn main() {
         None
     };
 
+    let colors_line = ColoredLevelConfig::new()
+        .error(Color::Red)
+        .warn(Color::Yellow)
+        .info(Color::BrightWhite)
+        .debug(Color::Blue)
+        .trace(Color::BrightBlack);
+
     let builder = tauri::Builder::default().plugin(
         tauri_plugin_log::Builder::new()
             .targets([
-                tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stdout),
+                tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stderr),
                 tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::LogDir {
                     file_name: None,
                 }),
             ])
-            .level(log::LevelFilter::Info)
-            .level_for("atuin_desktop", log::LevelFilter::Info)
+            .level(
+                std::env::var("RUST_LOG")
+                    .ok()
+                    .and_then(|level| level.parse().ok())
+                    .unwrap_or(log::LevelFilter::Info),
+            )
+            .level_for(
+                "atuin_desktop",
+                std::env::var("ATUIN_LOG")
+                    .or_else(|_| std::env::var("RUST_LOG"))
+                    .ok()
+                    .and_then(|level| level.parse().ok())
+                    .unwrap_or(log::LevelFilter::Info),
+            )
             .max_file_size(20_000_000)
             .rotation_strategy(tauri_plugin_log::RotationStrategy::KeepSome(4))
+            .with_colors(tauri_plugin_log::fern::colors::ColoredLevelConfig::default())
+            .format(move |out, message, record| {
+                out.finish(format_args!(
+                    "{color_reset}[{date}][{level}]{target}{color_line} {message}{color_reset}",
+                    color_reset = format_args!("\x1B[0m"),
+                    color_line = format_args!(
+                        "\x1B[{}m",
+                        colors_line.get_color(&record.level()).to_fg_str()
+                    ),
+                    date = humantime::format_rfc3339(std::time::SystemTime::now()),
+                    target =
+                        format_args!("\x1B[{}m[{}]", Color::White.to_fg_str(), record.target()),
+                    level = colors_line.color(record.level()),
+                    message = message
+                ));
+            })
             .build(),
     );
     let builder = if cfg!(debug_assertions) {
@@ -557,7 +593,7 @@ fn main() {
                 .resolve("resources", BaseDirectory::Resource);
 
             if let Err(e) = resources_dir {
-                eprintln!("Failed to resolve resources directory: {}", e);
+                log::error!("Failed to resolve resources directory: {}", e);
                 return http::Response::builder()
                     .status(500)
                     .header(http::header::CONTENT_TYPE, "text/plain")

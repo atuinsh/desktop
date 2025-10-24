@@ -48,7 +48,7 @@ pub async fn subscribe_to_events(
     tokio::spawn(async move {
         while let Some(event) = receiver.recv().await {
             if let Err(e) = event_channel.send(event) {
-                eprintln!("Failed to send event to frontend: {}", e);
+                log::error!("Failed to send event to frontend: {}", e);
                 break;
             }
         }
