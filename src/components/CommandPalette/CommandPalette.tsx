@@ -12,6 +12,7 @@ import { VisuallyHidden } from "@heroui/react";
 import { commandRegistry, registerBuiltinCommands } from "@/lib/commands/registry";
 import { CommandSearchResult } from "@/lib/commands/types";
 import { useStore } from "@/state/store";
+import { LucideIcon } from "lucide-react";
 
 export default function CommandPalette() {
   const [query, setQuery] = useState("");
@@ -137,7 +138,7 @@ export default function CommandPalette() {
                         (() => {
                           const Icon =
                             typeof result.command.icon === "function"
-                              ? result.command.icon()
+                              ? (result.command.icon as () => LucideIcon)()
                               : result.command.icon;
                           return <Icon className="h-4 w-4" />;
                         })()}
