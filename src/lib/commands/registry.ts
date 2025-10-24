@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { emit } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
+import { fuzzyMatch } from "@/lib/fuzzy-matcher";
 
 export class CommandRegistry {
   private commands: Map<string, CommandImplementation> = new Map();
@@ -37,33 +38,6 @@ export class CommandRegistry {
     return Array.from(this.commands.values());
   }
 
-  private fuzzyMatch(query: string, target: string): { score: number; matches: string[] } {
-    const targetLower = target.toLowerCase();
-
-    if (targetLower.includes(query.toLowerCase())) {
-      return { score: query.length / target.length, matches: [target] };
-    }
-
-    let score = 0;
-    let queryIndex = 0;
-    const matches: string[] = [];
-    const queryLower = query.toLowerCase();
-
-    for (let i = 0; i < targetLower.length && queryIndex < queryLower.length; i++) {
-      if (targetLower[i] === queryLower[queryIndex]) {
-        score += 1 / (i + 1);
-        queryIndex++;
-        matches.push(target[i]);
-      }
-    }
-
-    if (queryIndex === queryLower.length) {
-      return { score: score / queryLower.length, matches };
-    }
-
-    return { score: 0, matches: [] };
-  }
-
   search(query: string): CommandSearchResult[] {
     if (!query.trim()) {
       return this.getAllCommands()
@@ -82,22 +56,28 @@ export class CommandRegistry {
       if (!this.isCommandEnabled(command)) continue;
 
       const searchFields = [
-        command.title,
-        command.description || "",
-        command.category || "",
-        ...(command.keywords || []),
+        { text: command.title, weight: 3 },
+        { text: command.description || "", weight: 2 },
+        { text: command.category || "", weight: 1 },
+        ...(command.keywords?.map((kw) => ({ text: kw, weight: 2 })) || []),
       ];
 
       let bestScore = 0;
       const allMatches: string[] = [];
 
       for (const field of searchFields) {
-        const { score, matches } = this.fuzzyMatch(query, field);
-        if (score > bestScore) {
-          bestScore = score;
-        }
-        if (matches.length > 0) {
-          allMatches.push(...matches);
+        const result = fuzzyMatch(query, field.text);
+        if (result) {
+          const weightedScore = result.score * field.weight;
+          if (weightedScore > bestScore) {
+            bestScore = weightedScore;
+          }
+          // Collect matched characters for highlighting
+          for (const match of result.matches) {
+            for (let i = match.start; i < match.end; i++) {
+              allMatches.push(field.text[i]);
+            }
+          }
         }
       }
 
