@@ -5,7 +5,7 @@ export interface Command {
   title: string;
   description?: string;
   category?: string;
-  icon?: LucideIcon;
+  icon?: LucideIcon | (() => LucideIcon);
   keywords?: string[];
   shortcut?: string[];
   enabled?: boolean | (() => boolean);

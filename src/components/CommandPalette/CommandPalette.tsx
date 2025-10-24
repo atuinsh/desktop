@@ -133,7 +133,14 @@ export default function CommandPalette() {
                       onSelect={() => onItemSelect(result)}
                       className="flex items-center gap-2"
                     >
-                      {result.command.icon && <result.command.icon className="h-4 w-4" />}
+                      {result.command.icon &&
+                        (() => {
+                          const Icon =
+                            typeof result.command.icon === "function"
+                              ? result.command.icon()
+                              : result.command.icon;
+                          return <Icon className="h-4 w-4" />;
+                        })()}
                       <div className="flex-1">
                         <div className="font-medium">{result.command.title}</div>
                         {result.command.description && (

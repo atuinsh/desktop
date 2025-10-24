@@ -1,7 +1,19 @@
 import { Command, CommandImplementation, CommandSearchResult, CommandContext } from "./types";
 import { useStore } from "@/state/store";
-import { FolderPlus, Download, FileText, Settings, History, BarChart3 } from "lucide-react";
+import {
+  FolderPlus,
+  Download,
+  FileText,
+  Settings,
+  History,
+  BarChart3,
+  RefreshCw,
+  Moon,
+  Sun,
+  XCircle,
+} from "lucide-react";
 import { emit } from "@tauri-apps/api/event";
+import { invoke } from "@tauri-apps/api/core";
 
 export class CommandRegistry {
   private commands: Map<string, CommandImplementation> = new Map();
@@ -211,6 +223,85 @@ export function registerBuiltinCommands(): void {
     keywords: ["stats", "statistics", "analytics"],
     handler: () => {
       useStore.getState().openTab("/stats", "Statistics");
+    },
+  });
+
+  commandRegistry.registerCommand({
+    id: "app.sync",
+    title: "Sync Now",
+    description: "Trigger a sync with Atuin server",
+    category: "Application",
+    icon: RefreshCw,
+    keywords: ["sync", "refresh", "update"],
+    handler: async () => {
+      try {
+        await emit("start-sync");
+      } catch (error) {
+        console.error("Failed to trigger sync:", error);
+      }
+    },
+  });
+
+  commandRegistry.registerCommand({
+    id: "app.toggle-dark-mode",
+    title: "Toggle Dark Mode",
+    description: "Switch between light and dark mode",
+    category: "Application",
+    icon: () => {
+      const colorMode = useStore.getState().colorMode;
+      return colorMode === "dark" ? Sun : Moon;
+    },
+    keywords: ["dark", "light", "theme", "appearance"],
+    handler: () => {
+      const state = useStore.getState();
+      const currentMode = state.colorMode;
+      const newMode = currentMode === "dark" ? "light" : "dark";
+      state.setColorMode(newMode);
+    },
+  });
+
+  commandRegistry.registerCommand({
+    id: "app.set-system-theme",
+    title: "Follow System Theme",
+    description: "Automatically match your system's light/dark mode",
+    category: "Application",
+    icon: RefreshCw,
+    keywords: ["system", "auto", "automatic", "theme", "appearance"],
+    handler: () => {
+      useStore.getState().setColorMode("system");
+    },
+  });
+
+  commandRegistry.registerCommand({
+    id: "runbook.kill-all-terminals",
+    title: "Kill All Terminals in Current Runbook",
+    description: "Stop all running terminals in the current runbook",
+    category: "Runbook",
+    icon: XCircle,
+    keywords: ["kill", "stop", "terminate", "terminals"],
+    enabled: () => {
+      const state = useStore.getState();
+      const currentTab = state.tabs.find((tab) => tab.id === state.currentTabId);
+      if (!currentTab) return false;
+      return currentTab.url.startsWith("/runbook/");
+    },
+    handler: async () => {
+      const state = useStore.getState();
+      const currentTab = state.tabs.find((tab) => tab.id === state.currentTabId);
+      if (!currentTab || !currentTab.url.startsWith("/runbook/")) {
+        console.error("Not in a runbook");
+        return;
+      }
+      const runbookId = currentTab.url.split("/").pop();
+      if (!runbookId) {
+        console.error("Could not get runbook ID");
+        return;
+      }
+      try {
+        await invoke("runbook_kill_all_ptys", { runbook: runbookId });
+      } catch (error) {
+        console.error("Failed to kill terminals:", error);
+      }
     },
   });
 }
