@@ -76,9 +76,10 @@ export default function CommandMenu(props: CommandMenuProps) {
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      const hotkey = navigator.platform.toLowerCase().includes("mac") ? "metaKey" : "ctrlKey";
+      const isMac = navigator.userAgent.toLowerCase().includes("mac");
+      const hotkey = isMac ? "metaKey" : "ctrlKey";
 
-      if (e?.key?.toLowerCase() === "p" && e[hotkey]) {
+      if (e?.key?.toLowerCase() === "p" && e[hotkey] && !e.shiftKey) {
         e.preventDefault();
         isOpen ? onClose() : onOpen();
       }

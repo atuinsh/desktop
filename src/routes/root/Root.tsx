@@ -87,6 +87,7 @@ const UPDATE_CHECK_INTERVAL = globalOptions.channel === "edge" ? 1000 * 60 * 5 :
 const Onboarding = React.lazy(() => import("@/components/Onboarding/Onboarding"));
 const UpdateNotifier = React.lazy(() => import("./UpdateNotifier"));
 const CommandMenu = React.lazy(() => import("@/components/CommandMenu/CommandMenu"));
+const CommandPalette = React.lazy(() => import("@/components/CommandPalette/CommandPalette"));
 const DialogManager = React.lazy(() => import("@/components/Dialogs/DialogManager"));
 const DesktopConnect = React.lazy(() => import("@/components/DesktopConnect/DesktopConnect"));
 const DeleteRunbookModal = React.lazy(() => import("./DeleteRunbookModal"));
@@ -155,7 +156,10 @@ function App() {
   const savingBlock = useStore((state: AtuinState) => state.savingBlock);
   const clearSavingBlock = useStore((state: AtuinState) => state.clearSavingBlock);
 
-  const [showNewWorkspaceDialog, setShowNewWorkspaceDialog] = useState(false);
+  const [showNewWorkspaceDialog, setShowNewWorkspaceDialog] = useStore((state: AtuinState) => [
+    state.newWorkspaceDialogOpen,
+    state.setNewWorkspaceDialogOpen,
+  ]);
 
   const listRef = useRef<ListApi>(null);
 
@@ -329,7 +333,8 @@ function App() {
   });
 
   useTauriEvent("new-runbook", async () => {
-    handleStartCreateRunbook(currentWorkspaceId, null);
+    const workspaceId = useStore.getState().currentWorkspaceId;
+    handleStartCreateRunbook(workspaceId, null);
   });
 
   useTauriEvent("new-workspace", async () => {
@@ -942,6 +947,7 @@ function App() {
         }}
       >
         <CommandMenu index={runbookIndex} />
+        <CommandPalette />
         <RunbookSearchIndex index={runbookIndex} />
         <UpdateNotifier />
         <>

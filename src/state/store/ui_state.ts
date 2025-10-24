@@ -39,6 +39,8 @@ export interface AtuinUiState {
   focused: boolean;
   connectedToHubSocket: boolean;
   searchOpen: boolean;
+  commandPaletteOpen: boolean;
+  newWorkspaceDialogOpen: boolean;
   proposedDesktopConnectUser: { username: string; token: string } | undefined;
   isSyncing: boolean;
   colorMode: ColorMode;
@@ -74,6 +76,8 @@ export interface AtuinUiState {
   setFocused: (focused: boolean) => void;
   setConnectedToHubSocket: (online: boolean) => void;
   setSearchOpen: (open: boolean) => void;
+  setCommandPaletteOpen: (open: boolean) => void;
+  setNewWorkspaceDialogOpen: (open: boolean) => void;
   setProposedDesktopConnectuser: (proposedUser?: { username: string; token: string }) => void;
   setIsSyncing: (isSyncing: boolean) => void;
   setColorMode: (colorMode: ColorMode) => void;
@@ -139,6 +143,8 @@ export const createUiState: StateCreator<AtuinUiState> = (set, get, _store): Atu
   focused: false,
   connectedToHubSocket: false,
   searchOpen: false,
+  commandPaletteOpen: false,
+  newWorkspaceDialogOpen: false,
   proposedDesktopConnectUser: undefined,
   isSyncing: false,
   colorMode: "system",
@@ -172,6 +178,8 @@ export const createUiState: StateCreator<AtuinUiState> = (set, get, _store): Atu
   setFocused: (focused: boolean) => set(() => ({ focused })),
   setConnectedToHubSocket: (online: boolean) => set(() => ({ connectedToHubSocket: online })),
   setSearchOpen: (open) => set(() => ({ searchOpen: open })),
+  setCommandPaletteOpen: (open) => set(() => ({ commandPaletteOpen: open })),
+  setNewWorkspaceDialogOpen: (open) => set(() => ({ newWorkspaceDialogOpen: open })),
   setProposedDesktopConnectuser: (proposedUser?) =>
     set(() => ({ proposedDesktopConnectUser: proposedUser })),
   setIsSyncing: (isSyncing: boolean) => set(() => ({ isSyncing })),
