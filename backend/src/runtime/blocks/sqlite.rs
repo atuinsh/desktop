@@ -2,9 +2,11 @@ use serde::{Deserialize, Serialize};
 use typed_builder::TypedBuilder;
 use uuid::Uuid;
 
+use crate::runtime::blocks::{Block, BlockBehavior};
+
 use super::FromDocument;
 
-#[derive(Debug, Serialize, Deserialize, Clone, TypedBuilder)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, TypedBuilder)]
 #[serde(rename_all = "camelCase")]
 pub struct SQLite {
     #[builder(setter(into))]
@@ -69,5 +71,11 @@ impl FromDocument for SQLite {
             .build();
 
         Ok(sqlite)
+    }
+}
+
+impl BlockBehavior for SQLite {
+    fn into_block(self) -> Block {
+        Block::SQLite(self)
     }
 }

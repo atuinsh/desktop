@@ -15,6 +15,7 @@ use uuid::Uuid;
 
 use crate::{
     runtime::{
+        blocks::document::actor::DocumentHandle,
         events::GCEvent,
         exec_log::ExecLogHandle,
         pty_store::PtyStoreHandle,
@@ -88,6 +89,9 @@ pub(crate) struct AtuinState {
     // Map of block execution id -> execution handle for cancellation
     pub block_executions:
         Arc<RwLock<HashMap<Uuid, crate::runtime::blocks::handler::ExecutionHandle>>>,
+
+    // Map of document handles per runbook
+    pub documents: Arc<RwLock<HashMap<String, DocumentHandle>>>,
 }
 
 impl AtuinState {
@@ -112,6 +116,7 @@ impl AtuinState {
             runbooks_api_token: Default::default(),
             runbook_output_variables: Default::default(),
             block_executions: Default::default(),
+            documents: Default::default(),
             dev_prefix,
             app_path,
             use_hub_updater_service,
@@ -154,7 +159,7 @@ impl AtuinState {
 
         let app_clone = app.clone();
         tauri::async_runtime::spawn(async move {
-            println!("starting executor command loop");
+            log::info!("starting executor command loop");
 
             while let Some(event) = cmd_receiver.recv().await {
                 match event {

@@ -5,15 +5,23 @@ show_help() {
     echo "Usage: script/dev [OPTIONS]"
     echo ""
     echo "Options:"
-    echo "  -p --profile VALUE   Start with the given dev profile"
-    echo "  -d --devtools        Start with devtools opened"
-    echo "  -h --help            Display this help message and exit"
+    echo "  -p --profile VALUE    Start with the given dev profile"
+    echo "  -d --devtools         Start with devtools opened"
+    echo "  -r --rust-log VALUE   Set the log level for Rust dependencies (error, warn, info, debug, trace)"
+    echo "  -l --atuin-log VALUE  Set the log level for the Atuin backend (error, warn, info, debug, trace)"
+    echo "  -h --help             Display this help message and exit"
+    echo ""
+    echo "Default log levels:"
+    echo "  Rust backend: info"
+    echo "  Atuin backend: debug"
     echo ""
 }
 
 # Parse command line arguments
 PROFILE=""
 DEVTOOLS=""
+RUST_LOG="info"
+ATUIN_LOG="debug"
 while [[ $# -gt 0 ]]; do
     case $1 in
         -p|--profile)
@@ -27,6 +35,14 @@ while [[ $# -gt 0 ]]; do
         -h|--help)
             show_help
             exit 0
+            ;;
+        -r|--rust-log)
+            RUST_LOG="$2"
+            shift 2
+            ;;
+        -l|--atuin-log)
+            ATUIN_LOG="$2"
+            shift 2
             ;;
         *)
             echo "Unknown argument: $1"
@@ -45,6 +61,8 @@ check_port() {
 
 # Start with default port
 PORT=1420
+export RUST_LOG
+export ATUIN_LOG
 
 # If default port is in use, find next available port
 if check_port $PORT; then

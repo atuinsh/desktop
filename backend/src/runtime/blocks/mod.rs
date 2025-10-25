@@ -1,32 +1,74 @@
 pub(crate) mod clickhouse;
-pub(crate) mod context;
-pub(crate) mod context_blocks;
+pub(crate) mod directory;
+pub(crate) mod document;
 pub(crate) mod editor;
+pub(crate) mod environment;
 pub(crate) mod handler;
 pub(crate) mod handlers;
+pub(crate) mod host;
 pub(crate) mod http;
+pub(crate) mod local_var;
 pub(crate) mod mysql;
 pub(crate) mod postgres;
 pub(crate) mod prometheus;
-pub(crate) mod registry;
 pub(crate) mod script;
 pub(crate) mod sqlite;
+pub(crate) mod ssh_connect;
 pub(crate) mod terminal;
+pub(crate) mod var;
+pub(crate) mod var_display;
 
-// #[cfg(test)]
-// mod terminal_integration_test;
-
+use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
+
+pub const KNOWN_UNSUPPORTED_BLOCKS: &[&str] = &[
+    "audio",
+    "bulletedListItem",
+    "checkListItem",
+    "codeBlock",
+    "file",
+    "heading",
+    "horizontal_rule",
+    "image",
+    "numberedListItem",
+    "paragraph",
+    "quote",
+    "table",
+    "video",
+];
+
+use crate::runtime::blocks::{
+    document::block_context::{BlockContext, ContextResolver},
+    handler::{ExecutionContext, ExecutionHandle},
+};
 
 pub trait FromDocument: Sized {
     fn from_document(block_data: &serde_json::Value) -> Result<Self, String>;
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[async_trait]
+pub trait BlockBehavior: Send + Sync {
+    fn into_block(self) -> Block;
+
+    fn passive_context(
+        &self,
+        _resolver: &ContextResolver,
+    ) -> Result<Option<BlockContext>, Box<dyn std::error::Error + Send + Sync>> {
+        Ok(None)
+    }
+    async fn execute(
+        &self,
+        _execution_context: ExecutionContext,
+    ) -> Result<Option<ExecutionHandle>, Box<dyn std::error::Error + Send + Sync>> {
+        Ok(None)
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(tag = "type")]
 #[serde(rename_all = "camelCase")]
-pub(crate) enum Block {
+pub enum Block {
     Terminal(terminal::Terminal),
     Script(script::Script),
     Postgres(postgres::Postgres),
@@ -37,6 +79,15 @@ pub(crate) enum Block {
 
     #[serde(rename = "sqlite")]
     SQLite(sqlite::SQLite),
+
+    LocalVar(local_var::LocalVar),
+    Var(var::Var),
+    Environment(environment::Environment),
+    Directory(directory::Directory),
+    SshConnect(ssh_connect::SshConnect),
+    Host(host::Host),
+    VarDisplay(var_display::VarDisplay),
+    Editor(editor::Editor),
 }
 
 impl Block {
@@ -50,6 +101,15 @@ impl Block {
             Block::Prometheus(prometheus) => prometheus.id,
             Block::Clickhouse(clickhouse) => clickhouse.id,
             Block::Mysql(mysql) => mysql.id,
+
+            Block::LocalVar(local_var) => local_var.id,
+            Block::Var(var) => var.id,
+            Block::Environment(environment) => environment.id,
+            Block::Directory(directory) => directory.id,
+            Block::SshConnect(ssh_connect) => ssh_connect.id,
+            Block::Host(host) => host.id,
+            Block::VarDisplay(var_display) => var_display.id,
+            Block::Editor(editor) => editor.id,
         }
     }
 
@@ -64,6 +124,15 @@ impl Block {
             Block::Prometheus(prometheus) => prometheus.name.clone(),
             Block::Clickhouse(clickhouse) => clickhouse.name.clone(),
             Block::Mysql(mysql) => mysql.name.clone(),
+            Block::Editor(_) => "".to_string(),
+
+            Block::LocalVar(_) => "".to_string(),
+            Block::Var(_) => "".to_string(),
+            Block::Environment(_) => "".to_string(),
+            Block::Directory(_) => "".to_string(),
+            Block::SshConnect(_) => "".to_string(),
+            Block::Host(_) => "".to_string(),
+            Block::VarDisplay(_) => "".to_string(),
         }
     }
 
@@ -90,7 +159,57 @@ impl Block {
             )?)),
             "mysql" => Ok(Block::Mysql(mysql::Mysql::from_document(block_data)?)),
             "sqlite" => Ok(Block::SQLite(sqlite::SQLite::from_document(block_data)?)),
-            _ => Err(format!("Unsupported block type: {}", block_type)),
+            "local-var" => Ok(Block::LocalVar(local_var::LocalVar::from_document(
+                block_data,
+            )?)),
+            "var" => Ok(Block::Var(var::Var::from_document(block_data)?)),
+            "env" => Ok(Block::Environment(environment::Environment::from_document(
+                block_data,
+            )?)),
+            "directory" => Ok(Block::Directory(directory::Directory::from_document(
+                block_data,
+            )?)),
+            "ssh-connect" => Ok(Block::SshConnect(ssh_connect::SshConnect::from_document(
+                block_data,
+            )?)),
+            "host-select" => Ok(Block::Host(host::Host::from_document(block_data)?)),
+            "var_display" => Ok(Block::VarDisplay(var_display::VarDisplay::from_document(
+                block_data,
+            )?)),
+            "editor" => Ok(Block::Editor(editor::Editor::from_document(block_data)?)),
+            _ => Err(format!("Unknown block type: {}", block_type)),
         }
+    }
+
+    pub fn passive_context(
+        &self,
+        resolver: &ContextResolver,
+    ) -> Result<Option<BlockContext>, Box<dyn std::error::Error + Send + Sync>> {
+        match self {
+            Block::LocalVar(local_var) => local_var.passive_context(resolver),
+            Block::Var(var) => var.passive_context(resolver),
+            Block::Environment(environment) => environment.passive_context(resolver),
+            Block::Directory(directory) => directory.passive_context(resolver),
+            Block::SshConnect(ssh_connect) => ssh_connect.passive_context(resolver),
+            Block::Host(host) => host.passive_context(resolver),
+            Block::VarDisplay(var_display) => var_display.passive_context(resolver),
+            Block::Editor(editor) => editor.passive_context(resolver),
+            Block::Terminal(terminal) => terminal.passive_context(resolver),
+            Block::Script(script) => script.passive_context(resolver),
+            Block::SQLite(sqlite) => sqlite.passive_context(resolver),
+            Block::Postgres(postgres) => postgres.passive_context(resolver),
+            Block::Http(http) => http.passive_context(resolver),
+            Block::Prometheus(prometheus) => prometheus.passive_context(resolver),
+            Block::Clickhouse(clickhouse) => clickhouse.passive_context(resolver),
+            Block::Mysql(clickhouse) => clickhouse.passive_context(resolver),
+        }
+    }
+}
+
+impl TryInto<Block> for &serde_json::Value {
+    type Error = Box<dyn std::error::Error + Send + Sync + 'static>;
+
+    fn try_into(self) -> Result<Block, Self::Error> {
+        Block::from_document(self).map_err(|e| e.into())
     }
 }
