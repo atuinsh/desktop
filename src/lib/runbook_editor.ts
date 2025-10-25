@@ -15,16 +15,18 @@ import Logger from "./logger";
 import Snapshot from "@/state/runbooks/snapshot";
 import Operation from "@/state/runbooks/operation";
 import { invoke } from "@tauri-apps/api/core";
+import Emittery from "emittery";
 
 const SAVE_DEBOUNCE = 1000;
-const SEND_CHANGES_DEBOUNCE = 500;
+const SEND_CHANGES_DEBOUNCE = 100;
 
 function isContentBlank(content: any) {
   return (
-    content.length === 1 &&
-    content[0].content.length === 0 &&
-    content[0].type === "paragraph" &&
-    content[0].id === "initialBlockId"
+    content.length === 0 ||
+    (content.length === 1 &&
+      content[0].content.length === 0 &&
+      content[0].type === "paragraph" &&
+      content[0].id === "initialBlockId")
   );
 }
 
@@ -38,6 +40,8 @@ export default class RunbookEditor {
   private onClearPresences: () => void;
   private yDoc: Y.Doc;
   private hashes: string[] = [];
+  private emitter: Emittery;
+  private sendChangeInProgress = false;
 
   private editor: Promise<BlockNoteEditor> | null = null;
   private provider: PhoenixProvider | null = null;
@@ -67,6 +71,7 @@ export default class RunbookEditor {
     this.onPresenceLeave = onPresenceLeave;
     this.onClearPresences = onClearPresences;
     this.yDoc = new Y.Doc();
+    this.emitter = new Emittery();
 
     if (this.runbook instanceof OfflineRunbook) {
       this.hashes.push(this.runbook.contentHash);
@@ -144,6 +149,10 @@ export default class RunbookEditor {
     this.editor = null;
   }
 
+  onBlockFocus(callback: (blockId: string) => void) {
+    return this.emitter.on("block_focus", callback);
+  }
+
   getEditor(): Promise<BlockNoteEditor> {
     if (this.editor) return this.editor;
 
@@ -197,6 +206,11 @@ export default class RunbookEditor {
       provider.on("presence:join", this.onPresenceJoin);
       provider.on("presence:leave", this.onPresenceLeave);
 
+      editor.onSelectionChange((editor: any) => {
+        const typedEditor = editor as BlockNoteEditor;
+        this.emitter.emit("block_focus", typedEditor.getTextCursorPosition().block.id);
+      });
+
       if (this.maybeNeedsContentConversion) {
         provider.once("synced").then(() => {
           // If the loaded YJS doc has no content, and the server has no content,
@@ -246,7 +260,15 @@ export default class RunbookEditor {
     return "Untitled";
   }
 
-  save(runbook: Runbook | undefined, editor: BlockNoteEditor) {
+  async save(runbook: Runbook | undefined, editorArg: BlockNoteEditor) {
+    const editor = await this.getEditor();
+    if (editor !== editorArg) {
+      // Note[mkt]: I'm not sure why, but after BlockNote 0.39, `this.editor` is no longer the same as the editor from args.
+      // `this.editor` contains a document that is out of date, so we go ahead and replace the editor with the one from the args.
+      this.logger.warn("Replacing editor with editor from args");
+      this.editor = Promise.resolve(editorArg);
+    }
+
     this.scheduleSendChanges();
 
     // Don't allow `onChange` events from BlockNote to fire a save
@@ -278,9 +300,14 @@ export default class RunbookEditor {
   }
 
   // Schedule a send changes event to the backend.
-  // Changes get sent every 500ms at most, even if more
-  // changes are made in that time.
+  // Changes are sent as fast as possible, once the previous
+  // change has been sent.
   async scheduleSendChanges() {
+    if (!this.sendChangeInProgress && !this.sendChangesTimer) {
+      this._sendChanges();
+      return;
+    }
+
     if (!this.sendChangesTimer) {
       this.sendChangesTimer = setTimeout(() => {
         this.sendChangesTimer = null;
@@ -290,13 +317,26 @@ export default class RunbookEditor {
   }
 
   async _sendChanges() {
+    if (this.sendChangeInProgress) {
+      this.scheduleSendChanges();
+      return;
+    }
+
+    this.sendChangeInProgress = true;
+
     const editor = await this.editor;
     if (!editor) return;
 
-    await invoke("update_document", {
-      documentId: this.runbook.id,
-      documentContent: editor.document,
-    });
+    try {
+      await invoke("update_document", {
+        documentId: this.runbook.id,
+        documentContent: editor.document,
+      });
+    } catch (error) {
+      this.logger.error("Error updating document for runbook", this.runbook.id, error);
+    } finally {
+      this.sendChangeInProgress = false;
+    }
   }
 
   async _save(runbookArg: Runbook | undefined, editorArg: BlockNoteEditor) {

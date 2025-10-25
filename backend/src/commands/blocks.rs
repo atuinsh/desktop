@@ -1,12 +1,24 @@
 use std::sync::Arc;
 
+use async_trait::async_trait;
+use serde::Serialize;
 use tauri::{ipc::Channel, AppHandle, Manager, State};
 use uuid::Uuid;
 
 use crate::commands::events::ChannelEventBus;
+use crate::runtime::blocks::document::block_context::ResolvedContext;
+use crate::runtime::blocks::document::bridge::DocumentBridgeMessage;
 use crate::runtime::blocks::document::DocumentHandle;
 use crate::runtime::blocks::handler::BlockOutput;
+use crate::runtime::ClientMessageChannel;
 use crate::state::AtuinState;
+
+#[async_trait]
+impl<M: Serialize + Send + Sync> ClientMessageChannel<M> for tauri::ipc::Channel<M> {
+    async fn send(&self, message: M) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        self.send(message).map_err(|e| e.into())
+    }
+}
 
 #[tauri::command]
 pub async fn execute_block(
@@ -65,27 +77,26 @@ pub async fn open_document(
     state: State<'_, AtuinState>,
     document_id: String,
     document: Vec<serde_json::Value>,
+    document_bridge: Channel<DocumentBridgeMessage>,
 ) -> Result<(), String> {
-    let documents = state.documents.read().await;
-    if documents.get(&document_id).is_some() {
-        // Document already open, nothing to do
+    let mut documents = state.documents.write().await;
+    if let Some(document) = documents.get_mut(&document_id) {
+        document
+            .update_bridge_channel(Box::new(document_bridge))
+            .await
+            .map_err(|e| e.to_string())?;
         return Ok(());
     }
-    drop(documents);
 
     let event_bus = Arc::new(ChannelEventBus::new(state.gc_event_sender()));
-    let document_handle = DocumentHandle::new(document_id.clone(), event_bus);
+    let document_handle = DocumentHandle::new(document_id.clone(), event_bus, document_bridge);
 
     document_handle
         .put_document(document)
         .await
         .map_err(|e| e.to_string())?;
 
-    state
-        .documents
-        .write()
-        .await
-        .insert(document_id, document_handle);
+    documents.insert(document_id, document_handle);
 
     Ok(())
 }
@@ -104,4 +115,19 @@ pub async fn update_document(
         .map_err(|e| e.to_string())?;
 
     Ok(())
+}
+
+#[tauri::command]
+pub async fn get_flattened_block_context(
+    state: State<'_, AtuinState>,
+    document_id: String,
+    block_id: String,
+) -> Result<ResolvedContext, String> {
+    let documents = state.documents.read().await;
+    let document = documents.get(&document_id).ok_or("Document not found")?;
+    let context = document
+        .get_resolved_context(Uuid::parse_str(&block_id).map_err(|e| e.to_string())?)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(context)
 }
