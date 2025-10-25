@@ -1,13 +1,7 @@
-import React, { useEffect } from "react";
 import { Tooltip, Button, Input } from "@heroui/react";
 import { EyeIcon } from "lucide-react";
-import { invoke } from "@tauri-apps/api/core";
-
-// @ts-ignore
 import { createReactBlockSpec } from "@blocknote/react";
-import RunbookBus from "@/lib/app/runbook_bus";
 import { exportPropMatter } from "@/lib/utils";
-import { useCurrentRunbookId } from "@/context/runbook_id_context";
 import { useBlockContext } from "@/lib/hooks/useDocumentBridge";
 
 /**
@@ -25,8 +19,7 @@ interface VarDisplayProps {
  * Refreshes automatically every 2 seconds to keep values in sync
  */
 const VarDisplay = (props: VarDisplayProps) => {
-  const currentRunbookId = useCurrentRunbookId();
-  const context = useBlockContext(currentRunbookId, props.blockId);
+  const context = useBlockContext(props.blockId);
 
   let value = None;
   if (Object.hasOwn(context.variables, props.name)) {

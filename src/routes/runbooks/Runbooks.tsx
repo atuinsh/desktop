@@ -24,10 +24,7 @@ import RunbookIdContext from "@/context/runbook_id_context";
 import { invoke } from "@tauri-apps/api/core";
 import RunbookSynchronizer from "@/lib/sync/runbook_synchronizer";
 import RunbookControls from "./RunbookControls";
-import useDocumentBridge, {
-  DocumentBridge,
-  DocumentBridgeContext,
-} from "@/lib/hooks/useDocumentBridge";
+import { DocumentBridge, DocumentBridgeContext } from "@/lib/hooks/useDocumentBridge";
 import DebugWindow from "@/lib/dev/DebugWindow";
 import { ResolvedContext } from "@/rs-bindings/ResolvedContext";
 
@@ -117,7 +114,7 @@ export default function Runbooks() {
     if (!currentRunbook?.id) {
       return;
     }
-    setDocumentBridge(new DocumentBridge(currentRunbook.id));
+    setDocumentBridge(new DocumentBridge());
   }, [currentRunbook?.id]);
 
   const [blockContext, setBlockContext] = useState<ResolvedContext | null>(null);
