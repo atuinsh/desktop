@@ -1,421 +1,414 @@
-use std::sync::Arc;
-use tauri::ipc::Channel;
-use tokio::sync::{mpsc, oneshot};
+use std::{
+    any::Any,
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
+
+use tokio::sync::mpsc;
 use uuid::Uuid;
 
-use crate::runtime::blocks::document::block_context::{BlockContext, ResolvedContext};
-use crate::runtime::blocks::document::bridge::DocumentBridgeMessage;
-use crate::runtime::blocks::document::document::Document;
-use crate::runtime::blocks::handler::ExecutionContext;
-use crate::runtime::blocks::Block;
-use crate::runtime::events::EventBus;
-use crate::runtime::ClientMessageChannel;
+use crate::runtime::{
+    blocks::{
+        document::{
+            actor::DocumentCommand,
+            actor::DocumentError,
+            block_context::{
+                BlockContext, BlockWithContext, ContextResolver, DocumentCwd, DocumentEnvVar,
+                DocumentSshHost, DocumentVar, ResolvedContext,
+            },
+            bridge::DocumentBridgeMessage,
+        },
+        handler::ExecutionContext,
+        Block, KNOWN_UNSUPPORTED_BLOCKS,
+    },
+    events::{EventBus, GCEvent},
+    ClientMessageChannel,
+};
 
+pub mod actor;
 pub mod block_context;
 pub mod bridge;
-pub mod document;
 
-/// Errors that can occur during document operations
-#[derive(thiserror::Error, Debug, Clone)]
-pub enum DocumentError {
-    #[error("Block not found: {0}")]
-    BlockNotFound(Uuid),
-
-    #[error("Failed to send command to document actor")]
-    ActorSendError,
-
-    #[error("Failed to evaluate passive context: {0}")]
-    PassiveContextError(String),
-
-    #[error("Invalid document structure: {0}")]
-    InvalidStructure(String),
+/// Document-level context containing all block contexts
+/// This is the internal state owned by the DocumentActor
+pub struct Document {
+    id: String,
+    blocks: Vec<BlockWithContext>,
+    document_bridge: Box<dyn ClientMessageChannel<DocumentBridgeMessage>>,
+    known_unsupported_blocks: HashSet<String>,
 }
 
-impl<T> From<mpsc::error::SendError<T>> for DocumentError {
-    fn from(_: mpsc::error::SendError<T>) -> Self {
-        DocumentError::ActorSendError
-    }
-}
-
-pub type Reply<T> = oneshot::Sender<Result<T, DocumentError>>;
-
-/// Commands that can be sent to the document actor
-pub enum DocumentCommand {
-    UpdateDocument {
-        document: Vec<serde_json::Value>,
-        reply: Reply<()>,
-    },
-
-    /// Update the bridge channel for the document
-    UpdateBridgeChannel {
-        document_bridge: Box<dyn ClientMessageChannel<DocumentBridgeMessage>>,
-        reply: Reply<()>,
-    },
-
-    /// Start execution of a block, returning a snapshot of its context
-    StartExecution {
-        block_id: Uuid,
-        reply: Reply<ExecutionContext>,
-    },
-
-    /// Complete execution of a block, updating its context
-    CompleteExecution {
-        block_id: Uuid,
-        context: BlockContext,
-        reply: Reply<()>,
-    },
-
-    /// Update a block's context during execution (intermediate updates)
-    UpdateContext {
-        block_id: Uuid,
-        update_fn: Box<dyn FnOnce(&mut BlockContext) + Send>,
-        reply: Reply<()>,
-    },
-
-    /// Get a block by ID (for inspection/debugging)
-    GetBlock {
-        block_id: Uuid,
-        reply: oneshot::Sender<Option<Block>>,
-    },
-
-    /// Get a flattened block context
-    GetResolvedContext {
-        block_id: Uuid,
-        reply: oneshot::Sender<Result<ResolvedContext, DocumentError>>,
-    },
-
-    /// Shutdown the document actor
-    Shutdown,
-}
-
-/// Handle for interacting with a document actor
-/// This is the public API for document operations
-#[derive(Clone)]
-pub struct DocumentHandle {
-    runbook_id: String,
-    command_tx: mpsc::UnboundedSender<DocumentCommand>,
-}
-
-impl DocumentHandle {
-    /// Create a new document handle and spawn its actor
+impl Document {
     pub fn new(
-        runbook_id: String,
-        event_bus: Arc<dyn EventBus>,
-        document_bridge: Channel<DocumentBridgeMessage>, // todo: don't use Channel directly
-    ) -> Self {
-        let document_bridge = Box::new(document_bridge);
-        let (tx, rx) = mpsc::unbounded_channel();
-
-        // Clone tx for the actor
-        let tx_clone = tx.clone();
-        let runbook_id_clone = runbook_id.clone();
-
-        // Spawn the document actor
-        tokio::spawn(async move {
-            let mut actor =
-                DocumentActor::new(runbook_id_clone, event_bus, tx_clone, document_bridge);
-            actor.run(rx).await;
-        });
-
-        Self {
-            runbook_id,
-            command_tx: tx,
-        }
-    }
-
-    pub fn from_raw(
-        runbook_id: String,
-        command_tx: mpsc::UnboundedSender<DocumentCommand>,
-    ) -> Self {
-        Self {
-            runbook_id,
-            command_tx,
-        }
-    }
-
-    /// Get the runbook ID this document handle is for
-    #[allow(unused)]
-    pub fn runbook_id(&self) -> &str {
-        &self.runbook_id
-    }
-
-    pub async fn update_bridge_channel(
-        &self,
-        document_bridge: Box<dyn ClientMessageChannel<DocumentBridgeMessage>>,
-    ) -> Result<(), DocumentError> {
-        let (tx, rx) = oneshot::channel();
-        self.command_tx
-            .send(DocumentCommand::UpdateBridgeChannel {
-                document_bridge,
-                reply: tx,
-            })
-            .map_err(|_| DocumentError::ActorSendError)?;
-        rx.await.map_err(|_| DocumentError::ActorSendError)?
-    }
-
-    /// Update the entire document from BlockNote
-    pub async fn put_document(
-        &self,
+        id: String,
         document: Vec<serde_json::Value>,
-    ) -> Result<(), DocumentError> {
-        let (tx, rx) = oneshot::channel();
-        self.command_tx
-            .send(DocumentCommand::UpdateDocument {
-                document,
-                reply: tx,
-            })
-            .map_err(|_| DocumentError::ActorSendError)?;
-        rx.await.map_err(|_| DocumentError::ActorSendError)?
+        document_bridge: Box<dyn ClientMessageChannel<DocumentBridgeMessage>>,
+        _command_tx: mpsc::UnboundedSender<DocumentCommand>,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
+        let mut doc = Self {
+            id,
+            blocks: vec![],
+            document_bridge,
+            known_unsupported_blocks: HashSet::new(),
+        };
+        doc.put_document(document)?;
+
+        Ok(doc)
     }
 
-    /// Start execution of a block, returning a snapshot of its context
-    pub async fn start_execution(&self, block_id: Uuid) -> Result<ExecutionContext, DocumentError> {
-        let (tx, rx) = oneshot::channel();
-        self.command_tx
-            .send(DocumentCommand::StartExecution {
-                block_id,
-                reply: tx,
-            })
-            .map_err(|_| DocumentError::ActorSendError)?;
-        rx.await.map_err(|_| DocumentError::ActorSendError)?
+    pub fn update_document_bridge(
+        &mut self,
+        document_bridge: Box<dyn ClientMessageChannel<DocumentBridgeMessage>>,
+    ) {
+        self.document_bridge = document_bridge;
     }
 
-    /// Complete execution of a block, updating its final context
-    pub async fn complete_execution(
+    pub fn put_document(
+        &mut self,
+        document: Vec<serde_json::Value>,
+    ) -> Result<Option<usize>, Box<dyn std::error::Error>> {
+        let new_blocks = self.flatten_document(&document)?;
+
+        if self.blocks.is_empty() {
+            self.blocks = new_blocks
+                .into_iter()
+                .map(|b| BlockWithContext::new(b, BlockContext::new()))
+                .collect();
+            return Ok(Some(0));
+        }
+
+        // Capture old state for change detection
+        let old_block_ids: Vec<Uuid> = self.blocks.iter().map(|b| b.id()).collect();
+
+        // Build a map of existing blocks by ID for quick lookup
+        let mut existing_blocks_map: HashMap<Uuid, BlockWithContext> =
+            self.blocks.drain(..).map(|b| (b.id(), b)).collect();
+
+        // Track which blocks need context rebuild
+        let mut rebuild_from_index: Option<usize> = None;
+
+        // Single pass: Build the final block list in the correct order
+        let mut updated_blocks = Vec::with_capacity(new_blocks.len());
+
+        for (new_index, new_block) in new_blocks.into_iter().enumerate() {
+            if let Some(mut existing) = existing_blocks_map.remove(&new_block.id()) {
+                // Block exists - check if content changed or position moved
+                let content_changed = existing.block() != &new_block;
+                let old_index = old_block_ids.iter().position(|id| id == &new_block.id());
+                let position_changed = old_index != Some(new_index);
+
+                if content_changed {
+                    let block = existing.block_mut();
+                    *block = new_block;
+                }
+
+                if content_changed || position_changed {
+                    rebuild_from_index = Some(match rebuild_from_index {
+                        Some(existing_idx) => std::cmp::min(existing_idx, new_index),
+                        None => new_index,
+                    });
+                }
+
+                updated_blocks.push(existing);
+            } else {
+                // New block - create it
+                let block_with_context =
+                    BlockWithContext::new(new_block.clone(), BlockContext::new());
+                updated_blocks.push(block_with_context);
+
+                // Mark rebuild from this position
+                rebuild_from_index = Some(match rebuild_from_index {
+                    Some(existing) => std::cmp::min(existing, new_index),
+                    None => new_index,
+                });
+            }
+        }
+
+        // Any remaining blocks in existing_blocks_map were deleted
+        if !existing_blocks_map.is_empty() {
+            // Find the minimum position where a deletion occurred
+            for deleted_id in existing_blocks_map.keys() {
+                if let Some(old_index) = old_block_ids.iter().position(|id| id == deleted_id) {
+                    rebuild_from_index = Some(match rebuild_from_index {
+                        Some(existing) => std::cmp::min(existing, old_index),
+                        None => old_index,
+                    });
+                }
+            }
+        }
+
+        self.blocks = updated_blocks;
+
+        Ok(rebuild_from_index)
+    }
+
+    /// Flatten the nested document structure into a flat list
+    pub fn flatten_document(
+        &mut self,
+        document: &[serde_json::Value],
+    ) -> Result<Vec<Block>, Box<dyn std::error::Error>> {
+        let mut doc_blocks = Vec::with_capacity(document.len());
+        self.flatten_recursive(document, &mut doc_blocks)?;
+        let blocks = doc_blocks
+            .iter()
+            .filter_map(|value| match value.try_into() {
+                Ok(block) => Some(block),
+                Err(e) => {
+                    let block_type: String = value.get("type").and_then(|v| v.as_str()).unwrap_or("<unknown>").to_string();
+                    let block_id: String = value.get("id").and_then(|v| v.as_str()).unwrap_or("<unknown id>").to_string();
+
+                    let inserted = self.known_unsupported_blocks.insert(
+                        block_id,
+                    );
+
+                    if !KNOWN_UNSUPPORTED_BLOCKS.contains(&block_type.as_str()) && inserted
+                    {
+                        log::warn!(
+                            "Failed to parse Value with ID {:?} of type {:?} into Block: {:?}. Will not warn about this block again.",
+                            value
+                                .get("id")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("<unknown>"),
+                            value
+                                .get("type")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("<unknown>"),
+                            e
+                        );
+                    }
+                    None
+                }
+            })
+            .collect();
+
+        Ok(blocks)
+    }
+
+    fn flatten_recursive(
         &self,
-        block_id: Uuid,
-        context: BlockContext,
-    ) -> Result<(), DocumentError> {
-        let (tx, rx) = oneshot::channel();
-        self.command_tx
-            .send(DocumentCommand::CompleteExecution {
-                block_id,
-                context,
-                reply: tx,
-            })
-            .map_err(|_| DocumentError::ActorSendError)?;
-        rx.await.map_err(|_| DocumentError::ActorSendError)?
+        nodes: &[serde_json::Value],
+        out: &mut Vec<serde_json::Value>,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        for node in nodes {
+            out.push(node.clone());
+
+            if let Some(children) = node.get("children").and_then(|v| v.as_array()) {
+                self.flatten_recursive(children, out)?;
+            }
+        }
+
+        Ok(())
     }
 
-    /// Update a block's context during execution
-    pub async fn update_context<F>(&self, block_id: Uuid, update_fn: F) -> Result<(), DocumentError>
+    /// Get a block's context
+    pub fn get_block(&self, block_id: &Uuid) -> Option<&BlockWithContext> {
+        self.blocks.iter().find(|block| &block.id() == block_id)
+    }
+
+    /// Get a mutable reference to a block
+    pub fn get_block_mut(&mut self, block_id: &Uuid) -> Option<&mut BlockWithContext> {
+        self.blocks.iter_mut().find(|block| &block.id() == block_id)
+    }
+
+    /// Get a value of type T from the first block above current_block_id that has it
+    ///
+    /// This searches backwards from the current block through all blocks above it
+    /// until it finds one that contains a value of type T.
+    pub fn get_context_above<T: Any + Send + Sync>(&self, current_block_id: &Uuid) -> Option<&T> {
+        let current_idx = self
+            .blocks
+            .iter()
+            .position(|block| &block.id() == current_block_id)?;
+
+        // Iterate through blocks above current block (in reverse order, closest first)
+        for block in self.blocks[..current_idx].iter().rev() {
+            if let Some(value) = block.context().get::<T>() {
+                return Some(value);
+            }
+        }
+
+        None
+    }
+
+    /// Get all values of type T from blocks above current_block_id
+    ///
+    /// Returns values in order from closest to furthest from current block.
+    pub fn get_all_context_above<T: Any + Send + Sync>(&self, current_block_id: &Uuid) -> Vec<&T> {
+        let current_idx = match self
+            .blocks
+            .iter()
+            .position(|block| &block.id() == current_block_id)
+        {
+            Some(idx) => idx,
+            None => return Vec::new(),
+        };
+
+        let mut results = Vec::new();
+
+        // Iterate through blocks above current block (in reverse order, closest first)
+        for block in self.blocks[..current_idx].iter().rev() {
+            if let Some(value) = block.context().get::<T>() {
+                results.push(value);
+            }
+        }
+
+        results
+    }
+
+    /// Collect context from all blocks above current_block_id, merging them
+    ///
+    /// This is useful for types that can be merged (like variables or environment maps).
+    /// The collector function receives values from furthest to closest, allowing
+    /// closer blocks to override values from further blocks.
+    pub fn collect_context_above<T, R, F>(
+        &self,
+        current_block_id: &Uuid,
+        init: R,
+        mut collector: F,
+    ) -> R
     where
-        F: FnOnce(&mut BlockContext) + Send + 'static,
+        T: Any + Send + Sync,
+        F: FnMut(R, &T) -> R,
     {
-        let (tx, rx) = oneshot::channel();
-        self.command_tx
-            .send(DocumentCommand::UpdateContext {
-                block_id,
-                update_fn: Box::new(update_fn),
-                reply: tx,
-            })
-            .map_err(|_| DocumentError::ActorSendError)?;
-        rx.await.map_err(|_| DocumentError::ActorSendError)?
+        // Get all context values in order from closest to furthest
+        let values = self.get_all_context_above::<T>(current_block_id);
+
+        // Reverse to process furthest first, then fold with collector
+        values
+            .into_iter()
+            .rev()
+            .fold(init, |acc, value| collector(acc, value))
     }
 
-    /// Get a flattened block context
-    pub async fn get_resolved_context(
+    /// Build an execution context for a block, capturing all context from blocks above it
+    pub fn build_execution_context(
         &self,
-        block_id: Uuid,
-    ) -> Result<ResolvedContext, DocumentError> {
-        let (tx, rx) = oneshot::channel();
-        self.command_tx
-            .send(DocumentCommand::GetResolvedContext {
-                block_id,
-                reply: tx,
-            })
-            .map_err(|_| DocumentError::ActorSendError)?;
-        rx.await.map_err(|_| DocumentError::ActorSendError)?
-    }
-
-    /// Get a block by ID (for debugging/inspection)
-    #[allow(unused)]
-    pub async fn get_block(&self, block_id: Uuid) -> Option<Block> {
-        let (tx, rx) = oneshot::channel();
-        self.command_tx
-            .send(DocumentCommand::GetBlock {
-                block_id,
-                reply: tx,
-            })
-            .ok()?;
-        rx.await.ok()?
-    }
-
-    /// Update the document with a new document snapshot
-    pub async fn update_document(
-        &self,
-        document: Vec<serde_json::Value>,
-    ) -> Result<(), DocumentError> {
-        let (tx, rx) = oneshot::channel();
-        self.command_tx
-            .send(DocumentCommand::UpdateDocument {
-                document,
-                reply: tx,
-            })
-            .map_err(|_| DocumentError::ActorSendError)?;
-        rx.await.map_err(|_| DocumentError::ActorSendError)?
-    }
-
-    /// Shutdown the document actor
-    pub fn shutdown(&self) -> Result<(), DocumentError> {
-        self.command_tx
-            .send(DocumentCommand::Shutdown)
-            .map_err(|_| DocumentError::ActorSendError)?;
-        Ok(())
-    }
-}
-
-impl Drop for DocumentHandle {
-    fn drop(&mut self) {
-        // Send shutdown command on drop (fire and forget)
-        let _ = self.shutdown();
-    }
-}
-
-/// The document actor that owns the document state and processes commands
-struct DocumentActor {
-    document: Document,
-    event_bus: Arc<dyn EventBus>,
-    command_tx: mpsc::UnboundedSender<DocumentCommand>,
-}
-
-impl DocumentActor {
-    fn new(
-        runbook_id: String,
-        event_bus: Arc<dyn EventBus>,
+        block_id: &Uuid,
         command_tx: mpsc::UnboundedSender<DocumentCommand>,
-        document_bridge: Box<dyn ClientMessageChannel<DocumentBridgeMessage>>,
-    ) -> Self {
-        let document =
-            Document::new(runbook_id, vec![], document_bridge, command_tx.clone()).unwrap();
-
-        Self {
-            document,
-            event_bus,
-            command_tx,
-        }
-    }
-
-    /// Main actor loop - processes commands sequentially
-    async fn run(&mut self, mut rx: mpsc::UnboundedReceiver<DocumentCommand>) {
-        while let Some(cmd) = rx.recv().await {
-            match cmd {
-                DocumentCommand::UpdateDocument { document, reply } => {
-                    let result = self.handle_update_document(document).await;
-                    let _ = reply.send(result);
-                }
-                DocumentCommand::UpdateBridgeChannel {
-                    document_bridge,
-                    reply,
-                } => {
-                    self.document.update_document_bridge(document_bridge);
-                    let _ = reply.send(Ok(()));
-                }
-                DocumentCommand::StartExecution { block_id, reply } => {
-                    let result = self.handle_start_execution(block_id).await;
-                    let _ = reply.send(result);
-                }
-                DocumentCommand::CompleteExecution {
-                    block_id,
-                    context,
-                    reply,
-                } => {
-                    let result = self.handle_complete_execution(block_id, context).await;
-                    let _ = reply.send(result);
-                }
-                DocumentCommand::UpdateContext {
-                    block_id,
-                    update_fn,
-                    reply,
-                } => {
-                    let result = self.handle_update_context(block_id, update_fn).await;
-                    let _ = reply.send(result);
-                }
-                DocumentCommand::GetResolvedContext { block_id, reply } => {
-                    let context = self.document.get_resolved_context(&block_id);
-                    let _ = reply.send(context);
-                }
-                DocumentCommand::GetBlock { block_id, reply } => {
-                    let block = self
-                        .document
-                        .get_block(&block_id)
-                        .map(|b| b.block().clone());
-                    let _ = reply.send(block);
-                }
-                DocumentCommand::Shutdown => {
-                    break;
-                }
-            }
-        }
-    }
-
-    async fn handle_update_document(
-        &mut self,
-        document: Vec<serde_json::Value>,
-    ) -> Result<(), DocumentError> {
-        // Update the document using put_document, which returns the index to rebuild from
-        let rebuild_from = self
-            .document
-            .put_document(document)
-            .map_err(|e| DocumentError::InvalidStructure(e.to_string()))?;
-
-        // Rebuild passive contexts only for affected blocks
-        if let Some(start_index) = rebuild_from {
-            let result = self
-                .document
-                .rebuild_passive_contexts(Some(start_index), self.event_bus.clone());
-
-            if let Err(errors) = result {
-                // Log errors but don't fail the entire operation
-                for error in errors {
-                    log::error!("Error rebuilding passive context: {:?}", error);
-                }
-            }
-        }
-
-        Ok(())
-    }
-
-    async fn handle_start_execution(
-        &mut self,
-        block_id: Uuid,
+        event_bus: Arc<dyn EventBus>,
     ) -> Result<ExecutionContext, DocumentError> {
-        // Build execution view from current document state
-        let view = self.document.build_execution_context(
-            &block_id,
-            self.command_tx.clone(),
-            self.event_bus.clone(),
-        )?;
-        Ok(view)
+        todo!()
+        // let block = self
+        //     .get_block(block_id)
+        //     .ok_or_else(|| DocumentError::BlockNotFound(*block_id))?;
+
+        // // Collect variables
+        // let vars = self.collect_context_above::<DocumentVar, HashMap<String, String>, _>(
+        //     block_id,
+        //     HashMap::new(),
+        //     |mut acc, var| {
+        //         acc.insert(var.0.clone(), var.1.clone());
+        //         acc
+        //     },
+        // );
+
+        // // Get current working directory (use last one set, or default)
+        // let cwd = self
+        //     .get_context_above::<DocumentCwd>(block_id)
+        //     .map(|cwd| cwd.0.clone())
+        //     .unwrap_or_else(|| {
+        //         std::env::current_dir()
+        //             .unwrap_or_default()
+        //             .to_string_lossy()
+        //             .to_string()
+        //     });
+
+        // // Collect environment variables
+        // let env_vars = self.collect_context_above::<DocumentEnvVar, HashMap<String, String>, _>(
+        //     block_id,
+        //     HashMap::new(),
+        //     |mut acc, env| {
+        //         acc.insert(env.0.clone(), env.1.clone());
+        //         acc
+        //     },
+        // );
+
+        // // Get SSH host (use most recent)
+        // let ssh_host = self
+        //     .get_context_above::<DocumentSshHost>(block_id)
+        //     .and_then(|host| host.0.clone());
+
+        // Ok(DocumentExecutionView {
+        //     block_id: *block_id,
+        //     block: block.block().clone(),
+        //     runbook_id: Uuid::parse_str(&self.id).unwrap_or_else(|_| Uuid::new_v4()),
+        //     vars,
+        //     cwd,
+        //     env_vars,
+        //     ssh_host,
+        //     command_tx,
+        //     event_bus,
+        // })
     }
 
-    async fn handle_complete_execution(
-        &mut self,
-        block_id: Uuid,
-        context: BlockContext,
-    ) -> Result<(), DocumentError> {
-        // Update the block's context with the final execution result
-        let block = self
-            .document
-            .get_block_mut(&block_id)
-            .ok_or_else(|| DocumentError::BlockNotFound(block_id))?;
+    pub fn get_resolved_context(&self, block_id: &Uuid) -> Result<ResolvedContext, DocumentError> {
+        let position = self
+            .blocks
+            .iter()
+            .position(|b| b.id() == *block_id)
+            .ok_or(DocumentError::BlockNotFound(*block_id))?;
 
-        block.update_context(context);
-        Ok(())
+        let resolver = ContextResolver::from_blocks(&self.blocks[..position]);
+        Ok(ResolvedContext::from_resolver(&resolver))
     }
 
-    async fn handle_update_context(
+    /// Rebuild passive contexts for all blocks or blocks starting from a given index
+    /// This should be called after document structure changes
+    pub fn rebuild_passive_contexts(
         &mut self,
-        block_id: Uuid,
-        update_fn: Box<dyn FnOnce(&mut BlockContext) + Send>,
-    ) -> Result<(), DocumentError> {
-        // Apply the update function to the block's context
-        let block = self
-            .document
-            .get_block_mut(&block_id)
-            .ok_or_else(|| DocumentError::BlockNotFound(block_id))?;
+        start_index: Option<usize>,
+        event_bus: Arc<dyn EventBus>,
+    ) -> Result<(), Vec<DocumentError>> {
+        let mut errors = Vec::new();
+        let start = start_index.unwrap_or(0);
 
-        update_fn(block.context_mut());
-        Ok(())
+        let mut context_resolver = ContextResolver::from_blocks(&self.blocks[..start]);
+        for i in start..self.blocks.len() {
+            let block_id = self.blocks[i].id();
+
+            // Build resolver from all blocks ABOVE this one
+            // let resolver = ContextResolver::from_blocks(&self.blocks[..i]);
+
+            // Evaluate passive context for this block with the resolver
+            match self.blocks[i].block().passive_context(&context_resolver) {
+                Ok(Some(new_context)) => {
+                    self.blocks[i].update_context(new_context);
+                }
+                Ok(None) => {
+                    // Block has no passive context, that's fine
+                }
+                Err(e) => {
+                    let error_msg = format!("Failed to evaluate passive context: {}", e);
+                    errors.push(DocumentError::PassiveContextError(error_msg.clone()));
+
+                    // Emit Grand Central event for the error asynchronously
+                    let event_bus = event_bus.clone();
+                    let runbook_id = Uuid::parse_str(&self.id).unwrap_or_else(|_| Uuid::new_v4());
+                    tokio::spawn(async move {
+                        let _ = event_bus
+                            .emit(GCEvent::BlockFailed {
+                                block_id,
+                                runbook_id,
+                                error: error_msg,
+                            })
+                            .await;
+                    });
+                }
+            }
+
+            context_resolver.push_block(&self.blocks[i]);
+            let _ = self
+                .document_bridge
+                .send(DocumentBridgeMessage::BlockContextUpdate {
+                    block_id,
+                    context: ResolvedContext::from_resolver(&context_resolver),
+                });
+        }
+
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(errors)
+        }
     }
 }

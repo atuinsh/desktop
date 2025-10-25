@@ -6,9 +6,9 @@ use tauri::{ipc::Channel, AppHandle, Manager, State};
 use uuid::Uuid;
 
 use crate::commands::events::ChannelEventBus;
+use crate::runtime::blocks::document::actor::DocumentHandle;
 use crate::runtime::blocks::document::block_context::ResolvedContext;
 use crate::runtime::blocks::document::bridge::DocumentBridgeMessage;
-use crate::runtime::blocks::document::DocumentHandle;
 use crate::runtime::blocks::handler::BlockOutput;
 use crate::runtime::ClientMessageChannel;
 use crate::state::AtuinState;

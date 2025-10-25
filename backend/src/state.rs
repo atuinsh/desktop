@@ -15,7 +15,7 @@ use uuid::Uuid;
 
 use crate::{
     runtime::{
-        blocks::document::DocumentHandle,
+        blocks::document::actor::DocumentHandle,
         events::GCEvent,
         exec_log::ExecLogHandle,
         pty_store::PtyStoreHandle,
