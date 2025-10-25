@@ -159,7 +159,7 @@ impl AtuinState {
 
         let app_clone = app.clone();
         tauri::async_runtime::spawn(async move {
-            println!("starting executor command loop");
+            log::info!("starting executor command loop");
 
             while let Some(event) = cmd_receiver.recv().await {
                 match event {
