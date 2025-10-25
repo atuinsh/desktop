@@ -1,4 +1,5 @@
 // @ts-ignore
+import { createBlockNoteExtension } from "@blocknote/core";
 import { createReactBlockSpec } from "@blocknote/react";
 
 /**
@@ -31,4 +32,17 @@ export default createReactBlockSpec(
       return <HorizontalRule />;
     },
   },
+  [
+    createBlockNoteExtension({
+      key: "horizontal-rule-shortcut",
+      inputRules: [
+        {
+          find: new RegExp("^---$"),
+          replace() {
+            return { type: "horizontal_rule", props: {}, content: [] };
+          },
+        },
+      ],
+    }),
+  ],
 );
