@@ -3,6 +3,8 @@ use std::collections::HashMap;
 use typed_builder::TypedBuilder;
 use uuid::Uuid;
 
+use crate::runtime::blocks::{Block, BlockBehavior};
+
 use super::FromDocument;
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
@@ -100,6 +102,12 @@ impl FromDocument for Http {
             .build();
 
         Ok(http)
+    }
+}
+
+impl BlockBehavior for Http {
+    fn into_block(self) -> Block {
+        Block::Http(self)
     }
 }
 

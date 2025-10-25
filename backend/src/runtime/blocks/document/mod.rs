@@ -1,16 +1,19 @@
 use std::sync::Arc;
+use tauri::ipc::Channel;
 use tokio::sync::{mpsc, oneshot};
 use uuid::Uuid;
 
-use crate::runtime::blocks::document::block_context::BlockContext;
+use crate::runtime::blocks::document::block_context::{BlockContext, ResolvedContext};
+use crate::runtime::blocks::document::bridge::DocumentBridgeMessage;
 use crate::runtime::blocks::document::document::Document;
-use crate::runtime::blocks::document::document_context::DocumentExecutionView;
+use crate::runtime::blocks::handler::ExecutionContext;
 use crate::runtime::blocks::Block;
 use crate::runtime::events::EventBus;
+use crate::runtime::ClientMessageChannel;
 
 pub mod block_context;
+pub mod bridge;
 pub mod document;
-pub mod document_context;
 
 /// Errors that can occur during document operations
 #[derive(thiserror::Error, Debug, Clone)]
@@ -43,10 +46,16 @@ pub enum DocumentCommand {
         reply: Reply<()>,
     },
 
+    /// Update the bridge channel for the document
+    UpdateBridgeChannel {
+        document_bridge: Box<dyn ClientMessageChannel<DocumentBridgeMessage>>,
+        reply: Reply<()>,
+    },
+
     /// Start execution of a block, returning a snapshot of its context
     StartExecution {
         block_id: Uuid,
-        reply: Reply<DocumentExecutionView>,
+        reply: Reply<ExecutionContext>,
     },
 
     /// Complete execution of a block, updating its context
@@ -69,6 +78,12 @@ pub enum DocumentCommand {
         reply: oneshot::Sender<Option<Block>>,
     },
 
+    /// Get a flattened block context
+    GetResolvedContext {
+        block_id: Uuid,
+        reply: oneshot::Sender<Result<ResolvedContext, DocumentError>>,
+    },
+
     /// Shutdown the document actor
     Shutdown,
 }
@@ -83,7 +98,12 @@ pub struct DocumentHandle {
 
 impl DocumentHandle {
     /// Create a new document handle and spawn its actor
-    pub fn new(runbook_id: String, event_bus: Arc<dyn EventBus>) -> Self {
+    pub fn new(
+        runbook_id: String,
+        event_bus: Arc<dyn EventBus>,
+        document_bridge: Channel<DocumentBridgeMessage>, // todo: don't use Channel directly
+    ) -> Self {
+        let document_bridge = Box::new(document_bridge);
         let (tx, rx) = mpsc::unbounded_channel();
 
         // Clone tx for the actor
@@ -92,7 +112,8 @@ impl DocumentHandle {
 
         // Spawn the document actor
         tokio::spawn(async move {
-            let mut actor = DocumentActor::new(runbook_id_clone, event_bus, tx_clone);
+            let mut actor =
+                DocumentActor::new(runbook_id_clone, event_bus, tx_clone, document_bridge);
             actor.run(rx).await;
         });
 
@@ -102,10 +123,34 @@ impl DocumentHandle {
         }
     }
 
+    pub fn from_raw(
+        runbook_id: String,
+        command_tx: mpsc::UnboundedSender<DocumentCommand>,
+    ) -> Self {
+        Self {
+            runbook_id,
+            command_tx,
+        }
+    }
+
     /// Get the runbook ID this document handle is for
     #[allow(unused)]
     pub fn runbook_id(&self) -> &str {
         &self.runbook_id
+    }
+
+    pub async fn update_bridge_channel(
+        &self,
+        document_bridge: Box<dyn ClientMessageChannel<DocumentBridgeMessage>>,
+    ) -> Result<(), DocumentError> {
+        let (tx, rx) = oneshot::channel();
+        self.command_tx
+            .send(DocumentCommand::UpdateBridgeChannel {
+                document_bridge,
+                reply: tx,
+            })
+            .map_err(|_| DocumentError::ActorSendError)?;
+        rx.await.map_err(|_| DocumentError::ActorSendError)?
     }
 
     /// Update the entire document from BlockNote
@@ -124,10 +169,7 @@ impl DocumentHandle {
     }
 
     /// Start execution of a block, returning a snapshot of its context
-    pub async fn start_execution(
-        &self,
-        block_id: Uuid,
-    ) -> Result<DocumentExecutionView, DocumentError> {
+    pub async fn start_execution(&self, block_id: Uuid) -> Result<ExecutionContext, DocumentError> {
         let (tx, rx) = oneshot::channel();
         self.command_tx
             .send(DocumentCommand::StartExecution {
@@ -165,6 +207,21 @@ impl DocumentHandle {
             .send(DocumentCommand::UpdateContext {
                 block_id,
                 update_fn: Box::new(update_fn),
+                reply: tx,
+            })
+            .map_err(|_| DocumentError::ActorSendError)?;
+        rx.await.map_err(|_| DocumentError::ActorSendError)?
+    }
+
+    /// Get a flattened block context
+    pub async fn get_resolved_context(
+        &self,
+        block_id: Uuid,
+    ) -> Result<ResolvedContext, DocumentError> {
+        let (tx, rx) = oneshot::channel();
+        self.command_tx
+            .send(DocumentCommand::GetResolvedContext {
+                block_id,
                 reply: tx,
             })
             .map_err(|_| DocumentError::ActorSendError)?;
@@ -227,8 +284,10 @@ impl DocumentActor {
         runbook_id: String,
         event_bus: Arc<dyn EventBus>,
         command_tx: mpsc::UnboundedSender<DocumentCommand>,
+        document_bridge: Box<dyn ClientMessageChannel<DocumentBridgeMessage>>,
     ) -> Self {
-        let document = Document::new(runbook_id, vec![]).unwrap();
+        let document =
+            Document::new(runbook_id, vec![], document_bridge, command_tx.clone()).unwrap();
 
         Self {
             document,
@@ -244,6 +303,13 @@ impl DocumentActor {
                 DocumentCommand::UpdateDocument { document, reply } => {
                     let result = self.handle_update_document(document).await;
                     let _ = reply.send(result);
+                }
+                DocumentCommand::UpdateBridgeChannel {
+                    document_bridge,
+                    reply,
+                } => {
+                    self.document.update_document_bridge(document_bridge);
+                    let _ = reply.send(Ok(()));
                 }
                 DocumentCommand::StartExecution { block_id, reply } => {
                     let result = self.handle_start_execution(block_id).await;
@@ -264,6 +330,10 @@ impl DocumentActor {
                 } => {
                     let result = self.handle_update_context(block_id, update_fn).await;
                     let _ = reply.send(result);
+                }
+                DocumentCommand::GetResolvedContext { block_id, reply } => {
+                    let context = self.document.get_resolved_context(&block_id);
+                    let _ = reply.send(context);
                 }
                 DocumentCommand::GetBlock { block_id, reply } => {
                     let block = self
@@ -293,12 +363,12 @@ impl DocumentActor {
         if let Some(start_index) = rebuild_from {
             let result = self
                 .document
-                .rebuild_passive_contexts(Some(start_index), &self.event_bus);
+                .rebuild_passive_contexts(Some(start_index), self.event_bus.clone());
 
             if let Err(errors) = result {
                 // Log errors but don't fail the entire operation
                 for error in errors {
-                    eprintln!("Error rebuilding passive context: {:?}", error);
+                    log::error!("Error rebuilding passive context: {:?}", error);
                 }
             }
         }
@@ -309,9 +379,9 @@ impl DocumentActor {
     async fn handle_start_execution(
         &mut self,
         block_id: Uuid,
-    ) -> Result<DocumentExecutionView, DocumentError> {
+    ) -> Result<ExecutionContext, DocumentError> {
         // Build execution view from current document state
-        let view = self.document.build_execution_view(
+        let view = self.document.build_execution_context(
             &block_id,
             self.command_tx.clone(),
             self.event_bus.clone(),
@@ -330,7 +400,7 @@ impl DocumentActor {
             .get_block_mut(&block_id)
             .ok_or_else(|| DocumentError::BlockNotFound(block_id))?;
 
-        block.replace_context(context);
+        block.update_context(context);
         Ok(())
     }
 

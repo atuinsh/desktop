@@ -1,10 +1,6 @@
 use crate::runtime::blocks::{
-    document::{
-        block_context::{BlockContext, DocumentVar},
-        document_context::ContextResolver,
-    },
-    handler::{ContextProvider, ExecutionContext},
-    BlockBehavior,
+    document::block_context::{BlockContext, ContextResolver, DocumentVar},
+    Block, BlockBehavior, FromDocument,
 };
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
@@ -24,59 +20,26 @@ pub struct LocalVar {
     pub value: String,
 }
 
-pub struct LocalVarHandler;
-
-#[async_trait]
-impl ContextProvider for LocalVarHandler {
-    type Block = LocalVar;
-
-    fn block_type(&self) -> &'static str {
-        "local-var"
-    }
-
-    async fn apply_context(
-        &self,
-        block: &LocalVar,
-        context: &mut ExecutionContext,
-    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        if !block.name.is_empty() {
-            // Get the value from output storage (same as get_template_var command)
-            let value = if let Some(output_storage) = &context.output_storage {
-                output_storage
-                    .read()
-                    .await
-                    .get(&context.runbook_id.to_string())
-                    .and_then(|vars| vars.get(&block.name))
-                    .cloned()
-                    .unwrap_or_default()
-            } else {
-                // Fallback to empty if no output storage available
-                String::new()
-            };
-
-            // Add the variable to the execution context for template substitution
-            context.variables.insert(block.name.clone(), value);
-        }
-        Ok(())
-    }
-}
-
-impl LocalVar {
-    #[allow(dead_code)] // Used for JSON parsing but not currently called
-    pub fn from_document(block_data: &serde_json::Value) -> Result<Self, String> {
+impl FromDocument for LocalVar {
+    fn from_document(block_data: &serde_json::Value) -> Result<Self, String> {
         let id = block_data
             .get("id")
             .and_then(|v| v.as_str())
             .and_then(|s| Uuid::parse_str(s).ok())
             .ok_or("Invalid or missing id")?;
 
-        let name = block_data
+        let props = block_data
+            .get("props")
+            .and_then(|p| p.as_object())
+            .ok_or("Invalid or missing props")?;
+
+        let name = props
             .get("name")
             .and_then(|v| v.as_str())
             .ok_or("Missing name")?
             .to_string();
 
-        let value = block_data
+        let value = props
             .get("value")
             .and_then(|v| v.as_str())
             .unwrap_or("") // Default to empty string if value is missing
@@ -88,10 +51,24 @@ impl LocalVar {
 
 #[async_trait]
 impl BlockBehavior for LocalVar {
+    fn into_block(self) -> Block {
+        Block::LocalVar(self)
+    }
+
     fn passive_context(
         &self,
         resolver: &ContextResolver,
     ) -> Result<Option<BlockContext>, Box<dyn std::error::Error + Send + Sync>> {
+        // Validate name
+        if self.name.is_empty() {
+            return Err("Local variable name cannot be empty".into());
+        }
+
+        if !self.name.chars().all(|c| c.is_alphanumeric() || c == '_') {
+            return Err("Variable names can only contain letters, numbers, and underscores".into());
+        }
+
+        // Resolve value
         let mut context = BlockContext::new();
         let resolved_value = resolver.resolve_template(&self.value)?;
         context.insert(DocumentVar(self.name.clone(), resolved_value));
@@ -101,53 +78,37 @@ impl BlockBehavior for LocalVar {
 
 #[cfg(test)]
 mod tests {
+    use crate::runtime::blocks::document::block_context::ResolvedContext;
+
     use super::*;
     use uuid::Uuid;
 
     #[tokio::test]
     async fn test_local_var_handler_empty_name() {
-        let handler = LocalVarHandler;
         let local_var = LocalVar::builder()
             .id(Uuid::new_v4())
             .name("")
             .value("")
             .build();
 
-        let mut context = ExecutionContext::default();
-        handler
-            .apply_context(&local_var, &mut context)
-            .await
-            .unwrap();
-
-        // Should not add anything to variables for empty name
-        assert!(context.variables.is_empty());
+        let context = ResolvedContext::from_block(&local_var);
+        assert!(context.is_err());
     }
 
     #[tokio::test]
     async fn test_local_var_handler_with_name() {
-        let handler = LocalVarHandler;
         let local_var = LocalVar::builder()
             .id(Uuid::new_v4())
             .name("test_var")
             .value("test_value")
             .build();
 
-        let mut context = ExecutionContext::default();
-        handler
-            .apply_context(&local_var, &mut context)
-            .await
-            .unwrap();
+        let context = ResolvedContext::from_block(&local_var).unwrap();
 
         assert_eq!(
             context.variables.get("test_var"),
             Some(&"test_value".to_string())
         );
-    }
-
-    #[tokio::test]
-    async fn test_local_var_handler_block_type() {
-        let handler = LocalVarHandler;
-        assert_eq!(handler.block_type(), "local-var");
     }
 
     #[tokio::test]
@@ -168,8 +129,6 @@ mod tests {
 
     #[tokio::test]
     async fn test_local_var_valid_name_pattern() {
-        let handler = LocalVarHandler;
-
         // Test valid variable names (same pattern as frontend validation)
         let valid_names = vec!["test_var", "TEST123", "var_name_123", "a", "A"];
 
@@ -180,10 +139,7 @@ mod tests {
                 .value("test_value")
                 .build();
 
-            let mut context = ExecutionContext::default();
-            let result = handler.apply_context(&local_var, &mut context).await;
-
-            assert!(result.is_ok(), "Should handle valid name: {}", name);
+            let context = ResolvedContext::from_block(&local_var).unwrap();
             assert_eq!(context.variables.get(name), Some(&"test_value".to_string()));
         }
     }

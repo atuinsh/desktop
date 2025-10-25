@@ -2,6 +2,8 @@ use serde::{Deserialize, Serialize};
 use typed_builder::TypedBuilder;
 use uuid::Uuid;
 
+use crate::runtime::blocks::{Block, BlockBehavior};
+
 use super::FromDocument;
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, TypedBuilder)]
@@ -59,5 +61,11 @@ impl FromDocument for Terminal {
             .build();
 
         Ok(terminal)
+    }
+}
+
+impl BlockBehavior for Terminal {
+    fn into_block(self) -> Block {
+        Block::Terminal(self)
     }
 }
