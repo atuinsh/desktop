@@ -7,11 +7,13 @@ import { DialogBuilder } from "@/components/Dialogs/dialog";
 import { uuidv7 } from "uuidv7";
 import Runbook, { OfflineRunbook } from "@/state/runbooks/runbook";
 import * as commands from "./commands";
+import * as api from "@/api/api";
 import { WorkspaceError } from "@/rs-bindings/WorkspaceError";
 import { NodeApi } from "react-arborist";
 import { TreeRowData } from "@/components/runbooks/List/TreeView";
 import track_event from "@/tracking";
-
+import { ydocToBlocknote } from "../ydoc_to_blocknote";
+import * as Y from "yjs";
 interface WorkspaceFolderError {
   fatal: boolean;
   type: "not_empty" | "not_directory" | "not_exist" | "not_writable" | "is_subdir_of_workspace";
@@ -233,6 +235,62 @@ export default class OfflineStrategy implements WorkspaceStrategy {
   async deleteWorkspace(): Promise<void> {
     // `WorkspaceWatcher` unmount will handle unwatching the workspace
     this.workspace.del();
+  }
+
+  async importRunbookFromHub(
+    runbookId: string,
+    tag: string,
+    activateRunbook: (runbookId: string) => Promise<void>,
+  ): Promise<Result<string, WorkspaceError>> {
+    const remoteRunbook = await api.getRunbookID(runbookId);
+
+    let tagContent: any[];
+    if (tag === "latest") {
+      const yjsContent = await api.getRunbookYdoc(runbookId);
+      const doc = new Y.Doc();
+      if (yjsContent) {
+        Y.applyUpdate(doc, yjsContent);
+      }
+      tagContent = await ydocToBlocknote(doc);
+    } else {
+      const snapshot = remoteRunbook.snapshots.find((s) => s.tag === tag);
+      if (!snapshot) {
+        return Err({
+          type: "GenericWorkspaceError",
+          data: {
+            message: `Tag ${tag} not found on Atuin Hub`,
+          },
+        } as WorkspaceError);
+      }
+      const remoteSnapshot = await api.getSnapshotById(snapshot.id);
+      tagContent = remoteSnapshot.content;
+    }
+
+    const rb = await OfflineRunbook.create(
+      this.workspace,
+      null,
+      true,
+      remoteRunbook.name,
+      tagContent,
+    );
+    if (rb === null) {
+      return Err({
+        type: "RunbookSaveError",
+        data: {
+          runbook_id: runbookId,
+          message: "Failed to create runbook",
+        },
+      } as WorkspaceError);
+    }
+
+    await activateRunbook(rb.id);
+
+    track_event("runbooks.import", {
+      workspaceType: "offline",
+      forkedFrom: runbookId,
+    });
+
+    return Ok(rb.id);
   }
 
   async createRunbook(

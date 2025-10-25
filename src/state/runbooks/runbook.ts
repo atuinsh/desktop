@@ -528,7 +528,7 @@ export class OnlineRunbook extends Runbook {
     });
   }
 
-  public static async saveYDocForRunbook(id: string, update: ArrayBuffer | null) {
+  public static async saveYDocForRunbook(id: string, update: Uint8Array | null) {
     if (update) {
       logger.time(`Saving Y.Doc for runbook ${id}...`, async () => {
         await invoke("save_ydoc_for_runbook", update, {

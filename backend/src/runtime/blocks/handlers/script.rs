@@ -816,7 +816,7 @@ mod tests {
 
         let (exit_code, output) = ScriptHandler::run_script(
             &create_test_script("echo $TEST_ENV_VAR", "bash"),
-            context,
+            context.clone(),
             CancellationToken::new(),
             _tx,
             None,
@@ -825,7 +825,10 @@ mod tests {
 
         assert!(exit_code.is_ok());
         assert_eq!(exit_code.unwrap(), 0);
-        assert!(output.contains("env_value"));
+        assert!(
+            output.contains("env_value"),
+            "got {output:?} with {context:?}"
+        );
     }
 
     #[tokio::test]

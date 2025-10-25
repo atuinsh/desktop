@@ -15,6 +15,14 @@ export async function getRunbookID(id: string): Promise<RemoteRunbook> {
   return runbook;
 }
 
+export async function getRunbookYdoc(id: string): Promise<Uint8Array | null> {
+  let url = `/runbooks/${id}/yjs`;
+
+  const ydoc = await get<ArrayBuffer>(url, { bodyType: "bytes" });
+
+  return new Uint8Array(ydoc);
+}
+
 export function createRunbook(runbook: Runbook, slug: string, visibility: string) {
   const body = {
     runbook: {

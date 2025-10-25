@@ -214,8 +214,11 @@ export default class RunbookEditor {
       if (this.maybeNeedsContentConversion) {
         provider.once("synced").then(() => {
           // If the loaded YJS doc has no content, and the server has no content,
-          // we should take the old `content` field (if any) and populate the editor
+          // we should take the `content` field (if any) and populate the editor
           // so that we trigger a save, creating the YJS document.
+          //
+          // This is common when importing a runbook to an online workspace via
+          // Open in Desktop.
           //
           // This doesn't work if we set the content on the same tick, so defer it.
           setTimeout(() => {
@@ -339,7 +342,7 @@ export default class RunbookEditor {
     }
   }
 
-  async _save(runbookArg: Runbook | undefined, editorArg: BlockNoteEditor) {
+  async _save(runbookArg: Runbook | undefined, _editorArg: BlockNoteEditor) {
     if (!runbookArg) return;
     if (runbookArg.id !== this.runbook.id) {
       this.logger.warn(

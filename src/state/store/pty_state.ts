@@ -1,6 +1,8 @@
 import { invoke } from "@tauri-apps/api/core";
 import { platform } from "@tauri-apps/plugin-os";
 import { FitAddon } from "@xterm/addon-fit";
+import { WebLinksAddon } from '@xterm/addon-web-links';
+import { open } from "@tauri-apps/plugin-shell";
 import { IDisposable, Terminal } from "@xterm/xterm";
 import { Settings } from "../settings";
 import { WebglAddon } from "@xterm/addon-webgl";
@@ -180,6 +182,13 @@ export const createPtyState: StateCreator<AtuinPtyState> = (set, get, _store): A
 
     let fitAddon = new FitAddon();
     terminal.loadAddon(fitAddon);
+
+    function onLinkClick(_event: any, url: any) {
+      open(url);
+    }
+
+    let link = new WebLinksAddon(onLinkClick);
+    terminal.loadAddon(link);
 
     let td = new TerminalData(pty, terminal, fitAddon);
 
