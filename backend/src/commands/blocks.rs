@@ -15,7 +15,7 @@ use crate::state::AtuinState;
 
 #[async_trait]
 impl<M: Serialize + Send + Sync> ClientMessageChannel<M> for tauri::ipc::Channel<M> {
-    async fn send(&self, message: M) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    fn send(&self, message: M) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         self.send(message).map_err(|e| e.into())
     }
 }

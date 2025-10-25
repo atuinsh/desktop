@@ -394,7 +394,7 @@ impl DocumentActor {
         let block = self
             .document
             .get_block_mut(&block_id)
-            .ok_or_else(|| DocumentError::BlockNotFound(block_id))?;
+            .ok_or(DocumentError::BlockNotFound(block_id))?;
 
         block.update_context(context);
         Ok(())
@@ -409,7 +409,7 @@ impl DocumentActor {
         let block = self
             .document
             .get_block_mut(&block_id)
-            .ok_or_else(|| DocumentError::BlockNotFound(block_id))?;
+            .ok_or(DocumentError::BlockNotFound(block_id))?;
 
         update_fn(block.context_mut());
         Ok(())

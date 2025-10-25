@@ -148,7 +148,7 @@ impl Document {
         document: &[serde_json::Value],
     ) -> Result<Vec<Block>, Box<dyn std::error::Error>> {
         let mut doc_blocks = Vec::with_capacity(document.len());
-        self.flatten_recursive(document, &mut doc_blocks)?;
+        Self::flatten_recursive(document, &mut doc_blocks)?;
         let blocks = doc_blocks
             .iter()
             .filter_map(|value| match value.try_into() {
@@ -185,7 +185,6 @@ impl Document {
     }
 
     fn flatten_recursive(
-        &self,
         nodes: &[serde_json::Value],
         out: &mut Vec<serde_json::Value>,
     ) -> Result<(), Box<dyn std::error::Error>> {
@@ -193,7 +192,7 @@ impl Document {
             out.push(node.clone());
 
             if let Some(children) = node.get("children").and_then(|v| v.as_array()) {
-                self.flatten_recursive(children, out)?;
+                Self::flatten_recursive(children, out)?;
             }
         }
 
@@ -274,10 +273,7 @@ impl Document {
         let values = self.get_all_context_above::<T>(current_block_id);
 
         // Reverse to process furthest first, then fold with collector
-        values
-            .into_iter()
-            .rev()
-            .fold(init, |acc, value| collector(acc, value))
+        values.into_iter().rev().fold(init, collector)
     }
 
     /// Build an execution context for a block, capturing all context from blocks above it

@@ -1,4 +1,3 @@
-use async_trait::async_trait;
 use serde::Serialize;
 
 pub(crate) mod blocks;
@@ -9,7 +8,8 @@ pub(crate) mod ssh;
 pub(crate) mod ssh_pool;
 pub(crate) mod workflow;
 
-#[async_trait]
+// TODO: this may need to be async, but Tauri channels are sync and are used in sync code
+// (see Document::rebuild_passive_contexts)
 pub trait ClientMessageChannel<M: Serialize + Send + Sync>: Send + Sync {
-    async fn send(&self, message: M) -> Result<(), Box<dyn std::error::Error + Send + Sync>>;
+    fn send(&self, message: M) -> Result<(), Box<dyn std::error::Error + Send + Sync>>;
 }
