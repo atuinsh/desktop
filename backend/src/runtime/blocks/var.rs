@@ -61,7 +61,7 @@ impl BlockBehavior for Var {
     async fn passive_context(
         &self,
         resolver: &ContextResolver,
-        _block_local_value_provider: Option<&Box<dyn BlockLocalValueProvider>>,
+        _block_local_value_provider: Option<&dyn BlockLocalValueProvider>,
     ) -> Result<Option<BlockContext>, Box<dyn std::error::Error + Send + Sync>> {
         let mut context = BlockContext::new();
 

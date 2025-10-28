@@ -1,4 +1,3 @@
-use reqwest;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::sync::Arc;
@@ -279,10 +278,12 @@ impl Clickhouse {
         }
 
         // Template the query using context resolver
-        let query = self.template_clickhouse_query(&context).unwrap_or_else(|e| {
-            eprintln!("Template error in Clickhouse query {}: {}", block_id, e);
-            self.query.clone() // Fallback to original query
-        });
+        let query = self
+            .template_clickhouse_query(&context)
+            .unwrap_or_else(|e| {
+                eprintln!("Template error in Clickhouse query {}: {}", block_id, e);
+                self.query.clone() // Fallback to original query
+            });
 
         // Validate URI format
         if let Err(e) = Self::validate_clickhouse_uri(&self.uri) {
@@ -576,7 +577,10 @@ impl BlockBehavior for Clickhouse {
             }
 
             let result = self
-                .run_clickhouse_query(context_clone.clone(), handle_clone.cancellation_token.clone())
+                .run_clickhouse_query(
+                    context_clone.clone(),
+                    handle_clone.cancellation_token.clone(),
+                )
                 .await;
 
             // Determine status based on result
@@ -605,9 +609,7 @@ impl BlockBehavior for Clickhouse {
                         })
                         .await;
 
-                    ExecutionStatus::Success(
-                        "Clickhouse query completed successfully".to_string(),
-                    )
+                    ExecutionStatus::Success("Clickhouse query completed successfully".to_string())
                 }
                 Err(e) => {
                     // Emit BlockFailed event via Grand Central

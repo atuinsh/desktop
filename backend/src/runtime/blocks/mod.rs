@@ -57,7 +57,7 @@ pub trait BlockBehavior: Sized + Send + Sync {
     async fn passive_context(
         &self,
         _resolver: &ContextResolver,
-        _block_local_value_provider: Option<&Box<dyn BlockLocalValueProvider>>,
+        _block_local_value_provider: Option<&dyn BlockLocalValueProvider>,
     ) -> Result<Option<BlockContext>, Box<dyn std::error::Error + Send + Sync>> {
         Ok(None)
     }
@@ -195,7 +195,7 @@ impl Block {
     pub async fn passive_context(
         &self,
         resolver: &ContextResolver,
-        block_local_value_provider: Option<&Box<dyn BlockLocalValueProvider>>,
+        block_local_value_provider: Option<&dyn BlockLocalValueProvider>,
     ) -> Result<Option<BlockContext>, Box<dyn std::error::Error + Send + Sync>> {
         match self {
             Block::LocalVar(local_var) => {

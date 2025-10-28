@@ -1,5 +1,4 @@
 use std::{
-    any::Any,
     collections::{HashMap, HashSet},
     sync::Arc,
 };
@@ -14,10 +13,13 @@ use crate::runtime::{
             block_context::{BlockContext, BlockWithContext, ContextResolver, ResolvedContext},
             bridge::DocumentBridgeMessage,
         },
-        handler::ExecutionContext,
+        handler::{BlockOutput, ExecutionContext},
         Block, KNOWN_UNSUPPORTED_BLOCKS,
     },
     events::{EventBus, GCEvent},
+    pty_store::PtyStoreHandle,
+    ssh_pool::SshPoolHandle,
+    workflow::event::WorkflowEvent,
     ClientMessageChannel,
 };
 
@@ -219,28 +221,21 @@ impl Document {
     }
 
     /// Build an execution context for a block, capturing all context from blocks above it
+    #[allow(clippy::too_many_arguments)]
     pub fn build_execution_context(
         &self,
         block_id: &Uuid,
         command_tx: mpsc::UnboundedSender<DocumentCommand>,
         event_bus: Arc<dyn EventBus>,
-        output_channel: Option<
-            Arc<
-                dyn crate::runtime::ClientMessageChannel<
-                    crate::runtime::blocks::handler::BlockOutput,
-                >,
-            >,
-        >,
-        event_sender: tokio::sync::broadcast::Sender<
-            crate::runtime::workflow::event::WorkflowEvent,
-        >,
-        ssh_pool: Option<crate::runtime::ssh_pool::SshPoolHandle>,
-        pty_store: Option<crate::runtime::pty_store::PtyStoreHandle>,
+        output_channel: Option<Arc<dyn ClientMessageChannel<BlockOutput>>>,
+        event_sender: tokio::sync::broadcast::Sender<WorkflowEvent>,
+        ssh_pool: Option<SshPoolHandle>,
+        pty_store: Option<PtyStoreHandle>,
     ) -> Result<ExecutionContext, DocumentError> {
         // Verify block exists
         let _block = self
             .get_block(block_id)
-            .ok_or_else(|| DocumentError::BlockNotFound(*block_id))?;
+            .ok_or(DocumentError::BlockNotFound(*block_id))?;
 
         // Find the block's position in the document
         let position = self
@@ -307,7 +302,10 @@ impl Document {
             // Evaluate passive context for this block with the resolver
             match self.blocks[i]
                 .block()
-                .passive_context(&context_resolver, self.block_local_value_provider.as_ref())
+                .passive_context(
+                    &context_resolver,
+                    self.block_local_value_provider.as_deref(),
+                )
                 .await
             {
                 Ok(Some(new_context)) => {

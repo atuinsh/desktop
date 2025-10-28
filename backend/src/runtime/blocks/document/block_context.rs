@@ -61,10 +61,10 @@ impl ResolvedContext {
 
     pub async fn from_block(
         block: &(impl BlockBehavior + Clone),
-        block_local_value_provider: Option<Box<dyn BlockLocalValueProvider>>,
+        block_local_value_provider: Option<&dyn BlockLocalValueProvider>,
     ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         if let Some(context) = block
-            .passive_context(&ContextResolver::new(), block_local_value_provider.as_ref())
+            .passive_context(&ContextResolver::new(), block_local_value_provider)
             .await?
         {
             let block_with_context = BlockWithContext::new(block.clone().into_block(), context);

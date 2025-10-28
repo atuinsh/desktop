@@ -26,7 +26,7 @@ impl BlockBehavior for LocalDirectory {
     async fn passive_context(
         &self,
         resolver: &ContextResolver,
-        block_local_value_provider: Option<&Box<dyn BlockLocalValueProvider>>,
+        block_local_value_provider: Option<&dyn BlockLocalValueProvider>,
     ) -> Result<Option<BlockContext>, Box<dyn std::error::Error + Send + Sync>> {
         let local_value = if let Some(block_local_value_provider) = block_local_value_provider {
             block_local_value_provider
@@ -64,11 +64,8 @@ mod tests {
 
     use super::*;
 
-    fn local_value_provider(path: String) -> Box<dyn BlockLocalValueProvider> {
-        Box::new(MemoryBlockLocalValueProvider::new(vec![(
-            "path".to_string(),
-            path,
-        )]))
+    fn local_value_provider(path: String) -> impl BlockLocalValueProvider {
+        MemoryBlockLocalValueProvider::new(vec![("path".to_string(), path)])
     }
 
     // Basic functionality tests
@@ -77,7 +74,7 @@ mod tests {
         let dir = LocalDirectory::builder().id(Uuid::new_v4()).build();
 
         let context =
-            ResolvedContext::from_block(&dir, Some(local_value_provider("/tmp/test".to_string())))
+            ResolvedContext::from_block(&dir, Some(&local_value_provider("/tmp/test".to_string())))
                 .await
                 .unwrap();
 

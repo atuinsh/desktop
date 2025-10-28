@@ -14,8 +14,6 @@ pub struct VarDisplay {
     pub name: String,
 }
 
-pub struct VarDisplayHandler;
-
 impl FromDocument for VarDisplay {
     fn from_document(block_data: &serde_json::Value) -> Result<Self, String> {
         let id = block_data

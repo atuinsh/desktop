@@ -38,18 +38,11 @@ impl BlockLocalValueProvider for KvBlockLocalValueProvider {
         block_id: Uuid,
         property_name: &str,
     ) -> Result<Option<String>, Box<dyn std::error::Error + Send + Sync>> {
-        let db = kv::open_db(&self.app_handle).await.map_err(|_| {
-            Box::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                "Failed to open KV database",
-            ))
-        })?;
+        let db = kv::open_db(&self.app_handle)
+            .await
+            .map_err(|_| Box::new(std::io::Error::other("Failed to open KV database")))?;
         let key = format!("block.{block_id}.{property_name}");
-        match kv::get(&db, &key).await.map_err(|e| e.into()) {
-            Ok(Some(value)) => Ok(Some(value)),
-            Ok(None) => Ok(None),
-            Err(e) => Err(e),
-        }
+        kv::get(&db, &key).await.map_err(|e| e.into())
     }
 }
 

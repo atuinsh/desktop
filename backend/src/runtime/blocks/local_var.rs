@@ -53,7 +53,7 @@ impl BlockBehavior for LocalVar {
     async fn passive_context(
         &self,
         resolver: &ContextResolver,
-        block_local_value_provider: Option<&Box<dyn BlockLocalValueProvider>>,
+        block_local_value_provider: Option<&dyn BlockLocalValueProvider>,
     ) -> Result<Option<BlockContext>, Box<dyn std::error::Error + Send + Sync>> {
         // Validate name
         if self.name.is_empty() {
@@ -90,18 +90,15 @@ mod tests {
     use super::*;
     use uuid::Uuid;
 
-    fn local_value_provider() -> Box<dyn BlockLocalValueProvider> {
-        Box::new(MemoryBlockLocalValueProvider::new(vec![(
-            "value".to_string(),
-            "test_value".to_string(),
-        )]))
+    fn local_value_provider() -> impl BlockLocalValueProvider {
+        MemoryBlockLocalValueProvider::new(vec![("value".to_string(), "test_value".to_string())])
     }
 
     #[tokio::test]
     async fn test_local_var_handler_empty_name() {
         let local_var = LocalVar::builder().id(Uuid::new_v4()).name("").build();
 
-        let context = ResolvedContext::from_block(&local_var, Some(local_value_provider())).await;
+        let context = ResolvedContext::from_block(&local_var, Some(&local_value_provider())).await;
         assert!(context.is_err());
     }
 
@@ -112,7 +109,7 @@ mod tests {
             .name("test_var")
             .build();
 
-        let context = ResolvedContext::from_block(&local_var, Some(local_value_provider()))
+        let context = ResolvedContext::from_block(&local_var, Some(&local_value_provider()))
             .await
             .unwrap();
 
@@ -150,10 +147,9 @@ mod tests {
                 "test_value".to_string(),
             )]);
 
-            let context =
-                ResolvedContext::from_block(&local_var, Some(Box::new(local_value_provider)))
-                    .await
-                    .unwrap();
+            let context = ResolvedContext::from_block(&local_var, Some(&local_value_provider))
+                .await
+                .unwrap();
             assert_eq!(context.variables.get(name), Some(&"test_value".to_string()));
         }
     }

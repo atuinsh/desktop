@@ -6,8 +6,8 @@ use crate::runtime::ssh_pool::SshPoolHandle;
 use crate::runtime::workflow::event::WorkflowEvent;
 use crate::runtime::ClientMessageChannel;
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
 use std::fmt::Debug;
+use std::sync::Arc;
 use tokio::sync::{broadcast, oneshot, RwLock};
 use ts_rs::TS;
 use uuid::Uuid;
@@ -54,13 +54,19 @@ pub struct CancellationToken {
     receiver: Arc<std::sync::Mutex<Option<oneshot::Receiver<()>>>>,
 }
 
-impl CancellationToken {
-    pub fn new() -> Self {
+impl Default for CancellationToken {
+    fn default() -> Self {
         let (sender, receiver) = oneshot::channel();
         Self {
             sender: Arc::new(std::sync::Mutex::new(Some(sender))),
             receiver: Arc::new(std::sync::Mutex::new(Some(receiver))),
         }
+    }
+}
+
+impl CancellationToken {
+    pub fn new() -> Self {
+        Self::default()
     }
 
     pub fn cancel(&self) {
