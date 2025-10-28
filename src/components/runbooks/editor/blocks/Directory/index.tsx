@@ -1,10 +1,6 @@
-import { useState } from "react";
 import { Input, Tooltip, Button } from "@heroui/react";
 import { FolderInputIcon } from "lucide-react";
-
-// @ts-ignore
 import { createReactBlockSpec } from "@blocknote/react";
-
 import { open } from "@tauri-apps/plugin-dialog";
 import { exportPropMatter } from "@/lib/utils";
 
@@ -15,17 +11,14 @@ interface DirectoryProps {
 }
 
 const Directory = ({ path, onInputChange, isEditable }: DirectoryProps) => {
-  const [value, setValue] = useState(path);
-
   const selectFolder = async () => {
     if (isEditable) {
-      const path = await open({
+      const selectedPath = await open({
         multiple: false,
         directory: true,
       });
 
-      setValue(path || "");
-      onInputChange(path || "");
+      onInputChange(selectedPath || "");
     }
   };
 
@@ -52,15 +45,12 @@ const Directory = ({ path, onInputChange, isEditable }: DirectoryProps) => {
           <div className="flex-1">
             <Input
               placeholder="~ (working directory shared with collaborators)"
-              value={value}
+              value={path}
               autoComplete="off"
               autoCapitalize="off"
               autoCorrect="off"
               spellCheck="false"
-              onValueChange={(val) => {
-                setValue(val);
-                onInputChange(val);
-              }}
+              onValueChange={onInputChange}
               disabled={!isEditable}
               className="flex-1 border-blue-200 dark:border-blue-800 focus:ring-blue-500"
             />
