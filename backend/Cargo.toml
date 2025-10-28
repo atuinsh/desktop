@@ -44,7 +44,7 @@ klickhouse = { version = "0.14.0", features = ["tls"] }
 sha2 = "0.10"
 bigdecimal = "0.4"
 
-tauri = { version = "2.8.4", features = ["tray-icon", "devtools"] }
+tauri = { version = "2.8.4", features = ["tray-icon"] }
 tauri-plugin-http = { version = "2.5.2", features = ["native-tls"] }
 tauri-plugin-deep-link = "2.4.3"
 tauri-plugin-single-instance = { version = "2.3.4", features = ["deep-link"] }
@@ -139,3 +139,6 @@ strip = true        # Ensures debug symbols are removed
 # this feature is used for production builds or when `devPath` points to the filesystem
 # DO NOT REMOVE!!
 custom-protocol = ["tauri/custom-protocol"]
+# Enable devtools for development builds only
+default = ["devtools"]
+devtools = ["tauri/devtools"]
