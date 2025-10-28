@@ -6,6 +6,7 @@ pub(crate) mod environment;
 pub(crate) mod handler;
 pub(crate) mod host;
 pub(crate) mod http;
+pub(crate) mod local_directory;
 pub(crate) mod local_var;
 pub(crate) mod mysql;
 pub(crate) mod postgres;
@@ -88,6 +89,7 @@ pub enum Block {
     Var(var::Var),
     Environment(environment::Environment),
     Directory(directory::Directory),
+    LocalDirectory(local_directory::LocalDirectory),
     SshConnect(ssh_connect::SshConnect),
     Host(host::Host),
     VarDisplay(var_display::VarDisplay),
@@ -110,6 +112,7 @@ impl Block {
             Block::Var(var) => var.id,
             Block::Environment(environment) => environment.id,
             Block::Directory(directory) => directory.id,
+            Block::LocalDirectory(local_directory) => local_directory.id,
             Block::SshConnect(ssh_connect) => ssh_connect.id,
             Block::Host(host) => host.id,
             Block::VarDisplay(var_display) => var_display.id,
@@ -134,6 +137,7 @@ impl Block {
             Block::Var(_) => "".to_string(),
             Block::Environment(_) => "".to_string(),
             Block::Directory(_) => "".to_string(),
+            Block::LocalDirectory(_) => "".to_string(),
             Block::SshConnect(_) => "".to_string(),
             Block::Host(_) => "".to_string(),
             Block::VarDisplay(_) => "".to_string(),
@@ -173,6 +177,9 @@ impl Block {
             "directory" => Ok(Block::Directory(directory::Directory::from_document(
                 block_data,
             )?)),
+            "local-directory" => Ok(Block::LocalDirectory(
+                local_directory::LocalDirectory::from_document(block_data)?,
+            )),
             "ssh-connect" => Ok(Block::SshConnect(ssh_connect::SshConnect::from_document(
                 block_data,
             )?)),
@@ -207,6 +214,11 @@ impl Block {
             }
             Block::Directory(directory) => {
                 directory
+                    .passive_context(resolver, block_local_value_provider)
+                    .await
+            }
+            Block::LocalDirectory(local_directory) => {
+                local_directory
                     .passive_context(resolver, block_local_value_provider)
                     .await
             }
@@ -288,6 +300,7 @@ impl Block {
             Block::Var(var) => var.execute(context).await,
             Block::Environment(environment) => environment.execute(context).await,
             Block::Directory(directory) => directory.execute(context).await,
+            Block::LocalDirectory(local_directory) => local_directory.execute(context).await,
             Block::SshConnect(ssh_connect) => ssh_connect.execute(context).await,
             Block::Host(host) => host.execute(context).await,
             Block::VarDisplay(var_display) => var_display.execute(context).await,
