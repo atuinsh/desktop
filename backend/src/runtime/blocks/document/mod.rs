@@ -344,7 +344,8 @@ impl Document {
                 .send(DocumentBridgeMessage::BlockContextUpdate {
                     block_id,
                     context: ResolvedContext::from_resolver(&context_resolver),
-                });
+                })
+                .await;
         }
 
         if errors.is_empty() {
