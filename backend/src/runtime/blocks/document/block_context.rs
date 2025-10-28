@@ -142,6 +142,20 @@ impl ContextResolver {
         resolver
     }
 
+    /// Test-only constructor to create a resolver with specific vars
+    #[cfg(test)]
+    pub fn with_vars(vars: HashMap<String, String>) -> Self {
+        Self {
+            vars,
+            cwd: std::env::current_dir()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .to_string(),
+            env_vars: HashMap::new(),
+            ssh_host: None,
+        }
+    }
+
     /// Update the resolver with the context of a block.
     /// Values are overwritten or merged as appropriate.
     pub fn push_block(&mut self, block: &BlockWithContext) {
@@ -269,3 +283,12 @@ pub struct DocumentEnvVar(pub String, pub String);
 /// SSH connection information from SshConnect blocks
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DocumentSshHost(pub Option<String>);
+
+/// Execution output from blocks that produce results
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct BlockExecutionOutput {
+    pub exit_code: Option<i32>,
+    pub stdout: Option<String>,
+    pub stderr: Option<String>,
+    // Future: dataframes, complex data structures, etc.
+}

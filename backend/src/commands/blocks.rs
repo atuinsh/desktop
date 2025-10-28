@@ -30,23 +30,45 @@ pub async fn execute_block(
 ) -> Result<String, String> {
     let block_id = Uuid::parse_str(&block_id).map_err(|e| e.to_string())?;
 
+    // Update the document
     let documents = state.documents.read().await;
     let document = documents.get(&runbook_id).ok_or("Document not found")?;
     document
-        .update_document(editor_document)
+        .update_document(editor_document.clone())
         .await
         .map_err(|e| e.to_string())?;
 
-    // Start execution and get immutable snapshot
-    // TODO: output_channel
-    let exec_view = document
-        .start_execution(block_id)
+    // Get resources from state
+    let pty_store = state.pty_store();
+    let ssh_pool = state.ssh_pool();
+    let event_sender = state.event_sender();
+
+    // Get execution context
+    let context = document
+        .start_execution(
+            block_id,
+            Some(Arc::new(output_channel)),
+            event_sender,
+            Some(ssh_pool),
+            Some(pty_store),
+        )
         .await
         .map_err(|e| e.to_string())?;
 
-    // TODO: Actually execute the block with exec_view
-    // This will require updating block handlers to use DocumentExecutionView
-    // For now, just return the block ID
+    // Get the block to execute
+    let block = document.get_block(block_id).await.ok_or("Block not found")?;
+
+    // Execute the block
+    let execution_handle = block
+        .execute(context)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    // Store execution handle if one was returned
+    if let Some(handle) = execution_handle {
+        let mut executions = state.block_executions.write().await;
+        executions.insert(handle.id, handle);
+    }
 
     Ok(block_id.to_string())
 }

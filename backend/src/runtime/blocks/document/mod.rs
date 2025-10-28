@@ -10,11 +10,9 @@ use uuid::Uuid;
 use crate::runtime::{
     blocks::{
         document::{
-            actor::DocumentCommand,
-            actor::DocumentError,
+            actor::{DocumentCommand, DocumentError, DocumentHandle},
             block_context::{
-                BlockContext, BlockWithContext, ContextResolver, DocumentCwd, DocumentEnvVar,
-                DocumentSshHost, DocumentVar, ResolvedContext,
+                BlockContext, BlockWithContext, ContextResolver, ResolvedContext,
             },
             bridge::DocumentBridgeMessage,
         },
@@ -263,7 +261,7 @@ impl Document {
         &self,
         current_block_id: &Uuid,
         init: R,
-        mut collector: F,
+        collector: F,
     ) -> R
     where
         T: Any + Send + Sync,
@@ -282,59 +280,42 @@ impl Document {
         block_id: &Uuid,
         command_tx: mpsc::UnboundedSender<DocumentCommand>,
         event_bus: Arc<dyn EventBus>,
+        output_channel: Option<Arc<dyn crate::runtime::ClientMessageChannel<crate::runtime::blocks::handler::BlockOutput>>>,
+        event_sender: tokio::sync::broadcast::Sender<crate::runtime::workflow::event::WorkflowEvent>,
+        ssh_pool: Option<crate::runtime::ssh_pool::SshPoolHandle>,
+        pty_store: Option<crate::runtime::pty_store::PtyStoreHandle>,
     ) -> Result<ExecutionContext, DocumentError> {
-        todo!()
-        // let block = self
-        //     .get_block(block_id)
-        //     .ok_or_else(|| DocumentError::BlockNotFound(*block_id))?;
+        // Verify block exists
+        let _block = self
+            .get_block(block_id)
+            .ok_or_else(|| DocumentError::BlockNotFound(*block_id))?;
 
-        // // Collect variables
-        // let vars = self.collect_context_above::<DocumentVar, HashMap<String, String>, _>(
-        //     block_id,
-        //     HashMap::new(),
-        //     |mut acc, var| {
-        //         acc.insert(var.0.clone(), var.1.clone());
-        //         acc
-        //     },
-        // );
+        // Find the block's position in the document
+        let position = self
+            .blocks
+            .iter()
+            .position(|b| b.id() == *block_id)
+            .ok_or(DocumentError::BlockNotFound(*block_id))?;
 
-        // // Get current working directory (use last one set, or default)
-        // let cwd = self
-        //     .get_context_above::<DocumentCwd>(block_id)
-        //     .map(|cwd| cwd.0.clone())
-        //     .unwrap_or_else(|| {
-        //         std::env::current_dir()
-        //             .unwrap_or_default()
-        //             .to_string_lossy()
-        //             .to_string()
-        //     });
+        // Build context resolver from all blocks above this one
+        let context_resolver = ContextResolver::from_blocks(&self.blocks[..position]);
 
-        // // Collect environment variables
-        // let env_vars = self.collect_context_above::<DocumentEnvVar, HashMap<String, String>, _>(
-        //     block_id,
-        //     HashMap::new(),
-        //     |mut acc, env| {
-        //         acc.insert(env.0.clone(), env.1.clone());
-        //         acc
-        //     },
-        // );
+        // Create DocumentHandle for the block to use for context updates
+        let document_handle = DocumentHandle::from_raw(self.id.clone(), command_tx);
 
-        // // Get SSH host (use most recent)
-        // let ssh_host = self
-        //     .get_context_above::<DocumentSshHost>(block_id)
-        //     .and_then(|host| host.0.clone());
+        // Parse runbook ID
+        let runbook_id = Uuid::parse_str(&self.id).unwrap_or_else(|_| Uuid::new_v4());
 
-        // Ok(DocumentExecutionView {
-        //     block_id: *block_id,
-        //     block: block.block().clone(),
-        //     runbook_id: Uuid::parse_str(&self.id).unwrap_or_else(|_| Uuid::new_v4()),
-        //     vars,
-        //     cwd,
-        //     env_vars,
-        //     ssh_host,
-        //     command_tx,
-        //     event_bus,
-        // })
+        Ok(ExecutionContext {
+            runbook_id,
+            document_handle,
+            context_resolver,
+            output_channel,
+            event_sender,
+            ssh_pool,
+            pty_store,
+            event_bus: Some(event_bus),
+        })
     }
 
     pub fn get_resolved_context(&self, block_id: &Uuid) -> Result<ResolvedContext, DocumentError> {

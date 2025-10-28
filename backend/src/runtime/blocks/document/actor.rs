@@ -51,6 +51,10 @@ pub enum DocumentCommand {
     /// Start execution of a block, returning a snapshot of its context
     StartExecution {
         block_id: Uuid,
+        output_channel: Option<Arc<dyn crate::runtime::ClientMessageChannel<crate::runtime::blocks::handler::BlockOutput>>>,
+        event_sender: tokio::sync::broadcast::Sender<crate::runtime::workflow::event::WorkflowEvent>,
+        ssh_pool: Option<crate::runtime::ssh_pool::SshPoolHandle>,
+        pty_store: Option<crate::runtime::pty_store::PtyStoreHandle>,
         reply: Reply<ExecutionContext>,
     },
 
@@ -165,11 +169,22 @@ impl DocumentHandle {
     }
 
     /// Start execution of a block, returning a snapshot of its context
-    pub async fn start_execution(&self, block_id: Uuid) -> Result<ExecutionContext, DocumentError> {
+    pub async fn start_execution(
+        &self,
+        block_id: Uuid,
+        output_channel: Option<Arc<dyn crate::runtime::ClientMessageChannel<crate::runtime::blocks::handler::BlockOutput>>>,
+        event_sender: tokio::sync::broadcast::Sender<crate::runtime::workflow::event::WorkflowEvent>,
+        ssh_pool: Option<crate::runtime::ssh_pool::SshPoolHandle>,
+        pty_store: Option<crate::runtime::pty_store::PtyStoreHandle>,
+    ) -> Result<ExecutionContext, DocumentError> {
         let (tx, rx) = oneshot::channel();
         self.command_tx
             .send(DocumentCommand::StartExecution {
                 block_id,
+                output_channel,
+                event_sender,
+                ssh_pool,
+                pty_store,
                 reply: tx,
             })
             .map_err(|_| DocumentError::ActorSendError)?;
@@ -307,8 +322,17 @@ impl DocumentActor {
                     self.document.update_document_bridge(document_bridge);
                     let _ = reply.send(Ok(()));
                 }
-                DocumentCommand::StartExecution { block_id, reply } => {
-                    let result = self.handle_start_execution(block_id).await;
+                DocumentCommand::StartExecution {
+                    block_id,
+                    output_channel,
+                    event_sender,
+                    ssh_pool,
+                    pty_store,
+                    reply,
+                } => {
+                    let result = self
+                        .handle_start_execution(block_id, output_channel, event_sender, ssh_pool, pty_store)
+                        .await;
                     let _ = reply.send(result);
                 }
                 DocumentCommand::CompleteExecution {
@@ -375,14 +399,22 @@ impl DocumentActor {
     async fn handle_start_execution(
         &mut self,
         block_id: Uuid,
+        output_channel: Option<Arc<dyn crate::runtime::ClientMessageChannel<crate::runtime::blocks::handler::BlockOutput>>>,
+        event_sender: tokio::sync::broadcast::Sender<crate::runtime::workflow::event::WorkflowEvent>,
+        ssh_pool: Option<crate::runtime::ssh_pool::SshPoolHandle>,
+        pty_store: Option<crate::runtime::pty_store::PtyStoreHandle>,
     ) -> Result<ExecutionContext, DocumentError> {
-        // Build execution view from current document state
-        let view = self.document.build_execution_context(
+        // Build execution context from current document state
+        let context = self.document.build_execution_context(
             &block_id,
             self.command_tx.clone(),
             self.event_bus.clone(),
+            output_channel,
+            event_sender,
+            ssh_pool,
+            pty_store,
         )?;
-        Ok(view)
+        Ok(context)
     }
 
     async fn handle_complete_execution(

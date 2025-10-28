@@ -506,6 +506,7 @@ dependencies = [
  "comrak",
  "dirs 5.0.1",
  "eyre",
+ "fern",
  "font-kit",
  "glob",
  "humantime",
@@ -8144,8 +8145,6 @@ dependencies = [
 [[package]]
 name = "tauri-plugin-log"
 version = "2.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "61c1438bc7662acd16d508c919b3c087efd63669a4c75625dff829b1c75975ec"
 dependencies = [
  "android_logger",
  "byte-unit",

@@ -18,6 +18,7 @@ mod file;
 mod font;
 mod install;
 mod kv;
+mod logs;
 mod main_window;
 mod menu;
 mod pty;
@@ -43,6 +44,8 @@ use atuin_client::{history::HISTORY_TAG, record::sqlite_store::SqliteStore, reco
 use atuin_history::stats as atuin_stats;
 use db::{GlobalStats, HistoryDB, UIHistory};
 use dotfiles::aliases::aliases;
+
+// Logging setup is done via tauri-plugin-log
 
 #[derive(Debug, serde::Serialize)]
 struct HomeInfo {
@@ -409,9 +412,32 @@ fn main() {
     let builder = tauri::Builder::default().plugin(
         tauri_plugin_log::Builder::new()
             .targets([
-                tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stderr),
+                tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stderr).format(
+                    move |out, message, record| {
+                        out.finish(format_args!(
+                        "{color_reset}[{date}][{level}]{target}{color_line} {message}{color_reset}",
+                        color_reset = format_args!("\x1B[0m"),
+                        color_line = format_args!(
+                            "\x1B[{}m",
+                            colors_line.get_color(&record.level()).to_fg_str()
+                        ),
+                        date = humantime::format_rfc3339(std::time::SystemTime::now()),
+                        target =
+                            format_args!("\x1B[{}m[{}]", Color::White.to_fg_str(), record.target()),
+                        level = colors_line.color(record.level())
+                    ));
+                    },
+                ),
                 tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::LogDir {
                     file_name: None,
+                })
+                .format(move |out, message, record| {
+                    out.finish(format_args!(
+                        "[{date}][{level}][{target}] {message}",
+                        date = humantime::format_rfc3339(std::time::SystemTime::now()),
+                        target = record.target(),
+                        level = record.level()
+                    ));
                 }),
             ])
             .level(
@@ -430,21 +456,8 @@ fn main() {
             )
             .max_file_size(20_000_000)
             .rotation_strategy(tauri_plugin_log::RotationStrategy::KeepSome(4))
-            .with_colors(tauri_plugin_log::fern::colors::ColoredLevelConfig::default())
-            .format(move |out, message, record| {
-                out.finish(format_args!(
-                    "{color_reset}[{date}][{level}]{target}{color_line} {message}{color_reset}",
-                    color_reset = format_args!("\x1B[0m"),
-                    color_line = format_args!(
-                        "\x1B[{}m",
-                        colors_line.get_color(&record.level()).to_fg_str()
-                    ),
-                    date = humantime::format_rfc3339(std::time::SystemTime::now()),
-                    target =
-                        format_args!("\x1B[{}m[{}]", Color::White.to_fg_str(), record.target()),
-                    level = colors_line.color(record.level()),
-                    message = message
-                ));
+            .format(move |out, message, _record| {
+                out.finish(format_args!("{message}"));
             })
             .build(),
     );

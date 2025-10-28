@@ -4,7 +4,6 @@ pub(crate) mod document;
 pub(crate) mod editor;
 pub(crate) mod environment;
 pub(crate) mod handler;
-pub(crate) mod handlers;
 pub(crate) mod host;
 pub(crate) mod http;
 pub(crate) mod local_var;
@@ -48,7 +47,7 @@ pub trait FromDocument: Sized {
 }
 
 #[async_trait]
-pub trait BlockBehavior: Send + Sync {
+pub trait BlockBehavior: Sized + Send + Sync {
     fn into_block(self) -> Block;
 
     fn passive_context(
@@ -57,9 +56,10 @@ pub trait BlockBehavior: Send + Sync {
     ) -> Result<Option<BlockContext>, Box<dyn std::error::Error + Send + Sync>> {
         Ok(None)
     }
+
     async fn execute(
-        &self,
-        _execution_context: ExecutionContext,
+        self,
+        _context: ExecutionContext,
     ) -> Result<Option<ExecutionHandle>, Box<dyn std::error::Error + Send + Sync>> {
         Ok(None)
     }
@@ -202,6 +202,30 @@ impl Block {
             Block::Prometheus(prometheus) => prometheus.passive_context(resolver),
             Block::Clickhouse(clickhouse) => clickhouse.passive_context(resolver),
             Block::Mysql(clickhouse) => clickhouse.passive_context(resolver),
+        }
+    }
+
+    pub async fn execute(
+        self,
+        context: ExecutionContext,
+    ) -> Result<Option<ExecutionHandle>, Box<dyn std::error::Error + Send + Sync>> {
+        match self {
+            Block::Terminal(terminal) => terminal.execute(context).await,
+            Block::Script(script) => script.execute(context).await,
+            Block::Postgres(postgres) => postgres.execute(context).await,
+            Block::Http(http) => http.execute(context).await,
+            Block::Prometheus(prometheus) => prometheus.execute(context).await,
+            Block::Clickhouse(clickhouse) => clickhouse.execute(context).await,
+            Block::Mysql(mysql) => mysql.execute(context).await,
+            Block::SQLite(sqlite) => sqlite.execute(context).await,
+            Block::LocalVar(local_var) => local_var.execute(context).await,
+            Block::Var(var) => var.execute(context).await,
+            Block::Environment(environment) => environment.execute(context).await,
+            Block::Directory(directory) => directory.execute(context).await,
+            Block::SshConnect(ssh_connect) => ssh_connect.execute(context).await,
+            Block::Host(host) => host.execute(context).await,
+            Block::VarDisplay(var_display) => var_display.execute(context).await,
+            Block::Editor(editor) => editor.execute(context).await,
         }
     }
 }

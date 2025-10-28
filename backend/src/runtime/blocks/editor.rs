@@ -79,6 +79,8 @@ impl BlockBehavior for Editor {
         Block::Editor(self)
     }
 
+    // TODO: If the variable sync switch is on for the editor, we need to replace the editor's code
+    // with the value stored in the variable.
     fn passive_context(
         &self,
         resolver: &ContextResolver,

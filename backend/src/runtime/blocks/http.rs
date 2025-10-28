@@ -105,9 +105,18 @@ impl FromDocument for Http {
     }
 }
 
+#[async_trait::async_trait]
 impl BlockBehavior for Http {
     fn into_block(self) -> Block {
         Block::Http(self)
+    }
+
+    async fn execute(
+        self,
+        _context: super::handler::ExecutionContext,
+    ) -> Result<Option<super::handler::ExecutionHandle>, Box<dyn std::error::Error + Send + Sync>> {
+        // TODO: Migrate logic from handlers/http.rs
+        Err("HTTP execution not yet implemented - needs migration from handlers/http.rs".into())
     }
 }
 
