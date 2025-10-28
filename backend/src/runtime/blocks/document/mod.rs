@@ -283,7 +283,7 @@ impl Document {
         start_index: Option<usize>,
         event_bus: Arc<dyn EventBus>,
     ) -> Result<(), Vec<DocumentError>> {
-        log::debug!(
+        log::trace!(
             "Rebuilding passive contexts for document {} starting from index {}",
             self.id,
             start_index.unwrap_or(0)
