@@ -1175,15 +1175,28 @@ mod tests {
         // Create a valid runbook in subdirectory (should not be ignored)
         create_test_runbook(&subdir, "valid_runbook", "valid-runbook-id").await;
 
-        // Wait a bit to ensure any events would have been processed
-        sleep(Duration::from_millis(200)).await;
+        // Wait for events with timeout - without this pattern, this test can be flaky
+        let events_future = async {
+            loop {
+                let events = collector.get_events().await;
+                if !events.is_empty() {
+                    break events;
+                }
+                tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+            }
+        };
+        let timeout_future = tokio::time::sleep(tokio::time::Duration::from_millis(1000));
 
-        // Check that only the valid runbook generated events
-        let events = collector.get_events().await;
-        assert!(
-            !events.is_empty(),
-            "Events should be generated for valid runbook"
-        );
+        match tokio::select! {
+            events = events_future => Ok(events),
+            _ = timeout_future => Err("Timeout waiting for events"),
+        } {
+            Ok(events) => assert!(
+                !events.is_empty(),
+                "Events should be generated for valid runbook"
+            ),
+            Err(e) => panic!("{}", e),
+        };
 
         // Verify that only the valid runbook is in the workspace state
         {
