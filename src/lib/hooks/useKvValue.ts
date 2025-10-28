@@ -1,3 +1,4 @@
+import { useCurrentRunbookId } from "@/context/runbook_id_context";
 import { KVStore } from "@/state/kv";
 import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useState } from "react";
@@ -45,11 +46,15 @@ export function useKvValue<T>(key: string, defaultValue: T): [T, (value: T) => P
  * @returns A tuple containing the current value and a function to update the value.
  */
 export function useBlockKvValue<T>(
-  runbookId: string,
   blockId: string,
   key: string,
   defaultValue: T,
 ): [T, (value: T) => Promise<void>] {
+  const runbookId = useCurrentRunbookId();
+  if (!runbookId) {
+    throw new Error("useBlockKvValue must be used within a runbook context");
+  }
+
   const storeKey = `block.${blockId}.${key}`;
   const [value, updateValue] = useKvValue(storeKey, defaultValue);
 

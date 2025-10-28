@@ -1,11 +1,10 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { Input, Button } from "@heroui/react";
 import { CloudOffIcon, LockIcon } from "lucide-react";
 import { createReactBlockSpec } from "@blocknote/react";
 import track_event from "@/tracking";
 import { exportPropMatter } from "@/lib/utils";
 import { useBlockKvValue } from "@/lib/hooks/useKvValue";
-import { useCurrentRunbookId } from "@/context/runbook_id_context";
 
 interface LocalVarProps {
   blockId: string;
@@ -15,8 +14,7 @@ interface LocalVarProps {
 }
 
 const LocalVar = (props: LocalVarProps) => {
-  const runbookId = useCurrentRunbookId()!;
-  const [value, setValue] = useBlockKvValue(runbookId, props.blockId, "value", "");
+  const [value, setValue] = useBlockKvValue(props.blockId, "value", "");
 
   const [hasNameError, setHasNameError] = useState(false);
 

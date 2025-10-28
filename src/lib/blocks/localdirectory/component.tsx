@@ -1,7 +1,7 @@
 import { Input, Tooltip, Button } from "@heroui/react";
 import { FolderInputIcon } from "lucide-react";
 import { open } from "@tauri-apps/plugin-dialog";
-import { useKvValue } from "@/lib/hooks/useKvValue";
+import { useBlockKvValue } from "@/lib/hooks/useKvValue";
 
 interface LocalDirectoryComponentProps {
   blockId: string;
@@ -9,8 +9,7 @@ interface LocalDirectoryComponentProps {
 }
 
 export const LocalDirectoryComponent = ({ blockId, isEditable }: LocalDirectoryComponentProps) => {
-  const storeKey = `block.${blockId}.path`;
-  const [path, setPath] = useKvValue(storeKey, "");
+  const [path, setPath] = useBlockKvValue(blockId, "path", "");
 
   const selectFolder = async () => {
     if (isEditable) {
