@@ -114,7 +114,7 @@ export default function Runbooks() {
     if (!currentRunbook?.id) {
       return;
     }
-    setDocumentBridge(new DocumentBridge());
+    setDocumentBridge(new DocumentBridge(currentRunbook.id));
   }, [currentRunbook?.id]);
 
   const [blockContext, setBlockContext] = useState<ResolvedContext | null>(null);
@@ -214,7 +214,7 @@ export default function Runbooks() {
       console.log("Opening document", currentRunbook.id);
       invoke("open_document", {
         documentId: currentRunbook.id,
-        document: [],
+        document: currentRunbook.content ? JSON.parse(currentRunbook.content) : "[]",
         documentBridge: documentBridge.channel,
       });
     }

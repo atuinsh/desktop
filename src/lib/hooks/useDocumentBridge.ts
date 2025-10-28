@@ -1,4 +1,4 @@
-import { Channel } from "@tauri-apps/api/core";
+import { Channel, invoke } from "@tauri-apps/api/core";
 import { createContext, useContext, useEffect, useState } from "react";
 import { autobind } from "../decorators";
 import Emittery from "emittery";
@@ -14,6 +14,7 @@ export default function useDocumentBridge(): DocumentBridge | null {
 export type BlockContext = {};
 
 export class DocumentBridge {
+  public readonly runbookId: string;
   private _channel: Channel<DocumentBridgeMessage>;
   private emitter: Emittery;
 
@@ -21,7 +22,8 @@ export class DocumentBridge {
     return this._channel;
   }
 
-  constructor() {
+  constructor(runbookId: string) {
+    this.runbookId = runbookId;
     this._channel = new Channel<DocumentBridgeMessage>((message) => this.onMessage(message));
     this.emitter = new Emittery();
   }
@@ -35,6 +37,13 @@ export class DocumentBridge {
       default:
         break;
     }
+  }
+
+  public getBlockContext(blockId: string): Promise<ResolvedContext> {
+    return invoke("get_flattened_block_context", {
+      documentId: this.runbookId,
+      blockId,
+    });
   }
 
   public onBlockContextUpdate(blockId: string, callback: (context: ResolvedContext) => void) {
@@ -63,6 +72,11 @@ export function useBlockContext(blockId: string): ResolvedContext {
     if (!documentBridge) {
       return;
     }
+
+    documentBridge.getBlockContext(blockId).then((context) => {
+      setContext(context);
+    });
+
     return documentBridge.onBlockContextUpdate(blockId, (context) => {
       setContext(context);
     });

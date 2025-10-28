@@ -241,7 +241,6 @@ export default class RunbookEditor {
       }
     });
 
-    this.scheduleSendChanges();
     return this.editor;
   }
 
