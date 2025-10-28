@@ -315,10 +315,12 @@ impl Prometheus {
             });
         }
 
-        let query = self.template_prometheus_query(&context).unwrap_or_else(|e| {
-            eprintln!("Template error in Prometheus query {}: {}", block_id, e);
-            self.query.clone()
-        });
+        let query = self
+            .template_prometheus_query(&context)
+            .unwrap_or_else(|e| {
+                eprintln!("Template error in Prometheus query {}: {}", block_id, e);
+                self.query.clone()
+            });
 
         if let Err(e) = Self::validate_prometheus_endpoint(&self.endpoint) {
             if let Some(ref ch) = context.output_channel {
@@ -477,7 +479,10 @@ impl BlockBehavior for Prometheus {
             }
 
             let result = self
-                .run_prometheus_query(context_clone.clone(), handle_clone.cancellation_token.clone())
+                .run_prometheus_query(
+                    context_clone.clone(),
+                    handle_clone.cancellation_token.clone(),
+                )
                 .await;
 
             let status = match result {
@@ -503,9 +508,7 @@ impl BlockBehavior for Prometheus {
                         })
                         .await;
 
-                    ExecutionStatus::Success(
-                        "Prometheus query completed successfully".to_string(),
-                    )
+                    ExecutionStatus::Success("Prometheus query completed successfully".to_string())
                 }
                 Err(e) => {
                     if let Some(event_bus) = &context_clone.event_bus {

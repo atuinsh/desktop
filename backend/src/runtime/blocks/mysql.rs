@@ -515,7 +515,10 @@ impl BlockBehavior for Mysql {
             }
 
             let result = self
-                .run_mysql_query(context_clone.clone(), handle_clone.cancellation_token.clone())
+                .run_mysql_query(
+                    context_clone.clone(),
+                    handle_clone.cancellation_token.clone(),
+                )
                 .await;
 
             // Determine status based on result

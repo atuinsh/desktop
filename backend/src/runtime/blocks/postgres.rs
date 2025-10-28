@@ -591,7 +591,10 @@ impl BlockBehavior for Postgres {
             }
 
             let result = self
-                .run_postgres_query(context_clone.clone(), handle_clone.cancellation_token.clone())
+                .run_postgres_query(
+                    context_clone.clone(),
+                    handle_clone.cancellation_token.clone(),
+                )
                 .await;
 
             // Determine status based on result
@@ -620,9 +623,7 @@ impl BlockBehavior for Postgres {
                         })
                         .await;
 
-                    ExecutionStatus::Success(
-                        "Postgres query completed successfully".to_string(),
-                    )
+                    ExecutionStatus::Success("Postgres query completed successfully".to_string())
                 }
                 Err(e) => {
                     // Emit BlockFailed event via Grand Central

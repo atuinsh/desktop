@@ -73,10 +73,11 @@ impl BlockBehavior for Terminal {
     async fn execute(
         self,
         context: super::handler::ExecutionContext,
-    ) -> Result<Option<super::handler::ExecutionHandle>, Box<dyn std::error::Error + Send + Sync>> {
+    ) -> Result<Option<super::handler::ExecutionHandle>, Box<dyn std::error::Error + Send + Sync>>
+    {
         use crate::runtime::blocks::handler::{
-            BlockErrorData, BlockFinishedData, BlockLifecycleEvent, BlockOutput,
-            CancellationToken, ExecutionStatus, ExecutionHandle,
+            BlockErrorData, BlockFinishedData, BlockLifecycleEvent, BlockOutput, CancellationToken,
+            ExecutionHandle, ExecutionStatus,
         };
         use crate::runtime::events::GCEvent;
         use crate::runtime::workflow::event::WorkflowEvent;
@@ -92,7 +93,9 @@ impl BlockBehavior for Terminal {
         };
 
         // Send started event
-        let _ = context.event_sender.send(WorkflowEvent::BlockStarted { id: self.id });
+        let _ = context
+            .event_sender
+            .send(WorkflowEvent::BlockStarted { id: self.id });
         if let Some(ref ch) = context.output_channel {
             let _ = ch.send(BlockOutput {
                 stdout: None,
@@ -125,7 +128,13 @@ impl BlockBehavior for Terminal {
         let handle_clone = handle.clone();
 
         tokio::spawn(async move {
-            let result = self.run_terminal(context.clone(), metadata, handle_clone.cancellation_token.clone()).await;
+            let result = self
+                .run_terminal(
+                    context.clone(),
+                    metadata,
+                    handle_clone.cancellation_token.clone(),
+                )
+                .await;
 
             let status = match result {
                 Ok(false) => ExecutionStatus::Success("Terminal session ended".to_string()),
@@ -198,7 +207,9 @@ impl Terminal {
             .ok_or("PTY store not available in execution context")?;
 
         // Open PTY based on context (local or SSH)
-        let pty: Box<dyn PtyLike + Send> = if let Some(ssh_host) = context.context_resolver.ssh_host() {
+        let pty: Box<dyn PtyLike + Send> = if let Some(ssh_host) =
+            context.context_resolver.ssh_host()
+        {
             // Parse SSH host
             let (username, hostname) = Self::parse_ssh_host(ssh_host);
 
@@ -406,7 +417,9 @@ impl Terminal {
             }
 
             // Send cancelled event to the block channel
-            let _ = context.event_sender.send(WorkflowEvent::BlockFinished { id: self.id });
+            let _ = context
+                .event_sender
+                .send(WorkflowEvent::BlockFinished { id: self.id });
             if let Some(ref ch) = context.output_channel {
                 let _ = ch.send(BlockOutput {
                     stdout: None,

@@ -263,8 +263,7 @@ impl SQLite {
 
         let pool = {
             let connection_task = async {
-                let opts = SqliteConnectOptions::from_str(&self.uri)?
-                    .create_if_missing(true);
+                let opts = SqliteConnectOptions::from_str(&self.uri)?.create_if_missing(true);
                 SqlitePool::connect_with(opts).await
             };
 
@@ -479,7 +478,10 @@ impl BlockBehavior for SQLite {
             }
 
             let result = self
-                .run_sqlite_query(context_clone.clone(), handle_clone.cancellation_token.clone())
+                .run_sqlite_query(
+                    context_clone.clone(),
+                    handle_clone.cancellation_token.clone(),
+                )
                 .await;
 
             let status = match result {
@@ -725,10 +727,14 @@ mod tests {
             "SELECT * FROM users WHERE id = {{ var.user_id }} AND name = '{{ var.user_name }}'",
             "sqlite::memory:",
         );
-        let context = create_test_context_with_vars(vec![("user_id", "123"), ("user_name", "Alice")]);
+        let context =
+            create_test_context_with_vars(vec![("user_id", "123"), ("user_name", "Alice")]);
 
         let result = sqlite.template_sqlite_query(&context).unwrap();
-        assert_eq!(result, "SELECT * FROM users WHERE id = 123 AND name = 'Alice'");
+        assert_eq!(
+            result,
+            "SELECT * FROM users WHERE id = 123 AND name = 'Alice'"
+        );
     }
 
     // Execution tests
@@ -987,7 +993,9 @@ mod tests {
         let status = handle.status.read().await.clone();
         // The query might complete before cancellation, or it might be cancelled
         match status {
-            ExecutionStatus::Cancelled | ExecutionStatus::Success(_) | ExecutionStatus::Failed(_) => {
+            ExecutionStatus::Cancelled
+            | ExecutionStatus::Success(_)
+            | ExecutionStatus::Failed(_) => {
                 // Any of these outcomes is acceptable for this test
             }
             ExecutionStatus::Running => {
