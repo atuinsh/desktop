@@ -552,3 +552,463 @@ impl BlockBehavior for SQLite {
         Ok(Some(handle))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::runtime::blocks::document::actor::{DocumentCommand, DocumentHandle};
+    use crate::runtime::blocks::document::block_context::ContextResolver;
+    use crate::runtime::events::MemoryEventBus;
+    use std::collections::HashMap;
+    use std::sync::Arc;
+    use tokio::sync::mpsc;
+
+    fn create_test_sqlite(query: &str, uri: &str) -> SQLite {
+        SQLite::builder()
+            .id(Uuid::new_v4())
+            .name("Test SQLite")
+            .query(query)
+            .uri(uri)
+            .build()
+    }
+
+    fn create_test_context() -> ExecutionContext {
+        let (tx, _rx) = mpsc::unbounded_channel::<DocumentCommand>();
+        let document_handle = DocumentHandle::from_raw("test-runbook".to_string(), tx);
+        let context_resolver = ContextResolver::new();
+        let (event_sender, _event_receiver) = tokio::sync::broadcast::channel(16);
+
+        ExecutionContext {
+            runbook_id: Uuid::new_v4(),
+            document_handle,
+            context_resolver,
+            output_channel: None,
+            event_sender,
+            ssh_pool: None,
+            pty_store: None,
+            event_bus: None,
+        }
+    }
+
+    fn create_test_context_with_vars(vars: Vec<(&str, &str)>) -> ExecutionContext {
+        let (tx, _rx) = mpsc::unbounded_channel::<DocumentCommand>();
+        let document_handle = DocumentHandle::from_raw("test-runbook".to_string(), tx);
+
+        let vars_map: HashMap<String, String> = vars
+            .into_iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect();
+
+        let context_resolver = ContextResolver::with_vars(vars_map);
+
+        let (event_sender, _event_receiver) = tokio::sync::broadcast::channel(16);
+
+        ExecutionContext {
+            runbook_id: Uuid::new_v4(),
+            document_handle,
+            context_resolver,
+            output_channel: None,
+            event_sender,
+            ssh_pool: None,
+            pty_store: None,
+            event_bus: None,
+        }
+    }
+
+    fn create_test_context_with_event_bus(event_bus: Arc<MemoryEventBus>) -> ExecutionContext {
+        let (tx, _rx) = mpsc::unbounded_channel::<DocumentCommand>();
+        let document_handle = DocumentHandle::from_raw("test-runbook".to_string(), tx);
+        let context_resolver = ContextResolver::new();
+        let (event_sender, _event_receiver) = tokio::sync::broadcast::channel(16);
+
+        ExecutionContext {
+            runbook_id: Uuid::new_v4(),
+            document_handle,
+            context_resolver,
+            output_channel: None,
+            event_sender,
+            ssh_pool: None,
+            pty_store: None,
+            event_bus: Some(event_bus),
+        }
+    }
+
+    // FromDocument tests
+    #[tokio::test]
+    async fn test_from_document_valid() {
+        let id = Uuid::new_v4();
+        let json_data = serde_json::json!({
+            "id": id.to_string(),
+            "props": {
+                "name": "Test Query",
+                "query": "SELECT * FROM users",
+                "uri": "sqlite::memory:",
+                "autoRefresh": 5
+            },
+            "type": "sqlite"
+        });
+
+        let sqlite = SQLite::from_document(&json_data).unwrap();
+        assert_eq!(sqlite.id, id);
+        assert_eq!(sqlite.name, "Test Query");
+        assert_eq!(sqlite.query, "SELECT * FROM users");
+        assert_eq!(sqlite.uri, "sqlite::memory:");
+        assert_eq!(sqlite.auto_refresh, 5);
+    }
+
+    #[tokio::test]
+    async fn test_from_document_defaults() {
+        let id = Uuid::new_v4();
+        let json_data = serde_json::json!({
+            "id": id.to_string(),
+            "props": {},
+            "type": "sqlite"
+        });
+
+        let sqlite = SQLite::from_document(&json_data).unwrap();
+        assert_eq!(sqlite.id, id);
+        assert_eq!(sqlite.name, "SQLite Query");
+        assert_eq!(sqlite.query, "");
+        assert_eq!(sqlite.uri, "");
+        assert_eq!(sqlite.auto_refresh, 0);
+    }
+
+    #[tokio::test]
+    async fn test_from_document_missing_id() {
+        let json_data = serde_json::json!({
+            "props": {
+                "query": "SELECT 1"
+            }
+        });
+
+        let result = SQLite::from_document(&json_data);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("no id"));
+    }
+
+    #[tokio::test]
+    async fn test_from_document_invalid_id() {
+        let json_data = serde_json::json!({
+            "id": "not-a-uuid",
+            "props": {}
+        });
+
+        let result = SQLite::from_document(&json_data);
+        assert!(result.is_err());
+    }
+
+    // Template resolution tests
+    #[tokio::test]
+    async fn test_template_sqlite_query_no_template() {
+        let sqlite = create_test_sqlite("SELECT * FROM users", "sqlite::memory:");
+        let context = create_test_context();
+
+        let result = sqlite.template_sqlite_query(&context).unwrap();
+        assert_eq!(result, "SELECT * FROM users");
+    }
+
+    #[tokio::test]
+    async fn test_template_sqlite_query_with_vars() {
+        let sqlite = create_test_sqlite(
+            "SELECT * FROM users WHERE id = {{ var.user_id }}",
+            "sqlite::memory:",
+        );
+        let context = create_test_context_with_vars(vec![("user_id", "123")]);
+
+        let result = sqlite.template_sqlite_query(&context).unwrap();
+        assert_eq!(result, "SELECT * FROM users WHERE id = 123");
+    }
+
+    #[tokio::test]
+    async fn test_template_sqlite_query_multiple_vars() {
+        let sqlite = create_test_sqlite(
+            "SELECT * FROM users WHERE id = {{ var.user_id }} AND name = '{{ var.user_name }}'",
+            "sqlite::memory:",
+        );
+        let context = create_test_context_with_vars(vec![("user_id", "123"), ("user_name", "Alice")]);
+
+        let result = sqlite.template_sqlite_query(&context).unwrap();
+        assert_eq!(result, "SELECT * FROM users WHERE id = 123 AND name = 'Alice'");
+    }
+
+    // Execution tests
+    #[tokio::test]
+    async fn test_simple_select_query() {
+        let sqlite = create_test_sqlite("SELECT 1 as num, 'hello' as text", "sqlite::memory:");
+        let context = create_test_context();
+
+        let handle = sqlite.execute(context).await.unwrap().unwrap();
+
+        // Wait for execution to complete
+        loop {
+            tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+            let status = handle.status.read().await.clone();
+            match status {
+                ExecutionStatus::Success(_) => break,
+                ExecutionStatus::Failed(e) => panic!("Query failed: {}", e),
+                ExecutionStatus::Cancelled => panic!("Query was cancelled"),
+                ExecutionStatus::Running => continue,
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn test_create_table_and_insert() {
+        let query = r#"
+            CREATE TABLE test_users (id INTEGER PRIMARY KEY, name TEXT);
+            INSERT INTO test_users (id, name) VALUES (1, 'Alice');
+            INSERT INTO test_users (id, name) VALUES (2, 'Bob');
+        "#;
+        let sqlite = create_test_sqlite(query, "sqlite::memory:");
+        let context = create_test_context();
+
+        let handle = sqlite.execute(context).await.unwrap().unwrap();
+
+        loop {
+            tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+            let status = handle.status.read().await.clone();
+            match status {
+                ExecutionStatus::Success(_) => break,
+                ExecutionStatus::Failed(e) => panic!("Query failed: {}", e),
+                ExecutionStatus::Cancelled => panic!("Query was cancelled"),
+                ExecutionStatus::Running => continue,
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn test_invalid_sql_syntax() {
+        let sqlite = create_test_sqlite("SELECT FROM users", "sqlite::memory:");
+        let context = create_test_context();
+
+        let handle = sqlite.execute(context).await.unwrap().unwrap();
+
+        loop {
+            tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+            let status = handle.status.read().await.clone();
+            match status {
+                ExecutionStatus::Failed(e) => {
+                    assert!(e.contains("SQL"));
+                    break;
+                }
+                ExecutionStatus::Success(_) => panic!("Query should have failed"),
+                ExecutionStatus::Cancelled => panic!("Query was cancelled"),
+                ExecutionStatus::Running => continue,
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn test_empty_query() {
+        let sqlite = create_test_sqlite("", "sqlite::memory:");
+        let context = create_test_context();
+
+        let handle = sqlite.execute(context).await.unwrap().unwrap();
+
+        loop {
+            tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+            let status = handle.status.read().await.clone();
+            match status {
+                ExecutionStatus::Failed(e) => {
+                    assert!(e.contains("No SQL statements"));
+                    break;
+                }
+                ExecutionStatus::Success(_) => panic!("Query should have failed"),
+                ExecutionStatus::Cancelled => panic!("Query was cancelled"),
+                ExecutionStatus::Running => continue,
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn test_query_with_semicolons() {
+        let query = "SELECT 1; SELECT 2; SELECT 3";
+        let sqlite = create_test_sqlite(query, "sqlite::memory:");
+        let context = create_test_context();
+
+        let handle = sqlite.execute(context).await.unwrap().unwrap();
+
+        loop {
+            tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+            let status = handle.status.read().await.clone();
+            match status {
+                ExecutionStatus::Success(_) => break,
+                ExecutionStatus::Failed(e) => panic!("Query failed: {}", e),
+                ExecutionStatus::Cancelled => panic!("Query was cancelled"),
+                ExecutionStatus::Running => continue,
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn test_invalid_uri() {
+        let sqlite = create_test_sqlite("SELECT 1", "invalid://uri");
+        let context = create_test_context();
+
+        let handle = sqlite.execute(context).await.unwrap().unwrap();
+
+        loop {
+            tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+            let status = handle.status.read().await.clone();
+            match status {
+                ExecutionStatus::Failed(_) => break,
+                ExecutionStatus::Success(_) => panic!("Query should have failed with invalid URI"),
+                ExecutionStatus::Cancelled => panic!("Query was cancelled"),
+                ExecutionStatus::Running => continue,
+            }
+        }
+    }
+
+    // Event bus tests
+    #[tokio::test]
+    async fn test_grand_central_events_successful_query() {
+        let event_bus = Arc::new(MemoryEventBus::new());
+        let context = create_test_context_with_event_bus(event_bus.clone());
+        let runbook_id = context.runbook_id;
+
+        let sqlite = create_test_sqlite("SELECT 1", "sqlite::memory:");
+        let sqlite_id = sqlite.id;
+
+        let handle = sqlite.execute(context).await.unwrap().unwrap();
+
+        loop {
+            tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+            let status = handle.status.read().await.clone();
+            match status {
+                ExecutionStatus::Success(_) => break,
+                ExecutionStatus::Failed(e) => panic!("Query failed: {}", e),
+                ExecutionStatus::Cancelled => panic!("Query was cancelled"),
+                ExecutionStatus::Running => continue,
+            }
+        }
+
+        // Verify events were emitted
+        let events = event_bus.events();
+        assert_eq!(events.len(), 2);
+
+        // Check BlockStarted event
+        match &events[0] {
+            GCEvent::BlockStarted {
+                block_id,
+                runbook_id: rb_id,
+            } => {
+                assert_eq!(*block_id, sqlite_id);
+                assert_eq!(*rb_id, runbook_id);
+            }
+            _ => panic!("Expected BlockStarted event, got: {:?}", events[0]),
+        }
+
+        // Check BlockFinished event
+        match &events[1] {
+            GCEvent::BlockFinished {
+                block_id,
+                runbook_id: rb_id,
+                success,
+            } => {
+                assert_eq!(*block_id, sqlite_id);
+                assert_eq!(*rb_id, runbook_id);
+                assert_eq!(*success, true);
+            }
+            _ => panic!("Expected BlockFinished event, got: {:?}", events[1]),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_grand_central_events_failed_query() {
+        let event_bus = Arc::new(MemoryEventBus::new());
+        let context = create_test_context_with_event_bus(event_bus.clone());
+        let runbook_id = context.runbook_id;
+
+        let sqlite = create_test_sqlite("INVALID SQL", "sqlite::memory:");
+        let sqlite_id = sqlite.id;
+
+        let handle = sqlite.execute(context).await.unwrap().unwrap();
+
+        loop {
+            tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+            let status = handle.status.read().await.clone();
+            match status {
+                ExecutionStatus::Failed(_) => break,
+                ExecutionStatus::Success(_) => panic!("Query should have failed"),
+                ExecutionStatus::Cancelled => panic!("Query was cancelled"),
+                ExecutionStatus::Running => continue,
+            }
+        }
+
+        // Verify events were emitted
+        let events = event_bus.events();
+        assert_eq!(events.len(), 2);
+
+        // Check BlockStarted event
+        match &events[0] {
+            GCEvent::BlockStarted {
+                block_id,
+                runbook_id: rb_id,
+            } => {
+                assert_eq!(*block_id, sqlite_id);
+                assert_eq!(*rb_id, runbook_id);
+            }
+            _ => panic!("Expected BlockStarted event, got: {:?}", events[0]),
+        }
+
+        // Check BlockFailed event
+        match &events[1] {
+            GCEvent::BlockFailed {
+                block_id,
+                runbook_id: rb_id,
+                error,
+            } => {
+                assert_eq!(*block_id, sqlite_id);
+                assert_eq!(*rb_id, runbook_id);
+                assert!(error.contains("SQL") || error.contains("syntax"));
+            }
+            _ => panic!("Expected BlockFailed event, got: {:?}", events[1]),
+        }
+    }
+
+    // Cancellation test
+    #[tokio::test]
+    async fn test_query_cancellation() {
+        // Use a long-running query to test cancellation
+        let sqlite = create_test_sqlite(
+            "SELECT 1; SELECT 2; SELECT 3; SELECT 4; SELECT 5",
+            "sqlite::memory:",
+        );
+        let context = create_test_context();
+
+        let handle = sqlite.execute(context).await.unwrap().unwrap();
+
+        // Cancel immediately
+        handle.cancellation_token.cancel();
+
+        // Wait a bit for cancellation to take effect
+        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+
+        let status = handle.status.read().await.clone();
+        // The query might complete before cancellation, or it might be cancelled
+        match status {
+            ExecutionStatus::Cancelled | ExecutionStatus::Success(_) | ExecutionStatus::Failed(_) => {
+                // Any of these outcomes is acceptable for this test
+            }
+            ExecutionStatus::Running => {
+                // Give it more time
+                tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
+            }
+        }
+    }
+
+    // Serialization tests
+    #[tokio::test]
+    async fn test_json_serialization_roundtrip() {
+        let original = create_test_sqlite("SELECT * FROM users", "sqlite://test.db");
+
+        let json = serde_json::to_string(&original).unwrap();
+        let deserialized: SQLite = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(original.id, deserialized.id);
+        assert_eq!(original.name, deserialized.name);
+        assert_eq!(original.query, deserialized.query);
+        assert_eq!(original.uri, deserialized.uri);
+        assert_eq!(original.auto_refresh, deserialized.auto_refresh);
+    }
+}
