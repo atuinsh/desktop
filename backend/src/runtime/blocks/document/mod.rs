@@ -10,10 +10,8 @@ use uuid::Uuid;
 use crate::runtime::{
     blocks::{
         document::{
-            actor::{DocumentCommand, DocumentError, DocumentHandle},
-            block_context::{
-                BlockContext, BlockWithContext, ContextResolver, ResolvedContext,
-            },
+            actor::{BlockLocalValueProvider, DocumentCommand, DocumentError, DocumentHandle},
+            block_context::{BlockContext, BlockWithContext, ContextResolver, ResolvedContext},
             bridge::DocumentBridgeMessage,
         },
         handler::ExecutionContext,
@@ -34,6 +32,7 @@ pub struct Document {
     blocks: Vec<BlockWithContext>,
     document_bridge: Box<dyn ClientMessageChannel<DocumentBridgeMessage>>,
     known_unsupported_blocks: HashSet<String>,
+    block_local_value_provider: Option<Box<dyn BlockLocalValueProvider>>,
 }
 
 impl Document {
@@ -42,12 +41,14 @@ impl Document {
         document: Vec<serde_json::Value>,
         document_bridge: Box<dyn ClientMessageChannel<DocumentBridgeMessage>>,
         _command_tx: mpsc::UnboundedSender<DocumentCommand>,
+        block_local_value_provider: Option<Box<dyn BlockLocalValueProvider>>,
     ) -> Result<Self, Box<dyn std::error::Error>> {
         let mut doc = Self {
             id,
             blocks: vec![],
             document_bridge,
             known_unsupported_blocks: HashSet::new(),
+            block_local_value_provider,
         };
         doc.put_document(document)?;
 
@@ -280,8 +281,16 @@ impl Document {
         block_id: &Uuid,
         command_tx: mpsc::UnboundedSender<DocumentCommand>,
         event_bus: Arc<dyn EventBus>,
-        output_channel: Option<Arc<dyn crate::runtime::ClientMessageChannel<crate::runtime::blocks::handler::BlockOutput>>>,
-        event_sender: tokio::sync::broadcast::Sender<crate::runtime::workflow::event::WorkflowEvent>,
+        output_channel: Option<
+            Arc<
+                dyn crate::runtime::ClientMessageChannel<
+                    crate::runtime::blocks::handler::BlockOutput,
+                >,
+            >,
+        >,
+        event_sender: tokio::sync::broadcast::Sender<
+            crate::runtime::workflow::event::WorkflowEvent,
+        >,
         ssh_pool: Option<crate::runtime::ssh_pool::SshPoolHandle>,
         pty_store: Option<crate::runtime::pty_store::PtyStoreHandle>,
     ) -> Result<ExecutionContext, DocumentError> {
@@ -331,7 +340,7 @@ impl Document {
 
     /// Rebuild passive contexts for all blocks or blocks starting from a given index
     /// This should be called after document structure changes
-    pub fn rebuild_passive_contexts(
+    pub async fn rebuild_passive_contexts(
         &mut self,
         start_index: Option<usize>,
         event_bus: Arc<dyn EventBus>,
@@ -347,7 +356,11 @@ impl Document {
             // let resolver = ContextResolver::from_blocks(&self.blocks[..i]);
 
             // Evaluate passive context for this block with the resolver
-            match self.blocks[i].block().passive_context(&context_resolver) {
+            match self.blocks[i]
+                .block()
+                .passive_context(&context_resolver, self.block_local_value_provider.as_ref())
+                .await
+            {
                 Ok(Some(new_context)) => {
                     self.blocks[i].update_context(new_context);
                 }

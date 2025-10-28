@@ -1,5 +1,8 @@
 use crate::runtime::blocks::{
-    document::block_context::{BlockContext, ContextResolver, DocumentVar},
+    document::{
+        actor::BlockLocalValueProvider,
+        block_context::{BlockContext, ContextResolver, DocumentVar},
+    },
     Block, BlockBehavior, FromDocument,
 };
 use async_trait::async_trait;
@@ -55,9 +58,10 @@ impl BlockBehavior for Var {
         Block::Var(self)
     }
 
-    fn passive_context(
+    async fn passive_context(
         &self,
         resolver: &ContextResolver,
+        _block_local_value_provider: Option<&Box<dyn BlockLocalValueProvider>>,
     ) -> Result<Option<BlockContext>, Box<dyn std::error::Error + Send + Sync>> {
         let mut context = BlockContext::new();
 
@@ -93,7 +97,7 @@ mod tests {
             .value("test_value")
             .build();
 
-        let context = ResolvedContext::from_block(&var).unwrap();
+        let context = ResolvedContext::from_block(&var, None).await.unwrap();
         assert_eq!(
             context.variables.get("TEST_VAR"),
             Some(&"test_value".to_string())
@@ -109,7 +113,7 @@ mod tests {
             .value("")
             .build();
 
-        let context = ResolvedContext::from_block(&var).unwrap();
+        let context = ResolvedContext::from_block(&var, None).await.unwrap();
         assert_eq!(context.variables.get("EMPTY_VAR"), Some(&"".to_string()));
     }
 
@@ -121,7 +125,7 @@ mod tests {
             .value("test_value")
             .build();
 
-        let context = ResolvedContext::from_block(&var);
+        let context = ResolvedContext::from_block(&var, None).await;
         assert!(context.is_err());
     }
 
@@ -133,7 +137,7 @@ mod tests {
             .value("test_value")
             .build();
 
-        let context = ResolvedContext::from_block(&var);
+        let context = ResolvedContext::from_block(&var, None).await;
         assert!(context.is_err());
     }
 
@@ -145,7 +149,7 @@ mod tests {
             .value("test_value")
             .build();
 
-        let context = ResolvedContext::from_block(&var);
+        let context = ResolvedContext::from_block(&var, None).await;
         assert!(context.is_err());
     }
 
@@ -157,7 +161,7 @@ mod tests {
             .value("test_value")
             .build();
 
-        let context = ResolvedContext::from_block(&var).unwrap();
+        let context = ResolvedContext::from_block(&var, None).await.unwrap();
         assert_eq!(
             context.variables.get("VALID_VAR_NAME_123"),
             Some(&"test_value".to_string())
@@ -172,7 +176,7 @@ mod tests {
             .value("value with spaces and symbols: !@#$%^&*()")
             .build();
 
-        let context = ResolvedContext::from_block(&var).unwrap();
+        let context = ResolvedContext::from_block(&var, None).await.unwrap();
         assert_eq!(
             context.variables.get("SPECIAL_VAR"),
             Some(&"value with spaces and symbols: !@#$%^&*()".to_string())
@@ -187,7 +191,7 @@ mod tests {
             .value("line1\nline2\nline3")
             .build();
 
-        let context = ResolvedContext::from_block(&var).unwrap();
+        let context = ResolvedContext::from_block(&var, None).await.unwrap();
         assert_eq!(
             context.variables.get("MULTILINE_VAR"),
             Some(&"line1\nline2\nline3".to_string())
@@ -202,7 +206,7 @@ mod tests {
             .value("测试值 🚀 émojis")
             .build();
 
-        let context = ResolvedContext::from_block(&var).unwrap();
+        let context = ResolvedContext::from_block(&var, None).await.unwrap();
         assert_eq!(
             context.variables.get("UNICODE_VAR"),
             Some(&"测试值 🚀 émojis".to_string())

@@ -1,3 +1,4 @@
+use async_trait::async_trait;
 use std::sync::Arc;
 use tauri::ipc::Channel;
 use tokio::sync::{mpsc, oneshot};
@@ -10,6 +11,15 @@ use crate::runtime::blocks::handler::ExecutionContext;
 use crate::runtime::blocks::Block;
 use crate::runtime::events::EventBus;
 use crate::runtime::ClientMessageChannel;
+
+#[async_trait]
+pub trait BlockLocalValueProvider: Send + Sync {
+    async fn get_block_local_value(
+        &self,
+        block_id: Uuid,
+        property_name: String,
+    ) -> Result<Option<String>, String>;
+}
 
 /// Errors that can occur during document operations
 #[derive(thiserror::Error, Debug, Clone)]
@@ -51,8 +61,15 @@ pub enum DocumentCommand {
     /// Start execution of a block, returning a snapshot of its context
     StartExecution {
         block_id: Uuid,
-        output_channel: Option<Arc<dyn crate::runtime::ClientMessageChannel<crate::runtime::blocks::handler::BlockOutput>>>,
-        event_sender: tokio::sync::broadcast::Sender<crate::runtime::workflow::event::WorkflowEvent>,
+        output_channel: Option<
+            Arc<
+                dyn crate::runtime::ClientMessageChannel<
+                    crate::runtime::blocks::handler::BlockOutput,
+                >,
+            >,
+        >,
+        event_sender:
+            tokio::sync::broadcast::Sender<crate::runtime::workflow::event::WorkflowEvent>,
         ssh_pool: Option<crate::runtime::ssh_pool::SshPoolHandle>,
         pty_store: Option<crate::runtime::pty_store::PtyStoreHandle>,
         reply: Reply<ExecutionContext>,
@@ -102,6 +119,7 @@ impl DocumentHandle {
         runbook_id: String,
         event_bus: Arc<dyn EventBus>,
         document_bridge: Channel<DocumentBridgeMessage>, // todo: don't use Channel directly
+        block_local_value_provider: Option<Box<dyn BlockLocalValueProvider>>,
     ) -> Self {
         let document_bridge = Box::new(document_bridge);
         let (tx, rx) = mpsc::unbounded_channel();
@@ -112,8 +130,13 @@ impl DocumentHandle {
 
         // Spawn the document actor
         tokio::spawn(async move {
-            let mut actor =
-                DocumentActor::new(runbook_id_clone, event_bus, tx_clone, document_bridge);
+            let mut actor = DocumentActor::new(
+                runbook_id_clone,
+                event_bus,
+                tx_clone,
+                document_bridge,
+                block_local_value_provider,
+            );
             actor.run(rx).await;
         });
 
@@ -172,8 +195,16 @@ impl DocumentHandle {
     pub async fn start_execution(
         &self,
         block_id: Uuid,
-        output_channel: Option<Arc<dyn crate::runtime::ClientMessageChannel<crate::runtime::blocks::handler::BlockOutput>>>,
-        event_sender: tokio::sync::broadcast::Sender<crate::runtime::workflow::event::WorkflowEvent>,
+        output_channel: Option<
+            Arc<
+                dyn crate::runtime::ClientMessageChannel<
+                    crate::runtime::blocks::handler::BlockOutput,
+                >,
+            >,
+        >,
+        event_sender: tokio::sync::broadcast::Sender<
+            crate::runtime::workflow::event::WorkflowEvent,
+        >,
         ssh_pool: Option<crate::runtime::ssh_pool::SshPoolHandle>,
         pty_store: Option<crate::runtime::pty_store::PtyStoreHandle>,
     ) -> Result<ExecutionContext, DocumentError> {
@@ -296,9 +327,16 @@ impl DocumentActor {
         event_bus: Arc<dyn EventBus>,
         command_tx: mpsc::UnboundedSender<DocumentCommand>,
         document_bridge: Box<dyn ClientMessageChannel<DocumentBridgeMessage>>,
+        block_local_value_provider: Option<Box<dyn BlockLocalValueProvider>>,
     ) -> Self {
-        let document =
-            Document::new(runbook_id, vec![], document_bridge, command_tx.clone()).unwrap();
+        let document = Document::new(
+            runbook_id,
+            vec![],
+            document_bridge,
+            command_tx.clone(),
+            block_local_value_provider,
+        )
+        .unwrap();
 
         Self {
             document,
@@ -331,7 +369,13 @@ impl DocumentActor {
                     reply,
                 } => {
                     let result = self
-                        .handle_start_execution(block_id, output_channel, event_sender, ssh_pool, pty_store)
+                        .handle_start_execution(
+                            block_id,
+                            output_channel,
+                            event_sender,
+                            ssh_pool,
+                            pty_store,
+                        )
                         .await;
                     let _ = reply.send(result);
                 }
@@ -383,7 +427,8 @@ impl DocumentActor {
         if let Some(start_index) = rebuild_from {
             let result = self
                 .document
-                .rebuild_passive_contexts(Some(start_index), self.event_bus.clone());
+                .rebuild_passive_contexts(Some(start_index), self.event_bus.clone())
+                .await;
 
             if let Err(errors) = result {
                 // Log errors but don't fail the entire operation
@@ -399,8 +444,16 @@ impl DocumentActor {
     async fn handle_start_execution(
         &mut self,
         block_id: Uuid,
-        output_channel: Option<Arc<dyn crate::runtime::ClientMessageChannel<crate::runtime::blocks::handler::BlockOutput>>>,
-        event_sender: tokio::sync::broadcast::Sender<crate::runtime::workflow::event::WorkflowEvent>,
+        output_channel: Option<
+            Arc<
+                dyn crate::runtime::ClientMessageChannel<
+                    crate::runtime::blocks::handler::BlockOutput,
+                >,
+            >,
+        >,
+        event_sender: tokio::sync::broadcast::Sender<
+            crate::runtime::workflow::event::WorkflowEvent,
+        >,
         ssh_pool: Option<crate::runtime::ssh_pool::SshPoolHandle>,
         pty_store: Option<crate::runtime::pty_store::PtyStoreHandle>,
     ) -> Result<ExecutionContext, DocumentError> {

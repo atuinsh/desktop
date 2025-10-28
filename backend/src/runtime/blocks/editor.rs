@@ -1,9 +1,13 @@
+use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use typed_builder::TypedBuilder;
 use uuid::Uuid;
 
 use crate::runtime::blocks::{
-    document::block_context::{BlockContext, ContextResolver, DocumentVar},
+    document::{
+        actor::BlockLocalValueProvider,
+        block_context::{BlockContext, ContextResolver, DocumentVar},
+    },
     Block, BlockBehavior, FromDocument,
 };
 
@@ -74,6 +78,7 @@ impl FromDocument for Editor {
     }
 }
 
+#[async_trait]
 impl BlockBehavior for Editor {
     fn into_block(self) -> Block {
         Block::Editor(self)
@@ -81,9 +86,10 @@ impl BlockBehavior for Editor {
 
     // TODO: If the variable sync switch is on for the editor, we need to replace the editor's code
     // with the value stored in the variable.
-    fn passive_context(
+    async fn passive_context(
         &self,
         resolver: &ContextResolver,
+        _block_local_value_provider: Option<&Box<dyn BlockLocalValueProvider>>,
     ) -> Result<Option<BlockContext>, Box<dyn std::error::Error + Send + Sync>> {
         let mut context = BlockContext::new();
         if self.var_name.is_some() {

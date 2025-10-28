@@ -38,7 +38,10 @@ pub const KNOWN_UNSUPPORTED_BLOCKS: &[&str] = &[
 ];
 
 use crate::runtime::blocks::{
-    document::block_context::{BlockContext, ContextResolver},
+    document::{
+        actor::BlockLocalValueProvider,
+        block_context::{BlockContext, ContextResolver},
+    },
     handler::{ExecutionContext, ExecutionHandle},
 };
 
@@ -50,9 +53,10 @@ pub trait FromDocument: Sized {
 pub trait BlockBehavior: Sized + Send + Sync {
     fn into_block(self) -> Block;
 
-    fn passive_context(
+    async fn passive_context(
         &self,
         _resolver: &ContextResolver,
+        _block_local_value_provider: Option<&Box<dyn BlockLocalValueProvider>>,
     ) -> Result<Option<BlockContext>, Box<dyn std::error::Error + Send + Sync>> {
         Ok(None)
     }
@@ -181,27 +185,89 @@ impl Block {
         }
     }
 
-    pub fn passive_context(
+    pub async fn passive_context(
         &self,
         resolver: &ContextResolver,
+        block_local_value_provider: Option<&Box<dyn BlockLocalValueProvider>>,
     ) -> Result<Option<BlockContext>, Box<dyn std::error::Error + Send + Sync>> {
         match self {
-            Block::LocalVar(local_var) => local_var.passive_context(resolver),
-            Block::Var(var) => var.passive_context(resolver),
-            Block::Environment(environment) => environment.passive_context(resolver),
-            Block::Directory(directory) => directory.passive_context(resolver),
-            Block::SshConnect(ssh_connect) => ssh_connect.passive_context(resolver),
-            Block::Host(host) => host.passive_context(resolver),
-            Block::VarDisplay(var_display) => var_display.passive_context(resolver),
-            Block::Editor(editor) => editor.passive_context(resolver),
-            Block::Terminal(terminal) => terminal.passive_context(resolver),
-            Block::Script(script) => script.passive_context(resolver),
-            Block::SQLite(sqlite) => sqlite.passive_context(resolver),
-            Block::Postgres(postgres) => postgres.passive_context(resolver),
-            Block::Http(http) => http.passive_context(resolver),
-            Block::Prometheus(prometheus) => prometheus.passive_context(resolver),
-            Block::Clickhouse(clickhouse) => clickhouse.passive_context(resolver),
-            Block::Mysql(clickhouse) => clickhouse.passive_context(resolver),
+            Block::LocalVar(local_var) => {
+                local_var
+                    .passive_context(resolver, block_local_value_provider)
+                    .await
+            }
+            Block::Var(var) => {
+                var.passive_context(resolver, block_local_value_provider)
+                    .await
+            }
+            Block::Environment(environment) => {
+                environment
+                    .passive_context(resolver, block_local_value_provider)
+                    .await
+            }
+            Block::Directory(directory) => {
+                directory
+                    .passive_context(resolver, block_local_value_provider)
+                    .await
+            }
+            Block::SshConnect(ssh_connect) => {
+                ssh_connect
+                    .passive_context(resolver, block_local_value_provider)
+                    .await
+            }
+            Block::Host(host) => {
+                host.passive_context(resolver, block_local_value_provider)
+                    .await
+            }
+            Block::VarDisplay(var_display) => {
+                var_display
+                    .passive_context(resolver, block_local_value_provider)
+                    .await
+            }
+            Block::Editor(editor) => {
+                editor
+                    .passive_context(resolver, block_local_value_provider)
+                    .await
+            }
+            Block::Terminal(terminal) => {
+                terminal
+                    .passive_context(resolver, block_local_value_provider)
+                    .await
+            }
+            Block::Script(script) => {
+                script
+                    .passive_context(resolver, block_local_value_provider)
+                    .await
+            }
+            Block::SQLite(sqlite) => {
+                sqlite
+                    .passive_context(resolver, block_local_value_provider)
+                    .await
+            }
+            Block::Postgres(postgres) => {
+                postgres
+                    .passive_context(resolver, block_local_value_provider)
+                    .await
+            }
+            Block::Http(http) => {
+                http.passive_context(resolver, block_local_value_provider)
+                    .await
+            }
+            Block::Prometheus(prometheus) => {
+                prometheus
+                    .passive_context(resolver, block_local_value_provider)
+                    .await
+            }
+            Block::Clickhouse(clickhouse) => {
+                clickhouse
+                    .passive_context(resolver, block_local_value_provider)
+                    .await
+            }
+            Block::Mysql(clickhouse) => {
+                clickhouse
+                    .passive_context(resolver, block_local_value_provider)
+                    .await
+            }
         }
     }
 

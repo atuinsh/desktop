@@ -1,5 +1,8 @@
 use crate::runtime::blocks::{
-    document::block_context::{BlockContext, ContextResolver, DocumentCwd},
+    document::{
+        actor::BlockLocalValueProvider,
+        block_context::{BlockContext, ContextResolver, DocumentCwd},
+    },
     Block, BlockBehavior, FromDocument,
 };
 use async_trait::async_trait;
@@ -23,9 +26,10 @@ impl BlockBehavior for Directory {
         Block::Directory(self)
     }
 
-    fn passive_context(
+    async fn passive_context(
         &self,
         resolver: &ContextResolver,
+        _block_local_value_provider: Option<&Box<dyn BlockLocalValueProvider>>,
     ) -> Result<Option<BlockContext>, Box<dyn std::error::Error + Send + Sync>> {
         let mut context = BlockContext::new();
         let resolved_path = resolver.resolve_template(&self.path)?;
@@ -71,7 +75,7 @@ mod tests {
             .path("/tmp/test")
             .build();
 
-        let context = ResolvedContext::from_block(&dir).unwrap();
+        let context = ResolvedContext::from_block(&dir, None).await.unwrap();
 
         assert_eq!(context.cwd, "/tmp/test");
     }
@@ -82,7 +86,8 @@ mod tests {
         let dir = Directory::builder().id(Uuid::new_v4()).path("").build();
 
         let context = dir
-            .passive_context(&ContextResolver::default())
+            .passive_context(&ContextResolver::default(), None)
+            .await
             .unwrap()
             .unwrap();
 
@@ -97,7 +102,8 @@ mod tests {
             .build();
 
         let context = dir
-            .passive_context(&ContextResolver::default())
+            .passive_context(&ContextResolver::default(), None)
+            .await
             .unwrap()
             .unwrap();
 
@@ -112,7 +118,8 @@ mod tests {
             .build();
 
         let context = dir
-            .passive_context(&ContextResolver::default())
+            .passive_context(&ContextResolver::default(), None)
+            .await
             .unwrap()
             .unwrap();
 
@@ -130,7 +137,8 @@ mod tests {
             .build();
 
         let context = dir
-            .passive_context(&ContextResolver::default())
+            .passive_context(&ContextResolver::default(), None)
+            .await
             .unwrap()
             .unwrap();
 
@@ -148,7 +156,8 @@ mod tests {
             .build();
 
         let context = dir
-            .passive_context(&ContextResolver::default())
+            .passive_context(&ContextResolver::default(), None)
+            .await
             .unwrap()
             .unwrap();
 

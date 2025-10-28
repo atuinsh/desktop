@@ -38,7 +38,10 @@ use typed_builder::TypedBuilder;
 use uuid::Uuid;
 
 use crate::runtime::blocks::{
-    document::block_context::{BlockContext, ContextResolver, DocumentSshHost},
+    document::{
+        actor::BlockLocalValueProvider,
+        block_context::{BlockContext, ContextResolver, DocumentSshHost},
+    },
     Block, BlockBehavior,
 };
 use async_trait::async_trait;
@@ -91,9 +94,10 @@ impl BlockBehavior for Host {
         Block::Host(self)
     }
 
-    fn passive_context(
+    async fn passive_context(
         &self,
         resolver: &ContextResolver,
+        _block_local_value_provider: Option<&Box<dyn BlockLocalValueProvider>>,
     ) -> Result<Option<BlockContext>, Box<dyn std::error::Error + Send + Sync>> {
         let mut context = BlockContext::new();
         let host = self.host.trim().to_lowercase();
@@ -119,7 +123,7 @@ mod tests {
     async fn test_switch_to_localhost() {
         let host = Host::builder().id(Uuid::new_v4()).host("localhost").build();
 
-        let context = ResolvedContext::from_block(&host).unwrap();
+        let context = ResolvedContext::from_block(&host, None).await.unwrap();
 
         assert!(context.ssh_host.is_none());
     }
@@ -128,7 +132,7 @@ mod tests {
     async fn test_switch_to_empty_host() {
         let host = Host::builder().id(Uuid::new_v4()).host("").build();
 
-        let context = ResolvedContext::from_block(&host).unwrap();
+        let context = ResolvedContext::from_block(&host, None).await.unwrap();
         assert!(context.ssh_host.is_none());
     }
 
@@ -139,7 +143,7 @@ mod tests {
             .host("user@newhost.com")
             .build();
 
-        let context = ResolvedContext::from_block(&host).unwrap();
+        let context = ResolvedContext::from_block(&host, None).await.unwrap();
         assert!(context.ssh_host.is_some());
     }
 
@@ -150,7 +154,7 @@ mod tests {
             .host("  user@host.com  ")
             .build();
 
-        let context = ResolvedContext::from_block(&host).unwrap();
+        let context = ResolvedContext::from_block(&host, None).await.unwrap();
         assert_eq!(context.ssh_host, Some("user@host.com".to_string()));
     }
 
@@ -166,7 +170,9 @@ mod tests {
         for (host_str, expected_ssh_host) in variations {
             let host_block = Host::builder().id(Uuid::new_v4()).host(host_str).build();
 
-            let context = ResolvedContext::from_block(&host_block).unwrap();
+            let context = ResolvedContext::from_block(&host_block, None)
+                .await
+                .unwrap();
             assert_eq!(context.ssh_host, expected_ssh_host.map(|s| s.to_string()));
         }
     }
@@ -259,7 +265,9 @@ mod tests {
         for (host_str, expected_ssh_host) in test_cases {
             let host_block = Host::builder().id(Uuid::new_v4()).host(host_str).build();
 
-            let context = ResolvedContext::from_block(&host_block).unwrap();
+            let context = ResolvedContext::from_block(&host_block, None)
+                .await
+                .unwrap();
             assert_eq!(context.ssh_host, expected_ssh_host.map(|s| s.to_string()));
         }
     }

@@ -1,5 +1,8 @@
 use crate::runtime::blocks::{
-    document::block_context::{BlockContext, ContextResolver, DocumentVar},
+    document::{
+        actor::BlockLocalValueProvider,
+        block_context::{BlockContext, ContextResolver, DocumentVar},
+    },
     Block, BlockBehavior, FromDocument,
 };
 use async_trait::async_trait;
@@ -55,9 +58,11 @@ impl BlockBehavior for LocalVar {
         Block::LocalVar(self)
     }
 
-    fn passive_context(
+    // TODO: get this from KV storage
+    async fn passive_context(
         &self,
         resolver: &ContextResolver,
+        block_local_value_provider: Option<&Box<dyn BlockLocalValueProvider>>,
     ) -> Result<Option<BlockContext>, Box<dyn std::error::Error + Send + Sync>> {
         // Validate name
         if self.name.is_empty() {
@@ -91,7 +96,7 @@ mod tests {
             .value("")
             .build();
 
-        let context = ResolvedContext::from_block(&local_var);
+        let context = ResolvedContext::from_block(&local_var, None).await;
         assert!(context.is_err());
     }
 
@@ -103,7 +108,7 @@ mod tests {
             .value("test_value")
             .build();
 
-        let context = ResolvedContext::from_block(&local_var).unwrap();
+        let context = ResolvedContext::from_block(&local_var, None).await.unwrap();
 
         assert_eq!(
             context.variables.get("test_var"),
@@ -139,7 +144,7 @@ mod tests {
                 .value("test_value")
                 .build();
 
-            let context = ResolvedContext::from_block(&local_var).unwrap();
+            let context = ResolvedContext::from_block(&local_var, None).await.unwrap();
             assert_eq!(context.variables.get(name), Some(&"test_value".to_string()));
         }
     }

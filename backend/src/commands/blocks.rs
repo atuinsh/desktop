@@ -6,7 +6,8 @@ use tauri::{ipc::Channel, AppHandle, Manager, State};
 use uuid::Uuid;
 
 use crate::commands::events::ChannelEventBus;
-use crate::runtime::blocks::document::actor::DocumentHandle;
+use crate::kv;
+use crate::runtime::blocks::document::actor::{BlockLocalValueProvider, DocumentHandle};
 use crate::runtime::blocks::document::block_context::ResolvedContext;
 use crate::runtime::blocks::document::bridge::DocumentBridgeMessage;
 use crate::runtime::blocks::handler::BlockOutput;
@@ -17,6 +18,35 @@ use crate::state::AtuinState;
 impl<M: Serialize + Send + Sync> ClientMessageChannel<M> for tauri::ipc::Channel<M> {
     fn send(&self, message: M) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         self.send(message).map_err(|e| e.into())
+    }
+}
+
+struct KvBlockLocalValueProvider {
+    app_handle: AppHandle,
+}
+
+impl KvBlockLocalValueProvider {
+    pub fn new(app_handle: AppHandle) -> Self {
+        Self { app_handle }
+    }
+}
+
+#[async_trait]
+impl BlockLocalValueProvider for KvBlockLocalValueProvider {
+    async fn get_block_local_value(
+        &self,
+        block_id: Uuid,
+        property_name: String,
+    ) -> Result<Option<String>, String> {
+        let db = kv::open_db(&self.app_handle)
+            .await
+            .map_err(|e| e.to_string())?;
+        let key = format!("block.{block_id}.{property_name}");
+        match kv::get(&db, &key).await.map_err(|e| e.to_string()) {
+            Ok(Some(value)) => Ok(Some(value)),
+            Ok(None) => Ok(None),
+            Err(e) => Err(e),
+        }
     }
 }
 
@@ -98,6 +128,7 @@ pub async fn cancel_block_execution(
 
 #[tauri::command]
 pub async fn open_document(
+    app: AppHandle,
     state: State<'_, AtuinState>,
     document_id: String,
     document: Vec<serde_json::Value>,
@@ -113,7 +144,12 @@ pub async fn open_document(
     }
 
     let event_bus = Arc::new(ChannelEventBus::new(state.gc_event_sender()));
-    let document_handle = DocumentHandle::new(document_id.clone(), event_bus, document_bridge);
+    let document_handle = DocumentHandle::new(
+        document_id.clone(),
+        event_bus,
+        document_bridge,
+        Some(Box::new(KvBlockLocalValueProvider::new(app.clone()))),
+    );
 
     document_handle
         .put_document(document)
