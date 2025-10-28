@@ -43,6 +43,8 @@ pub async fn execute_block(
     let ssh_pool = state.ssh_pool();
     let event_sender = state.event_sender();
 
+    log::debug!("Starting execution of block {block_id}");
+
     // Get execution context
     let context = document
         .start_execution(
@@ -56,13 +58,13 @@ pub async fn execute_block(
         .map_err(|e| e.to_string())?;
 
     // Get the block to execute
-    let block = document.get_block(block_id).await.ok_or("Block not found")?;
+    let block = document
+        .get_block(block_id)
+        .await
+        .ok_or("Block not found")?;
 
     // Execute the block
-    let execution_handle = block
-        .execute(context)
-        .await
-        .map_err(|e| e.to_string())?;
+    let execution_handle = block.execute(context).await.map_err(|e| e.to_string())?;
 
     // Store execution handle if one was returned
     if let Some(handle) = execution_handle {

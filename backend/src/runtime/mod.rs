@@ -13,3 +13,11 @@ pub(crate) mod workflow;
 pub trait ClientMessageChannel<M: Serialize + Send + Sync>: Send + Sync {
     fn send(&self, message: M) -> Result<(), Box<dyn std::error::Error + Send + Sync>>;
 }
+
+impl<M: Serialize + Send + Sync> ClientMessageChannel<M>
+    for fn(M) -> Result<(), Box<dyn std::error::Error + Send + Sync>>
+{
+    fn send(&self, message: M) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        self(message)
+    }
+}

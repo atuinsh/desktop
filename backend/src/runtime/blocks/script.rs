@@ -130,11 +130,9 @@ impl BlockBehavior for Script {
                     .await;
             }
 
-            let (exit_code, captured_output) = self.run_script(
-                context.clone(),
-                handle_clone.cancellation_token.clone(),
-            )
-            .await;
+            let (exit_code, captured_output) = self
+                .run_script(context.clone(), handle_clone.cancellation_token.clone())
+                .await;
 
             // Determine status based on exit code
             let status = match exit_code {
@@ -277,16 +275,20 @@ impl Script {
         Result<i32, Box<dyn std::error::Error + Send + Sync>>,
         String,
     ) {
-        use crate::runtime::blocks::handler::{BlockErrorData, BlockFinishedData, BlockLifecycleEvent, BlockOutput};
+        use crate::runtime::blocks::handler::{
+            BlockErrorData, BlockFinishedData, BlockLifecycleEvent, BlockOutput,
+        };
         use crate::runtime::workflow::event::WorkflowEvent;
-        use tokio::io::{AsyncBufReadExt, BufReader};
-        use tokio::process::Command;
         use std::process::Stdio;
         use std::sync::Arc;
+        use tokio::io::{AsyncBufReadExt, BufReader};
+        use tokio::process::Command;
         use tokio::sync::RwLock;
 
         // Send start event
-        let _ = context.event_sender.send(WorkflowEvent::BlockStarted { id: self.id });
+        let _ = context
+            .event_sender
+            .send(WorkflowEvent::BlockStarted { id: self.id });
 
         // Send started lifecycle event to output channel
         if let Some(ref ch) = context.output_channel {
@@ -300,16 +302,17 @@ impl Script {
         }
 
         // Template the script code
-        let code = self.template_script_code(&context)
-            .unwrap_or_else(|e| {
-                eprintln!("Template error in script {}: {}", self.id, e);
-                self.code.clone()
-            });
+        let code = self.template_script_code(&context).unwrap_or_else(|e| {
+            eprintln!("Template error in script {}: {}", self.id, e);
+            self.code.clone()
+        });
 
         // Check if SSH execution is needed
         let ssh_host = context.context_resolver.ssh_host().cloned();
         if let Some(ssh_host) = ssh_host {
-            return self.execute_ssh_script(&code, &ssh_host, context, cancellation_token).await;
+            return self
+                .execute_ssh_script(&code, &ssh_host, context, cancellation_token)
+                .await;
         }
 
         // Local execution
@@ -328,7 +331,9 @@ impl Script {
         let mut child = match cmd.spawn() {
             Ok(child) => child,
             Err(e) => {
-                let _ = context.event_sender.send(WorkflowEvent::BlockFinished { id: self.id });
+                let _ = context
+                    .event_sender
+                    .send(WorkflowEvent::BlockFinished { id: self.id });
                 if let Some(ref ch) = context.output_channel {
                     let _ = ch.send(BlockOutput {
                         stdout: None,
@@ -466,7 +471,9 @@ impl Script {
                 Ok(status) => status.code().unwrap_or(-1),
                 Err(e) => {
                     let captured = captured_output.read().await.clone();
-                    let _ = context.event_sender.send(WorkflowEvent::BlockFinished { id: self.id });
+                    let _ = context
+                        .event_sender
+                        .send(WorkflowEvent::BlockFinished { id: self.id });
                     if let Some(ref ch) = context.output_channel {
                         let _ = ch.send(BlockOutput {
                             stdout: None,
@@ -478,13 +485,18 @@ impl Script {
                             })),
                         });
                     }
-                    return (Err(format!("Failed to wait for process: {}", e).into()), captured);
+                    return (
+                        Err(format!("Failed to wait for process: {}", e).into()),
+                        captured,
+                    );
                 }
             }
         };
 
         // Send completion event
-        let _ = context.event_sender.send(WorkflowEvent::BlockFinished { id: self.id });
+        let _ = context
+            .event_sender
+            .send(WorkflowEvent::BlockFinished { id: self.id });
 
         if let Some(ref ch) = context.output_channel {
             let _ = ch.send(BlockOutput {
@@ -513,13 +525,17 @@ impl Script {
         Result<i32, Box<dyn std::error::Error + Send + Sync>>,
         String,
     ) {
-        use crate::runtime::blocks::handler::{BlockErrorData, BlockFinishedData, BlockLifecycleEvent, BlockOutput};
+        use crate::runtime::blocks::handler::{
+            BlockErrorData, BlockFinishedData, BlockLifecycleEvent, BlockOutput,
+        };
         use crate::runtime::workflow::event::WorkflowEvent;
-        use tokio::sync::{mpsc, oneshot};
         use std::sync::Arc;
         use tokio::sync::RwLock;
+        use tokio::sync::{mpsc, oneshot};
 
-        let _ = context.event_sender.send(WorkflowEvent::BlockStarted { id: self.id });
+        let _ = context
+            .event_sender
+            .send(WorkflowEvent::BlockStarted { id: self.id });
 
         if let Some(ref ch) = context.output_channel {
             let _ = ch.send(BlockOutput {
@@ -537,7 +553,9 @@ impl Script {
             Some(pool) => pool,
             None => {
                 let error_msg = "SSH pool not available in execution context";
-                let _ = context.event_sender.send(WorkflowEvent::BlockFinished { id: self.id });
+                let _ = context
+                    .event_sender
+                    .send(WorkflowEvent::BlockFinished { id: self.id });
                 if let Some(ref ch) = context.output_channel {
                     let _ = ch.send(BlockOutput {
                         stdout: None,
@@ -574,7 +592,9 @@ impl Script {
 
         if let Err(e) = exec_result {
             let error_msg = format!("Failed to start SSH execution: {}", e);
-            let _ = context.event_sender.send(WorkflowEvent::BlockFinished { id: self.id });
+            let _ = context
+                .event_sender
+                .send(WorkflowEvent::BlockFinished { id: self.id });
             if let Some(ref ch) = context.output_channel {
                 let _ = ch.send(BlockOutput {
                     stdout: None,
@@ -645,7 +665,9 @@ impl Script {
             0
         };
 
-        let _ = context.event_sender.send(WorkflowEvent::BlockFinished { id: self.id });
+        let _ = context
+            .event_sender
+            .send(WorkflowEvent::BlockFinished { id: self.id });
         if let Some(ref ch) = context.output_channel {
             let _ = ch.send(BlockOutput {
                 stdout: None,
