@@ -38,12 +38,14 @@ export function useKvValue<T>(key: string, defaultValue: T): [T, (value: T) => P
  * The value is stored in the KV store under the key `block.${blockId}.${key}`.
  * Updates to the value are propagated to the backend runtime system.
  *
+ * @param runbookId The ID of the runbook to store the value for
  * @param blockId The ID of the block to store the value for
  * @param key The key to store the value under
  * @param defaultValue The default value to use if the value is not found.
  * @returns A tuple containing the current value and a function to update the value.
  */
 export function useBlockKvValue<T>(
+  runbookId: string,
   blockId: string,
   key: string,
   defaultValue: T,
@@ -54,6 +56,7 @@ export function useBlockKvValue<T>(
   const wrappedUpdateValue = async (value: T) => {
     await updateValue(value);
     await invoke("notify_block_kv_value_changed", {
+      documentId: runbookId,
       blockId,
       key,
       value,
