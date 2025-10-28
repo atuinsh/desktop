@@ -557,6 +557,7 @@ fn main() {
             commands::blocks::open_document,
             commands::blocks::update_document,
             commands::blocks::get_flattened_block_context,
+            commands::blocks::notify_block_kv_value_changed,
             commands::events::subscribe_to_events,
             commands::updates::check_for_updates,
             commands::workspaces::copy_welcome_workspace,

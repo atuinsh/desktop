@@ -36,13 +36,16 @@ impl BlockLocalValueProvider for KvBlockLocalValueProvider {
     async fn get_block_local_value(
         &self,
         block_id: Uuid,
-        property_name: String,
-    ) -> Result<Option<String>, String> {
-        let db = kv::open_db(&self.app_handle)
-            .await
-            .map_err(|e| e.to_string())?;
+        property_name: &str,
+    ) -> Result<Option<String>, Box<dyn std::error::Error + Send + Sync>> {
+        let db = kv::open_db(&self.app_handle).await.map_err(|_| {
+            Box::new(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "Failed to open KV database",
+            ))
+        })?;
         let key = format!("block.{block_id}.{property_name}");
-        match kv::get(&db, &key).await.map_err(|e| e.to_string()) {
+        match kv::get(&db, &key).await.map_err(|e| e.into()) {
             Ok(Some(value)) => Ok(Some(value)),
             Ok(None) => Ok(None),
             Err(e) => Err(e),
@@ -143,6 +146,9 @@ pub async fn open_document(
         return Ok(());
     }
 
+    log::debug!("Opening document {document_id}");
+    log::trace!("Initial blocks: {:?}", document);
+
     let event_bus = Arc::new(ChannelEventBus::new(state.gc_event_sender()));
     let document_handle = DocumentHandle::new(
         document_id.clone(),
@@ -174,6 +180,26 @@ pub async fn update_document(
         .await
         .map_err(|e| e.to_string())?;
 
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn notify_block_kv_value_changed(
+    state: State<'_, AtuinState>,
+    document_id: String,
+    block_id: String,
+    _key: String,
+    _value: String,
+) -> Result<(), String> {
+    log::debug!("Notifying block KV value changed for document {document_id}, block {block_id}");
+
+    let documents = state.documents.read().await;
+    let document = documents.get(&document_id).ok_or("Document not found")?;
+    let block_id = Uuid::parse_str(&block_id).map_err(|e| e.to_string())?;
+    document
+        .block_local_value_changed(block_id)
+        .await
+        .map_err(|e| e.to_string())?;
     Ok(())
 }
 

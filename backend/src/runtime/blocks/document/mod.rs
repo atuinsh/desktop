@@ -62,6 +62,16 @@ impl Document {
         self.document_bridge = document_bridge;
     }
 
+    pub fn block_local_value_changed(&mut self, block_id: Uuid) -> Result<usize, DocumentError> {
+        let start_index = self
+            .blocks
+            .iter()
+            .position(|b| b.id() == block_id)
+            .ok_or(DocumentError::BlockNotFound(block_id))?;
+
+        Ok(start_index)
+    }
+
     pub fn put_document(
         &mut self,
         document: Vec<serde_json::Value>,
@@ -345,6 +355,12 @@ impl Document {
         start_index: Option<usize>,
         event_bus: Arc<dyn EventBus>,
     ) -> Result<(), Vec<DocumentError>> {
+        log::debug!(
+            "Rebuilding passive contexts for document {} starting from index {}",
+            self.id,
+            start_index.unwrap_or(0)
+        );
+
         let mut errors = Vec::new();
         let start = start_index.unwrap_or(0);
 
@@ -365,10 +381,15 @@ impl Document {
                     self.blocks[i].update_context(new_context);
                 }
                 Ok(None) => {
-                    // Block has no passive context, that's fine
+                    self.blocks[i].update_context(BlockContext::new());
                 }
                 Err(e) => {
-                    let error_msg = format!("Failed to evaluate passive context: {}", e);
+                    self.blocks[i].update_context(BlockContext::new());
+
+                    let error_msg = format!(
+                        "Failed to evaluate passive context for block {block_id}: {}",
+                        e
+                    );
                     errors.push(DocumentError::PassiveContextError(error_msg.clone()));
 
                     // Emit Grand Central event for the error asynchronously

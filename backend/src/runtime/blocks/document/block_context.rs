@@ -11,7 +11,7 @@ use uuid::Uuid;
 use crate::runtime::blocks::{document::actor::BlockLocalValueProvider, Block, BlockBehavior};
 
 /// A single block's context - can store multiple typed values
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct BlockContext {
     entries: HashMap<TypeId, Box<dyn Any + Send + Sync>>,
 }
@@ -76,6 +76,7 @@ impl ResolvedContext {
     }
 }
 
+#[derive(Debug)]
 pub struct BlockWithContext {
     block: Block,
     context: BlockContext,

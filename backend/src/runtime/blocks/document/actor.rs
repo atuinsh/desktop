@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use std::collections::HashMap;
 use std::sync::Arc;
 use tauri::ipc::Channel;
 use tokio::sync::{mpsc, oneshot};
@@ -17,8 +18,33 @@ pub trait BlockLocalValueProvider: Send + Sync {
     async fn get_block_local_value(
         &self,
         block_id: Uuid,
-        property_name: String,
-    ) -> Result<Option<String>, String>;
+        property_name: &str,
+    ) -> Result<Option<String>, Box<dyn std::error::Error + Send + Sync>>;
+}
+
+#[allow(unused)]
+pub(crate) struct MemoryBlockLocalValueProvider {
+    values: HashMap<String, String>,
+}
+
+#[allow(unused)]
+impl MemoryBlockLocalValueProvider {
+    pub fn new(values: Vec<(String, String)>) -> Self {
+        Self {
+            values: values.into_iter().collect(),
+        }
+    }
+}
+
+#[async_trait]
+impl BlockLocalValueProvider for MemoryBlockLocalValueProvider {
+    async fn get_block_local_value(
+        &self,
+        _block_id: Uuid,
+        property_name: &str,
+    ) -> Result<Option<String>, Box<dyn std::error::Error + Send + Sync>> {
+        Ok(self.values.get(property_name).cloned())
+    }
 }
 
 /// Errors that can occur during document operations
@@ -51,6 +77,9 @@ pub enum DocumentCommand {
         document: Vec<serde_json::Value>,
         reply: Reply<()>,
     },
+
+    /// Notify the document actor that a block's local value has changed
+    BlockLocalValueChanged { block_id: Uuid, reply: Reply<()> },
 
     /// Update the bridge channel for the document
     UpdateBridgeChannel {
@@ -298,6 +327,18 @@ impl DocumentHandle {
         rx.await.map_err(|_| DocumentError::ActorSendError)?
     }
 
+    /// Notify the document actor that a block's local value has changed
+    pub async fn block_local_value_changed(&self, block_id: Uuid) -> Result<(), DocumentError> {
+        let (tx, rx) = oneshot::channel();
+        self.command_tx
+            .send(DocumentCommand::BlockLocalValueChanged {
+                block_id,
+                reply: tx,
+            })
+            .map_err(|_| DocumentError::ActorSendError)?;
+        rx.await.map_err(|_| DocumentError::ActorSendError)?
+    }
+
     /// Shutdown the document actor
     pub fn shutdown(&self) -> Result<(), DocumentError> {
         self.command_tx
@@ -351,6 +392,10 @@ impl DocumentActor {
             match cmd {
                 DocumentCommand::UpdateDocument { document, reply } => {
                     let result = self.handle_update_document(document).await;
+                    let _ = reply.send(result);
+                }
+                DocumentCommand::BlockLocalValueChanged { block_id, reply } => {
+                    let result = self.handle_block_local_value_changed(block_id).await;
                     let _ = reply.send(result);
                 }
                 DocumentCommand::UpdateBridgeChannel {
@@ -417,6 +462,7 @@ impl DocumentActor {
         &mut self,
         document: Vec<serde_json::Value>,
     ) -> Result<(), DocumentError> {
+        log::trace!("Updating document {} with new content", self.document.id);
         // Update the document using put_document, which returns the index to rebuild from
         let rebuild_from = self
             .document
@@ -497,6 +543,33 @@ impl DocumentActor {
             .ok_or(DocumentError::BlockNotFound(block_id))?;
 
         update_fn(block.context_mut());
+        Ok(())
+    }
+
+    async fn handle_block_local_value_changed(
+        &mut self,
+        block_id: Uuid,
+    ) -> Result<(), DocumentError> {
+        log::trace!(
+            "Block local value changed for block {block_id} in document {}",
+            self.document.id
+        );
+        let rebuild_from = self.document.block_local_value_changed(block_id)?;
+        log::trace!("Rebuilding document from index {rebuild_from}");
+
+        // Rebuild passive contexts only for affected blocks
+        let result = self
+            .document
+            .rebuild_passive_contexts(Some(rebuild_from), self.event_bus.clone())
+            .await;
+
+        if let Err(errors) = result {
+            // Log errors but don't fail the entire operation
+            for error in errors {
+                log::error!("Error rebuilding passive context: {:?}", error);
+            }
+        }
+
         Ok(())
     }
 }

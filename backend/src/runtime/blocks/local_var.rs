@@ -18,9 +18,6 @@ pub struct LocalVar {
 
     #[builder(setter(into))]
     pub name: String,
-
-    #[builder(setter(into))]
-    pub value: String,
 }
 
 impl FromDocument for LocalVar {
@@ -42,13 +39,7 @@ impl FromDocument for LocalVar {
             .ok_or("Missing name")?
             .to_string();
 
-        let value = props
-            .get("value")
-            .and_then(|v| v.as_str())
-            .unwrap_or("") // Default to empty string if value is missing
-            .to_string();
-
-        Ok(LocalVar::builder().id(id).name(name).value(value).build())
+        Ok(LocalVar::builder().id(id).name(name).build())
     }
 }
 
@@ -73,9 +64,18 @@ impl BlockBehavior for LocalVar {
             return Err("Variable names can only contain letters, numbers, and underscores".into());
         }
 
+        let local_value = if let Some(block_local_value_provider) = block_local_value_provider {
+            block_local_value_provider
+                .get_block_local_value(self.id, "value")
+                .await?
+                .ok_or("Value not found for local variable")?
+        } else {
+            return Err("Block local value provider not found".into());
+        };
+
         // Resolve value
         let mut context = BlockContext::new();
-        let resolved_value = resolver.resolve_template(&self.value)?;
+        let resolved_value = resolver.resolve_template(&local_value)?;
         context.insert(DocumentVar(self.name.clone(), resolved_value));
         Ok(Some(context))
     }
@@ -83,20 +83,25 @@ impl BlockBehavior for LocalVar {
 
 #[cfg(test)]
 mod tests {
-    use crate::runtime::blocks::document::block_context::ResolvedContext;
+    use crate::runtime::blocks::document::{
+        actor::MemoryBlockLocalValueProvider, block_context::ResolvedContext,
+    };
 
     use super::*;
     use uuid::Uuid;
 
+    fn local_value_provider() -> Box<dyn BlockLocalValueProvider> {
+        Box::new(MemoryBlockLocalValueProvider::new(vec![(
+            "value".to_string(),
+            "test_value".to_string(),
+        )]))
+    }
+
     #[tokio::test]
     async fn test_local_var_handler_empty_name() {
-        let local_var = LocalVar::builder()
-            .id(Uuid::new_v4())
-            .name("")
-            .value("")
-            .build();
+        let local_var = LocalVar::builder().id(Uuid::new_v4()).name("").build();
 
-        let context = ResolvedContext::from_block(&local_var, None).await;
+        let context = ResolvedContext::from_block(&local_var, Some(local_value_provider())).await;
         assert!(context.is_err());
     }
 
@@ -105,10 +110,11 @@ mod tests {
         let local_var = LocalVar::builder()
             .id(Uuid::new_v4())
             .name("test_var")
-            .value("test_value")
             .build();
 
-        let context = ResolvedContext::from_block(&local_var, None).await.unwrap();
+        let context = ResolvedContext::from_block(&local_var, Some(local_value_provider()))
+            .await
+            .unwrap();
 
         assert_eq!(
             context.variables.get("test_var"),
@@ -121,7 +127,6 @@ mod tests {
         let local_var = LocalVar::builder()
             .id(Uuid::new_v4())
             .name("test_var")
-            .value("test_value")
             .build();
 
         // Test serialization roundtrip
@@ -138,13 +143,17 @@ mod tests {
         let valid_names = vec!["test_var", "TEST123", "var_name_123", "a", "A"];
 
         for name in valid_names {
-            let local_var = LocalVar::builder()
-                .id(Uuid::new_v4())
-                .name(name)
-                .value("test_value")
-                .build();
+            let local_var = LocalVar::builder().id(Uuid::new_v4()).name(name).build();
 
-            let context = ResolvedContext::from_block(&local_var, None).await.unwrap();
+            let local_value_provider = MemoryBlockLocalValueProvider::new(vec![(
+                "value".to_string(),
+                "test_value".to_string(),
+            )]);
+
+            let context =
+                ResolvedContext::from_block(&local_var, Some(Box::new(local_value_provider)))
+                    .await
+                    .unwrap();
             assert_eq!(context.variables.get(name), Some(&"test_value".to_string()));
         }
     }
