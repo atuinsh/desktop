@@ -91,7 +91,7 @@ pub(crate) struct AtuinState {
         Arc<RwLock<HashMap<Uuid, crate::runtime::blocks::handler::ExecutionHandle>>>,
 
     // Map of document handles per runbook
-    pub documents: Arc<RwLock<HashMap<String, DocumentHandle>>>,
+    pub documents: Arc<RwLock<HashMap<String, Arc<DocumentHandle>>>>,
 }
 
 impl AtuinState {

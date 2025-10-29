@@ -1,5 +1,17 @@
+use crate::runtime::blocks::document::block_context::{BlockExecutionOutput, DocumentVar};
+use crate::runtime::blocks::handler::{
+    BlockErrorData, BlockFinishedData, BlockLifecycleEvent, BlockOutput,
+};
+use crate::runtime::blocks::handler::{CancellationToken, ExecutionStatus};
+use crate::runtime::events::GCEvent;
+use crate::runtime::workflow::event::WorkflowEvent;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
+use std::process::Stdio;
+use std::sync::Arc;
+use tokio::io::{AsyncBufReadExt, BufReader};
+use tokio::process::Command;
+use tokio::sync::RwLock;
 use typed_builder::TypedBuilder;
 use uuid::Uuid;
 
@@ -103,11 +115,7 @@ impl BlockBehavior for Script {
         self,
         context: ExecutionContext,
     ) -> Result<Option<ExecutionHandle>, Box<dyn std::error::Error + Send + Sync>> {
-        use crate::runtime::blocks::document::block_context::{BlockExecutionOutput, DocumentVar};
-        use crate::runtime::blocks::handler::{CancellationToken, ExecutionStatus};
-        use crate::runtime::events::GCEvent;
-        use std::sync::Arc;
-        use tokio::sync::RwLock;
+        log::trace!("Executing script block {id}", id = self.id);
 
         let handle = crate::runtime::blocks::handler::ExecutionHandle {
             id: uuid::Uuid::new_v4(),
@@ -117,11 +125,21 @@ impl BlockBehavior for Script {
             output_variable: self.output_variable.clone(),
         };
 
+        log::trace!(
+            "Script block {id} execution handle created; ID = {handle_id}",
+            id = self.id,
+            handle_id = handle.id
+        );
+
         let handle_clone = handle.clone();
 
         tokio::spawn(async move {
             // Emit BlockStarted event via Grand Central
             if let Some(event_bus) = &context.event_bus {
+                log::trace!(
+                    "Emitting BlockStarted event for script block {id}",
+                    id = self.id
+                );
                 let _ = event_bus
                     .emit(GCEvent::BlockStarted {
                         block_id: self.id,
@@ -133,6 +151,15 @@ impl BlockBehavior for Script {
             let (exit_code, captured_output) = self
                 .run_script(context.clone(), handle_clone.cancellation_token.clone())
                 .await;
+
+            log::trace!(
+                "Script block {id} execution completed; Exit code = {exit_code}",
+                id = self.id,
+                exit_code = exit_code
+                    .as_ref()
+                    .map(|c| c.to_string())
+                    .unwrap_or("(none)".to_string())
+            );
 
             // Determine status based on exit code
             let status = match exit_code {
@@ -146,30 +173,31 @@ impl BlockBehavior for Script {
                         let output_clone = output.clone();
                         let document_handle = context.document_handle.clone();
 
-                        tokio::spawn(async move {
-                            let _ = document_handle
-                                .update_context(block_id, move |ctx| {
-                                    ctx.insert(DocumentVar(var_name_clone, output_clone));
-                                })
-                                .await;
-                        });
+                        let _ = document_handle
+                            .update_active_context(block_id, move |ctx| {
+                                log::trace!(
+                                    "Storing output variable {var_name_clone} for script block {block_id}",
+                                    var_name_clone = var_name_clone,
+                                    block_id = block_id
+                                );
+                                ctx.insert(DocumentVar(var_name_clone, output_clone));
+                            })
+                            .await;
                     }
 
                     // Store execution output in context
                     let block_id = self.id;
                     let document_handle = context.document_handle.clone();
                     let output_for_context = output.clone();
-                    tokio::spawn(async move {
-                        let _ = document_handle
-                            .update_context(block_id, move |ctx| {
-                                ctx.insert(BlockExecutionOutput {
-                                    exit_code: Some(0),
-                                    stdout: Some(output_for_context),
-                                    stderr: None,
-                                });
-                            })
-                            .await;
-                    });
+                    let _ = document_handle
+                        .update_active_context(block_id, move |ctx| {
+                            ctx.insert(BlockExecutionOutput {
+                                exit_code: Some(0),
+                                stdout: Some(output_for_context),
+                                stderr: None,
+                            });
+                        })
+                        .await;
 
                     // Emit BlockFinished event via Grand Central
                     if let Some(event_bus) = &context.event_bus {
@@ -189,17 +217,15 @@ impl BlockBehavior for Script {
                     let block_id = self.id;
                     let document_handle = context.document_handle.clone();
                     let captured_clone = captured_output.clone();
-                    tokio::spawn(async move {
-                        let _ = document_handle
-                            .update_context(block_id, move |ctx| {
-                                ctx.insert(BlockExecutionOutput {
-                                    exit_code: Some(code),
-                                    stdout: Some(captured_clone),
-                                    stderr: None,
-                                });
-                            })
-                            .await;
-                    });
+                    let _ = document_handle
+                        .update_active_context(block_id, move |ctx| {
+                            ctx.insert(BlockExecutionOutput {
+                                exit_code: Some(code),
+                                stdout: Some(captured_clone),
+                                stderr: None,
+                            });
+                        })
+                        .await;
 
                     // Emit BlockFailed event via Grand Central
                     if let Some(event_bus) = &context.event_bus {
@@ -270,46 +296,51 @@ impl Script {
     async fn run_script(
         &self,
         context: ExecutionContext,
-        cancellation_token: crate::runtime::blocks::handler::CancellationToken,
+        cancellation_token: CancellationToken,
     ) -> (
         Result<i32, Box<dyn std::error::Error + Send + Sync>>,
         String,
     ) {
-        use crate::runtime::blocks::handler::{
-            BlockErrorData, BlockFinishedData, BlockLifecycleEvent, BlockOutput,
-        };
-        use crate::runtime::workflow::event::WorkflowEvent;
-        use std::process::Stdio;
-        use std::sync::Arc;
-        use tokio::io::{AsyncBufReadExt, BufReader};
-        use tokio::process::Command;
-        use tokio::sync::RwLock;
-
         // Send start event
         let _ = context
             .event_sender
             .send(WorkflowEvent::BlockStarted { id: self.id });
 
         // Send started lifecycle event to output channel
-        if let Some(ref ch) = context.output_channel {
-            let _ = ch.send(BlockOutput {
-                stdout: None,
-                stderr: None,
-                binary: None,
-                object: None,
-                lifecycle: Some(BlockLifecycleEvent::Started),
-            });
-        }
+        log::trace!(
+            "Sending started lifecycle event to output channel for script block {id}",
+            id = self.id
+        );
+
+        let _ = context
+            .send_output(
+                BlockOutput {
+                    block_id: self.id,
+                    stdout: None,
+                    stderr: None,
+                    binary: None,
+                    object: None,
+                    lifecycle: Some(BlockLifecycleEvent::Started),
+                }
+                .into(),
+            )
+            .await;
 
         // Template the script code
         let code = self.template_script_code(&context).unwrap_or_else(|e| {
-            eprintln!("Template error in script {}: {}", self.id, e);
+            log::warn!("Templating error in script {id}: {e}", id = self.id, e = e);
             self.code.clone()
         });
 
         // Check if SSH execution is needed
         let ssh_host = context.context_resolver.ssh_host().cloned();
         if let Some(ssh_host) = ssh_host {
+            log::trace!(
+                "Executing SSH script for script block {id} with SSH host {ssh_host}",
+                id = self.id,
+                ssh_host = ssh_host
+            );
+
             return self
                 .execute_ssh_script(&code, &ssh_host, context, cancellation_token)
                 .await;
@@ -328,23 +359,34 @@ impl Script {
         cmd.stderr(Stdio::piped());
         cmd.stdin(Stdio::null());
 
+        log::trace!("Spawning process for script block {id}", id = self.id,);
+
         let mut child = match cmd.spawn() {
             Ok(child) => child,
             Err(e) => {
                 let _ = context
                     .event_sender
                     .send(WorkflowEvent::BlockFinished { id: self.id });
-                if let Some(ref ch) = context.output_channel {
-                    let _ = ch.send(BlockOutput {
-                        stdout: None,
-                        stderr: None,
-                        binary: None,
-                        object: None,
-                        lifecycle: Some(BlockLifecycleEvent::Error(BlockErrorData {
-                            message: format!("Failed to spawn process: {}", e),
-                        })),
-                    });
-                }
+                log::trace!(
+                    "Sending error lifecycle event to output channel for script block {id}",
+                    id = self.id
+                );
+
+                let _ = context
+                    .send_output(
+                        BlockOutput {
+                            block_id: self.id,
+                            stdout: None,
+                            stderr: None,
+                            binary: None,
+                            object: None,
+                            lifecycle: Some(BlockLifecycleEvent::Error(BlockErrorData {
+                                message: format!("Failed to spawn process: {}", e),
+                            })),
+                        }
+                        .into(),
+                    )
+                    .await;
                 return (Err(e.into()), String::new());
             }
         };
@@ -354,8 +396,9 @@ impl Script {
 
         // Capture stdout
         if let Some(stdout) = child.stdout.take() {
-            let channel = context.output_channel.clone();
+            let context_clone = context.clone();
             let capture = captured_output.clone();
+            let block_id = self.id;
 
             tokio::spawn(async move {
                 let mut reader = BufReader::new(stdout);
@@ -364,15 +407,24 @@ impl Script {
                     if n == 0 {
                         break;
                     }
-                    if let Some(ref ch) = channel {
-                        let _ = ch.send(BlockOutput {
-                            stdout: Some(line.clone()),
-                            stderr: None,
-                            lifecycle: None,
-                            binary: None,
-                            object: None,
-                        });
-                    }
+                    log::trace!(
+                        "Sending stdout line to output channel for script block {id}",
+                        id = block_id
+                    );
+
+                    let _ = context_clone
+                        .send_output(
+                            BlockOutput {
+                                block_id,
+                                stdout: Some(line.clone()),
+                                stderr: None,
+                                lifecycle: None,
+                                binary: None,
+                                object: None,
+                            }
+                            .into(),
+                        )
+                        .await;
                     let mut captured = capture.write().await;
                     captured.push_str(&line);
                     line.clear();
@@ -382,7 +434,9 @@ impl Script {
 
         // Stream stderr
         if let Some(stderr) = child.stderr.take() {
-            let channel = context.output_channel.clone();
+            let context_clone = context.clone();
+            let block_id = self.id;
+
             tokio::spawn(async move {
                 let mut reader = BufReader::new(stderr);
                 let mut line = String::new();
@@ -390,15 +444,24 @@ impl Script {
                     if n == 0 {
                         break;
                     }
-                    if let Some(ref ch) = channel {
-                        let _ = ch.send(BlockOutput {
-                            stdout: None,
-                            stderr: Some(line.clone()),
-                            lifecycle: None,
-                            binary: None,
-                            object: None,
-                        });
-                    }
+                    log::trace!(
+                        "Sending stderr line to output channel for script block {id}",
+                        id = block_id
+                    );
+
+                    let _ = context_clone
+                        .send_output(
+                            BlockOutput {
+                                block_id,
+                                stdout: None,
+                                stderr: Some(line.clone()),
+                                lifecycle: None,
+                                binary: None,
+                                object: None,
+                            }
+                            .into(),
+                        )
+                        .await;
                     line.clear();
                 }
             });
@@ -409,6 +472,8 @@ impl Script {
         let exit_code = if let Some(cancel_rx) = cancellation_receiver {
             tokio::select! {
                 _ = cancel_rx => {
+                    log::trace!("Process for script block {id} cancelled", id = self.id);
+
                     // Kill the process
                     if let Some(pid) = pid {
                         #[cfg(unix)]
@@ -426,6 +491,11 @@ impl Script {
 
                     // Emit BlockCancelled event
                     if let Some(event_bus) = &context.event_bus {
+                        log::trace!(
+                            "Emitting BlockCancelled event for script block {id}",
+                            id = self.id
+                        );
+
                         let _ = event_bus.emit(crate::runtime::events::GCEvent::BlockCancelled {
                             block_id: self.id,
                             runbook_id: context.runbook_id,
@@ -433,15 +503,20 @@ impl Script {
                     }
 
                     let _ = context.event_sender.send(WorkflowEvent::BlockFinished { id: self.id });
-                    if let Some(ref ch) = context.output_channel {
-                        let _ = ch.send(BlockOutput {
+                        log::trace!(
+                            "Sending cancelled lifecycle event to output channel for script block {id}",
+                            id = self.id
+                        );
+                        let _ = context.send_output(BlockOutput {
+                            block_id: self.id,
                             stdout: None,
                             stderr: None,
                             binary: None,
                             object: None,
                             lifecycle: Some(BlockLifecycleEvent::Cancelled),
-                        });
-                    }
+                        }.into(),
+                        )
+                        .await;
                     return (Err("Script execution cancelled".into()), captured);
                 }
                 result = child.wait() => {
@@ -450,8 +525,12 @@ impl Script {
                         Err(e) => {
                             let captured = captured_output.read().await.clone();
                             let _ = context.event_sender.send(WorkflowEvent::BlockFinished { id: self.id });
-                            if let Some(ref ch) = context.output_channel {
-                                let _ = ch.send(BlockOutput {
+                                log::trace!(
+                                    "Sending error lifecycle event to output channel for script block {id}",
+                                    id = self.id
+                                );
+                                let _ = context.send_output(BlockOutput {
+                                    block_id: self.id,
                                     stdout: None,
                                     stderr: None,
                                     binary: None,
@@ -459,8 +538,9 @@ impl Script {
                                     lifecycle: Some(BlockLifecycleEvent::Error(BlockErrorData {
                                         message: format!("Failed to wait for process: {}", e)
                                     })),
-                                });
-                            }
+                                }.into(),
+                                )
+                                .await;
                             return (Err(format!("Failed to wait for process: {}", e).into()), captured);
                         }
                     }
@@ -474,17 +554,25 @@ impl Script {
                     let _ = context
                         .event_sender
                         .send(WorkflowEvent::BlockFinished { id: self.id });
-                    if let Some(ref ch) = context.output_channel {
-                        let _ = ch.send(BlockOutput {
-                            stdout: None,
-                            stderr: None,
-                            binary: None,
-                            object: None,
-                            lifecycle: Some(BlockLifecycleEvent::Error(BlockErrorData {
-                                message: format!("Failed to wait for process: {}", e),
-                            })),
-                        });
-                    }
+                    log::trace!(
+                        "Sending error lifecycle event to output channel for script block {id}",
+                        id = self.id
+                    );
+                    let _ = context
+                        .send_output(
+                            BlockOutput {
+                                block_id: self.id,
+                                stdout: None,
+                                stderr: None,
+                                binary: None,
+                                object: None,
+                                lifecycle: Some(BlockLifecycleEvent::Error(BlockErrorData {
+                                    message: format!("Failed to wait for process: {}", e),
+                                })),
+                            }
+                            .into(),
+                        )
+                        .await;
                     return (
                         Err(format!("Failed to wait for process: {}", e).into()),
                         captured,
@@ -498,18 +586,26 @@ impl Script {
             .event_sender
             .send(WorkflowEvent::BlockFinished { id: self.id });
 
-        if let Some(ref ch) = context.output_channel {
-            let _ = ch.send(BlockOutput {
-                stdout: None,
-                stderr: None,
-                binary: None,
-                object: None,
-                lifecycle: Some(BlockLifecycleEvent::Finished(BlockFinishedData {
-                    exit_code: Some(exit_code),
-                    success: exit_code == 0,
-                })),
-            });
-        }
+        log::trace!(
+            "Sending finished lifecycle event to output channel for script block {id}",
+            id = self.id
+        );
+        let _ = context
+            .send_output(
+                BlockOutput {
+                    block_id: self.id,
+                    stdout: None,
+                    stderr: None,
+                    binary: None,
+                    object: None,
+                    lifecycle: Some(BlockLifecycleEvent::Finished(BlockFinishedData {
+                        exit_code: Some(exit_code),
+                        success: exit_code == 0,
+                    })),
+                }
+                .into(),
+            )
+            .await;
 
         let captured = captured_output.read().await.clone();
         (Ok(exit_code), captured)
@@ -537,36 +633,44 @@ impl Script {
             .event_sender
             .send(WorkflowEvent::BlockStarted { id: self.id });
 
-        if let Some(ref ch) = context.output_channel {
-            let _ = ch.send(BlockOutput {
-                stdout: None,
-                stderr: None,
-                binary: None,
-                object: None,
-                lifecycle: Some(BlockLifecycleEvent::Started),
-            });
-        }
+        let _ = context
+            .send_output(
+                BlockOutput {
+                    block_id: self.id,
+                    stdout: None,
+                    stderr: None,
+                    binary: None,
+                    object: None,
+                    lifecycle: Some(BlockLifecycleEvent::Started),
+                }
+                .into(),
+            )
+            .await;
 
         let (username, hostname) = Self::parse_ssh_host(ssh_host);
 
-        let ssh_pool = match context.ssh_pool {
+        let ssh_pool = match &context.ssh_pool {
             Some(pool) => pool,
             None => {
                 let error_msg = "SSH pool not available in execution context";
                 let _ = context
                     .event_sender
                     .send(WorkflowEvent::BlockFinished { id: self.id });
-                if let Some(ref ch) = context.output_channel {
-                    let _ = ch.send(BlockOutput {
-                        stdout: None,
-                        stderr: None,
-                        binary: None,
-                        object: None,
-                        lifecycle: Some(BlockLifecycleEvent::Error(BlockErrorData {
-                            message: error_msg.to_string(),
-                        })),
-                    });
-                }
+                let _ = context
+                    .send_output(
+                        BlockOutput {
+                            block_id: self.id,
+                            stdout: None,
+                            stderr: None,
+                            binary: None,
+                            object: None,
+                            lifecycle: Some(BlockLifecycleEvent::Error(BlockErrorData {
+                                message: error_msg.to_string(),
+                            })),
+                        }
+                        .into(),
+                    )
+                    .await;
                 return (Err(error_msg.into()), String::new());
             }
         };
@@ -595,8 +699,9 @@ impl Script {
             let _ = context
                 .event_sender
                 .send(WorkflowEvent::BlockFinished { id: self.id });
-            if let Some(ref ch) = context.output_channel {
-                let _ = ch.send(BlockOutput {
+            let _ = context.send_output(
+                BlockOutput {
+                    block_id: self.id,
                     stdout: None,
                     stderr: None,
                     binary: None,
@@ -604,28 +709,33 @@ impl Script {
                     lifecycle: Some(BlockLifecycleEvent::Error(BlockErrorData {
                         message: error_msg.clone(),
                     })),
-                });
-            }
+                }
+                .into(),
+            );
             return (Err(error_msg.into()), String::new());
         }
 
         let cancellation_receiver = cancellation_token.take_receiver();
-        let output_channel_clone = context.output_channel.clone();
+        let context_clone = context.clone();
         let block_id = self.id;
         let ssh_pool_clone = ssh_pool.clone();
         let channel_id_clone = channel_id.clone();
 
         tokio::spawn(async move {
             while let Some(line) = output_receiver.recv().await {
-                if let Some(ref ch) = output_channel_clone {
-                    let _ = ch.send(BlockOutput {
-                        stdout: Some(line.clone()),
-                        stderr: None,
-                        lifecycle: None,
-                        binary: None,
-                        object: None,
-                    });
-                }
+                let _ = context_clone
+                    .send_output(
+                        BlockOutput {
+                            block_id,
+                            stdout: Some(line.clone()),
+                            stderr: None,
+                            lifecycle: None,
+                            binary: None,
+                            object: None,
+                        }
+                        .into(),
+                    )
+                    .await;
                 let mut captured = captured_output_clone.write().await;
                 captured.push_str(&line);
             }
@@ -639,21 +749,21 @@ impl Script {
 
                     if let Some(event_bus) = &context.event_bus {
                         let _ = event_bus.emit(crate::runtime::events::GCEvent::BlockCancelled {
-                            block_id,
+                            block_id: self.id,
                             runbook_id: context.runbook_id,
                         }).await;
                     }
 
                     let _ = context.event_sender.send(WorkflowEvent::BlockFinished { id: block_id });
-                    if let Some(ref ch) = context.output_channel {
-                        let _ = ch.send(BlockOutput {
-                            stdout: None,
-                            stderr: None,
-                            binary: None,
-                            object: None,
-                            lifecycle: Some(BlockLifecycleEvent::Cancelled),
-                        });
-                    }
+                    let _ = context.send_output(BlockOutput {
+                        block_id,
+                        stdout: None,
+                        stderr: None,
+                        binary: None,
+                        object: None,
+                        lifecycle: Some(BlockLifecycleEvent::Cancelled),
+                    }.into())
+                    .await;
                     return (Err("SSH script execution cancelled".into()), captured);
                 }
                 _ = result_rx => {
@@ -668,18 +778,22 @@ impl Script {
         let _ = context
             .event_sender
             .send(WorkflowEvent::BlockFinished { id: self.id });
-        if let Some(ref ch) = context.output_channel {
-            let _ = ch.send(BlockOutput {
-                stdout: None,
-                stderr: None,
-                binary: None,
-                object: None,
-                lifecycle: Some(BlockLifecycleEvent::Finished(BlockFinishedData {
-                    exit_code: Some(exit_code),
-                    success: exit_code == 0,
-                })),
-            });
-        }
+        let _ = context
+            .send_output(
+                BlockOutput {
+                    block_id: self.id,
+                    stdout: None,
+                    stderr: None,
+                    binary: None,
+                    object: None,
+                    lifecycle: Some(BlockLifecycleEvent::Finished(BlockFinishedData {
+                        exit_code: Some(exit_code),
+                        success: exit_code == 0,
+                    })),
+                }
+                .into(),
+            )
+            .await;
 
         let captured = captured_output.read().await.clone();
         (Ok(exit_code), captured)

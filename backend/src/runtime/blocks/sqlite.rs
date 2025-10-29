@@ -149,6 +149,7 @@ impl SQLite {
 
     /// Execute a single SQLite statement
     async fn execute_statement(
+        &self,
         pool: &SqlitePool,
         statement: &str,
         context: &ExecutionContext,
@@ -185,41 +186,49 @@ impl SQLite {
                 results.push(Self::row_to_json(row)?);
             }
 
-            if let Some(ref ch) = context.output_channel {
-                let result_json = json!({
-                    "columns": column_names,
-                    "rows": results,
-                    "rowCount": results.len()
-                });
+            let result_json = json!({
+                "columns": column_names,
+                "rows": results,
+                "rowCount": results.len()
+            });
 
-                let _ = ch.send(BlockOutput {
-                    stdout: None,
-                    stderr: None,
-                    lifecycle: None,
-                    binary: None,
-                    object: Some(result_json),
-                });
-            }
+            let _ = context
+                .send_output(
+                    BlockOutput {
+                        block_id: self.id,
+                        stdout: None,
+                        stderr: None,
+                        lifecycle: None,
+                        binary: None,
+                        object: Some(result_json),
+                    }
+                    .into(),
+                )
+                .await;
         } else {
             let result = sqlx::query(statement)
                 .execute(pool)
                 .await
                 .map_err(|e| format!("SQL execution failed: {}", e))?;
 
-            if let Some(ref ch) = context.output_channel {
-                let result_json = json!({
-                    "rowsAffected": result.rows_affected(),
-                    "lastInsertRowid": result.last_insert_rowid(),
-                });
+            let result_json = json!({
+                "rowsAffected": result.rows_affected(),
+                "lastInsertRowid": result.last_insert_rowid(),
+            });
 
-                let _ = ch.send(BlockOutput {
-                    stdout: None,
-                    stderr: None,
-                    lifecycle: None,
-                    binary: None,
-                    object: Some(result_json),
-                });
-            }
+            let _ = context
+                .send_output(
+                    BlockOutput {
+                        block_id: self.id,
+                        stdout: None,
+                        stderr: None,
+                        lifecycle: None,
+                        binary: None,
+                        object: Some(result_json),
+                    }
+                    .into(),
+                )
+                .await;
         }
 
         Ok(())
@@ -236,30 +245,38 @@ impl SQLite {
             .event_sender
             .send(WorkflowEvent::BlockStarted { id: block_id });
 
-        if let Some(ref ch) = context.output_channel {
-            let _ = ch.send(BlockOutput {
-                stdout: None,
-                stderr: None,
-                binary: None,
-                object: None,
-                lifecycle: Some(BlockLifecycleEvent::Started),
-            });
-        }
+        let _ = context
+            .send_output(
+                BlockOutput {
+                    block_id: self.id,
+                    stdout: None,
+                    stderr: None,
+                    binary: None,
+                    object: None,
+                    lifecycle: Some(BlockLifecycleEvent::Started),
+                }
+                .into(),
+            )
+            .await;
 
         let query = self.template_sqlite_query(&context).unwrap_or_else(|e| {
             eprintln!("Template error in SQLite query {}: {}", block_id, e);
             self.query.clone()
         });
 
-        if let Some(ref ch) = context.output_channel {
-            let _ = ch.send(BlockOutput {
-                stdout: Some("Connecting to database...".to_string()),
-                stderr: None,
-                binary: None,
-                object: None,
-                lifecycle: None,
-            });
-        }
+        let _ = context
+            .send_output(
+                BlockOutput {
+                    block_id: self.id,
+                    stdout: Some("Connecting to database...".to_string()),
+                    stderr: None,
+                    binary: None,
+                    object: None,
+                    lifecycle: None,
+                }
+                .into(),
+            )
+            .await;
 
         let pool = {
             let connection_task = async {
@@ -273,38 +290,38 @@ impl SQLite {
                 result = connection_task => {
                     match result {
                         Ok(pool) => {
-                            if let Some(ref ch) = context.output_channel {
-                                let _ = ch.send(BlockOutput {
-                                    stdout: Some("Connected to database successfully".to_string()),
-                                    stderr: None,
-                                    binary: None,
-                                    object: None,
-                                    lifecycle: None,
-                                });
-                            }
+                            let _ = context.send_output(BlockOutput {
+                                block_id: self.id,
+                                stdout: Some("Connected to database successfully".to_string()),
+                                stderr: None,
+                                binary: None,
+                                object: None,
+                                lifecycle: None,
+                            }.into())
+                            .await;
                             pool
                         },
                         Err(e) => {
                             let error_msg = format!("Failed to connect to database: {}", e);
-                            if let Some(ref ch) = context.output_channel {
-                                let _ = ch.send(BlockOutput {
-                                    stdout: None,
-                                    stderr: Some(error_msg.clone()),
-                                    binary: None,
-                                    object: None,
-                                    lifecycle: Some(BlockLifecycleEvent::Error(BlockErrorData {
-                                        message: error_msg.clone(),
-                                    })),
-                                });
-                            }
+                            let _ = context.send_output(BlockOutput {
+                                block_id: self.id,
+                                stdout: None,
+                                stderr: Some(error_msg.clone()),
+                                binary: None,
+                                object: None,
+                                lifecycle: Some(BlockLifecycleEvent::Error(BlockErrorData {
+                                    message: error_msg.clone(),
+                                })),
+                            }.into())
+                            .await;
                             return Err(error_msg.into());
                         }
                     }
                 }
                 _ = timeout_task => {
                     let error_msg = "Database connection timed out after 10 seconds.";
-                    if let Some(ref ch) = context.output_channel {
-                        let _ = ch.send(BlockOutput {
+                        let _ = context.send_output(BlockOutput {
+                            block_id: self.id,
                             stdout: None,
                             stderr: Some(error_msg.to_string()),
                             binary: None,
@@ -312,8 +329,8 @@ impl SQLite {
                             lifecycle: Some(BlockLifecycleEvent::Error(BlockErrorData {
                                 message: error_msg.to_string(),
                             })),
-                        });
-                    }
+                        }.into())
+                        .await;
                     return Err(error_msg.into());
                 }
             }
@@ -333,49 +350,62 @@ impl SQLite {
 
             if statements.is_empty() {
                 let error_msg = "No SQL statements to execute";
-                if let Some(ref ch) = &context_clone.output_channel {
-                    let _ = ch.send(BlockOutput {
-                        stdout: None,
-                        stderr: Some(error_msg.to_string()),
-                        binary: None,
-                        object: None,
-                        lifecycle: Some(BlockLifecycleEvent::Error(BlockErrorData {
-                            message: error_msg.to_string(),
-                        })),
-                    });
-                }
-                return Err(error_msg.into());
-            }
-
-            if let Some(ref ch) = &context_clone.output_channel {
-                let _ = ch.send(BlockOutput {
-                    stdout: Some(format!(
-                        "Executing {} SQL statement(s)...",
-                        statements.len()
-                    )),
-                    stderr: None,
-                    binary: None,
-                    object: None,
-                    lifecycle: None,
-                });
-            }
-
-            for (i, statement) in statements.iter().enumerate() {
-                if let Err(e) =
-                    Self::execute_statement(&pool_clone, statement, &context_clone).await
-                {
-                    let error_msg = format!("Statement {} failed: {}", i + 1, e);
-                    if let Some(ref ch) = &context_clone.output_channel {
-                        let _ = ch.send(BlockOutput {
+                let _ = context_clone
+                    .send_output(
+                        BlockOutput {
+                            block_id: self.id,
                             stdout: None,
-                            stderr: Some(error_msg.clone()),
+                            stderr: Some(error_msg.to_string()),
                             binary: None,
                             object: None,
                             lifecycle: Some(BlockLifecycleEvent::Error(BlockErrorData {
-                                message: error_msg.clone(),
+                                message: error_msg.to_string(),
                             })),
-                        });
+                        }
+                        .into(),
+                    )
+                    .await;
+                return Err(error_msg.into());
+            }
+
+            let _ = context_clone
+                .send_output(
+                    BlockOutput {
+                        block_id: self.id,
+                        stdout: Some(format!(
+                            "Executing {} SQL statement(s)...",
+                            statements.len()
+                        )),
+                        stderr: None,
+                        binary: None,
+                        object: None,
+                        lifecycle: None,
                     }
+                    .into(),
+                )
+                .await;
+
+            for (i, statement) in statements.iter().enumerate() {
+                if let Err(e) = self
+                    .execute_statement(&pool_clone, statement, &context_clone)
+                    .await
+                {
+                    let error_msg = format!("Statement {} failed: {}", i + 1, e);
+                    let _ = context_clone
+                        .send_output(
+                            BlockOutput {
+                                block_id: self.id,
+                                stdout: None,
+                                stderr: Some(error_msg.clone()),
+                                binary: None,
+                                object: None,
+                                lifecycle: Some(BlockLifecycleEvent::Error(BlockErrorData {
+                                    message: error_msg.clone(),
+                                })),
+                            }
+                            .into(),
+                        )
+                        .await;
                     return Err(error_msg.into());
                 }
             }
@@ -389,20 +419,20 @@ impl SQLite {
                     pool.close().await;
                     if let Some(event_bus) = &context.event_bus {
                         let _ = event_bus.emit(GCEvent::BlockCancelled {
-                            block_id,
+                            block_id: self.id,
                             runbook_id: context.runbook_id,
                         }).await;
                     }
                     let _ = context.event_sender.send(WorkflowEvent::BlockFinished { id: block_id });
-                    if let Some(ref ch) = context.output_channel {
-                        let _ = ch.send(BlockOutput {
-                            stdout: None,
-                            stderr: None,
-                            binary: None,
-                            object: None,
-                            lifecycle: Some(BlockLifecycleEvent::Cancelled),
-                        });
-                    }
+                    let _ = context.send_output(BlockOutput {
+                        block_id: self.id,
+                        stdout: None,
+                        stderr: None,
+                        binary: None,
+                        object: None,
+                        lifecycle: Some(BlockLifecycleEvent::Cancelled),
+                    }.into())
+                    .await;
                     return Err("SQLite query execution cancelled".into());
                 }
                 result = execution_task => {
@@ -419,26 +449,36 @@ impl SQLite {
         let _ = context
             .event_sender
             .send(WorkflowEvent::BlockFinished { id: block_id });
-        if let Some(ref ch) = context.output_channel {
-            let _ = ch.send(BlockOutput {
-                stdout: Some("Query execution completed successfully".to_string()),
-                stderr: None,
-                binary: None,
-                object: None,
-                lifecycle: None,
-            });
+        let _ = context
+            .send_output(
+                BlockOutput {
+                    block_id: self.id,
+                    stdout: Some("Query execution completed successfully".to_string()),
+                    stderr: None,
+                    binary: None,
+                    object: None,
+                    lifecycle: None,
+                }
+                .into(),
+            )
+            .await;
 
-            let _ = ch.send(BlockOutput {
-                stdout: None,
-                stderr: None,
-                binary: None,
-                object: None,
-                lifecycle: Some(BlockLifecycleEvent::Finished(BlockFinishedData {
-                    exit_code: Some(0),
-                    success: true,
-                })),
-            });
-        }
+        let _ = context
+            .send_output(
+                BlockOutput {
+                    block_id: self.id,
+                    stdout: None,
+                    stderr: None,
+                    binary: None,
+                    object: None,
+                    lifecycle: Some(BlockLifecycleEvent::Finished(BlockFinishedData {
+                        exit_code: Some(0),
+                        success: true,
+                    })),
+                }
+                .into(),
+            )
+            .await;
 
         result
     }
@@ -471,7 +511,7 @@ impl BlockBehavior for SQLite {
             if let Some(event_bus) = &context_clone.event_bus {
                 let _ = event_bus
                     .emit(GCEvent::BlockStarted {
-                        block_id,
+                        block_id: self.id,
                         runbook_id,
                     })
                     .await;
@@ -489,7 +529,7 @@ impl BlockBehavior for SQLite {
                     if let Some(event_bus) = &context_clone.event_bus {
                         let _ = event_bus
                             .emit(GCEvent::BlockFinished {
-                                block_id,
+                                block_id: self.id,
                                 runbook_id,
                                 success: true,
                             })
@@ -498,7 +538,7 @@ impl BlockBehavior for SQLite {
 
                     let _ = context_clone
                         .document_handle
-                        .update_context(block_id, move |ctx| {
+                        .update_passive_context(block_id, move |ctx| {
                             ctx.insert(BlockExecutionOutput {
                                 exit_code: Some(0),
                                 stdout: Some("Query execution completed successfully".to_string()),
@@ -513,29 +553,33 @@ impl BlockBehavior for SQLite {
                     if let Some(event_bus) = &context_clone.event_bus {
                         let _ = event_bus
                             .emit(GCEvent::BlockFailed {
-                                block_id,
+                                block_id: self.id,
                                 runbook_id,
                                 error: e.to_string(),
                             })
                             .await;
                     }
 
-                    if let Some(ref ch) = context_clone.output_channel {
-                        let _ = ch.send(BlockOutput {
-                            stdout: None,
-                            stderr: Some(e.to_string()),
-                            binary: None,
-                            object: None,
-                            lifecycle: Some(BlockLifecycleEvent::Error(BlockErrorData {
-                                message: e.to_string(),
-                            })),
-                        });
-                    }
+                    let _ = context_clone
+                        .send_output(
+                            BlockOutput {
+                                block_id: self.id,
+                                stdout: None,
+                                stderr: Some(e.to_string()),
+                                binary: None,
+                                object: None,
+                                lifecycle: Some(BlockLifecycleEvent::Error(BlockErrorData {
+                                    message: e.to_string(),
+                                })),
+                            }
+                            .into(),
+                        )
+                        .await;
 
                     let error_msg = e.to_string();
                     let _ = context_clone
                         .document_handle
-                        .update_context(block_id, move |ctx| {
+                        .update_passive_context(block_id, move |ctx| {
                             ctx.insert(BlockExecutionOutput {
                                 exit_code: Some(1),
                                 stdout: None,

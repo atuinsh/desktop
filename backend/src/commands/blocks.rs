@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use serde::Serialize;
 use tauri::{ipc::Channel, AppHandle, Manager, State};
 use uuid::Uuid;
 
@@ -10,17 +9,36 @@ use crate::kv;
 use crate::runtime::blocks::document::actor::{BlockLocalValueProvider, DocumentHandle};
 use crate::runtime::blocks::document::block_context::ResolvedContext;
 use crate::runtime::blocks::document::bridge::DocumentBridgeMessage;
-use crate::runtime::blocks::handler::BlockOutput;
 use crate::runtime::ClientMessageChannel;
 use crate::state::AtuinState;
 
+#[derive(Clone)]
+struct DocumentBridgeChannel {
+    runbook_id: String,
+    channel: Arc<Channel<DocumentBridgeMessage>>,
+}
+
 #[async_trait]
-impl<M: Serialize + Send + Sync> ClientMessageChannel<M> for tauri::ipc::Channel<M> {
-    async fn send(&self, message: M) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        self.send(message).map_err(|e| e.into())
+impl ClientMessageChannel<DocumentBridgeMessage> for DocumentBridgeChannel {
+    async fn send(
+        &self,
+        message: DocumentBridgeMessage,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        log::trace!(
+            "Sending message to document bridge for runbook {runbook_id}",
+            runbook_id = self.runbook_id
+        );
+        let result = self.channel.send(message).map_err(|e| e.into());
+
+        if let Err(e) = &result {
+            log::error!("Failed to send message to document bridge: {e}");
+        }
+
+        result
     }
 }
 
+#[derive(Clone)]
 struct KvBlockLocalValueProvider {
     app_handle: AppHandle,
 }
@@ -51,35 +69,27 @@ pub async fn execute_block(
     state: State<'_, AtuinState>,
     block_id: String,
     runbook_id: String,
-    editor_document: Vec<serde_json::Value>,
-    output_channel: Channel<BlockOutput>,
 ) -> Result<String, String> {
     let block_id = Uuid::parse_str(&block_id).map_err(|e| e.to_string())?;
 
-    // Update the document
     let documents = state.documents.read().await;
     let document = documents.get(&runbook_id).ok_or("Document not found")?;
-    document
-        .update_document(editor_document.clone())
-        .await
-        .map_err(|e| e.to_string())?;
 
     // Get resources from state
     let pty_store = state.pty_store();
     let ssh_pool = state.ssh_pool();
     let event_sender = state.event_sender();
 
-    log::debug!("Starting execution of block {block_id}");
+    log::debug!("Starting execution of block {block_id} in runbook {runbook_id}");
 
     // Get execution context
     let context = document
-        .start_execution(
-            block_id,
-            Some(Arc::new(output_channel)),
-            event_sender,
-            Some(ssh_pool),
-            Some(pty_store),
-        )
+        .start_execution(block_id, event_sender, Some(ssh_pool), Some(pty_store))
+        .await
+        .map_err(|e| e.to_string())?;
+    // Reset the active context for the block
+    context
+        .clear_active_context(block_id)
         .await
         .map_err(|e| e.to_string())?;
 
@@ -94,11 +104,15 @@ pub async fn execute_block(
 
     // Store execution handle if one was returned
     if let Some(handle) = execution_handle {
-        let mut executions = state.block_executions.write().await;
-        executions.insert(handle.id, handle);
-    }
+        let id = handle.id;
 
-    Ok(block_id.to_string())
+        let mut executions = state.block_executions.write().await;
+        executions.insert(id, handle);
+
+        Ok(id.to_string())
+    } else {
+        Err("Failed to execute block".to_string())
+    }
 }
 
 #[tauri::command]
@@ -130,17 +144,23 @@ pub async fn open_document(
     document: Vec<serde_json::Value>,
     document_bridge: Channel<DocumentBridgeMessage>,
 ) -> Result<(), String> {
+    let document_bridge = Arc::new(DocumentBridgeChannel {
+        runbook_id: document_id.clone(),
+        channel: Arc::new(document_bridge),
+    });
+
     let mut documents = state.documents.write().await;
-    if let Some(document) = documents.get_mut(&document_id) {
+    if let Some(document) = documents.get(&document_id) {
+        log::debug!("Updating document bridge channel for document {document_id}");
+
         document
-            .update_bridge_channel(Box::new(document_bridge))
+            .update_bridge_channel(document_bridge)
             .await
             .map_err(|e| e.to_string())?;
         return Ok(());
     }
 
     log::debug!("Opening document {document_id}");
-    log::trace!("Initial blocks: {:?}", document);
 
     let event_bus = Arc::new(ChannelEventBus::new(state.gc_event_sender()));
     let document_handle = DocumentHandle::new(

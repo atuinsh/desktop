@@ -2,4 +2,4 @@
 import type { BlockLifecycleEvent } from "./BlockLifecycleEvent";
 import type { JsonValue } from "./serde_json/JsonValue";
 
-export type BlockOutput = { stdout: string | null, stderr: string | null, lifecycle: BlockLifecycleEvent | null, binary: Array<number> | null, object: JsonValue | null, };
+export type BlockOutput = { block_id: string, stdout: string | null, stderr: string | null, lifecycle: BlockLifecycleEvent | null, binary: Array<number> | null, object: JsonValue | null, };

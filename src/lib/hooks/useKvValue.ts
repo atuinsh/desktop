@@ -39,7 +39,6 @@ export function useKvValue<T>(key: string, defaultValue: T): [T, (value: T) => P
  * The value is stored in the KV store under the key `block.${blockId}.${key}`.
  * Updates to the value are propagated to the backend runtime system.
  *
- * @param runbookId The ID of the runbook to store the value for
  * @param blockId The ID of the block to store the value for
  * @param key The key to store the value under
  * @param defaultValue The default value to use if the value is not found.

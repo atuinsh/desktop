@@ -3,17 +3,16 @@ use std::{
     sync::Arc,
 };
 
-use tokio::sync::mpsc;
 use uuid::Uuid;
 
 use crate::runtime::{
     blocks::{
         document::{
-            actor::{BlockLocalValueProvider, DocumentCommand, DocumentError, DocumentHandle},
+            actor::{BlockLocalValueProvider, DocumentError, DocumentHandle},
             block_context::{BlockContext, BlockWithContext, ContextResolver, ResolvedContext},
             bridge::DocumentBridgeMessage,
         },
-        handler::{BlockOutput, ExecutionContext},
+        handler::ExecutionContext,
         Block, KNOWN_UNSUPPORTED_BLOCKS,
     },
     events::{EventBus, GCEvent},
@@ -32,7 +31,7 @@ pub mod bridge;
 pub struct Document {
     id: String,
     blocks: Vec<BlockWithContext>,
-    document_bridge: Box<dyn ClientMessageChannel<DocumentBridgeMessage>>,
+    document_bridge: Arc<dyn ClientMessageChannel<DocumentBridgeMessage>>,
     known_unsupported_blocks: HashSet<String>,
     block_local_value_provider: Option<Box<dyn BlockLocalValueProvider>>,
 }
@@ -41,8 +40,7 @@ impl Document {
     pub fn new(
         id: String,
         document: Vec<serde_json::Value>,
-        document_bridge: Box<dyn ClientMessageChannel<DocumentBridgeMessage>>,
-        _command_tx: mpsc::UnboundedSender<DocumentCommand>,
+        document_bridge: Arc<dyn ClientMessageChannel<DocumentBridgeMessage>>,
         block_local_value_provider: Option<Box<dyn BlockLocalValueProvider>>,
     ) -> Result<Self, Box<dyn std::error::Error>> {
         let mut doc = Self {
@@ -59,19 +57,9 @@ impl Document {
 
     pub fn update_document_bridge(
         &mut self,
-        document_bridge: Box<dyn ClientMessageChannel<DocumentBridgeMessage>>,
+        document_bridge: Arc<dyn ClientMessageChannel<DocumentBridgeMessage>>,
     ) {
         self.document_bridge = document_bridge;
-    }
-
-    pub fn block_local_value_changed(&mut self, block_id: Uuid) -> Result<usize, DocumentError> {
-        let start_index = self
-            .blocks
-            .iter()
-            .position(|b| b.id() == block_id)
-            .ok_or(DocumentError::BlockNotFound(block_id))?;
-
-        Ok(start_index)
     }
 
     pub fn put_document(
@@ -210,14 +198,29 @@ impl Document {
         Ok(())
     }
 
+    /// Get a block's index
+    pub fn get_block_index(&self, block_id: &Uuid) -> Option<usize> {
+        self.blocks.iter().position(|block| &block.id() == block_id)
+    }
+
     /// Get a block's context
     pub fn get_block(&self, block_id: &Uuid) -> Option<&BlockWithContext> {
-        self.blocks.iter().find(|block| &block.id() == block_id)
+        let index = self.get_block_index(block_id)?;
+        self.get_block_by_index(index)
+    }
+
+    pub fn get_block_by_index(&self, index: usize) -> Option<&BlockWithContext> {
+        self.blocks.get(index)
     }
 
     /// Get a mutable reference to a block
     pub fn get_block_mut(&mut self, block_id: &Uuid) -> Option<&mut BlockWithContext> {
-        self.blocks.iter_mut().find(|block| &block.id() == block_id)
+        let index = self.get_block_index(block_id)?;
+        self.get_block_mut_by_index(index)
+    }
+
+    pub fn get_block_mut_by_index(&mut self, index: usize) -> Option<&mut BlockWithContext> {
+        self.blocks.get_mut(index)
     }
 
     /// Build an execution context for a block, capturing all context from blocks above it
@@ -225,9 +228,8 @@ impl Document {
     pub fn build_execution_context(
         &self,
         block_id: &Uuid,
-        command_tx: mpsc::UnboundedSender<DocumentCommand>,
+        handle: Arc<DocumentHandle>,
         event_bus: Arc<dyn EventBus>,
-        output_channel: Option<Arc<dyn ClientMessageChannel<BlockOutput>>>,
         event_sender: tokio::sync::broadcast::Sender<WorkflowEvent>,
         ssh_pool: Option<SshPoolHandle>,
         pty_store: Option<PtyStoreHandle>,
@@ -239,19 +241,19 @@ impl Document {
 
         // Find the block's position in the document
         let position = self
-            .blocks
-            .iter()
-            .position(|b| b.id() == *block_id)
+            .get_block_index(block_id)
             .ok_or(DocumentError::BlockNotFound(*block_id))?;
 
         // Build context resolver from all blocks above this one
         let context_resolver = ContextResolver::from_blocks(&self.blocks[..position]);
 
         // Create DocumentHandle for the block to use for context updates
-        let document_handle = DocumentHandle::from_raw(self.id.clone(), command_tx);
+        let document_handle = handle.clone();
 
         // Parse runbook ID
         let runbook_id = Uuid::parse_str(&self.id).unwrap_or_else(|_| Uuid::new_v4());
+
+        let output_channel = Some(self.document_bridge.clone());
 
         Ok(ExecutionContext {
             runbook_id,
@@ -267,9 +269,7 @@ impl Document {
 
     pub fn get_resolved_context(&self, block_id: &Uuid) -> Result<ResolvedContext, DocumentError> {
         let position = self
-            .blocks
-            .iter()
-            .position(|b| b.id() == *block_id)
+            .get_block_index(block_id)
             .ok_or(DocumentError::BlockNotFound(*block_id))?;
 
         let resolver = ContextResolver::from_blocks(&self.blocks[..position]);
@@ -277,8 +277,8 @@ impl Document {
     }
 
     /// Rebuild passive contexts for all blocks or blocks starting from a given index
-    /// This should be called after document structure changes
-    pub async fn rebuild_passive_contexts(
+    /// This should be called after document structure changes or block context change
+    pub async fn rebuild_contexts(
         &mut self,
         start_index: Option<usize>,
         event_bus: Arc<dyn EventBus>,
@@ -309,13 +309,13 @@ impl Document {
                 .await
             {
                 Ok(Some(new_context)) => {
-                    self.blocks[i].update_context(new_context);
+                    self.blocks[i].update_passive_context(new_context);
                 }
                 Ok(None) => {
-                    self.blocks[i].update_context(BlockContext::new());
+                    self.blocks[i].update_passive_context(BlockContext::new());
                 }
                 Err(e) => {
-                    self.blocks[i].update_context(BlockContext::new());
+                    self.blocks[i].update_passive_context(BlockContext::new());
 
                     let error_msg = format!(
                         "Failed to evaluate passive context for block {block_id}: {}",
@@ -339,8 +339,10 @@ impl Document {
             }
 
             context_resolver.push_block(&self.blocks[i]);
-            let _ = self
-                .document_bridge
+
+            let document_bridge = self.document_bridge.clone();
+
+            let _ = document_bridge
                 .send(DocumentBridgeMessage::BlockContextUpdate {
                     block_id,
                     context: ResolvedContext::from_resolver(&context_resolver),

@@ -1,5 +1,6 @@
-use crate::runtime::blocks::document::actor::DocumentHandle;
-use crate::runtime::blocks::document::block_context::ContextResolver;
+use crate::runtime::blocks::document::actor::DocumentError;
+use crate::runtime::blocks::document::block_context::{BlockContext, ContextResolver};
+use crate::runtime::blocks::document::{actor::DocumentHandle, bridge::DocumentBridgeMessage};
 use crate::runtime::events::EventBus;
 use crate::runtime::pty_store::PtyStoreHandle;
 use crate::runtime::ssh_pool::SshPoolHandle;
@@ -14,9 +15,9 @@ use uuid::Uuid;
 
 pub struct ExecutionContext {
     pub runbook_id: Uuid,
-    pub document_handle: DocumentHandle,
+    pub document_handle: Arc<DocumentHandle>,
     pub context_resolver: ContextResolver,
-    pub output_channel: Option<Arc<dyn ClientMessageChannel<BlockOutput>>>,
+    pub output_channel: Option<Arc<dyn ClientMessageChannel<DocumentBridgeMessage>>>,
     pub event_sender: broadcast::Sender<WorkflowEvent>,
     pub ssh_pool: Option<SshPoolHandle>,
     pub pty_store: Option<PtyStoreHandle>,
@@ -44,6 +45,43 @@ impl Debug for ExecutionContext {
             .field("runbook_id", &self.runbook_id)
             .field("context_resolver", &self.context_resolver)
             .finish()
+    }
+}
+
+impl ExecutionContext {
+    pub async fn send_output(&self, message: DocumentBridgeMessage) -> Result<(), DocumentError> {
+        if let Some(chan) = &self.output_channel {
+            chan.send(message)
+                .await
+                .map_err(|_| DocumentError::ActorSendError)?;
+        }
+        Ok(())
+    }
+
+    pub async fn clear_active_context(&self, block_id: Uuid) -> Result<(), DocumentError> {
+        self.document_handle
+            .update_active_context(block_id, |ctx| *ctx = BlockContext::new())
+            .await
+    }
+
+    pub async fn update_passive_context(
+        &self,
+        block_id: Uuid,
+        update_fn: Box<dyn FnOnce(&mut BlockContext) + Send>,
+    ) -> Result<(), DocumentError> {
+        self.document_handle
+            .update_passive_context(block_id, update_fn)
+            .await
+    }
+
+    pub async fn update_active_context(
+        &self,
+        block_id: Uuid,
+        update_fn: Box<dyn FnOnce(&mut BlockContext) + Send>,
+    ) -> Result<(), DocumentError> {
+        self.document_handle
+            .update_active_context(block_id, update_fn)
+            .await
     }
 }
 
@@ -110,6 +148,7 @@ pub enum ExecutionStatus {
 #[derive(TS, Debug, Clone, Serialize, Deserialize)]
 #[ts(export)]
 pub struct BlockOutput {
+    pub block_id: Uuid,
     pub stdout: Option<String>,
     pub stderr: Option<String>,
     pub lifecycle: Option<BlockLifecycleEvent>,

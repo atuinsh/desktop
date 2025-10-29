@@ -97,13 +97,17 @@ impl BlockBehavior for Terminal {
             .event_sender
             .send(WorkflowEvent::BlockStarted { id: self.id });
         if let Some(ref ch) = context.output_channel {
-            let _ = ch.send(BlockOutput {
-                stdout: None,
-                stderr: None,
-                lifecycle: Some(BlockLifecycleEvent::Started),
-                binary: None,
-                object: None,
-            });
+            let _ = ch.send(
+                BlockOutput {
+                    block_id: self.id,
+                    stdout: None,
+                    stderr: None,
+                    lifecycle: Some(BlockLifecycleEvent::Started),
+                    binary: None,
+                    object: None,
+                }
+                .into(),
+            );
         }
 
         // Emit BlockStarted event via Grand Central
@@ -207,158 +211,183 @@ impl Terminal {
             .ok_or("PTY store not available in execution context")?;
 
         // Open PTY based on context (local or SSH)
-        let pty: Box<dyn PtyLike + Send> = if let Some(ssh_host) =
-            context.context_resolver.ssh_host()
-        {
-            // Parse SSH host
-            let (username, hostname) = Self::parse_ssh_host(ssh_host);
+        let pty: Box<dyn PtyLike + Send> =
+            if let Some(ssh_host) = context.context_resolver.ssh_host() {
+                // Parse SSH host
+                let (username, hostname) = Self::parse_ssh_host(ssh_host);
 
-            // Get SSH pool from context
-            let ssh_pool = context
-                .ssh_pool
-                .ok_or("SSH pool not available in execution context")?;
+                // Get SSH pool from context
+                let ssh_pool = context
+                    .ssh_pool
+                    .ok_or("SSH pool not available in execution context")?;
 
-            // Create SSH PTY
-            let (output_sender, mut output_receiver) = tokio::sync::mpsc::channel(100);
-            let (pty_tx, resize_tx) = ssh_pool
-                .open_pty(
-                    &hostname,
-                    username.as_deref(),
-                    &self.id.to_string(),
-                    output_sender,
-                    80,
-                    24,
-                )
-                .await
-                .map_err(|e| format!("Failed to open SSH PTY: {}", e))?;
+                // Create SSH PTY
+                let (output_sender, mut output_receiver) = tokio::sync::mpsc::channel(100);
+                let (pty_tx, resize_tx) = ssh_pool
+                    .open_pty(
+                        &hostname,
+                        username.as_deref(),
+                        &self.id.to_string(),
+                        output_sender,
+                        80,
+                        24,
+                    )
+                    .await
+                    .map_err(|e| format!("Failed to open SSH PTY: {}", e))?;
 
-            // Forward SSH output to binary channel
-            let output_channel_ssh = context.output_channel.clone();
-            tokio::spawn(async move {
-                while let Some(output) = output_receiver.recv().await {
-                    if let Some(ref ch) = output_channel_ssh {
-                        let _ = ch.send(BlockOutput {
-                            stdout: None,
-                            stderr: None,
-                            lifecycle: None,
-                            binary: Some(output.as_bytes().to_vec()),
-                            object: None,
-                        });
-                    }
-                }
-            });
-
-            // Create SshPty wrapper
-            Box::new(SshPty {
-                tx: pty_tx,
-                resize_tx,
-                metadata: metadata.clone(),
-                ssh_pool: ssh_pool.clone(),
-            })
-        } else {
-            // Open local PTY
-            let cwd = context.context_resolver.cwd();
-            let env_vars = context.context_resolver.env_vars().clone();
-
-            let pty = Pty::open(
-                24,
-                80,
-                Some(cwd.to_string()),
-                env_vars,
-                metadata.clone(),
-                None, // Use default shell
-            )
-            .await
-            .map_err(|e| format!("Failed to open local PTY: {}", e))?;
-
-            // Clone reader before moving PTY
-            let reader = pty.reader.clone();
-
-            // Spawn reader task for local PTY
-            let output_channel_local = context.output_channel.clone();
-
-            tokio::spawn(async move {
-                loop {
-                    // Use blocking read in a blocking task
-                    let read_result = tokio::task::spawn_blocking({
-                        let reader = reader.clone();
-                        move || {
-                            let mut buf = [0u8; 8192];
-                            match reader.lock().unwrap().read(&mut buf) {
-                                Ok(n) => Ok((n, buf)),
-                                Err(e) => Err(e),
-                            }
-                        }
-                    })
-                    .await;
-
-                    match read_result {
-                        Ok(Ok((0, _))) => {
-                            // EOF - PTY terminated naturally
-                            if let Some(ref ch) = output_channel_local {
-                                let _ = ch.send(BlockOutput {
-                                    stdout: None,
-                                    stderr: None,
-                                    lifecycle: Some(BlockLifecycleEvent::Finished(
-                                        BlockFinishedData {
-                                            exit_code: Some(0), // We don't have access to actual exit code here
-                                            success: true,
-                                        },
-                                    )),
-                                    binary: None,
-                                    object: None,
-                                });
-                            }
-                            break;
-                        }
-                        Ok(Ok((n, buf))) => {
-                            // Send raw binary data
-                            if let Some(ref ch) = output_channel_local {
-                                let _ = ch.send(BlockOutput {
+                // Forward SSH output to binary channel
+                let output_channel_ssh = context.output_channel.clone();
+                let block_id = self.id;
+                tokio::spawn(async move {
+                    while let Some(output) = output_receiver.recv().await {
+                        if let Some(ref ch) = output_channel_ssh {
+                            let _ = ch.send(
+                                BlockOutput {
+                                    block_id,
                                     stdout: None,
                                     stderr: None,
                                     lifecycle: None,
-                                    binary: Some(buf[..n].to_vec()),
+                                    binary: Some(output.as_bytes().to_vec()),
                                     object: None,
-                                });
-                            }
-                        }
-                        Ok(Err(e)) => {
-                            // Send error
-                            if let Some(ref ch) = output_channel_local {
-                                let _ = ch.send(BlockOutput {
-                                    stdout: None,
-                                    stderr: None,
-                                    lifecycle: Some(BlockLifecycleEvent::Error(BlockErrorData {
-                                        message: format!("PTY read error: {}", e),
-                                    })),
-                                    binary: None,
-                                    object: None,
-                                });
-                            }
-                            break;
-                        }
-                        Err(e) => {
-                            // Task join error
-                            if let Some(ref ch) = output_channel_local {
-                                let _ = ch.send(BlockOutput {
-                                    stdout: None,
-                                    stderr: None,
-                                    lifecycle: Some(BlockLifecycleEvent::Error(BlockErrorData {
-                                        message: format!("Task error: {}", e),
-                                    })),
-                                    binary: None,
-                                    object: None,
-                                });
-                            }
-                            break;
+                                }
+                                .into(),
+                            );
                         }
                     }
-                }
-            });
+                });
 
-            Box::new(pty)
-        };
+                // Create SshPty wrapper
+                Box::new(SshPty {
+                    tx: pty_tx,
+                    resize_tx,
+                    metadata: metadata.clone(),
+                    ssh_pool: ssh_pool.clone(),
+                })
+            } else {
+                // Open local PTY
+                let cwd = context.context_resolver.cwd();
+                let env_vars = context.context_resolver.env_vars().clone();
+
+                let pty = Pty::open(
+                    24,
+                    80,
+                    Some(cwd.to_string()),
+                    env_vars,
+                    metadata.clone(),
+                    None, // Use default shell
+                )
+                .await
+                .map_err(|e| format!("Failed to open local PTY: {}", e))?;
+
+                // Clone reader before moving PTY
+                let reader = pty.reader.clone();
+
+                // Spawn reader task for local PTY
+                let output_channel_local = context.output_channel.clone();
+                let block_id = self.id;
+
+                tokio::spawn(async move {
+                    loop {
+                        // Use blocking read in a blocking task
+                        let read_result = tokio::task::spawn_blocking({
+                            let reader = reader.clone();
+                            move || {
+                                let mut buf = [0u8; 8192];
+                                match reader.lock().unwrap().read(&mut buf) {
+                                    Ok(n) => Ok((n, buf)),
+                                    Err(e) => Err(e),
+                                }
+                            }
+                        })
+                        .await;
+
+                        match read_result {
+                            Ok(Ok((0, _))) => {
+                                // EOF - PTY terminated naturally
+                                if let Some(ref ch) = output_channel_local {
+                                    let _ = ch.send(
+                                        BlockOutput {
+                                            block_id,
+                                            stdout: None,
+                                            stderr: None,
+                                            lifecycle: Some(BlockLifecycleEvent::Finished(
+                                                BlockFinishedData {
+                                                    exit_code: Some(0), // We don't have access to actual exit code here
+                                                    success: true,
+                                                },
+                                            )),
+                                            binary: None,
+                                            object: None,
+                                        }
+                                        .into(),
+                                    );
+                                }
+                                break;
+                            }
+                            Ok(Ok((n, buf))) => {
+                                // Send raw binary data
+                                if let Some(ref ch) = output_channel_local {
+                                    let _ = ch.send(
+                                        BlockOutput {
+                                            block_id,
+                                            stdout: None,
+                                            stderr: None,
+                                            lifecycle: None,
+                                            binary: Some(buf[..n].to_vec()),
+                                            object: None,
+                                        }
+                                        .into(),
+                                    );
+                                }
+                            }
+                            Ok(Err(e)) => {
+                                // Send error
+                                if let Some(ref ch) = output_channel_local {
+                                    let _ = ch.send(
+                                        BlockOutput {
+                                            block_id,
+                                            stdout: None,
+                                            stderr: None,
+                                            lifecycle: Some(BlockLifecycleEvent::Error(
+                                                BlockErrorData {
+                                                    message: format!("PTY read error: {}", e),
+                                                },
+                                            )),
+                                            binary: None,
+                                            object: None,
+                                        }
+                                        .into(),
+                                    );
+                                }
+                                break;
+                            }
+                            Err(e) => {
+                                // Task join error
+                                if let Some(ref ch) = output_channel_local {
+                                    let _ = ch.send(
+                                        BlockOutput {
+                                            block_id,
+                                            stdout: None,
+                                            stderr: None,
+                                            lifecycle: Some(BlockLifecycleEvent::Error(
+                                                BlockErrorData {
+                                                    message: format!("Task error: {}", e),
+                                                },
+                                            )),
+                                            binary: None,
+                                            object: None,
+                                        }
+                                        .into(),
+                                    );
+                                }
+                                break;
+                            }
+                        }
+                    }
+                });
+
+                Box::new(pty)
+            };
 
         // Add to PTY store
         pty_store
@@ -382,15 +411,19 @@ impl Terminal {
             if let Err(e) = pty_store.write_pty(self.id, command.into()).await {
                 // Send error event if command writing fails
                 if let Some(ref ch) = context.output_channel {
-                    let _ = ch.send(BlockOutput {
-                        stdout: None,
-                        stderr: None,
-                        lifecycle: Some(BlockLifecycleEvent::Error(BlockErrorData {
-                            message: format!("Failed to write command to PTY: {}", e),
-                        })),
-                        binary: None,
-                        object: None,
-                    });
+                    let _ = ch.send(
+                        BlockOutput {
+                            block_id: self.id,
+                            stdout: None,
+                            stderr: None,
+                            lifecycle: Some(BlockLifecycleEvent::Error(BlockErrorData {
+                                message: format!("Failed to write command to PTY: {}", e),
+                            })),
+                            binary: None,
+                            object: None,
+                        }
+                        .into(),
+                    );
                 }
             }
         }
@@ -421,13 +454,17 @@ impl Terminal {
                 .event_sender
                 .send(WorkflowEvent::BlockFinished { id: self.id });
             if let Some(ref ch) = context.output_channel {
-                let _ = ch.send(BlockOutput {
-                    stdout: None,
-                    stderr: None,
-                    lifecycle: Some(BlockLifecycleEvent::Cancelled),
-                    binary: None,
-                    object: None,
-                });
+                let _ = ch.send(
+                    BlockOutput {
+                        block_id: self.id,
+                        stdout: None,
+                        stderr: None,
+                        lifecycle: Some(BlockLifecycleEvent::Cancelled),
+                        binary: None,
+                        object: None,
+                    }
+                    .into(),
+                );
             }
 
             Ok(true)

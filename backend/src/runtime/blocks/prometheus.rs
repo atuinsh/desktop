@@ -166,6 +166,7 @@ impl Prometheus {
 
     /// Execute Prometheus range query
     async fn execute_range_query(
+        &self,
         client: &Client,
         endpoint: &str,
         query: &str,
@@ -183,15 +184,19 @@ impl Prometheus {
             ("step", &format!("{}s", step)),
         ];
 
-        if let Some(ref ch) = context.output_channel {
-            let _ = ch.send(BlockOutput {
-                stdout: Some(format!("Executing Prometheus query: {}", query)),
-                stderr: None,
-                binary: None,
-                object: None,
-                lifecycle: None,
-            });
-        }
+        let _ = context
+            .send_output(
+                BlockOutput {
+                    block_id: self.id,
+                    stdout: Some(format!("Executing Prometheus query: {}", query)),
+                    stderr: None,
+                    binary: None,
+                    object: None,
+                    lifecycle: None,
+                }
+                .into(),
+            )
+            .await;
 
         let response = client
             .get(&url)
@@ -271,25 +276,29 @@ impl Prometheus {
             }
         }
 
-        if let Some(ref ch) = context.output_channel {
-            let result_json = json!({
-                "series": series,
-                "queryExecuted": query,
-                "timeRange": {
-                    "start": start,
-                    "end": end,
-                    "step": step
-                }
-            });
+        let result_json = json!({
+            "series": series,
+            "queryExecuted": query,
+            "timeRange": {
+                "start": start,
+                "end": end,
+                "step": step
+            }
+        });
 
-            let _ = ch.send(BlockOutput {
-                stdout: None,
-                stderr: None,
-                lifecycle: None,
-                binary: None,
-                object: Some(result_json),
-            });
-        }
+        let _ = context
+            .send_output(
+                BlockOutput {
+                    block_id: self.id,
+                    stdout: None,
+                    stderr: None,
+                    lifecycle: None,
+                    binary: None,
+                    object: Some(result_json),
+                }
+                .into(),
+            )
+            .await;
 
         Ok(())
     }
@@ -299,69 +308,83 @@ impl Prometheus {
         context: ExecutionContext,
         cancellation_token: CancellationToken,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        let block_id = self.id;
-
         let _ = context
             .event_sender
-            .send(WorkflowEvent::BlockStarted { id: block_id });
+            .send(WorkflowEvent::BlockStarted { id: self.id });
 
-        if let Some(ref ch) = context.output_channel {
-            let _ = ch.send(BlockOutput {
-                stdout: None,
-                stderr: None,
-                binary: None,
-                object: None,
-                lifecycle: Some(BlockLifecycleEvent::Started),
-            });
-        }
+        let _ = context
+            .send_output(
+                BlockOutput {
+                    block_id: self.id,
+                    stdout: None,
+                    stderr: None,
+                    binary: None,
+                    object: None,
+                    lifecycle: Some(BlockLifecycleEvent::Started),
+                }
+                .into(),
+            )
+            .await;
 
         let query = self
             .template_prometheus_query(&context)
             .unwrap_or_else(|e| {
-                eprintln!("Template error in Prometheus query {}: {}", block_id, e);
+                eprintln!("Template error in Prometheus query {}: {}", self.id, e);
                 self.query.clone()
             });
 
         if let Err(e) = Self::validate_prometheus_endpoint(&self.endpoint) {
-            if let Some(ref ch) = context.output_channel {
-                let _ = ch.send(BlockOutput {
-                    stdout: None,
-                    stderr: Some(e.clone()),
-                    binary: None,
-                    object: None,
-                    lifecycle: Some(BlockLifecycleEvent::Error(BlockErrorData {
-                        message: e.clone(),
-                    })),
-                });
-            }
+            let _ = context
+                .send_output(
+                    BlockOutput {
+                        block_id: self.id,
+                        stdout: None,
+                        stderr: Some(e.clone()),
+                        binary: None,
+                        object: None,
+                        lifecycle: Some(BlockLifecycleEvent::Error(BlockErrorData {
+                            message: e.clone(),
+                        })),
+                    }
+                    .into(),
+                )
+                .await;
             return Err(e.into());
         }
 
         if query.trim().is_empty() {
             let error_msg = "Prometheus query cannot be empty";
-            if let Some(ref ch) = context.output_channel {
-                let _ = ch.send(BlockOutput {
-                    stdout: None,
-                    stderr: Some(error_msg.to_string()),
-                    binary: None,
-                    object: None,
-                    lifecycle: Some(BlockLifecycleEvent::Error(BlockErrorData {
-                        message: error_msg.to_string(),
-                    })),
-                });
-            }
+            let _ = context
+                .send_output(
+                    BlockOutput {
+                        block_id: self.id,
+                        stdout: None,
+                        stderr: Some(error_msg.to_string()),
+                        binary: None,
+                        object: None,
+                        lifecycle: Some(BlockLifecycleEvent::Error(BlockErrorData {
+                            message: error_msg.to_string(),
+                        })),
+                    }
+                    .into(),
+                )
+                .await;
             return Err(error_msg.into());
         }
 
-        if let Some(ref ch) = context.output_channel {
-            let _ = ch.send(BlockOutput {
-                stdout: Some(format!("Connecting to Prometheus: {}", self.endpoint)),
-                stderr: None,
-                binary: None,
-                object: None,
-                lifecycle: None,
-            });
-        }
+        let _ = context
+            .send_output(
+                BlockOutput {
+                    block_id: self.id,
+                    stdout: Some(format!("Connecting to Prometheus: {}", self.endpoint)),
+                    stderr: None,
+                    binary: None,
+                    object: None,
+                    lifecycle: None,
+                }
+                .into(),
+            )
+            .await;
 
         let client = ClientBuilder::new()
             .timeout(Duration::from_secs(30))
@@ -383,7 +406,7 @@ impl Prometheus {
         let context_clone = context.clone();
 
         let execution_task = async move {
-            Self::execute_range_query(&client, &endpoint, &query, start, end, step, &context_clone)
+            self.execute_range_query(&client, &endpoint, &query, start, end, step, &context_clone)
                 .await
         };
 
@@ -392,21 +415,20 @@ impl Prometheus {
                 _ = cancel_rx => {
                     if let Some(event_bus) = &context.event_bus {
                         let _ = event_bus.emit(GCEvent::BlockCancelled {
-                            block_id,
+                            block_id: self.id,
                             runbook_id: context.runbook_id,
                         }).await;
                     }
 
-                    let _ = context.event_sender.send(WorkflowEvent::BlockFinished { id: block_id });
-                    if let Some(ref ch) = context.output_channel {
-                        let _ = ch.send(BlockOutput {
+                    let _ = context.event_sender.send(WorkflowEvent::BlockFinished { id: self.id });
+                        let _ = context.send_output(BlockOutput {
+                            block_id: self.id,
                             stdout: None,
                             stderr: None,
                             binary: None,
                             object: None,
                             lifecycle: Some(BlockLifecycleEvent::Cancelled),
-                        });
-                    }
+                        }.into()).await;
                     return Err("Prometheus query execution cancelled".into());
                 }
                 result = execution_task => {
@@ -419,27 +441,37 @@ impl Prometheus {
 
         let _ = context
             .event_sender
-            .send(WorkflowEvent::BlockFinished { id: block_id });
-        if let Some(ref ch) = context.output_channel {
-            let _ = ch.send(BlockOutput {
-                stdout: Some("Prometheus query completed successfully".to_string()),
-                stderr: None,
-                binary: None,
-                object: None,
-                lifecycle: None,
-            });
+            .send(WorkflowEvent::BlockFinished { id: self.id });
+        let _ = context
+            .send_output(
+                BlockOutput {
+                    block_id: self.id,
+                    stdout: Some("Prometheus query completed successfully".to_string()),
+                    stderr: None,
+                    binary: None,
+                    object: None,
+                    lifecycle: None,
+                }
+                .into(),
+            )
+            .await;
 
-            let _ = ch.send(BlockOutput {
-                stdout: None,
-                stderr: None,
-                binary: None,
-                object: None,
-                lifecycle: Some(BlockLifecycleEvent::Finished(BlockFinishedData {
-                    exit_code: Some(0),
-                    success: true,
-                })),
-            });
-        }
+        let _ = context
+            .send_output(
+                BlockOutput {
+                    block_id: self.id,
+                    stdout: None,
+                    stderr: None,
+                    binary: None,
+                    object: None,
+                    lifecycle: Some(BlockLifecycleEvent::Finished(BlockFinishedData {
+                        exit_code: Some(0),
+                        success: true,
+                    })),
+                }
+                .into(),
+            )
+            .await;
 
         result
     }
@@ -472,7 +504,7 @@ impl BlockBehavior for Prometheus {
             if let Some(event_bus) = &context_clone.event_bus {
                 let _ = event_bus
                     .emit(GCEvent::BlockStarted {
-                        block_id,
+                        block_id: self.id,
                         runbook_id,
                     })
                     .await;
@@ -490,7 +522,7 @@ impl BlockBehavior for Prometheus {
                     if let Some(event_bus) = &context_clone.event_bus {
                         let _ = event_bus
                             .emit(GCEvent::BlockFinished {
-                                block_id,
+                                block_id: self.id,
                                 runbook_id,
                                 success: true,
                             })
@@ -499,7 +531,7 @@ impl BlockBehavior for Prometheus {
 
                     let _ = context_clone
                         .document_handle
-                        .update_context(block_id, move |ctx| {
+                        .update_passive_context(block_id, move |ctx| {
                             ctx.insert(BlockExecutionOutput {
                                 exit_code: Some(0),
                                 stdout: Some("Query execution completed successfully".to_string()),
@@ -514,29 +546,33 @@ impl BlockBehavior for Prometheus {
                     if let Some(event_bus) = &context_clone.event_bus {
                         let _ = event_bus
                             .emit(GCEvent::BlockFailed {
-                                block_id,
+                                block_id: self.id,
                                 runbook_id,
                                 error: e.to_string(),
                             })
                             .await;
                     }
 
-                    if let Some(ref ch) = context_clone.output_channel {
-                        let _ = ch.send(BlockOutput {
-                            stdout: None,
-                            stderr: Some(e.to_string()),
-                            binary: None,
-                            object: None,
-                            lifecycle: Some(BlockLifecycleEvent::Error(BlockErrorData {
-                                message: e.to_string(),
-                            })),
-                        });
-                    }
+                    let _ = context
+                        .send_output(
+                            BlockOutput {
+                                block_id: self.id,
+                                stdout: None,
+                                stderr: Some(e.to_string()),
+                                binary: None,
+                                object: None,
+                                lifecycle: Some(BlockLifecycleEvent::Error(BlockErrorData {
+                                    message: e.to_string(),
+                                })),
+                            }
+                            .into(),
+                        )
+                        .await;
 
                     let error_msg = e.to_string();
                     let _ = context_clone
                         .document_handle
-                        .update_context(block_id, move |ctx| {
+                        .update_passive_context(block_id, move |ctx| {
                             ctx.insert(BlockExecutionOutput {
                                 exit_code: Some(1),
                                 stdout: None,

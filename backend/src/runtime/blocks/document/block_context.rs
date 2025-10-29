@@ -79,24 +79,37 @@ impl ResolvedContext {
 #[derive(Debug)]
 pub struct BlockWithContext {
     block: Block,
-    context: BlockContext,
+    passive_context: BlockContext,
+    active_context: BlockContext,
 }
 
 impl BlockWithContext {
     pub fn new(block: Block, context: BlockContext) -> Self {
-        Self { block, context }
+        Self {
+            block,
+            passive_context: context,
+            active_context: BlockContext::new(),
+        }
     }
 
     pub fn id(&self) -> Uuid {
         self.block.id()
     }
 
-    pub fn context(&self) -> &BlockContext {
-        &self.context
+    pub fn passive_context(&self) -> &BlockContext {
+        &self.passive_context
     }
 
-    pub fn context_mut(&mut self) -> &mut BlockContext {
-        &mut self.context
+    pub fn passive_context_mut(&mut self) -> &mut BlockContext {
+        &mut self.passive_context
+    }
+
+    pub fn active_context(&self) -> &BlockContext {
+        &self.active_context
+    }
+
+    pub fn active_context_mut(&mut self) -> &mut BlockContext {
+        &mut self.active_context
     }
 
     pub fn block(&self) -> &Block {
@@ -108,8 +121,12 @@ impl BlockWithContext {
     }
 
     /// Replaces the context with a new one
-    pub fn update_context(&mut self, context: BlockContext) {
-        *self.context_mut() = context;
+    pub fn update_passive_context(&mut self, context: BlockContext) {
+        *self.passive_context_mut() = context;
+    }
+
+    pub fn update_active_context(&mut self, context: BlockContext) {
+        *self.active_context_mut() = context;
     }
 }
 
@@ -164,39 +181,44 @@ impl ContextResolver {
     /// Update the resolver with the context of a block.
     /// Values are overwritten or merged as appropriate.
     pub fn push_block(&mut self, block: &BlockWithContext) {
-        if let Some(var) = block.context().get::<DocumentVar>() {
-            if let Ok(resolved_value) = self.resolve_template(&var.1) {
-                self.vars.insert(var.0.clone(), resolved_value);
-            } else {
-                log::warn!("Failed to resolve template for variable {}", var.0);
-            }
-        }
+        let passive_context = block.passive_context();
+        let active_context = block.active_context();
 
-        if let Some(dir) = block.context().get::<DocumentCwd>() {
-            if let Ok(resolved_value) = self.resolve_template(&dir.0) {
-                self.cwd = resolved_value;
-            } else {
-                log::warn!("Failed to resolve template for directory {}", dir.0);
-            }
-        }
-
-        if let Some(env) = block.context().get::<DocumentEnvVar>() {
-            if let Ok(resolved_value) = self.resolve_template(&env.1) {
-                self.env_vars.insert(env.0.clone(), resolved_value);
-            } else {
-                log::warn!(
-                    "Failed to resolve template for environment variable {}",
-                    env.0
-                );
-            }
-        }
-
-        if let Some(host) = block.context().get::<DocumentSshHost>() {
-            if let Some(host) = host.0.as_ref() {
-                if let Ok(resolved_value) = self.resolve_template(host) {
-                    self.ssh_host = Some(resolved_value);
+        for ctx in [passive_context, active_context] {
+            if let Some(var) = ctx.get::<DocumentVar>() {
+                if let Ok(resolved_value) = self.resolve_template(&var.1) {
+                    self.vars.insert(var.0.clone(), resolved_value);
                 } else {
-                    log::warn!("Failed to resolve template for SSH host {}", host);
+                    log::warn!("Failed to resolve template for variable {}", var.0);
+                }
+            }
+
+            if let Some(dir) = ctx.get::<DocumentCwd>() {
+                if let Ok(resolved_value) = self.resolve_template(&dir.0) {
+                    self.cwd = resolved_value;
+                } else {
+                    log::warn!("Failed to resolve template for directory {}", dir.0);
+                }
+            }
+
+            if let Some(env) = ctx.get::<DocumentEnvVar>() {
+                if let Ok(resolved_value) = self.resolve_template(&env.1) {
+                    self.env_vars.insert(env.0.clone(), resolved_value);
+                } else {
+                    log::warn!(
+                        "Failed to resolve template for environment variable {}",
+                        env.0
+                    );
+                }
+            }
+
+            if let Some(host) = ctx.get::<DocumentSshHost>() {
+                if let Some(host) = host.0.as_ref() {
+                    if let Ok(resolved_value) = self.resolve_template(host) {
+                        self.ssh_host = Some(resolved_value);
+                    } else {
+                        log::warn!("Failed to resolve template for SSH host {}", host);
+                    }
                 }
             }
         }
