@@ -19,7 +19,22 @@ Insert an SSH block, and fill in the host. All following [terminal](../executabl
 
 ### Authentication
 
-We do not yet support specifying authentication, and only connect using the local SSH agent. Tailscale SSH works as expected.
+SSH authentication works like the standard `ssh` command, trying methods in this order:
+
+1. **SSH Agent** - All keys loaded in your SSH agent
+2. **SSH Config** - Identity files specified in `~/.ssh/config`
+3. **Default Keys** - Standard SSH keys in `~/.ssh/`:
+   - `id_rsa`
+   - `id_ecdsa`
+   - `id_ecdsa_sk` (FIDO/U2F security key)
+   - `id_ed25519`
+   - `id_ed25519_sk` (FIDO/U2F security key)
+   - `id_xmss`
+   - `id_dsa`
+
+Tailscale SSH works as expected. Password-protected keys must be added to your SSH agent with `ssh-add`, though soon we will support full config in the UI.
+
+Your SSH config is fully respected, including `ProxyJump`, `ProxyCommand`, `IdentityAgent`, and other options.
 
 ### Running locally
 
