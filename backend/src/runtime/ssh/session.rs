@@ -365,7 +365,10 @@ impl Session {
 
     /// Public key authentication
     pub async fn key_auth(&mut self, username: &str, key_path: PathBuf) -> Result<()> {
-        log::info!("Attempting public key authentication with {}", key_path.display());
+        log::info!(
+            "Attempting public key authentication with {}",
+            key_path.display()
+        );
 
         let key_pair = match russh::keys::load_secret_key(&key_path, None) {
             Ok(kp) => kp,
@@ -394,14 +397,19 @@ impl Session {
                 log::info!("✓ Authentication successful with {}", key_path.display());
                 Ok(())
             }
-            russh::client::AuthResult::Failure { remaining_methods, partial_success } => {
+            russh::client::AuthResult::Failure {
+                remaining_methods,
+                partial_success,
+            } => {
                 log::warn!(
                     "Server rejected key {} (remaining methods: {:?}, partial: {})",
                     key_path.display(),
                     remaining_methods,
                     partial_success
                 );
-                Err(eyre::eyre!("Public key authentication failed: server rejected key"))
+                Err(eyre::eyre!(
+                    "Public key authentication failed: server rejected key"
+                ))
             }
         }
     }
@@ -436,7 +444,10 @@ impl Session {
                             .await
                         {
                             Ok(russh::client::AuthResult::Success) => {
-                                log::info!("✓ Successfully authenticated with SSH agent key #{}", i + 1);
+                                log::info!(
+                                    "✓ Successfully authenticated with SSH agent key #{}",
+                                    i + 1
+                                );
                                 return Ok(true);
                             }
                             Ok(_) => {
@@ -483,7 +494,10 @@ impl Session {
         // Use provided username, or SSH config username, or default to "root"
         let username = username.or(config_username.as_deref()).unwrap_or("root");
 
-        log::info!("Starting SSH authentication for {username}@{}", self.ssh_config.hostname);
+        log::info!(
+            "Starting SSH authentication for {username}@{}",
+            self.ssh_config.hostname
+        );
         log::debug!("SSH config identity files: {identity_files:?}");
 
         let default_keys = Self::default_ssh_keys();
@@ -498,7 +512,10 @@ impl Session {
         log::info!("✗ SSH agent authentication failed or unavailable");
 
         // 2. Try SSH config identity files
-        log::info!("Step 2/4: Trying SSH config identity files ({} files)", identity_files.len());
+        log::info!(
+            "Step 2/4: Trying SSH config identity files ({} files)",
+            identity_files.len()
+        );
         for identity_file in &identity_files {
             if let Ok(()) = self.key_auth(username, identity_file.clone()).await {
                 return Ok(());
@@ -506,11 +523,17 @@ impl Session {
         }
 
         // 3. Try default SSH keys if not already tried via config
-        log::info!("Step 3/4: Trying default SSH keys ({} keys found)", default_keys.len());
+        log::info!(
+            "Step 3/4: Trying default SSH keys ({} keys found)",
+            default_keys.len()
+        );
         for key_path in &default_keys {
             // Skip if this key was already tried from config
             if identity_files.contains(key_path) {
-                log::debug!("Skipping {} (already tried via SSH config)", key_path.display());
+                log::debug!(
+                    "Skipping {} (already tried via SSH config)",
+                    key_path.display()
+                );
                 continue;
             }
 
@@ -972,7 +995,7 @@ Host example.com
     #[test]
     fn test_default_ssh_keys() {
         let keys = Session::default_ssh_keys();
-        
+
         // Keys should match ssh command's exact order
         let expected_order = vec![
             "id_rsa",
@@ -983,18 +1006,18 @@ Host example.com
             "id_xmss",
             "id_dsa",
         ];
-        
+
         for key_path in keys.iter() {
             let filename = key_path.file_name().unwrap().to_str().unwrap();
             assert!(
                 expected_order.contains(&filename),
                 "Unexpected key file: {filename}"
             );
-            
+
             // Verify the key exists (since we filtered for existing keys)
             assert!(key_path.exists());
         }
-        
+
         // Verify all returned keys are in ~/.ssh directory
         if let Some(home) = dirs::home_dir() {
             let ssh_dir = home.join(".ssh");
@@ -1002,16 +1025,16 @@ Host example.com
                 assert!(key_path.starts_with(&ssh_dir));
             }
         }
-        
+
         // Verify order is preserved (keys should be in the same order as expected_order)
         for (i, key_path) in keys.iter().enumerate() {
             if i > 0 {
                 let curr_name = key_path.file_name().unwrap().to_str().unwrap();
                 let prev_name = keys[i - 1].file_name().unwrap().to_str().unwrap();
-                
+
                 let curr_pos = expected_order.iter().position(|&k| k == curr_name).unwrap();
                 let prev_pos = expected_order.iter().position(|&k| k == prev_name).unwrap();
-                
+
                 assert!(
                     curr_pos > prev_pos,
                     "Keys not in ssh order: {prev_name} should come before {curr_name}"
