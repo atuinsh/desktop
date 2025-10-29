@@ -545,7 +545,7 @@ impl Session {
             }
         }
 
-        Ok(())
+        Err(eyre::eyre!("All SSH authentication methods exhausted"))
     }
 
     pub async fn disconnect(&self) -> Result<()> {
