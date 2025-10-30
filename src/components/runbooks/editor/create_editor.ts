@@ -33,14 +33,7 @@ import { TerminalBlockSpec } from "@/lib/blocks/terminal";
 import { KubernetesBlockSpec } from "@/lib/blocks/kubernetes";
 import { RunbookLink } from "./inline/RunbookLink";
 import HorizontalRule from "./blocks/HorizontalRule";
-
-function withoutProperties<T extends object>(object: T, properties: (keyof T)[]) {
-  const newObj = { ...object };
-  for (const property of properties) {
-    delete newObj[property];
-  }
-  return newObj;
-}
+import { withoutProperties } from "@/lib/utils";
 
 // Our schema with block specs, which contain the configs and implementations for blocks
 // that we want our editor to use.

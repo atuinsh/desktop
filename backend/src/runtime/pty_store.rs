@@ -10,7 +10,6 @@ use tokio::sync::{mpsc, oneshot};
 use uuid::Uuid;
 
 use crate::pty::PtyMetadata;
-use crate::run::pty::PTY_KILL_CHANNEL;
 
 #[async_trait]
 pub trait PtyLike {
@@ -246,13 +245,6 @@ impl PtyStore {
                     metadata.pid,
                     e
                 );
-            }
-
-            // Emit pty_kill event for frontend PTY store
-            if let Some(ref app) = self.app_handle {
-                if let Err(e) = app.emit(PTY_KILL_CHANNEL, &metadata) {
-                    log::debug!("Failed to emit pty_kill event: {}", e);
-                }
             }
         }
     }

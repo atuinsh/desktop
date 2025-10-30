@@ -241,7 +241,7 @@ impl Mysql {
         let block_id = self.id;
 
         // Send start event
-        let _ = context.emit_event(WorkflowEvent::BlockStarted { id: block_id });
+        let _ = context.emit_workflow_event(WorkflowEvent::BlockStarted { id: block_id });
 
         // Send started lifecycle event to output channel
         let _ = context
@@ -448,7 +448,7 @@ impl Mysql {
                     pool.close().await;
 
                     // Emit BlockCancelled event via Grand Central
-                    if let Some(event_bus) = &context.event_bus {
+                    if let Some(event_bus) = &context.gc_event_bus {
                         let _ = event_bus.emit(GCEvent::BlockCancelled {
                             block_id: self.id,
                             runbook_id: context.runbook_id,
@@ -456,7 +456,7 @@ impl Mysql {
                     }
 
                     // Send completion events
-                    let _ = context.emit_event(WorkflowEvent::BlockFinished { id: block_id });
+                    let _ = context.emit_workflow_event(WorkflowEvent::BlockFinished { id: block_id });
                     let _ = context.send_output(BlockOutput {
                         block_id: self.id,
                         stdout: None,
@@ -482,7 +482,7 @@ impl Mysql {
         };
 
         // Send completion events
-        let _ = context.emit_event(WorkflowEvent::BlockFinished { id: block_id });
+        let _ = context.emit_workflow_event(WorkflowEvent::BlockFinished { id: block_id });
         // Send success message
         let _ = context
             .send_output(
@@ -545,7 +545,7 @@ impl BlockBehavior for Mysql {
 
         tokio::spawn(async move {
             // Emit BlockStarted event via Grand Central
-            if let Some(event_bus) = &context_clone.event_bus {
+            if let Some(event_bus) = &context_clone.gc_event_bus {
                 let _ = event_bus
                     .emit(GCEvent::BlockStarted {
                         block_id: self.id,
@@ -565,7 +565,7 @@ impl BlockBehavior for Mysql {
             let status = match result {
                 Ok(_) => {
                     // Emit BlockFinished event via Grand Central
-                    if let Some(event_bus) = &context_clone.event_bus {
+                    if let Some(event_bus) = &context_clone.gc_event_bus {
                         let _ = event_bus
                             .emit(GCEvent::BlockFinished {
                                 block_id: self.id,
@@ -591,7 +591,7 @@ impl BlockBehavior for Mysql {
                 }
                 Err(e) => {
                     // Emit BlockFailed event via Grand Central
-                    if let Some(event_bus) = &context_clone.event_bus {
+                    if let Some(event_bus) = &context_clone.gc_event_bus {
                         let _ = event_bus
                             .emit(GCEvent::BlockFailed {
                                 block_id: self.id,

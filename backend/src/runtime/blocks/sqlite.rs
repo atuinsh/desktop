@@ -241,7 +241,7 @@ impl SQLite {
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let block_id = self.id;
 
-        let _ = context.emit_event(WorkflowEvent::BlockStarted { id: block_id });
+        let _ = context.emit_workflow_event(WorkflowEvent::BlockStarted { id: block_id });
 
         let _ = context
             .send_output(
@@ -415,13 +415,13 @@ impl SQLite {
             tokio::select! {
                 _ = cancel_rx => {
                     pool.close().await;
-                    if let Some(event_bus) = &context.event_bus {
+                    if let Some(event_bus) = &context.gc_event_bus {
                         let _ = event_bus.emit(GCEvent::BlockCancelled {
                             block_id: self.id,
                             runbook_id: context.runbook_id,
                         }).await;
                     }
-                    let _ = context.emit_event(WorkflowEvent::BlockFinished { id: block_id });
+                    let _ = context.emit_workflow_event(WorkflowEvent::BlockFinished { id: block_id });
                     let _ = context.send_output(BlockOutput {
                         block_id: self.id,
                         stdout: None,
@@ -444,7 +444,7 @@ impl SQLite {
             result
         };
 
-        let _ = context.emit_event(WorkflowEvent::BlockFinished { id: block_id });
+        let _ = context.emit_workflow_event(WorkflowEvent::BlockFinished { id: block_id });
         let _ = context
             .send_output(
                 BlockOutput {
@@ -504,7 +504,7 @@ impl BlockBehavior for SQLite {
         let runbook_id = context.runbook_id;
 
         tokio::spawn(async move {
-            if let Some(event_bus) = &context_clone.event_bus {
+            if let Some(event_bus) = &context_clone.gc_event_bus {
                 let _ = event_bus
                     .emit(GCEvent::BlockStarted {
                         block_id: self.id,
@@ -522,7 +522,7 @@ impl BlockBehavior for SQLite {
 
             let status = match result {
                 Ok(_) => {
-                    if let Some(event_bus) = &context_clone.event_bus {
+                    if let Some(event_bus) = &context_clone.gc_event_bus {
                         let _ = event_bus
                             .emit(GCEvent::BlockFinished {
                                 block_id: self.id,
@@ -546,7 +546,7 @@ impl BlockBehavior for SQLite {
                     ExecutionStatus::Success("SQLite query completed successfully".to_string())
                 }
                 Err(e) => {
-                    if let Some(event_bus) = &context_clone.event_bus {
+                    if let Some(event_bus) = &context_clone.gc_event_bus {
                         let _ = event_bus
                             .emit(GCEvent::BlockFailed {
                                 block_id: self.id,
@@ -624,7 +624,7 @@ mod tests {
             .runbook_id(Uuid::new_v4())
             .document_handle(document_handle)
             .context_resolver(Arc::new(context_resolver))
-            .event_sender(event_sender)
+            .workflow_event_sender(event_sender)
             .build()
     }
 
@@ -645,7 +645,7 @@ mod tests {
             .runbook_id(Uuid::new_v4())
             .document_handle(document_handle)
             .context_resolver(Arc::new(context_resolver))
-            .event_sender(event_sender)
+            .workflow_event_sender(event_sender)
             .build()
     }
 
@@ -659,8 +659,8 @@ mod tests {
             .runbook_id(Uuid::new_v4())
             .document_handle(document_handle)
             .context_resolver(context_resolver)
-            .event_sender(event_sender)
-            .event_bus(event_bus)
+            .workflow_event_sender(event_sender)
+            .gc_event_bus(event_bus)
             .build()
     }
 

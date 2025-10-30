@@ -21,13 +21,13 @@ pub struct ExecutionContext {
     pub context_resolver: Arc<ContextResolver>,
     #[builder(default, setter(strip_option(fallback = output_channel_opt)))]
     output_channel: Option<Arc<dyn ClientMessageChannel<DocumentBridgeMessage>>>,
-    event_sender: broadcast::Sender<WorkflowEvent>,
+    workflow_event_sender: broadcast::Sender<WorkflowEvent>,
     #[builder(default, setter(strip_option(fallback = ssh_pool_opt)))]
     pub ssh_pool: Option<SshPoolHandle>,
     #[builder(default, setter(strip_option(fallback = pty_store_opt)))]
     pub pty_store: Option<PtyStoreHandle>,
     #[builder(default, setter(strip_option(fallback = event_bus_opt)))]
-    pub event_bus: Option<Arc<dyn EventBus>>,
+    pub gc_event_bus: Option<Arc<dyn EventBus>>,
 }
 
 impl Debug for ExecutionContext {
@@ -40,8 +40,8 @@ impl Debug for ExecutionContext {
 }
 
 impl ExecutionContext {
-    pub fn emit_event(&self, event: WorkflowEvent) -> Result<(), DocumentError> {
-        self.event_sender
+    pub fn emit_workflow_event(&self, event: WorkflowEvent) -> Result<(), DocumentError> {
+        self.workflow_event_sender
             .send(event)
             .map_err(|_| DocumentError::EventSendError)?;
         Ok(())

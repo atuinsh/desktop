@@ -269,10 +269,10 @@ impl Document {
             .document_handle(document_handle)
             .context_resolver(Arc::new(context_resolver))
             .output_channel(output_channel)
-            .event_sender(event_sender)
+            .workflow_event_sender(event_sender)
             .ssh_pool_opt(ssh_pool)
             .pty_store_opt(pty_store)
-            .event_bus(event_bus)
+            .gc_event_bus(event_bus)
             .build())
     }
 

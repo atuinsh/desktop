@@ -135,7 +135,7 @@ impl BlockBehavior for Script {
 
         tokio::spawn(async move {
             // Emit BlockStarted event via Grand Central
-            if let Some(event_bus) = &context.event_bus {
+            if let Some(event_bus) = &context.gc_event_bus {
                 log::trace!(
                     "Emitting BlockStarted event for script block {id}",
                     id = self.id
@@ -200,7 +200,7 @@ impl BlockBehavior for Script {
                         .await;
 
                     // Emit BlockFinished event via Grand Central
-                    if let Some(event_bus) = &context.event_bus {
+                    if let Some(event_bus) = &context.gc_event_bus {
                         let _ = event_bus
                             .emit(GCEvent::BlockFinished {
                                 block_id: self.id,
@@ -228,7 +228,7 @@ impl BlockBehavior for Script {
                         .await;
 
                     // Emit BlockFailed event via Grand Central
-                    if let Some(event_bus) = &context.event_bus {
+                    if let Some(event_bus) = &context.gc_event_bus {
                         let _ = event_bus
                             .emit(GCEvent::BlockFailed {
                                 block_id: self.id,
@@ -242,7 +242,7 @@ impl BlockBehavior for Script {
                 }
                 Err(e) => {
                     // Emit BlockFailed event via Grand Central
-                    if let Some(event_bus) = &context.event_bus {
+                    if let Some(event_bus) = &context.gc_event_bus {
                         let _ = event_bus
                             .emit(GCEvent::BlockFailed {
                                 block_id: self.id,
@@ -302,7 +302,7 @@ impl Script {
         String,
     ) {
         // Send start event
-        let _ = context.emit_event(WorkflowEvent::BlockStarted { id: self.id });
+        let _ = context.emit_workflow_event(WorkflowEvent::BlockStarted { id: self.id });
 
         // Send started lifecycle event to output channel
         log::trace!(
@@ -362,7 +362,7 @@ impl Script {
         let mut child = match cmd.spawn() {
             Ok(child) => child,
             Err(e) => {
-                let _ = context.emit_event(WorkflowEvent::BlockFinished { id: self.id });
+                let _ = context.emit_workflow_event(WorkflowEvent::BlockFinished { id: self.id });
                 log::trace!(
                     "Sending error lifecycle event to output channel for script block {id}",
                     id = self.id
@@ -486,7 +486,7 @@ impl Script {
                     let captured = captured_output.read().await.clone();
 
                     // Emit BlockCancelled event
-                    if let Some(event_bus) = &context.event_bus {
+                    if let Some(event_bus) = &context.gc_event_bus {
                         log::trace!(
                             "Emitting BlockCancelled event for script block {id}",
                             id = self.id
@@ -498,7 +498,7 @@ impl Script {
                         }).await;
                     }
 
-                    let _ = context.emit_event(WorkflowEvent::BlockFinished { id: self.id });
+                    let _ = context.emit_workflow_event(WorkflowEvent::BlockFinished { id: self.id });
                         log::trace!(
                             "Sending cancelled lifecycle event to output channel for script block {id}",
                             id = self.id
@@ -520,7 +520,7 @@ impl Script {
                         Ok(status) => status.code().unwrap_or(-1),
                         Err(e) => {
                             let captured = captured_output.read().await.clone();
-                            let _ = context.emit_event(WorkflowEvent::BlockFinished { id: self.id });
+                            let _ = context.emit_workflow_event(WorkflowEvent::BlockFinished { id: self.id });
                                 log::trace!(
                                     "Sending error lifecycle event to output channel for script block {id}",
                                     id = self.id
@@ -547,7 +547,8 @@ impl Script {
                 Ok(status) => status.code().unwrap_or(-1),
                 Err(e) => {
                     let captured = captured_output.read().await.clone();
-                    let _ = context.emit_event(WorkflowEvent::BlockFinished { id: self.id });
+                    let _ =
+                        context.emit_workflow_event(WorkflowEvent::BlockFinished { id: self.id });
                     log::trace!(
                         "Sending error lifecycle event to output channel for script block {id}",
                         id = self.id
@@ -576,7 +577,7 @@ impl Script {
         };
 
         // Send completion event
-        let _ = context.emit_event(WorkflowEvent::BlockFinished { id: self.id });
+        let _ = context.emit_workflow_event(WorkflowEvent::BlockFinished { id: self.id });
 
         log::trace!(
             "Sending finished lifecycle event to output channel for script block {id}",
@@ -621,7 +622,7 @@ impl Script {
         use tokio::sync::RwLock;
         use tokio::sync::{mpsc, oneshot};
 
-        let _ = context.emit_event(WorkflowEvent::BlockStarted { id: self.id });
+        let _ = context.emit_workflow_event(WorkflowEvent::BlockStarted { id: self.id });
 
         let _ = context
             .send_output(
@@ -643,7 +644,7 @@ impl Script {
             Some(pool) => pool,
             None => {
                 let error_msg = "SSH pool not available in execution context";
-                let _ = context.emit_event(WorkflowEvent::BlockFinished { id: self.id });
+                let _ = context.emit_workflow_event(WorkflowEvent::BlockFinished { id: self.id });
                 let _ = context
                     .send_output(
                         BlockOutput {
@@ -684,7 +685,7 @@ impl Script {
 
         if let Err(e) = exec_result {
             let error_msg = format!("Failed to start SSH execution: {}", e);
-            let _ = context.emit_event(WorkflowEvent::BlockFinished { id: self.id });
+            let _ = context.emit_workflow_event(WorkflowEvent::BlockFinished { id: self.id });
             let _ = context.send_output(
                 BlockOutput {
                     block_id: self.id,
@@ -733,14 +734,14 @@ impl Script {
                     let _ = ssh_pool_clone.exec_cancel(&channel_id_clone).await;
                     let captured = captured_output.read().await.clone();
 
-                    if let Some(event_bus) = &context.event_bus {
+                    if let Some(event_bus) = &context.gc_event_bus {
                         let _ = event_bus.emit(crate::runtime::events::GCEvent::BlockCancelled {
                             block_id: self.id,
                             runbook_id: context.runbook_id,
                         }).await;
                     }
 
-                    let _ = context.emit_event(WorkflowEvent::BlockFinished { id: block_id });
+                    let _ = context.emit_workflow_event(WorkflowEvent::BlockFinished { id: block_id });
                     let _ = context.send_output(BlockOutput {
                         block_id,
                         stdout: None,
@@ -761,7 +762,7 @@ impl Script {
             0
         };
 
-        let _ = context.emit_event(WorkflowEvent::BlockFinished { id: self.id });
+        let _ = context.emit_workflow_event(WorkflowEvent::BlockFinished { id: self.id });
         let _ = context
             .send_output(
                 BlockOutput {
@@ -817,7 +818,7 @@ mod tests {
             .runbook_id(Uuid::new_v4())
             .document_handle(document_handle)
             .context_resolver(Arc::new(context_resolver))
-            .event_sender(event_sender)
+            .workflow_event_sender(event_sender)
             .build()
     }
 
@@ -838,7 +839,7 @@ mod tests {
             .runbook_id(Uuid::new_v4())
             .document_handle(document_handle)
             .context_resolver(Arc::new(context_resolver))
-            .event_sender(event_sender)
+            .workflow_event_sender(event_sender)
             .build()
     }
 
@@ -852,8 +853,8 @@ mod tests {
             .runbook_id(Uuid::new_v4())
             .document_handle(document_handle)
             .context_resolver(Arc::new(context_resolver))
-            .event_sender(event_sender)
-            .event_bus(event_bus)
+            .workflow_event_sender(event_sender)
+            .gc_event_bus(event_bus)
             .build()
     }
 

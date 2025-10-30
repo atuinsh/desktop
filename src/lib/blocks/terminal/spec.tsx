@@ -7,100 +7,82 @@ import { CodeIcon } from "lucide-react";
 import { exportPropMatter } from "@/lib/utils";
 import { useBlockLocalState } from "@/lib/hooks/useBlockLocalState";
 
-export default createReactBlockSpec(
-    TERMINAL_BLOCK_SCHEMA,
-    {
-      // @ts-ignore
-      render: ({ block, editor, code, type }) => {
-        const [collapseCode, setCollapseCode] = useBlockLocalState<boolean>(
-          block.id,
-          "collapsed",
-          false
-        );
+export default createReactBlockSpec(TERMINAL_BLOCK_SCHEMA, {
+  // @ts-ignore
+  render: ({ block, editor, code, type }) => {
+    const [collapseCode, setCollapseCode] = useBlockLocalState<boolean>(
+      block.id,
+      "collapsed",
+      false,
+    );
 
-        const handleCodeMirrorFocus = () => {
-          // Ensure BlockNote knows which block contains the focused CodeMirror
-          editor.setTextCursorPosition(block.id, "start");
-        };
-  
-        const onInputChange = (val: string) => {
-          editor.updateBlock(block, {
-            // @ts-ignore
-            props: { ...block.props, code: val },
-          });
-        };
-  
-        const onRun = (pty: string) => {
-          editor.updateBlock(block, {
-            // @ts-ignore
-            props: { ...block.props, pty: pty },
-          });
-        };
-  
-        const onStop = (_pty: string) => {
-          editor?.updateBlock(block, {
-            props: { ...block.props, pty: "" },
-          });
-        };
-  
-        const setName = (name: string) => {
-          editor.updateBlock(block, {
-            props: { ...block.props, name: name },
-          });
-        };
-  
-        const setOutputVisible = (visible: boolean) => {
-          editor.updateBlock(block, {
-            props: { ...block.props, outputVisible: visible },
-          });
-        };
-  
-        const setDependency = (dependency: DependencySpec) => {
-          editor.updateBlock(block, {
-            props: { ...block.props, dependency: dependency.serialize() },
-          });
-        };
-  
-        let dependency = DependencySpec.deserialize(block.props.dependency);
-        let terminal = new TerminalBlock(
-          block.id,
-          block.props.name,
-          dependency,
-          block.props.code,
-          block.props.outputVisible,
-        );
-  
-        return (
-          <RunBlock
-            setName={setName}
-            onChange={onInputChange}
-            type={block.props.type}
-            pty={block.props.pty}
-            isEditable={editor.isEditable}
-            onRun={onRun}
-            onStop={onStop}
-            setOutputVisible={setOutputVisible}
-            terminal={terminal}
-            setDependency={setDependency}
-            onCodeMirrorFocus={handleCodeMirrorFocus}
-            collapseCode={collapseCode}
-            setCollapseCode={setCollapseCode}
-          />
-        );
-      },
-      toExternalHTML: ({ block }) => {
-        let propMatter = exportPropMatter("terminal", block.props, ["name"]);
-        return (
-          <pre lang="beep boop">
-            <code lang="bash">
-              {propMatter}
-              {block?.props?.code}
-            </code>
-          </pre>
-        );
-      },
-    },
-  );
+    const handleCodeMirrorFocus = () => {
+      // Ensure BlockNote knows which block contains the focused CodeMirror
+      editor.setTextCursorPosition(block.id, "start");
+    };
+
+    const onInputChange = (val: string) => {
+      editor.updateBlock(block, {
+        // @ts-ignore
+        props: { ...block.props, code: val },
+      });
+    };
+
+    const setName = (name: string) => {
+      editor.updateBlock(block, {
+        props: { ...block.props, name: name },
+      });
+    };
+
+    const setOutputVisible = (visible: boolean) => {
+      editor.updateBlock(block, {
+        props: { ...block.props, outputVisible: visible },
+      });
+    };
+
+    const setDependency = (dependency: DependencySpec) => {
+      editor.updateBlock(block, {
+        props: { ...block.props, dependency: dependency.serialize() },
+      });
+    };
+
+    let dependency = DependencySpec.deserialize(block.props.dependency);
+    let terminal = new TerminalBlock(
+      block.id,
+      block.props.name,
+      dependency,
+      block.props.code,
+      block.props.outputVisible,
+    );
+
+    return (
+      <RunBlock
+        setName={setName}
+        onChange={onInputChange}
+        type={block.props.type}
+        pty={block.props.pty}
+        isEditable={editor.isEditable}
+        setOutputVisible={setOutputVisible}
+        terminal={terminal}
+        setDependency={setDependency}
+        onCodeMirrorFocus={handleCodeMirrorFocus}
+        collapseCode={collapseCode}
+        setCollapseCode={setCollapseCode}
+      />
+    );
+  },
+  toExternalHTML: ({ block }) => {
+    let propMatter = exportPropMatter("terminal", block.props, ["name"]);
+    return (
+      <pre lang="beep boop">
+        <code lang="bash">
+          {propMatter}
+          {block?.props?.code}
+        </code>
+      </pre>
+    );
+  },
+});
 
 export const insertTerminal = (editor: any) => ({
   title: "Terminal",

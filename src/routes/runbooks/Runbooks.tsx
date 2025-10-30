@@ -222,9 +222,6 @@ export default function Runbooks() {
 
   useMarkRunbookRead(currentRunbook || null, refreshRunbooks);
 
-  const listenPtyBackend = usePtyStore((state) => state.listenBackend);
-  const unlistenPtyBackend = usePtyStore((state) => state.unlistenBackend);
-
   const queryClient = useQueryClient();
 
   const [remoteRunbook, refreshRemoteRunbook] = useRemoteRunbook(currentRunbook || undefined);
@@ -318,11 +315,6 @@ export default function Runbooks() {
       setSelectedTag(tags[0]?.value || null);
     }
   }, [selectedTag, snapshots, tags, snapshotsFetching]);
-
-  useEffect(() => {
-    listenPtyBackend();
-    return unlistenPtyBackend;
-  }, []);
 
   useEffect(() => {
     const workspaceManager = WorkspaceManager.getInstance();

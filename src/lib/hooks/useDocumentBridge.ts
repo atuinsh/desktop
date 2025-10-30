@@ -20,7 +20,7 @@ export class DocumentBridge {
   public readonly runbookId: string;
   private _channel: Channel<DocumentBridgeMessage>;
   private emitter: Emittery;
-  private logger: Logger;
+  public readonly logger: Logger;
 
   public get channel(): Channel<DocumentBridgeMessage> {
     return this._channel;
@@ -35,8 +35,6 @@ export class DocumentBridge {
 
   @autobind
   private onMessage(message: DocumentBridgeMessage) {
-    this.logger.debug(`Received document bridge message: ${JSON.stringify(message)}`);
-
     switch (message.type) {
       case "blockContextUpdate":
         this.emitter.emit(`block_context:update:${message.data.blockId}`, message.data.context);
@@ -124,47 +122,74 @@ export function useBlockExecution(blockId: string): ClientExecutionHandle {
   const [executionId, setExecutionId] = useState<string | null>(null);
 
   const startExecution = useCallback(async () => {
-    if (!documentBridge) return;
-    if (lifecycle === "running") return;
+    if (!documentBridge) {
+      console.error("`startExecution` called but document bridge not found");
+      return;
+    }
+    if (lifecycle === "running") {
+      documentBridge.logger.error("`startExecution` called but lifecycle is already running");
+      return;
+    }
+
+    documentBridge.logger.info(
+      `Starting execution of block ${blockId} in runbook ${documentBridge.runbookId}`,
+    );
 
     const executionId = await executeBlock(documentBridge.runbookId, blockId);
+    documentBridge.logger.debug(
+      `Execution of block ${blockId} in runbook ${documentBridge.runbookId} started with execution ID: ${executionId}`,
+    );
     setExecutionId(executionId);
   }, []);
 
   const stopExecution = useCallback(async () => {
-    if (!documentBridge || !executionId) return;
-    if (lifecycle !== "running") return;
+    if (!documentBridge) {
+      console.error("`stopExecution` called but document bridge not found");
+      return;
+    }
 
+    if (!executionId) {
+      documentBridge.logger.error("`stopExecution` called but no execution ID set");
+      return;
+    }
+
+    if (lifecycle !== "running") {
+      documentBridge.logger.error(
+        "`stopExecution` called but lifecycle is not running: ",
+        lifecycle,
+      );
+      return;
+    }
+
+    documentBridge.logger.info(
+      `Cancelling execution of block ${blockId} in runbook ${documentBridge.runbookId} with execution ID: ${executionId}`,
+    );
     await cancelExecution(executionId);
     setExecutionId(null);
+  }, [executionId]);
+
+  const handleBlockOutput = useCallback((output: BlockOutput) => {
+    switch (output.lifecycle?.type) {
+      case "finished":
+        setLifecycle("success");
+        break;
+      case "cancelled":
+        setLifecycle("cancelled");
+        break;
+      case "error":
+        setLifecycle("error");
+        break;
+      case "started":
+        setLifecycle("running");
+        break;
+
+      default:
+        if (output.lifecycle !== null) {
+          const x: never = output.lifecycle;
+          throw new Error(`Unhandled lifecycle event: ${x}`);
+        }
+    }
   }, []);
-
-  const handleBlockOutput = useCallback(
-    (output: BlockOutput) => {
-      if (!documentBridge) return;
-      switch (output.lifecycle?.type) {
-        case "finished":
-          setLifecycle("success");
-          break;
-        case "cancelled":
-          setLifecycle("cancelled");
-          break;
-        case "error":
-          setLifecycle("error");
-          break;
-        case "started":
-          setLifecycle("running");
-          break;
-
-        default:
-          if (output.lifecycle !== null) {
-            const x: never = output.lifecycle;
-            throw new Error(`Unhandled lifecycle event: ${x}`);
-          }
-      }
-    },
-    [documentBridge],
-  );
 
   useBlockOutput(blockId, handleBlockOutput);
 

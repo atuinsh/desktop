@@ -117,22 +117,20 @@ pub async fn execute_block(
 
 #[tauri::command]
 pub async fn cancel_block_execution(
-    app_handle: AppHandle,
+    state: State<'_, AtuinState>,
     execution_id: String,
 ) -> Result<(), String> {
     let execution_uuid = Uuid::parse_str(&execution_id).map_err(|e| e.to_string())?;
 
-    if let Some(state) = app_handle.try_state::<AtuinState>() {
-        let mut executions = state.block_executions.write().await;
-        if let Some(handle) = executions.remove(&execution_uuid) {
-            // Cancel the execution
-            handle.cancellation_token.cancel();
-            Ok(())
-        } else {
-            Err("Execution not found".to_string())
-        }
+    let mut executions = state.block_executions.write().await;
+    if let Some(handle) = executions.remove(&execution_uuid) {
+        log::debug!("Cancelling block execution {execution_id}");
+        // Cancel the execution
+        handle.cancellation_token.cancel();
+        Ok(())
     } else {
-        Err("State not available".to_string())
+        log::error!("Cannot cancel execution; execution ID not found: {execution_id}");
+        Err("Execution not found".to_string())
     }
 }
 
