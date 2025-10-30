@@ -1,4 +1,4 @@
-use super::session::{Authentication, Session};
+use super::session::{Session, SshAuth};
 use eyre::Result;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -30,13 +30,8 @@ impl Pool {
     /// Connect to a host and return a session
     /// If the session already exists, return it
     /// If the existing session is dead, remove it and create a new one
-    pub async fn connect(
-        &mut self,
-        host: &str,
-        username: Option<&str>,
-        auth: Option<Authentication>,
-    ) -> Result<Arc<Session>> {
-        let username = username.unwrap_or("root");
+    pub async fn connect(&mut self, host: &str, ssh_auth: &SshAuth) -> Result<Arc<Session>> {
+        let username = ssh_auth.username.as_deref().unwrap_or("root");
         let key = format!("{username}@{host}");
 
         log::debug!("connecting to {key}");
@@ -58,7 +53,7 @@ impl Pool {
         // Create a new connection
         log::debug!("Creating new SSH connection for {key}");
         let mut session = Session::open(host).await?;
-        session.authenticate(auth, Some(username)).await?;
+        session.authenticate(ssh_auth).await?;
 
         let session = Arc::new(session);
         self.connections.insert(key, session.clone());

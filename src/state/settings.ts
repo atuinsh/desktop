@@ -12,6 +12,7 @@ const AI_ENABLED = "settings.ai.enabled";
 const AI_API_KEY = "settings.ai.api_key";
 const SHELLCHECK_ENABLED = "settings.editor.shellcheck.enabled";
 const SHELLCHECK_PATH = "settings.editor.shellcheck.path";
+const SSH_AGENT_SOCKET = "settings.ssh.agent_socket";
 
 export class Settings {
   public static DEFAULT_FONT = "FiraCode";
@@ -147,5 +148,16 @@ export class Settings {
     }
 
     return await store.get(SHELLCHECK_PATH);
+  }
+
+  public static async sshAgentSocket(val: string | null = null): Promise<string | null> {
+    let store = await KVStore.open_default();
+
+    if (val || val === "") {
+      await store.set(SSH_AGENT_SOCKET, val);
+      return val;
+    }
+
+    return await store.get(SSH_AGENT_SOCKET);
   }
 }
