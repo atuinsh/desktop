@@ -24,6 +24,9 @@ interface PlayButtonProps {
   // If specified, the button will not be disabled when in running state.
   alwaysStop?: boolean;
   className?: string;
+
+  tooltip?: string;
+  tooltipPlacement?: "top" | "bottom" | "left" | "right";
 }
 
 const PlayButton = ({
@@ -38,8 +41,9 @@ const PlayButton = ({
   disabled,
   alwaysStop,
   className,
+  tooltip,
+  tooltipPlacement,
 }: PlayButtonProps) => {
-
   const [isShiftPressed, setIsShiftPressed] = useState(false);
 
   // bind shift
@@ -65,7 +69,7 @@ const PlayButton = ({
     return (
       <Button
         isIconOnly
-        color={isRunning ? (isShiftPressed && onRefresh) ? "warning" : "danger" : "success"}
+        color={isRunning ? (isShiftPressed && onRefresh ? "warning" : "danger") : "success"}
         variant="flat"
         size="sm"
         aria-label={isRunning ? "Stop code" : "Run code"}
@@ -93,18 +97,36 @@ const PlayButton = ({
         isLoading={(isRunning && !cancellable) || isLoading}
       >
         <span
-          className={`transition-transform duration-300 ease-in-out ${isRunning ? "rotate-180" : ""}`}
+          className={`transition-transform duration-300 ease-in-out ${
+            isRunning ? "rotate-180" : ""
+          }`}
         >
-          {isRunning ? (isShiftPressed && onRefresh) ? <RefreshCw size={16} /> : <Square size={16} /> : <Play size={16} />}
+          {isRunning ? (
+            isShiftPressed && onRefresh ? (
+              <RefreshCw size={16} />
+            ) : (
+              <Square size={16} />
+            )
+          ) : (
+            <Play size={16} />
+          )}
         </span>
       </Button>
     );
   };
 
-  if (onRefresh && isRunning) {
-    return (<Tooltip content="Hold shift to re-run" delay={500}>
-      {renderButton()}
-    </Tooltip>);
+  if (tooltip) {
+    return (
+      <Tooltip content={tooltip} placement={tooltipPlacement || "bottom"}>
+        {renderButton()}
+      </Tooltip>
+    );
+  } else if (onRefresh && isRunning) {
+    return (
+      <Tooltip content="Hold shift to re-run" delay={500}>
+        {renderButton()}
+      </Tooltip>
+    );
   }
 
   return renderButton();

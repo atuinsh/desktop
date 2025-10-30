@@ -78,7 +78,10 @@ pub enum DocumentCommand {
     },
 
     /// Notify the document actor that a block's local value has changed
-    BlockLocalValueChanged { block_id: Uuid, reply: Reply<()> },
+    BlockLocalValueChanged {
+        block_id: Uuid,
+        reply: Reply<()>,
+    },
 
     /// Update the bridge channel for the document
     UpdateBridgeChannel {
@@ -127,6 +130,10 @@ pub enum DocumentCommand {
     GetResolvedContext {
         block_id: Uuid,
         reply: oneshot::Sender<Result<ResolvedContext, DocumentError>>,
+    },
+
+    ResetState {
+        reply: Reply<()>,
     },
 
     /// Shutdown the document actor
@@ -363,6 +370,15 @@ impl DocumentHandle {
             .map_err(|_| DocumentError::ActorSendError)?;
         Ok(())
     }
+
+    /// Reset the document state
+    pub async fn reset_state(&self) -> Result<(), DocumentError> {
+        let (tx, rx) = oneshot::channel();
+        self.command_tx
+            .send(DocumentCommand::ResetState { reply: tx })
+            .map_err(|_| DocumentError::ActorSendError)?;
+        rx.await.map_err(|_| DocumentError::ActorSendError)?
+    }
 }
 
 impl Drop for DocumentHandle {
@@ -473,6 +489,10 @@ impl DocumentActor {
                         .get_block(&block_id)
                         .map(|b| b.block().clone());
                     let _ = reply.send(block);
+                }
+                DocumentCommand::ResetState { reply } => {
+                    let result = self.handle_reset_state().await;
+                    let _ = reply.send(result);
                 }
                 DocumentCommand::Shutdown => {
                     break;
@@ -620,6 +640,24 @@ impl DocumentActor {
 
         if let Err(errors) = result {
             // Log errors but don't fail the entire operation
+            for error in errors {
+                log::error!("Error rebuilding passive context: {:?}", error);
+            }
+        }
+
+        Ok(())
+    }
+
+    async fn handle_reset_state(&mut self) -> Result<(), DocumentError> {
+        log::trace!("Resetting document state for document {}", self.document.id);
+        self.document.reset_state()?;
+
+        let result = self
+            .document
+            .rebuild_contexts(None, self.event_bus.clone())
+            .await;
+
+        if let Err(errors) = result {
             for error in errors {
                 log::error!("Error rebuilding passive context: {:?}", error);
             }

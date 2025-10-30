@@ -230,3 +230,14 @@ pub async fn get_flattened_block_context(
         .map_err(|e| e.to_string())?;
     Ok(context)
 }
+
+#[tauri::command]
+pub async fn reset_runbook_state(
+    state: State<'_, AtuinState>,
+    document_id: String,
+) -> Result<(), String> {
+    let documents = state.documents.read().await;
+    let document = documents.get(&document_id).ok_or("Document not found")?;
+    document.reset_state().await.map_err(|e| e.to_string())?;
+    Ok(())
+}

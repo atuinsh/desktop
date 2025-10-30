@@ -25,3 +25,14 @@ export async function cancelExecution(executionId: string) {
     throw error;
   }
 }
+
+export async function resetRunbookState(runbookId: string) {
+  try {
+    logger.info(`Resetting runbook state for ${runbookId}`);
+    await invoke<void>("reset_runbook_state", { documentId: runbookId });
+    logger.info(`Runbook state for ${runbookId} reset`);
+  } catch (error) {
+    logger.error(`Failed to reset runbook state for ${runbookId}`, error);
+    throw error;
+  }
+}

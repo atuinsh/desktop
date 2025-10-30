@@ -55,6 +55,15 @@ impl Document {
         Ok(doc)
     }
 
+    pub fn reset_state(&mut self) -> Result<(), DocumentError> {
+        for block in &mut self.blocks {
+            block.update_passive_context(BlockContext::new());
+            block.update_active_context(BlockContext::new());
+        }
+
+        Ok(())
+    }
+
     pub fn update_document_bridge(
         &mut self,
         document_bridge: Arc<dyn ClientMessageChannel<DocumentBridgeMessage>>,
