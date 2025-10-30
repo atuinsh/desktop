@@ -308,9 +308,7 @@ impl Prometheus {
         context: ExecutionContext,
         cancellation_token: CancellationToken,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        let _ = context
-            .event_sender
-            .send(WorkflowEvent::BlockStarted { id: self.id });
+        let _ = context.emit_event(WorkflowEvent::BlockStarted { id: self.id });
 
         let _ = context
             .send_output(
@@ -420,7 +418,7 @@ impl Prometheus {
                         }).await;
                     }
 
-                    let _ = context.event_sender.send(WorkflowEvent::BlockFinished { id: self.id });
+                    let _ = context.emit_event(WorkflowEvent::BlockFinished { id: self.id });
                         let _ = context.send_output(BlockOutput {
                             block_id: self.id,
                             stdout: None,
@@ -439,9 +437,7 @@ impl Prometheus {
             execution_task.await
         };
 
-        let _ = context
-            .event_sender
-            .send(WorkflowEvent::BlockFinished { id: self.id });
+        let _ = context.emit_event(WorkflowEvent::BlockFinished { id: self.id });
         let _ = context
             .send_output(
                 BlockOutput {

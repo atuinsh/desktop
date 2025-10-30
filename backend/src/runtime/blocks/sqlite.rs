@@ -241,9 +241,7 @@ impl SQLite {
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let block_id = self.id;
 
-        let _ = context
-            .event_sender
-            .send(WorkflowEvent::BlockStarted { id: block_id });
+        let _ = context.emit_event(WorkflowEvent::BlockStarted { id: block_id });
 
         let _ = context
             .send_output(
@@ -423,7 +421,7 @@ impl SQLite {
                             runbook_id: context.runbook_id,
                         }).await;
                     }
-                    let _ = context.event_sender.send(WorkflowEvent::BlockFinished { id: block_id });
+                    let _ = context.emit_event(WorkflowEvent::BlockFinished { id: block_id });
                     let _ = context.send_output(BlockOutput {
                         block_id: self.id,
                         stdout: None,
@@ -446,9 +444,7 @@ impl SQLite {
             result
         };
 
-        let _ = context
-            .event_sender
-            .send(WorkflowEvent::BlockFinished { id: block_id });
+        let _ = context.emit_event(WorkflowEvent::BlockFinished { id: block_id });
         let _ = context
             .send_output(
                 BlockOutput {
@@ -624,16 +620,12 @@ mod tests {
         let context_resolver = ContextResolver::new();
         let (event_sender, _event_receiver) = tokio::sync::broadcast::channel(16);
 
-        ExecutionContext {
-            runbook_id: Uuid::new_v4(),
-            document_handle,
-            context_resolver,
-            output_channel: None,
-            event_sender,
-            ssh_pool: None,
-            pty_store: None,
-            event_bus: None,
-        }
+        ExecutionContext::builder()
+            .runbook_id(Uuid::new_v4())
+            .document_handle(document_handle)
+            .context_resolver(Arc::new(context_resolver))
+            .event_sender(event_sender)
+            .build()
     }
 
     fn create_test_context_with_vars(vars: Vec<(&str, &str)>) -> ExecutionContext {
@@ -649,34 +641,27 @@ mod tests {
 
         let (event_sender, _event_receiver) = tokio::sync::broadcast::channel(16);
 
-        ExecutionContext {
-            runbook_id: Uuid::new_v4(),
-            document_handle,
-            context_resolver,
-            output_channel: None,
-            event_sender,
-            ssh_pool: None,
-            pty_store: None,
-            event_bus: None,
-        }
+        ExecutionContext::builder()
+            .runbook_id(Uuid::new_v4())
+            .document_handle(document_handle)
+            .context_resolver(Arc::new(context_resolver))
+            .event_sender(event_sender)
+            .build()
     }
 
     fn create_test_context_with_event_bus(event_bus: Arc<MemoryEventBus>) -> ExecutionContext {
         let (tx, _rx) = mpsc::unbounded_channel::<DocumentCommand>();
         let document_handle = DocumentHandle::from_raw("test-runbook".to_string(), tx);
-        let context_resolver = ContextResolver::new();
+        let context_resolver = Arc::new(ContextResolver::new());
         let (event_sender, _event_receiver) = tokio::sync::broadcast::channel(16);
 
-        ExecutionContext {
-            runbook_id: Uuid::new_v4(),
-            document_handle,
-            context_resolver,
-            output_channel: None,
-            event_sender,
-            ssh_pool: None,
-            pty_store: None,
-            event_bus: Some(event_bus),
-        }
+        ExecutionContext::builder()
+            .runbook_id(Uuid::new_v4())
+            .document_handle(document_handle)
+            .context_resolver(context_resolver)
+            .event_sender(event_sender)
+            .event_bus(event_bus)
+            .build()
     }
 
     // FromDocument tests

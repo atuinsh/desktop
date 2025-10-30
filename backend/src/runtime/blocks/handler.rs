@@ -11,32 +11,23 @@ use std::fmt::Debug;
 use std::sync::Arc;
 use tokio::sync::{broadcast, oneshot, RwLock};
 use ts_rs::TS;
+use typed_builder::TypedBuilder;
 use uuid::Uuid;
 
+#[derive(TypedBuilder, Clone)]
 pub struct ExecutionContext {
     pub runbook_id: Uuid,
     pub document_handle: Arc<DocumentHandle>,
-    pub context_resolver: ContextResolver,
-    pub output_channel: Option<Arc<dyn ClientMessageChannel<DocumentBridgeMessage>>>,
-    pub event_sender: broadcast::Sender<WorkflowEvent>,
+    pub context_resolver: Arc<ContextResolver>,
+    #[builder(default, setter(strip_option(fallback = output_channel_opt)))]
+    output_channel: Option<Arc<dyn ClientMessageChannel<DocumentBridgeMessage>>>,
+    event_sender: broadcast::Sender<WorkflowEvent>,
+    #[builder(default, setter(strip_option(fallback = ssh_pool_opt)))]
     pub ssh_pool: Option<SshPoolHandle>,
+    #[builder(default, setter(strip_option(fallback = pty_store_opt)))]
     pub pty_store: Option<PtyStoreHandle>,
+    #[builder(default, setter(strip_option(fallback = event_bus_opt)))]
     pub event_bus: Option<Arc<dyn EventBus>>,
-}
-
-impl Clone for ExecutionContext {
-    fn clone(&self) -> Self {
-        Self {
-            runbook_id: self.runbook_id,
-            document_handle: self.document_handle.clone(),
-            context_resolver: self.context_resolver.clone(),
-            output_channel: self.output_channel.clone(),
-            event_sender: self.event_sender.clone(),
-            ssh_pool: self.ssh_pool.clone(),
-            pty_store: self.pty_store.clone(),
-            event_bus: self.event_bus.clone(),
-        }
-    }
 }
 
 impl Debug for ExecutionContext {
@@ -49,11 +40,18 @@ impl Debug for ExecutionContext {
 }
 
 impl ExecutionContext {
+    pub fn emit_event(&self, event: WorkflowEvent) -> Result<(), DocumentError> {
+        self.event_sender
+            .send(event)
+            .map_err(|_| DocumentError::EventSendError)?;
+        Ok(())
+    }
+
     pub async fn send_output(&self, message: DocumentBridgeMessage) -> Result<(), DocumentError> {
         if let Some(chan) = &self.output_channel {
             chan.send(message)
                 .await
-                .map_err(|_| DocumentError::ActorSendError)?;
+                .map_err(|_| DocumentError::OutputSendError)?;
         }
         Ok(())
     }

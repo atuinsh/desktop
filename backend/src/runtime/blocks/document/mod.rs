@@ -262,18 +262,18 @@ impl Document {
         // Parse runbook ID
         let runbook_id = Uuid::parse_str(&self.id).unwrap_or_else(|_| Uuid::new_v4());
 
-        let output_channel = Some(self.document_bridge.clone());
+        let output_channel = self.document_bridge.clone();
 
-        Ok(ExecutionContext {
-            runbook_id,
-            document_handle,
-            context_resolver,
-            output_channel,
-            event_sender,
-            ssh_pool,
-            pty_store,
-            event_bus: Some(event_bus),
-        })
+        Ok(ExecutionContext::builder()
+            .runbook_id(runbook_id)
+            .document_handle(document_handle)
+            .context_resolver(Arc::new(context_resolver))
+            .output_channel(output_channel)
+            .event_sender(event_sender)
+            .ssh_pool_opt(ssh_pool)
+            .pty_store_opt(pty_store)
+            .event_bus(event_bus)
+            .build())
     }
 
     pub fn get_resolved_context(&self, block_id: &Uuid) -> Result<ResolvedContext, DocumentError> {

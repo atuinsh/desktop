@@ -93,11 +93,9 @@ impl BlockBehavior for Terminal {
         };
 
         // Send started event
+        let _ = context.emit_event(WorkflowEvent::BlockStarted { id: self.id });
         let _ = context
-            .event_sender
-            .send(WorkflowEvent::BlockStarted { id: self.id });
-        if let Some(ref ch) = context.output_channel {
-            let _ = ch.send(
+            .send_output(
                 BlockOutput {
                     block_id: self.id,
                     stdout: None,
@@ -107,8 +105,8 @@ impl BlockBehavior for Terminal {
                     object: None,
                 }
                 .into(),
-            );
-        }
+            )
+            .await;
 
         // Emit BlockStarted event via Grand Central
         if let Some(event_bus) = &context.event_bus {
@@ -208,6 +206,7 @@ impl Terminal {
         // Get PTY store from context
         let pty_store = context
             .pty_store
+            .clone()
             .ok_or("PTY store not available in execution context")?;
 
         // Open PTY based on context (local or SSH)
@@ -219,6 +218,7 @@ impl Terminal {
                 // Get SSH pool from context
                 let ssh_pool = context
                     .ssh_pool
+                    .clone()
                     .ok_or("SSH pool not available in execution context")?;
 
                 // Create SSH PTY
@@ -236,12 +236,12 @@ impl Terminal {
                     .map_err(|e| format!("Failed to open SSH PTY: {}", e))?;
 
                 // Forward SSH output to binary channel
-                let output_channel_ssh = context.output_channel.clone();
+                let context_clone = context.clone();
                 let block_id = self.id;
                 tokio::spawn(async move {
                     while let Some(output) = output_receiver.recv().await {
-                        if let Some(ref ch) = output_channel_ssh {
-                            let _ = ch.send(
+                        let _ = context_clone
+                            .send_output(
                                 BlockOutput {
                                     block_id,
                                     stdout: None,
@@ -251,8 +251,8 @@ impl Terminal {
                                     object: None,
                                 }
                                 .into(),
-                            );
-                        }
+                            )
+                            .await;
                     }
                 });
 
@@ -283,7 +283,7 @@ impl Terminal {
                 let reader = pty.reader.clone();
 
                 // Spawn reader task for local PTY
-                let output_channel_local = context.output_channel.clone();
+                let context_clone = context.clone();
                 let block_id = self.id;
 
                 tokio::spawn(async move {
@@ -304,8 +304,8 @@ impl Terminal {
                         match read_result {
                             Ok(Ok((0, _))) => {
                                 // EOF - PTY terminated naturally
-                                if let Some(ref ch) = output_channel_local {
-                                    let _ = ch.send(
+                                let _ = context_clone
+                                    .send_output(
                                         BlockOutput {
                                             block_id,
                                             stdout: None,
@@ -320,14 +320,14 @@ impl Terminal {
                                             object: None,
                                         }
                                         .into(),
-                                    );
-                                }
+                                    )
+                                    .await;
                                 break;
                             }
                             Ok(Ok((n, buf))) => {
                                 // Send raw binary data
-                                if let Some(ref ch) = output_channel_local {
-                                    let _ = ch.send(
+                                let _ = context_clone
+                                    .send_output(
                                         BlockOutput {
                                             block_id,
                                             stdout: None,
@@ -337,13 +337,13 @@ impl Terminal {
                                             object: None,
                                         }
                                         .into(),
-                                    );
-                                }
+                                    )
+                                    .await;
                             }
                             Ok(Err(e)) => {
                                 // Send error
-                                if let Some(ref ch) = output_channel_local {
-                                    let _ = ch.send(
+                                let _ = context_clone
+                                    .send_output(
                                         BlockOutput {
                                             block_id,
                                             stdout: None,
@@ -357,14 +357,14 @@ impl Terminal {
                                             object: None,
                                         }
                                         .into(),
-                                    );
-                                }
+                                    )
+                                    .await;
                                 break;
                             }
                             Err(e) => {
                                 // Task join error
-                                if let Some(ref ch) = output_channel_local {
-                                    let _ = ch.send(
+                                let _ = context_clone
+                                    .send_output(
                                         BlockOutput {
                                             block_id,
                                             stdout: None,
@@ -378,8 +378,8 @@ impl Terminal {
                                             object: None,
                                         }
                                         .into(),
-                                    );
-                                }
+                                    )
+                                    .await;
                                 break;
                             }
                         }
@@ -410,8 +410,8 @@ impl Terminal {
 
             if let Err(e) = pty_store.write_pty(self.id, command.into()).await {
                 // Send error event if command writing fails
-                if let Some(ref ch) = context.output_channel {
-                    let _ = ch.send(
+                let _ = context
+                    .send_output(
                         BlockOutput {
                             block_id: self.id,
                             stdout: None,
@@ -423,8 +423,8 @@ impl Terminal {
                             object: None,
                         }
                         .into(),
-                    );
-                }
+                    )
+                    .await;
             }
         }
 
@@ -450,11 +450,9 @@ impl Terminal {
             }
 
             // Send cancelled event to the block channel
+            let _ = context.emit_event(WorkflowEvent::BlockFinished { id: self.id });
             let _ = context
-                .event_sender
-                .send(WorkflowEvent::BlockFinished { id: self.id });
-            if let Some(ref ch) = context.output_channel {
-                let _ = ch.send(
+                .send_output(
                     BlockOutput {
                         block_id: self.id,
                         stdout: None,
@@ -464,9 +462,8 @@ impl Terminal {
                         object: None,
                     }
                     .into(),
-                );
-            }
-
+                )
+                .await;
             Ok(true)
         } else {
             Ok(false)

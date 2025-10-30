@@ -55,6 +55,12 @@ pub enum DocumentError {
     #[error("Failed to send command to document actor")]
     ActorSendError,
 
+    #[error("Failed to emit event")]
+    EventSendError,
+
+    #[error("Failed to send output")]
+    OutputSendError,
+
     #[error("Failed to evaluate passive context: {0}")]
     PassiveContextError(String),
 

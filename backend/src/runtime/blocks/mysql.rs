@@ -241,9 +241,7 @@ impl Mysql {
         let block_id = self.id;
 
         // Send start event
-        let _ = context
-            .event_sender
-            .send(WorkflowEvent::BlockStarted { id: block_id });
+        let _ = context.emit_event(WorkflowEvent::BlockStarted { id: block_id });
 
         // Send started lifecycle event to output channel
         let _ = context
@@ -458,7 +456,7 @@ impl Mysql {
                     }
 
                     // Send completion events
-                    let _ = context.event_sender.send(WorkflowEvent::BlockFinished { id: block_id });
+                    let _ = context.emit_event(WorkflowEvent::BlockFinished { id: block_id });
                     let _ = context.send_output(BlockOutput {
                         block_id: self.id,
                         stdout: None,
@@ -484,9 +482,7 @@ impl Mysql {
         };
 
         // Send completion events
-        let _ = context
-            .event_sender
-            .send(WorkflowEvent::BlockFinished { id: block_id });
+        let _ = context.emit_event(WorkflowEvent::BlockFinished { id: block_id });
         // Send success message
         let _ = context
             .send_output(

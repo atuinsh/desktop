@@ -302,9 +302,7 @@ impl Script {
         String,
     ) {
         // Send start event
-        let _ = context
-            .event_sender
-            .send(WorkflowEvent::BlockStarted { id: self.id });
+        let _ = context.emit_event(WorkflowEvent::BlockStarted { id: self.id });
 
         // Send started lifecycle event to output channel
         log::trace!(
@@ -364,9 +362,7 @@ impl Script {
         let mut child = match cmd.spawn() {
             Ok(child) => child,
             Err(e) => {
-                let _ = context
-                    .event_sender
-                    .send(WorkflowEvent::BlockFinished { id: self.id });
+                let _ = context.emit_event(WorkflowEvent::BlockFinished { id: self.id });
                 log::trace!(
                     "Sending error lifecycle event to output channel for script block {id}",
                     id = self.id
@@ -502,7 +498,7 @@ impl Script {
                         }).await;
                     }
 
-                    let _ = context.event_sender.send(WorkflowEvent::BlockFinished { id: self.id });
+                    let _ = context.emit_event(WorkflowEvent::BlockFinished { id: self.id });
                         log::trace!(
                             "Sending cancelled lifecycle event to output channel for script block {id}",
                             id = self.id
@@ -524,7 +520,7 @@ impl Script {
                         Ok(status) => status.code().unwrap_or(-1),
                         Err(e) => {
                             let captured = captured_output.read().await.clone();
-                            let _ = context.event_sender.send(WorkflowEvent::BlockFinished { id: self.id });
+                            let _ = context.emit_event(WorkflowEvent::BlockFinished { id: self.id });
                                 log::trace!(
                                     "Sending error lifecycle event to output channel for script block {id}",
                                     id = self.id
@@ -551,9 +547,7 @@ impl Script {
                 Ok(status) => status.code().unwrap_or(-1),
                 Err(e) => {
                     let captured = captured_output.read().await.clone();
-                    let _ = context
-                        .event_sender
-                        .send(WorkflowEvent::BlockFinished { id: self.id });
+                    let _ = context.emit_event(WorkflowEvent::BlockFinished { id: self.id });
                     log::trace!(
                         "Sending error lifecycle event to output channel for script block {id}",
                         id = self.id
@@ -582,9 +576,7 @@ impl Script {
         };
 
         // Send completion event
-        let _ = context
-            .event_sender
-            .send(WorkflowEvent::BlockFinished { id: self.id });
+        let _ = context.emit_event(WorkflowEvent::BlockFinished { id: self.id });
 
         log::trace!(
             "Sending finished lifecycle event to output channel for script block {id}",
@@ -629,9 +621,7 @@ impl Script {
         use tokio::sync::RwLock;
         use tokio::sync::{mpsc, oneshot};
 
-        let _ = context
-            .event_sender
-            .send(WorkflowEvent::BlockStarted { id: self.id });
+        let _ = context.emit_event(WorkflowEvent::BlockStarted { id: self.id });
 
         let _ = context
             .send_output(
@@ -653,9 +643,7 @@ impl Script {
             Some(pool) => pool,
             None => {
                 let error_msg = "SSH pool not available in execution context";
-                let _ = context
-                    .event_sender
-                    .send(WorkflowEvent::BlockFinished { id: self.id });
+                let _ = context.emit_event(WorkflowEvent::BlockFinished { id: self.id });
                 let _ = context
                     .send_output(
                         BlockOutput {
@@ -696,9 +684,7 @@ impl Script {
 
         if let Err(e) = exec_result {
             let error_msg = format!("Failed to start SSH execution: {}", e);
-            let _ = context
-                .event_sender
-                .send(WorkflowEvent::BlockFinished { id: self.id });
+            let _ = context.emit_event(WorkflowEvent::BlockFinished { id: self.id });
             let _ = context.send_output(
                 BlockOutput {
                     block_id: self.id,
@@ -754,7 +740,7 @@ impl Script {
                         }).await;
                     }
 
-                    let _ = context.event_sender.send(WorkflowEvent::BlockFinished { id: block_id });
+                    let _ = context.emit_event(WorkflowEvent::BlockFinished { id: block_id });
                     let _ = context.send_output(BlockOutput {
                         block_id,
                         stdout: None,
@@ -775,9 +761,7 @@ impl Script {
             0
         };
 
-        let _ = context
-            .event_sender
-            .send(WorkflowEvent::BlockFinished { id: self.id });
+        let _ = context.emit_event(WorkflowEvent::BlockFinished { id: self.id });
         let _ = context
             .send_output(
                 BlockOutput {
@@ -829,16 +813,12 @@ mod tests {
         let context_resolver = ContextResolver::new();
         let (event_sender, _event_receiver) = tokio::sync::broadcast::channel(16);
 
-        ExecutionContext {
-            runbook_id: Uuid::new_v4(),
-            document_handle,
-            context_resolver,
-            output_channel: None,
-            event_sender,
-            ssh_pool: None,
-            pty_store: None,
-            event_bus: None,
-        }
+        ExecutionContext::builder()
+            .runbook_id(Uuid::new_v4())
+            .document_handle(document_handle)
+            .context_resolver(Arc::new(context_resolver))
+            .event_sender(event_sender)
+            .build()
     }
 
     fn create_test_context_with_vars(vars: Vec<(&str, &str)>) -> ExecutionContext {
@@ -854,16 +834,12 @@ mod tests {
 
         let (event_sender, _event_receiver) = tokio::sync::broadcast::channel(16);
 
-        ExecutionContext {
-            runbook_id: Uuid::new_v4(),
-            document_handle,
-            context_resolver,
-            output_channel: None,
-            event_sender,
-            ssh_pool: None,
-            pty_store: None,
-            event_bus: None,
-        }
+        ExecutionContext::builder()
+            .runbook_id(Uuid::new_v4())
+            .document_handle(document_handle)
+            .context_resolver(Arc::new(context_resolver))
+            .event_sender(event_sender)
+            .build()
     }
 
     fn create_test_context_with_event_bus(event_bus: Arc<MemoryEventBus>) -> ExecutionContext {
@@ -872,16 +848,13 @@ mod tests {
         let context_resolver = ContextResolver::new();
         let (event_sender, _event_receiver) = tokio::sync::broadcast::channel(16);
 
-        ExecutionContext {
-            runbook_id: Uuid::new_v4(),
-            document_handle,
-            context_resolver,
-            output_channel: None,
-            event_sender,
-            ssh_pool: None,
-            pty_store: None,
-            event_bus: Some(event_bus),
-        }
+        ExecutionContext::builder()
+            .runbook_id(Uuid::new_v4())
+            .document_handle(document_handle)
+            .context_resolver(Arc::new(context_resolver))
+            .event_sender(event_sender)
+            .event_bus(event_bus)
+            .build()
     }
 
     #[tokio::test]
