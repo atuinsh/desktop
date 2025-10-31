@@ -4,7 +4,6 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use eyre::Result;
 use std::collections::HashMap;
-use tauri::Emitter;
 use tokio::sync::{mpsc, oneshot};
 
 use uuid::Uuid;
@@ -59,16 +58,7 @@ pub struct PtyStoreHandle {
 impl PtyStoreHandle {
     pub fn new() -> Self {
         let (sender, receiver) = mpsc::channel(8);
-        let mut actor = PtyStore::new(receiver, None);
-
-        tauri::async_runtime::spawn(async move { actor.run().await });
-
-        Self { sender }
-    }
-
-    pub fn new_with_app(app_handle: tauri::AppHandle) -> Self {
-        let (sender, receiver) = mpsc::channel(8);
-        let mut actor = PtyStore::new(receiver, Some(app_handle));
+        let mut actor = PtyStore::new(receiver);
 
         tauri::async_runtime::spawn(async move { actor.run().await });
 
@@ -167,18 +157,13 @@ impl Default for PtyStoreHandle {
 
 pub(crate) struct PtyStore {
     pub receiver: mpsc::Receiver<PtyStoreMessage>,
-    app_handle: Option<tauri::AppHandle>,
     pty_sessions: HashMap<Uuid, Box<dyn PtyLike + Send>>,
 }
 
 impl PtyStore {
-    pub fn new(
-        receiver: mpsc::Receiver<PtyStoreMessage>,
-        app_handle: Option<tauri::AppHandle>,
-    ) -> Self {
+    pub fn new(receiver: mpsc::Receiver<PtyStoreMessage>) -> Self {
         Self {
             receiver,
-            app_handle,
             pty_sessions: HashMap::new(),
         }
     }

@@ -135,7 +135,7 @@ impl AtuinState {
         let exec_log = ExecLogHandle::new(path).expect("Failed to boot exec log");
         self.exec_log.lock().unwrap().replace(exec_log);
 
-        let pty_store = PtyStoreHandle::new_with_app(app.clone());
+        let pty_store = PtyStoreHandle::new();
         self.pty_store.lock().unwrap().replace(pty_store);
 
         let ssh_pool = SshPoolHandle::new();
