@@ -32,6 +32,7 @@
       }
     },
     "macOS": {
+      "minimumSystemVersion": "10.13",
       "dmg": {
         "background": "icons/dmg-bg.png",
         "appPosition": {

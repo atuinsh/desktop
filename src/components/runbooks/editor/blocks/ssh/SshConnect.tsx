@@ -3,13 +3,7 @@
 
 import { Button, Input, Tooltip } from "@heroui/react";
 import { GlobeIcon } from "lucide-react";
-
-// @ts-ignore
 import { createReactBlockSpec } from "@blocknote/react";
-
-import { sshConnect } from "./ssh";
-import EditorBus from "@/lib/buses/editor";
-import { useEffect } from "react";
 import track_event from "@/tracking";
 import { exportPropMatter } from "@/lib/utils";
 
@@ -20,16 +14,6 @@ interface SshConnectProps {
 }
 
 const SshConnect = ({ userHost, onUserHostChange, isEditable }: SshConnectProps) => {
-  useEffect(() => {
-    EditorBus.get().emitBlockInserted("ssh-connect", {
-      userHost,
-    });
-    return () => {
-      EditorBus.get().emitBlockDeleted("ssh-connect", {
-        userHost,
-      });
-    };
-  }, [userHost]);
 
   return (
     <Tooltip
@@ -39,18 +23,13 @@ const SshConnect = ({ userHost, onUserHostChange, isEditable }: SshConnectProps)
     >
       <div className="flex flex-row items-center space-x-3 w-full bg-gradient-to-r from-slate-50 to-gray-50 dark:from-slate-800 dark:to-slate-900 rounded-lg p-3 border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-md transition-all duration-200">
         <div className="flex items-center">
-          <Tooltip content="Manually connect (otherwise we will try to connect automatically when needed)">
-            <Button
-              isIconOnly
-              variant="light"
-              className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300"
-              onPress={async () => {
-                sshConnect(userHost);
-              }}
-            >
-              <GlobeIcon className="h-4 w-4" />
-            </Button>
-          </Tooltip>
+          <Button
+            isIconOnly
+            variant="light"
+            className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300"
+          >
+            <GlobeIcon className="h-4 w-4" />
+          </Button>
         </div>
 
         <div className="flex-1">
@@ -62,9 +41,7 @@ const SshConnect = ({ userHost, onUserHostChange, isEditable }: SshConnectProps)
             autoCorrect="off"
             spellCheck="false"
             className="flex-1 border-slate-200 dark:border-slate-700 focus:ring-slate-500"
-            onValueChange={(val) => {
-              onUserHostChange(val);
-            }}
+            onValueChange={onUserHostChange}
             disabled={!isEditable}
           />
         </div>

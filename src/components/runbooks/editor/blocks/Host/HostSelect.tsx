@@ -3,12 +3,7 @@
 
 import { Button, Tooltip } from "@heroui/react";
 import { HomeIcon } from "lucide-react";
-
-// @ts-ignore
 import { createReactBlockSpec } from "@blocknote/react";
-
-import { useEffect } from "react";
-import EditorBus from "@/lib/buses/editor";
 import track_event from "@/tracking";
 import { exportPropMatter } from "@/lib/utils";
 
@@ -17,16 +12,6 @@ interface HostSelectProps {
 }
 
 const HostSelect = ({ }: HostSelectProps) => {
-  useEffect(() => {
-    EditorBus.get().emitBlockInserted("host-select", {
-      host: "local",
-    });
-    return () => {
-      EditorBus.get().emitBlockDeleted("host-select", {
-        host: "local",
-      });
-    }
-  }, []);
 
   return (
     <Tooltip

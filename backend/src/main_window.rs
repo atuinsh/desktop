@@ -152,13 +152,13 @@ pub(crate) async fn create_main_window(app: &AppHandle) -> Result<(), String> {
         attempts += 1;
         let target_size = PhysicalSize::new(window_state.width, window_state.height);
         let target_pos = PhysicalPosition::new(window_state.x, window_state.y);
-        println!("target window state:  size: {target_size:?}, pos: {target_pos:?}");
-        println!(
+        log::debug!("target window state:  size: {target_size:?}, pos: {target_pos:?}");
+        log::debug!(
             "current window state: size: {:?}, pos: {:?}",
             window.outer_size().unwrap(),
             window.outer_position().unwrap()
         );
-        println!("adjustment attempt: {attempts}");
+        log::debug!("adjustment attempt: {attempts}");
         tokio::time::sleep(std::time::Duration::from_millis(10)).await;
         window
             .set_size(PhysicalSize::new(window_state.width, window_state.height))

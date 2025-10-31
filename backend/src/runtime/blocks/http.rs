@@ -3,9 +3,11 @@ use std::collections::HashMap;
 use typed_builder::TypedBuilder;
 use uuid::Uuid;
 
+use crate::runtime::blocks::{Block, BlockBehavior};
+
 use super::FromDocument;
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 pub enum HttpVerb {
     #[default]
     #[serde(rename = "GET")]
@@ -22,7 +24,7 @@ pub enum HttpVerb {
     Head,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, TypedBuilder)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, TypedBuilder)]
 #[serde(rename_all = "camelCase")]
 pub struct Http {
     #[builder(setter(into))]
@@ -103,7 +105,23 @@ impl FromDocument for Http {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, TypedBuilder)]
+#[async_trait::async_trait]
+impl BlockBehavior for Http {
+    fn into_block(self) -> Block {
+        Block::Http(self)
+    }
+
+    async fn execute(
+        self,
+        _context: super::handler::ExecutionContext,
+    ) -> Result<Option<super::handler::ExecutionHandle>, Box<dyn std::error::Error + Send + Sync>>
+    {
+        // TODO: Migrate logic from handlers/http.rs
+        Err("HTTP execution not yet implemented - needs migration from handlers/http.rs".into())
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, TypedBuilder)]
 #[serde(rename_all = "camelCase")]
 pub struct HttpResponse {
     pub status: u16,
@@ -113,7 +131,7 @@ pub struct HttpResponse {
     // Note: We're not storing the response body data to avoid storing potentially large payloads
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, TypedBuilder)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, TypedBuilder)]
 #[serde(rename_all = "camelCase")]
 pub struct HttpOutput {
     pub response: HttpResponse,

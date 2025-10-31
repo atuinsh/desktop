@@ -1,62 +1,85 @@
+use crate::runtime::blocks::document::actor::DocumentError;
+use crate::runtime::blocks::document::block_context::{BlockContext, ContextResolver};
+use crate::runtime::blocks::document::{actor::DocumentHandle, bridge::DocumentBridgeMessage};
 use crate::runtime::events::EventBus;
 use crate::runtime::pty_store::PtyStoreHandle;
 use crate::runtime::ssh_pool::SshPoolHandle;
 use crate::runtime::workflow::event::WorkflowEvent;
-use async_trait::async_trait;
+use crate::runtime::ClientMessageChannel;
 use serde::{Deserialize, Serialize};
+use std::fmt::Debug;
 use std::sync::Arc;
-use std::{collections::HashMap, fmt::Debug};
-use tauri::ipc::Channel;
 use tokio::sync::{broadcast, oneshot, RwLock};
 use ts_rs::TS;
+use typed_builder::TypedBuilder;
 use uuid::Uuid;
 
-type BlockOutputMap = HashMap<String, HashMap<String, String>>;
-type BlockOutputStore = Arc<RwLock<BlockOutputMap>>;
-
-#[derive(Clone)]
+#[derive(TypedBuilder, Clone)]
 pub struct ExecutionContext {
     pub runbook_id: Uuid,
-    pub cwd: String,
-    pub env: HashMap<String, String>,
-    pub variables: HashMap<String, String>,
-    pub ssh_host: Option<String>,
-    pub document: Vec<serde_json::Value>, // For template resolution
-    pub ssh_pool: Option<SshPoolHandle>,  // For SSH execution
-    pub output_storage: Option<BlockOutputStore>,
-    pub pty_store: Option<PtyStoreHandle>, // For PTY management
-    pub event_bus: Option<Arc<dyn EventBus>>, // For emitting events
+    pub document_handle: Arc<DocumentHandle>,
+    pub context_resolver: Arc<ContextResolver>,
+    #[builder(default, setter(strip_option(fallback = output_channel_opt)))]
+    output_channel: Option<Arc<dyn ClientMessageChannel<DocumentBridgeMessage>>>,
+    workflow_event_sender: broadcast::Sender<WorkflowEvent>,
+    #[builder(default, setter(strip_option(fallback = ssh_pool_opt)))]
+    pub ssh_pool: Option<SshPoolHandle>,
+    #[builder(default, setter(strip_option(fallback = pty_store_opt)))]
+    pub pty_store: Option<PtyStoreHandle>,
+    #[builder(default, setter(strip_option(fallback = event_bus_opt)))]
+    pub gc_event_bus: Option<Arc<dyn EventBus>>,
 }
 
 impl Debug for ExecutionContext {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ExecutionContext")
             .field("runbook_id", &self.runbook_id)
-            .field("cwd", &self.cwd)
-            .field("env", &self.env)
-            .field("variables", &self.variables)
-            .field("ssh_host", &self.ssh_host)
+            .field("context_resolver", &self.context_resolver)
             .finish()
     }
 }
 
-impl Default for ExecutionContext {
-    fn default() -> Self {
-        Self {
-            runbook_id: Uuid::new_v4(),
-            cwd: std::env::current_dir()
-                .unwrap_or_default()
-                .to_string_lossy()
-                .to_string(),
-            env: HashMap::new(),
-            variables: HashMap::new(),
-            ssh_host: None,
-            document: Vec::new(),
-            ssh_pool: None,
-            output_storage: None,
-            pty_store: None,
-            event_bus: None,
+impl ExecutionContext {
+    pub fn emit_workflow_event(&self, event: WorkflowEvent) -> Result<(), DocumentError> {
+        self.workflow_event_sender
+            .send(event)
+            .map_err(|_| DocumentError::EventSendError)?;
+        Ok(())
+    }
+
+    pub async fn send_output(&self, message: DocumentBridgeMessage) -> Result<(), DocumentError> {
+        if let Some(chan) = &self.output_channel {
+            chan.send(message)
+                .await
+                .map_err(|_| DocumentError::OutputSendError)?;
         }
+        Ok(())
+    }
+
+    pub async fn clear_active_context(&self, block_id: Uuid) -> Result<(), DocumentError> {
+        self.document_handle
+            .update_active_context(block_id, |ctx| *ctx = BlockContext::new())
+            .await
+    }
+
+    pub async fn update_passive_context(
+        &self,
+        block_id: Uuid,
+        update_fn: Box<dyn FnOnce(&mut BlockContext) + Send>,
+    ) -> Result<(), DocumentError> {
+        self.document_handle
+            .update_passive_context(block_id, update_fn)
+            .await
+    }
+
+    pub async fn update_active_context(
+        &self,
+        block_id: Uuid,
+        update_fn: Box<dyn FnOnce(&mut BlockContext) + Send>,
+    ) -> Result<(), DocumentError> {
+        self.document_handle
+            .update_active_context(block_id, update_fn)
+            .await
     }
 }
 
@@ -67,13 +90,19 @@ pub struct CancellationToken {
     receiver: Arc<std::sync::Mutex<Option<oneshot::Receiver<()>>>>,
 }
 
-impl CancellationToken {
-    pub fn new() -> Self {
+impl Default for CancellationToken {
+    fn default() -> Self {
         let (sender, receiver) = oneshot::channel();
         Self {
             sender: Arc::new(std::sync::Mutex::new(Some(sender))),
             receiver: Arc::new(std::sync::Mutex::new(Some(receiver))),
         }
+    }
+}
+
+impl CancellationToken {
+    pub fn new() -> Self {
+        Self::default()
     }
 
     pub fn cancel(&self) {
@@ -117,6 +146,7 @@ pub enum ExecutionStatus {
 #[derive(TS, Debug, Clone, Serialize, Deserialize)]
 #[ts(export)]
 pub struct BlockOutput {
+    pub block_id: Uuid,
     pub stdout: Option<String>,
     pub stderr: Option<String>,
     pub lifecycle: Option<BlockLifecycleEvent>,
@@ -147,46 +177,4 @@ pub enum BlockLifecycleEvent {
     Error(BlockErrorData),
 }
 
-#[async_trait]
-pub trait BlockHandler: Send + Sync {
-    type Block: Send + Sync;
-
-    #[allow(dead_code)] // Used for identification but not currently called
-    fn block_type(&self) -> &'static str;
-
-    /// Get the output variable name from the block if it has one
-    #[allow(dead_code)] // Used for output variable extraction but not currently called
-    fn output_variable(&self, block: &Self::Block) -> Option<String>;
-
-    async fn execute(
-        &self,
-        block: Self::Block,
-        context: ExecutionContext,
-        event_sender: broadcast::Sender<WorkflowEvent>,
-        output_channel: Option<Channel<BlockOutput>>,
-    ) -> Result<ExecutionHandle, Box<dyn std::error::Error + Send + Sync>>;
-
-    #[allow(dead_code)] // Used for cancellation but not currently called directly
-    async fn cancel(
-        &self,
-        handle: &ExecutionHandle,
-    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        handle.cancellation_token.cancel();
-        Ok(())
-    }
-}
-
-#[async_trait]
-pub trait ContextProvider: Send + Sync {
-    type Block: Send + Sync;
-
-    #[allow(dead_code)] // Used for identification but not currently called
-    fn block_type(&self) -> &'static str;
-
-    #[allow(dead_code)] // Used by context builder but not currently called directly
-    async fn apply_context(
-        &self,
-        block: &Self::Block,
-        context: &mut ExecutionContext,
-    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>>;
-}
+// BlockHandler and ContextProvider traits removed - using BlockBehavior::execute() instead

@@ -7,7 +7,6 @@ pub(crate) mod feedback;
 pub(crate) mod kubernetes;
 pub(crate) mod mysql;
 pub(crate) mod pty_store;
-pub(crate) mod ssh_pool;
 pub(crate) mod stats;
 pub(crate) mod template;
 pub(crate) mod updates;

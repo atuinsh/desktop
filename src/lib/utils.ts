@@ -245,11 +245,21 @@ export function toSnakeCase(str: string) {
 }
 
 export function exportPropMatter(type: string, props: any, exportProps: string[]) {
-  let propMatter = exportProps.reduce((acc: any, key: string) => {
-    if (props[key]) 
-      acc[key] = props[key as keyof typeof props];
-    return acc;
-  }, {type});
+  let propMatter = exportProps.reduce(
+    (acc: any, key: string) => {
+      if (props[key]) acc[key] = props[key as keyof typeof props];
+      return acc;
+    },
+    { type },
+  );
 
   return `---\n${stringify(propMatter)}---\n`;
+}
+
+export function withoutProperties<T extends object>(object: T, properties: (keyof T)[]) {
+  const newObj = { ...object };
+  for (const property of properties) {
+    delete newObj[property];
+  }
+  return newObj;
 }

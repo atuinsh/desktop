@@ -4,13 +4,11 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use eyre::Result;
 use std::collections::HashMap;
-use tauri::Emitter;
 use tokio::sync::{mpsc, oneshot};
 
 use uuid::Uuid;
 
 use crate::pty::PtyMetadata;
-use crate::run::pty::PTY_KILL_CHANNEL;
 
 #[async_trait]
 pub trait PtyLike {
@@ -60,16 +58,7 @@ pub struct PtyStoreHandle {
 impl PtyStoreHandle {
     pub fn new() -> Self {
         let (sender, receiver) = mpsc::channel(8);
-        let mut actor = PtyStore::new(receiver, None);
-
-        tauri::async_runtime::spawn(async move { actor.run().await });
-
-        Self { sender }
-    }
-
-    pub fn new_with_app(app_handle: tauri::AppHandle) -> Self {
-        let (sender, receiver) = mpsc::channel(8);
-        let mut actor = PtyStore::new(receiver, Some(app_handle));
+        let mut actor = PtyStore::new(receiver);
 
         tauri::async_runtime::spawn(async move { actor.run().await });
 
@@ -168,18 +157,13 @@ impl Default for PtyStoreHandle {
 
 pub(crate) struct PtyStore {
     pub receiver: mpsc::Receiver<PtyStoreMessage>,
-    app_handle: Option<tauri::AppHandle>,
     pty_sessions: HashMap<Uuid, Box<dyn PtyLike + Send>>,
 }
 
 impl PtyStore {
-    pub fn new(
-        receiver: mpsc::Receiver<PtyStoreMessage>,
-        app_handle: Option<tauri::AppHandle>,
-    ) -> Self {
+    pub fn new(receiver: mpsc::Receiver<PtyStoreMessage>) -> Self {
         Self {
             receiver,
-            app_handle,
             pty_sessions: HashMap::new(),
         }
     }
@@ -246,13 +230,6 @@ impl PtyStore {
                     metadata.pid,
                     e
                 );
-            }
-
-            // Emit pty_kill event for frontend PTY store
-            if let Some(ref app) = self.app_handle {
-                if let Err(e) = app.emit(PTY_KILL_CHANNEL, &metadata) {
-                    log::debug!("Failed to emit pty_kill event: {}", e);
-                }
             }
         }
     }

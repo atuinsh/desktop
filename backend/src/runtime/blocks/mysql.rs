@@ -1,6 +1,8 @@
+pub(crate) mod decode;
+
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use sqlx::{postgres::PgConnectOptions, Column, PgPool, Row, TypeInfo};
+use sqlx::{mysql::MySqlConnectOptions, Column, MySqlPool, Row};
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
@@ -21,7 +23,7 @@ use super::FromDocument;
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, TypedBuilder)]
 #[serde(rename_all = "camelCase")]
-pub struct Postgres {
+pub struct Mysql {
     #[builder(setter(into))]
     pub id: Uuid,
 
@@ -38,7 +40,7 @@ pub struct Postgres {
     pub auto_refresh: u32,
 }
 
-impl FromDocument for Postgres {
+impl FromDocument for Mysql {
     fn from_document(block_data: &serde_json::Value) -> Result<Self, String> {
         let block_id = block_data
             .get("id")
@@ -52,13 +54,13 @@ impl FromDocument for Postgres {
 
         let id = Uuid::parse_str(block_id).map_err(|e| e.to_string())?;
 
-        let postgres = Postgres::builder()
+        let mysql = Mysql::builder()
             .id(id)
             .name(
                 props
                     .get("name")
                     .and_then(|v| v.as_str())
-                    .unwrap_or("Postgres Query")
+                    .unwrap_or("MySQL Query")
                     .to_string(),
             )
             .query(
@@ -83,34 +85,33 @@ impl FromDocument for Postgres {
             )
             .build();
 
-        Ok(postgres)
+        Ok(mysql)
     }
 }
 
-impl Postgres {
-    /// Validate Postgres URI format and connection parameters
-    fn validate_postgres_uri(uri: &str) -> Result<(), String> {
+impl Mysql {
+    /// Validate MySQL URI format and connection parameters
+    fn validate_mysql_uri(uri: &str) -> Result<(), String> {
         if uri.is_empty() {
-            return Err("Postgres URI cannot be empty".to_string());
+            return Err("MySQL URI cannot be empty".to_string());
         }
 
-        if !uri.starts_with("postgres://") && !uri.starts_with("postgresql://") {
+        if !uri.starts_with("mysql://") && !uri.starts_with("mariadb://") {
             return Err(
-                "Invalid Postgres URI format. Must start with 'postgres://' or 'postgresql://'"
-                    .to_string(),
+                "Invalid MySQL URI format. Must start with 'mysql://' or 'mariadb://'".to_string(),
             );
         }
 
         // Try parsing the URI to catch format errors early
-        if let Err(e) = PgConnectOptions::from_str(uri) {
+        if let Err(e) = MySqlConnectOptions::from_str(uri) {
             return Err(format!("Invalid URI format: {}", e));
         }
 
         Ok(())
     }
 
-    /// Template Postgres query using the context resolver
-    fn template_postgres_query(
+    /// Template MySQL query using the context resolver
+    fn template_mysql_query(
         &self,
         context: &ExecutionContext,
     ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
@@ -118,110 +119,27 @@ impl Postgres {
         Ok(rendered)
     }
 
-    /// Convert Postgres row to JSON value
-    fn row_to_json(row: &sqlx::postgres::PgRow) -> Result<Value, sqlx::Error> {
+    /// Convert MySQL row to JSON value using existing decode module
+    fn row_to_json(row: &sqlx::mysql::MySqlRow) -> Result<Value, sqlx::Error> {
         let mut obj = serde_json::Map::new();
 
         for (i, column) in row.columns().iter().enumerate() {
             let column_name = column.name().to_string();
-            let value: Value = match column.type_info().name() {
-                "BOOL" => {
-                    if let Ok(val) = row.try_get::<bool, _>(i) {
-                        json!(val)
-                    } else {
-                        Value::Null
-                    }
-                }
-                "INT2" | "SMALLINT" => {
-                    if let Ok(val) = row.try_get::<i16, _>(i) {
-                        json!(val)
-                    } else {
-                        Value::Null
-                    }
-                }
-                "INT4" | "INTEGER" => {
-                    if let Ok(val) = row.try_get::<i32, _>(i) {
-                        json!(val)
-                    } else {
-                        Value::Null
-                    }
-                }
-                "INT8" | "BIGINT" => {
-                    if let Ok(val) = row.try_get::<i64, _>(i) {
-                        json!(val)
-                    } else {
-                        Value::Null
-                    }
-                }
-                "FLOAT4" | "REAL" => {
-                    if let Ok(val) = row.try_get::<f32, _>(i) {
-                        json!(val)
-                    } else {
-                        Value::Null
-                    }
-                }
-                "FLOAT8" | "DOUBLE PRECISION" => {
-                    if let Ok(val) = row.try_get::<f64, _>(i) {
-                        json!(val)
-                    } else {
-                        Value::Null
-                    }
-                }
-                "TEXT" | "VARCHAR" | "CHAR" | "NAME" => {
-                    if let Ok(val) = row.try_get::<String, _>(i) {
-                        json!(val)
-                    } else {
-                        Value::Null
-                    }
-                }
-                "UUID" => {
-                    if let Ok(val) = row.try_get::<Uuid, _>(i) {
-                        json!(val.to_string())
-                    } else {
-                        Value::Null
-                    }
-                }
-                "BYTEA" => {
-                    if let Ok(val) = row.try_get::<Vec<u8>, _>(i) {
-                        json!(base64::encode(val))
-                    } else {
-                        Value::Null
-                    }
-                }
-                "TIMESTAMP" | "TIMESTAMPTZ" | "DATE" | "TIME" => {
-                    // For date/time types, just convert to string
-                    if let Ok(val) = row.try_get::<String, _>(i) {
-                        json!(val)
-                    } else {
-                        Value::Null
-                    }
-                }
-                "JSON" | "JSONB" => {
-                    if let Ok(val) = row.try_get::<Value, _>(i) {
-                        val
-                    } else {
-                        Value::Null
-                    }
-                }
-                _ => {
-                    // Try to get as string for unknown types
-                    if let Ok(val) = row.try_get::<String, _>(i) {
-                        json!(val)
-                    } else {
-                        Value::Null
-                    }
-                }
-            };
+            let raw_value = row.try_get_raw(i)?;
+
+            // Use existing MySQL decode function
+            let value = decode::to_json(raw_value).unwrap_or(Value::Null);
+
             obj.insert(column_name, value);
         }
 
         Ok(Value::Object(obj))
     }
 
-    /// Execute a single Postgres statement
+    /// Execute a single MySQL statement
     async fn execute_statement(
         &self,
-        pool: &PgPool,
+        pool: &MySqlPool,
         statement: &str,
         context: &ExecutionContext,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -237,8 +155,13 @@ impl Postgres {
             .unwrap_or("")
             .to_lowercase();
 
-        if first_word == "select" || first_word == "with" {
-            // Handle SELECT query or CTE
+        if first_word == "select"
+            || first_word == "with"
+            || first_word == "show"
+            || first_word == "describe"
+            || first_word == "explain"
+        {
+            // Handle SELECT query or other queries that return results
             let rows = sqlx::query(statement)
                 .fetch_all(pool)
                 .await
@@ -289,6 +212,7 @@ impl Postgres {
             // Send execution result as structured JSON object
             let result_json = json!({
                 "rowsAffected": result.rows_affected(),
+                "lastInsertId": result.last_insert_id(),
             });
 
             let _ = context
@@ -309,7 +233,7 @@ impl Postgres {
         Ok(())
     }
 
-    async fn run_postgres_query(
+    async fn run_mysql_query(
         &self,
         context: ExecutionContext,
         cancellation_token: CancellationToken,
@@ -335,13 +259,13 @@ impl Postgres {
             .await;
 
         // Template the query using context resolver
-        let query = self.template_postgres_query(&context).unwrap_or_else(|e| {
-            eprintln!("Template error in Postgres query {}: {}", block_id, e);
+        let query = self.template_mysql_query(&context).unwrap_or_else(|e| {
+            eprintln!("Template error in MySQL query {}: {}", block_id, e);
             self.query.clone() // Fallback to original query
         });
 
         // Validate URI format
-        if let Err(e) = Self::validate_postgres_uri(&self.uri) {
+        if let Err(e) = Self::validate_mysql_uri(&self.uri) {
             // Send error lifecycle event
             let _ = context
                 .send_output(
@@ -376,11 +300,11 @@ impl Postgres {
             )
             .await;
 
-        // Create Postgres connection pool with reliable timeout using tokio::select!
+        // Create MySQL connection pool with reliable timeout using tokio::select!
         let pool = {
             let connection_task = async {
-                let opts = PgConnectOptions::from_str(&self.uri)?;
-                PgPool::connect_with(opts).await
+                let opts = MySqlConnectOptions::from_str(&self.uri)?;
+                MySqlPool::connect_with(opts).await
             };
 
             let timeout_task = tokio::time::sleep(Duration::from_secs(10));
@@ -392,26 +316,28 @@ impl Postgres {
                             // Send successful connection status
                                 let _ = context.send_output(BlockOutput {
                                     block_id: self.id,
-                        stdout: Some("Connected to database successfully".to_string()),
+                                    stdout: Some("Connected to database successfully".to_string()),
                                     stderr: None,
                                     binary: None,
                                     object: None,
                                     lifecycle: None,
-                                }.into()).await;
+                                }.into(),
+                                ).await;
                             pool
                         },
                         Err(e) => {
                             let error_msg = format!("Failed to connect to database: {}", e);
                                 let _ = context.send_output(BlockOutput {
                                     block_id: self.id,
-                        stdout: None,
+                                    stdout: None,
                                     stderr: Some(error_msg.clone()),
                                     binary: None,
                                     object: None,
                                     lifecycle: Some(BlockLifecycleEvent::Error(BlockErrorData {
                                         message: error_msg.clone(),
                                     })),
-                                }.into()).await;
+                                }.into(),
+                                ).await;
                             return Err(error_msg.into());
                         }
                     }
@@ -420,14 +346,15 @@ impl Postgres {
                     let error_msg = "Database connection timed out after 10 seconds. Please check your connection string and network.";
                         let _ = context.send_output(BlockOutput {
                             block_id: self.id,
-                        stdout: None,
+                            stdout: None,
                             stderr: Some(error_msg.to_string()),
                             binary: None,
                             object: None,
                             lifecycle: Some(BlockLifecycleEvent::Error(BlockErrorData {
                                 message: error_msg.to_string(),
                             })),
-                        }.into()).await;
+                        }.into(),
+                        ).await;
                     return Err(error_msg.into());
                 }
             }
@@ -530,15 +457,16 @@ impl Postgres {
 
                     // Send completion events
                     let _ = context.emit_workflow_event(WorkflowEvent::BlockFinished { id: block_id });
-                        let _ = context.send_output(BlockOutput {
-                            block_id: self.id,
+                    let _ = context.send_output(BlockOutput {
+                        block_id: self.id,
                         stdout: None,
-                            stderr: None,
-                            binary: None,
-                            object: None,
-                            lifecycle: Some(BlockLifecycleEvent::Cancelled),
-                        }.into()).await;
-                    return Err("Postgres query execution cancelled".into());
+                        stderr: None,
+                        binary: None,
+                        object: None,
+                        lifecycle: Some(BlockLifecycleEvent::Cancelled),
+                    }.into(),
+                    ).await;
+                    return Err("MySQL query execution cancelled".into());
                 }
                 result = execution_task => {
                     // Close the pool after execution
@@ -593,9 +521,9 @@ impl Postgres {
 }
 
 #[async_trait::async_trait]
-impl BlockBehavior for Postgres {
+impl BlockBehavior for Mysql {
     fn into_block(self) -> Block {
-        Block::Postgres(self)
+        Block::Mysql(self)
     }
 
     async fn execute(
@@ -627,7 +555,7 @@ impl BlockBehavior for Postgres {
             }
 
             let result = self
-                .run_postgres_query(
+                .run_mysql_query(
                     context_clone.clone(),
                     handle_clone.cancellation_token.clone(),
                 )
@@ -659,7 +587,7 @@ impl BlockBehavior for Postgres {
                         })
                         .await;
 
-                    ExecutionStatus::Success("Postgres query completed successfully".to_string())
+                    ExecutionStatus::Success("MySQL query completed successfully".to_string())
                 }
                 Err(e) => {
                     // Emit BlockFailed event via Grand Central
