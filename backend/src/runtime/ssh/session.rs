@@ -40,6 +40,54 @@ pub enum Authentication {
     Password(String, String),
 }
 
+/// SSH authentication options
+#[derive(Debug, Clone, Default)]
+pub struct SshAuth {
+    pub username: Option<String>,
+    pub password: Option<String>,
+    pub key_path: Option<PathBuf>,
+    pub custom_agent_socket: Option<String>,
+}
+
+impl SshAuth {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn with_username(mut self, username: impl Into<String>) -> Self {
+        self.username = Some(username.into());
+        self
+    }
+
+    pub fn with_password(mut self, password: impl Into<String>) -> Self {
+        self.password = Some(password.into());
+        self
+    }
+
+    pub fn with_key_path(mut self, key_path: PathBuf) -> Self {
+        self.key_path = Some(key_path);
+        self
+    }
+
+    pub fn with_custom_agent_socket(mut self, socket: impl Into<String>) -> Self {
+        self.custom_agent_socket = Some(socket.into());
+        self
+    }
+
+    fn to_authentication(&self) -> Option<Authentication> {
+        if let Some(ref password) = self.password {
+            Some(Authentication::Password(
+                self.username.clone().unwrap_or_default(),
+                password.clone(),
+            ))
+        } else if let Some(ref key_path) = self.key_path {
+            Some(Authentication::Key(key_path.clone()))
+        } else {
+            None
+        }
+    }
+}
+
 /// SSH client implementation for russh
 pub struct Client;
 
@@ -414,19 +462,29 @@ impl Session {
         }
     }
 
-    pub async fn agent_auth(&mut self, username: &str) -> Result<bool> {
+    pub async fn agent_auth(
+        &mut self,
+        username: &str,
+        custom_agent_socket: Option<String>,
+    ) -> Result<bool> {
         log::info!("Attempting SSH agent authentication for {username}");
 
-        // Try to connect to SSH agent, using custom IdentityAgent if specified
+        // Try to connect to SSH agent with the following priority:
+        // 1. identity_agent (from SSH config - host-specific)
+        // 2. custom_agent_socket (from global settings)
+        // 3. SSH_AUTH_SOCK environment variable (default)
         let agent_result = if let Some(ref identity_agent) = self.ssh_config.identity_agent {
-            log::info!("Using custom IdentityAgent: {identity_agent}");
-            // Connect to custom agent socket
+            log::info!("Using IdentityAgent from SSH config: {identity_agent}");
             russh::keys::agent::client::AgentClient::connect_uds(identity_agent)
+                .await
+                .map_err(|_| russh::Error::NotAuthenticated)
+        } else if let Some(ref socket) = custom_agent_socket {
+            log::info!("Using custom agent socket from settings: {socket}");
+            russh::keys::agent::client::AgentClient::connect_uds(socket)
                 .await
                 .map_err(|_| russh::Error::NotAuthenticated)
         } else {
             log::info!("Using default SSH agent from environment");
-            // Use default SSH agent from environment
             russh::keys::agent::client::AgentClient::connect_env()
                 .await
                 .map_err(|_| russh::Error::NotAuthenticated)
@@ -475,24 +533,24 @@ impl Session {
         }
     }
 
-    /// Authenticate the session. If a username is provided, use it for authentication - otherwise we will use SSH config or "root"
+    /// Authenticate the session using the provided auth options
     ///
     /// The authentication order matches the ssh command:
-    /// 1. SSH Agent authentication
+    /// 1. SSH Agent authentication (priority: SSH config IdentityAgent → global custom_agent_socket → SSH_AUTH_SOCK env)
     /// 2. SSH config identity files
     /// 3. Default SSH keys (id_rsa, id_ecdsa, id_ecdsa_sk, id_ed25519, id_ed25519_sk, id_xmss, id_dsa)
     /// 4. Provided authentication method (password or key)
-    pub async fn authenticate(
-        &mut self,
-        auth: Option<Authentication>,
-        username: Option<&str>,
-    ) -> Result<()> {
+    pub async fn authenticate(&mut self, ssh_auth: &SshAuth) -> Result<()> {
         // Clone values we need before any mutable borrows
         let config_username = self.ssh_config.username.clone();
         let identity_files = self.ssh_config.identity_files.clone();
 
         // Use provided username, or SSH config username, or default to "root"
-        let username = username.or(config_username.as_deref()).unwrap_or("root");
+        let username = ssh_auth
+            .username
+            .as_deref()
+            .or(config_username.as_deref())
+            .unwrap_or("root");
 
         log::info!(
             "Starting SSH authentication for {username}@{}",
@@ -505,7 +563,10 @@ impl Session {
 
         // 1. attempt ssh agent auth
         log::info!("Step 1/4: Trying SSH agent authentication");
-        if self.agent_auth(username).await? {
+        if self
+            .agent_auth(username, ssh_auth.custom_agent_socket.clone())
+            .await?
+        {
             log::info!("✓ SSH authentication successful with agent");
             return Ok(());
         }
@@ -549,6 +610,7 @@ impl Session {
 
         // 4. whatever the user provided
         log::info!("Step 4/4: Trying explicitly provided authentication");
+        let auth = ssh_auth.to_authentication();
         match auth {
             Some(Authentication::Password(_user, password)) => {
                 log::info!("Trying password authentication");

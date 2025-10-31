@@ -17,6 +17,7 @@ import { WebglAddon } from "@xterm/addon-webgl";
 import "@xterm/xterm/css/xterm.css";
 import { findAllParentsOfType, findFirstParentOfType, getCurrentDirectory } from "@/lib/blocks/exec.ts";
 import { templateString } from "@/state/templates.ts";
+import { Settings } from "@/state/settings.ts";
 import { Command } from "@codemirror/view";
 import { ScriptBlock as ScriptBlockType } from "@/lib/workflow/blocks/script.ts";
 import { default as BlockType } from "@/lib/workflow/blocks/block.ts";
@@ -32,7 +33,6 @@ import { useBlockDeleted } from "@/lib/buses/editor.ts";
 import { useBlockInserted } from "@/lib/buses/editor.ts";
 import track_event from "@/tracking";
 import { invoke } from "@tauri-apps/api/core";
-import { Settings } from "@/state/settings.ts";
 import PlayButton from "@/lib/blocks/common/PlayButton.tsx";
 import CodeEditor, { TabAutoComplete } from "@/lib/blocks/common/CodeEditor/CodeEditor.tsx";
 import Block from "@/lib/blocks/common/Block.tsx";
@@ -336,12 +336,15 @@ const ScriptBlock = ({
           onStop();
         });
 
+        const customAgentSocket = await Settings.sshAgentSocket();
+
         await invoke<string>("ssh_exec", {
           host: host,
           username: username,
           command: command,
           interpreter: interpreterCommand,
           channel: channel,
+          customAgentSocket,
         });
         SSHBus.get().updateConnectionStatus(connectionBlock.props.userHost, "success");
       } catch (error) {

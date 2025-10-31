@@ -3,6 +3,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import SSHBus from "@/lib/buses/ssh";
 import { addToast } from "@heroui/react";
+import { Settings } from "@/state/settings";
 
 export async function sshConnect(userHost: string): Promise<void> {
   let username: string | undefined;
@@ -21,7 +22,14 @@ export async function sshConnect(userHost: string): Promise<void> {
     // Set status to idle while connecting
     SSHBus.get().updateConnectionStatus(userHost, "idle");
     
-    await invoke("ssh_connect", { username, host });
+    // Get custom SSH agent socket from settings (if configured)
+    const customAgentSocket = await Settings.sshAgentSocket();
+    
+    await invoke("ssh_connect", { 
+      username, 
+      host,
+      customAgentSocket,
+    });
     
     // If successful, update the status
     SSHBus.get().updateConnectionStatus(userHost, "success");

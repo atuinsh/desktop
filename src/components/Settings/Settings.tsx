@@ -782,6 +782,35 @@ const AISettings = () => {
   );
 };
 
+const SSHSettings = () => {
+  const [sshAgentSocket, setSshAgentSocket, socketLoading] = useSettingsState(
+    "ssh_agent_socket",
+    "",
+    Settings.sshAgentSocket,
+    Settings.sshAgentSocket,
+  );
+
+  if (socketLoading) return <Spinner />;
+
+  return (
+    <Card shadow="sm">
+      <CardBody className="flex flex-col gap-4">
+        <h2 className="text-xl font-semibold">SSH</h2>
+        <p className="text-sm text-default-500">Configure SSH connection settings</p>
+
+        <SettingInput
+          type="text"
+          label="SSH Agent Socket"
+          value={sshAgentSocket || ""}
+          onChange={setSshAgentSocket}
+          placeholder="/run/user/1000/keyring/ssh or ~/custom-agent.sock"
+          description="Custom SSH agent socket path (leave empty to use SSH_AUTH_SOCK environment variable)"
+        />
+      </CardBody>
+    </Card>
+  );
+};
+
 const UserSettings = () => {
   const user = useStore((state) => state.user);
   const refreshUser = useStore((state) => state.refreshUser);
@@ -874,6 +903,7 @@ const SettingsPanel = () => {
       <div className="flex flex-col gap-4">
         <GeneralSettings />
         <RunbookSettings />
+        <SSHSettings />
         <AISettings />
         <UserSettings />
       </div>

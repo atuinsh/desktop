@@ -1,6 +1,6 @@
 use crate::pty::PtyMetadata;
 use crate::run::pty::PTY_OPEN_CHANNEL;
-use crate::runtime::ssh::session::Authentication;
+use crate::runtime::ssh::session::SshAuth;
 use crate::runtime::ssh_pool::SshPty;
 use crate::state::AtuinState;
 
@@ -17,26 +17,29 @@ pub async fn ssh_connect(
     username: Option<String>,
     password: Option<String>,
     key_path: Option<String>,
+    custom_agent_socket: Option<String>,
 ) -> Result<(), String> {
     let ssh_pool = state.ssh_pool();
 
-    // Determine authentication method
-    let auth = match (password, key_path) {
-        (Some(pass), _) => Some(Authentication::Password(
-            username.clone().unwrap_or_default(),
-            pass,
-        )),
-        (_, Some(path)) => Some(Authentication::Key(PathBuf::from(path))),
-        _ => None,
-    };
+    // Build SshAuth from provided parameters
+    let mut ssh_auth = SshAuth::new();
+    if let Some(username) = username {
+        ssh_auth = ssh_auth.with_username(username);
+    }
+    if let Some(password) = password {
+        ssh_auth = ssh_auth.with_password(password);
+    }
+    if let Some(key_path) = key_path {
+        ssh_auth = ssh_auth.with_key_path(PathBuf::from(key_path));
+    }
+    if let Some(socket) = custom_agent_socket {
+        ssh_auth = ssh_auth.with_custom_agent_socket(socket);
+    }
 
-    ssh_pool
-        .connect(&host, username.as_deref(), auth)
-        .await
-        .map_err(|e| {
-            log::error!("Failed to connect to SSH host: {e}");
-            e.to_string()
-        })?;
+    ssh_pool.connect(&host, ssh_auth).await.map_err(|e| {
+        log::error!("Failed to connect to SSH host: {e}");
+        e.to_string()
+    })?;
 
     Ok(())
 }
@@ -73,14 +76,24 @@ pub async fn ssh_exec(
     state: tauri::State<'_, AtuinState>,
     app: tauri::AppHandle,
     host: String,
-    username: Option<&str>,
+    username: Option<String>,
     channel: &str,
     command: &str,
     interpreter: &str,
+    custom_agent_socket: Option<String>,
 ) -> Result<String, String> {
     let ssh_pool = state.ssh_pool();
     let (sender, mut receiver) = tokio::sync::mpsc::channel(100);
     let (result_tx, result_rx) = tokio::sync::oneshot::channel();
+
+    // Build SshAuth from provided parameters
+    let mut ssh_auth = SshAuth::new();
+    if let Some(username) = username {
+        ssh_auth = ssh_auth.with_username(username);
+    }
+    if let Some(socket) = custom_agent_socket {
+        ssh_auth = ssh_auth.with_custom_agent_socket(socket);
+    }
 
     // TODO(ellie): refactor the local script executor to work in the same way as the ssh remote does
     // this will allow us to use similar code for both local and remote execution, and have more reliable
@@ -89,7 +102,7 @@ pub async fn ssh_exec(
     ssh_pool
         .exec(
             &host,
-            username,
+            ssh_auth,
             interpreter,
             command,
             channel,
@@ -136,21 +149,31 @@ pub async fn ssh_open_pty(
     state: tauri::State<'_, AtuinState>,
     app: tauri::AppHandle,
     host: &str,
-    username: Option<&str>,
+    username: Option<String>,
     channel: &str,
     runbook: &str,
     block: &str,
     width: u16,
     height: u16,
+    custom_agent_socket: Option<String>,
 ) -> Result<(), String> {
     let ssh_pool = state.ssh_pool();
+
+    // Build SshAuth from provided parameters
+    let mut ssh_auth = SshAuth::new();
+    if let Some(username) = username {
+        ssh_auth = ssh_auth.with_username(username);
+    }
+    if let Some(socket) = custom_agent_socket {
+        ssh_auth = ssh_auth.with_custom_agent_socket(socket);
+    }
 
     // Create channels for bidirectional communication
     let (output_sender, mut output_receiver) = tokio::sync::mpsc::channel(100);
 
     // Start the PTY session
     let pty_tx = ssh_pool
-        .open_pty(host, username, channel, output_sender, width, height)
+        .open_pty(host, ssh_auth, channel, output_sender, width, height)
         .await
         .map_err(|e| e.to_string())?;
 

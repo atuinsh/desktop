@@ -10,7 +10,7 @@ use tokio::time::interval;
 
 use crate::pty::PtyMetadata;
 use crate::runtime::ssh::pool::Pool;
-use crate::runtime::ssh::session::{Authentication, Session};
+use crate::runtime::ssh::session::{Session, SshAuth};
 use eyre::Result;
 use std::sync::Arc;
 
@@ -52,8 +52,7 @@ impl PtyLike for SshPty {
 pub enum SshPoolMessage {
     Connect {
         host: String,
-        username: Option<String>,
-        auth: Option<Authentication>,
+        ssh_auth: SshAuth,
         reply_to: oneshot::Sender<Result<Arc<Session>>>,
     },
     Disconnect {
@@ -69,7 +68,7 @@ pub enum SshPoolMessage {
     },
     Exec {
         host: String,
-        username: Option<String>,
+        ssh_auth: SshAuth,
         interpreter: String,
         command: String,
         channel: String,
@@ -92,7 +91,7 @@ pub enum SshPoolMessage {
     },
     OpenPty {
         host: String,
-        username: Option<String>,
+        ssh_auth: SshAuth,
         channel: String,
         width: u16,
         height: u16,
@@ -136,17 +135,11 @@ impl SshPoolHandle {
         Self { sender }
     }
 
-    pub async fn connect(
-        &self,
-        host: &str,
-        username: Option<&str>,
-        auth: Option<Authentication>,
-    ) -> Result<Arc<Session>> {
+    pub async fn connect(&self, host: &str, ssh_auth: SshAuth) -> Result<Arc<Session>> {
         let (sender, receiver) = oneshot::channel();
         let msg = SshPoolMessage::Connect {
             host: host.to_string(),
-            username: username.map(|s| s.to_string()),
-            auth,
+            ssh_auth,
             reply_to: sender,
         };
 
@@ -184,11 +177,10 @@ impl SshPoolHandle {
         receiver.await
     }
 
-    #[allow(clippy::too_many_arguments)]
     pub async fn exec(
         &self,
         host: &str,
-        username: Option<&str>,
+        ssh_auth: SshAuth,
         interpreter: &str,
         command: &str,
         channel: &str,
@@ -198,7 +190,7 @@ impl SshPoolHandle {
         let (sender, receiver) = oneshot::channel();
         let msg = SshPoolMessage::Exec {
             host: host.to_string(),
-            username: username.map(|u| u.to_string()),
+            ssh_auth,
             interpreter: interpreter.to_string(),
             command: command.to_string(),
             channel: channel.to_string(),
@@ -234,7 +226,7 @@ impl SshPoolHandle {
     pub async fn open_pty(
         &self,
         host: &str,
-        username: Option<&str>,
+        ssh_auth: SshAuth,
         channel: &str,
         output_stream: mpsc::Sender<String>,
         width: u16,
@@ -244,7 +236,7 @@ impl SshPoolHandle {
 
         let msg = SshPoolMessage::OpenPty {
             host: host.to_string(),
-            username: username.map(|u| u.to_string()),
+            ssh_auth,
             channel: channel.to_string(),
             output_stream,
             reply_to: reply_sender,
@@ -372,11 +364,10 @@ impl SshPool {
         match message {
             SshPoolMessage::Connect {
                 host,
-                username,
-                auth,
+                ssh_auth,
                 reply_to,
             } => {
-                let result = self.pool.connect(&host, username.as_deref(), auth).await;
+                let result = self.pool.connect(&host, &ssh_auth).await;
 
                 let _ = reply_to.send(result);
             }
@@ -399,7 +390,7 @@ impl SshPool {
             }
             SshPoolMessage::Exec {
                 host,
-                username,
+                ssh_auth,
                 interpreter,
                 command,
                 channel,
@@ -407,11 +398,11 @@ impl SshPool {
                 reply_to,
                 result_tx,
             } => {
-                let username = username.unwrap_or("root".to_string());
-                let session = self
-                    .pool
-                    .connect(&host, Some(username.as_str()), None)
-                    .await;
+                let username = ssh_auth
+                    .username
+                    .clone()
+                    .unwrap_or_else(|| "root".to_string());
+                let session = self.pool.connect(&host, &ssh_auth).await;
 
                 let session = match session {
                     Ok(session) => session,
@@ -492,18 +483,18 @@ impl SshPool {
             }
             SshPoolMessage::OpenPty {
                 host,
-                username,
+                ssh_auth,
                 channel,
                 output_stream,
                 reply_to,
                 width,
                 height,
             } => {
-                let username = username.unwrap_or("root".to_string());
-                let session = self
-                    .pool
-                    .connect(&host, Some(username.as_str()), None)
-                    .await;
+                let username = ssh_auth
+                    .username
+                    .clone()
+                    .unwrap_or_else(|| "root".to_string());
+                let session = self.pool.connect(&host, &ssh_auth).await;
 
                 let session = match session {
                     Ok(session) => session,
