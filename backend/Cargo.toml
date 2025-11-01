@@ -122,6 +122,7 @@ features = ["sqlite"] # or "postgres", or "mysql"
 version = "2.3.0"
 
 [dev-dependencies]
+httpmock = "0.8"
 
 [target."cfg(target_os = \"macos\")".dependencies]
 cocoa = "0.26"
