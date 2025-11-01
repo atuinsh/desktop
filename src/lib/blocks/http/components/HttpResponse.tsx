@@ -6,6 +6,7 @@ import { githubDarkTheme } from "@uiw/react-json-view/githubDark";
 
 import "../style.css";
 import ResultTable from "../../common/ResultTable";
+import { HttpResponse } from "@/rs-bindings/HttpResponse";
 
 const renderBody = (body: string, headers: any, colorMode: "dark" | "light") => {
   let contentType = headers["content-type"];
@@ -31,7 +32,14 @@ const renderBody = (body: string, headers: any, colorMode: "dark" | "light") => 
   return <pre className="whitespace-pre-wrap break-words text-sm select-text">{body}</pre>;
 };
 
-const HttpResponse = ({ response, error, dismiss, colorMode }: any) => {
+interface HttpResponseProps {
+  response: HttpResponse;
+  error: string | null;
+  dismiss: () => void;
+  colorMode: "dark" | "light";
+}
+
+const HttpResponseComponent = ({ response, error, dismiss, colorMode }: HttpResponseProps) => {
   const copyToClipboard = async (text: string) => {
     try {
       await navigator.clipboard.writeText(text);
@@ -61,7 +69,7 @@ const HttpResponse = ({ response, error, dismiss, colorMode }: any) => {
         </CardHeader>
         <CardBody className="p-4">
           <p className="text-danger-600 select-text">
-            {error.message ||
+            {error ||
               "An error occurred while making the request. Please check your connection and try again."}
           </p>
         </CardBody>
@@ -73,9 +81,11 @@ const HttpResponse = ({ response, error, dismiss, colorMode }: any) => {
     return null;
   }
 
-  const { status, statusText, headers, data } = response;
+  const { status, statusText, headers, body } = response;
 
-  const headerEntries = Array.from(Object.entries(headers));
+  const headerEntries = Array.from(Object.entries(headers)).toSorted((a, b) =>
+    a[0].localeCompare(b[0]),
+  );
 
   const getStatusInfo = (status: any) => {
     if (status >= 200 && status < 300) return { color: "success", icon: CheckCircle };
@@ -107,13 +117,11 @@ const HttpResponse = ({ response, error, dismiss, colorMode }: any) => {
           <Tooltip content="Request duration">
             <div className="flex items-center gap-1 text-default-500">
               <Clock size={14} />
-              <span className="text-sm select-text">
-                {parseFloat(response.duration.toFixed(3))}ms
-              </span>
+              <span className="text-sm select-text">{(response.duration * 1000).toFixed(3)}ms</span>
             </div>
           </Tooltip>
           <span className="text-sm text-default-400 select-text">
-            {response.time.toLocaleString()}
+            {new Date(response.time).toLocaleString()}
           </span>
         </div>
       </CardHeader>
@@ -137,7 +145,7 @@ const HttpResponse = ({ response, error, dismiss, colorMode }: any) => {
               <Copy size={14} />
             </Button>
           </div>
-          <div className="bg-default-50 rounded-lg p-3">
+          <div className="bg-default-50 rounded-lg p-3 h-[200px]">
             <ResultTable
               results={headerEntries}
               width={"100%"}
@@ -161,12 +169,12 @@ const HttpResponse = ({ response, error, dismiss, colorMode }: any) => {
         <div>
           <div className="flex justify-between items-center mb-2">
             <h3 className="text-sm font-semibold text-default-700">Response Body</h3>
-            <Button variant="light" size="sm" isIconOnly onClick={() => copyToClipboard(data)}>
+            <Button variant="light" size="sm" isIconOnly onClick={() => copyToClipboard(body)}>
               <Copy size={14} />
             </Button>
           </div>
           <div className="bg-default-50 rounded-lg p-4 overflow-auto max-h-96">
-            {renderBody(data, headers, colorMode)}
+            {renderBody(body, headers, colorMode)}
           </div>
         </div>
       </CardBody>
@@ -174,4 +182,4 @@ const HttpResponse = ({ response, error, dismiss, colorMode }: any) => {
   );
 };
 
-export default HttpResponse;
+export default HttpResponseComponent;

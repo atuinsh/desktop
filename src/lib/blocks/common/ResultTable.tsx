@@ -27,6 +27,7 @@ interface ResultTableProps {
 
 export default function ResultTable({ columns, results, setColumns, width }: ResultTableProps) {
   const gridRef = useRef<AgGridReact>(null);
+  const cellPopupRef = useRef<HTMLDivElement>(null);
   const colorMode = useStore((state) => state.functionalColorMode);
   const [gridApi, setGridApi] = useState<GridApi | null>(null);
   const [cellPopup, setCellPopup] = useState<{
@@ -116,8 +117,8 @@ export default function ResultTable({ columns, results, setColumns, width }: Res
       value === null || value === undefined
         ? "null"
         : typeof value === "object"
-          ? JSON.stringify(value, null, 2)
-          : String(value);
+        ? JSON.stringify(value, null, 2)
+        : String(value);
 
     // Get the cell element position
     const cellElement = event.event?.target as HTMLElement;
@@ -129,6 +130,16 @@ export default function ResultTable({ columns, results, setColumns, width }: Res
         x: rect.left,
         y: rect.top - 10,
       });
+
+      setTimeout(() => {
+        if (cellPopupRef.current) {
+          const selection = window.getSelection();
+          const range = document.createRange();
+          range.selectNodeContents(cellPopupRef.current);
+          selection?.removeAllRanges();
+          selection?.addRange(range);
+        }
+      }, 100);
     }
   };
 
@@ -218,6 +229,7 @@ export default function ResultTable({ columns, results, setColumns, width }: Res
       {cellPopup &&
         createPortal(
           <div
+            ref={cellPopupRef}
             className="cell-popup fixed z-50 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded shadow-lg p-2 max-w-sm max-h-48 overflow-auto"
             style={{
               left: cellPopup.x,
