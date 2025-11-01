@@ -335,13 +335,10 @@ export const RunBlock = ({
           {!isFullscreen && pty && execution.isRunning && (
             <div className="overflow-hidden transition-all duration-300 ease-in-out min-w-0 max-h-[400px]">
               <Terminal
-                block_id={terminal.id}
                 pty={pty.pid}
-                script={terminal.code}
                 setCommandRunning={setCommandRunning}
                 setExitCode={setExitCode}
                 setCommandDuration={setCommandDuration}
-                editor={editor}
               />
             </div>
           )}
