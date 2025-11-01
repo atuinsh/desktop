@@ -109,6 +109,7 @@ export interface ClientExecutionHandle {
   isSuccess: boolean;
   isError: boolean;
   isCancelled: boolean;
+  error: string | null;
   execute: () => Promise<void>;
   cancel: () => Promise<void>;
 }
@@ -119,6 +120,7 @@ export function useBlockExecution(blockId: string): ClientExecutionHandle {
   const documentBridge = useDocumentBridge();
 
   const [lifecycle, setLifecycle] = useState<ExecutionLifecycle>("idle");
+  const [error, setError] = useState<string | null>(null);
   const [executionId, setExecutionId] = useState<string | null>(null);
 
   const startExecution = useCallback(async () => {
@@ -131,6 +133,7 @@ export function useBlockExecution(blockId: string): ClientExecutionHandle {
       return;
     }
 
+    setError(null);
     documentBridge.logger.info(
       `Starting execution of block ${blockId} in runbook ${documentBridge.runbookId}`,
     );
@@ -180,21 +183,26 @@ export function useBlockExecution(blockId: string): ClientExecutionHandle {
     );
     await cancelExecution(executionId);
     setExecutionId(null);
-  }, [executionId]);
+    setError(null);
+  }, [documentBridge, blockId, executionId, lifecycle]);
 
   const handleBlockOutput = useCallback((output: BlockOutput) => {
     switch (output.lifecycle?.type) {
       case "finished":
         setLifecycle("success");
+        setError(null);
         break;
       case "cancelled":
         setLifecycle("cancelled");
+        setError(null);
         break;
       case "error":
         setLifecycle("error");
+        setError(output.lifecycle?.data.message);
         break;
       case "started":
         setLifecycle("running");
+        setError(null);
         break;
 
       default:
@@ -212,6 +220,7 @@ export function useBlockExecution(blockId: string): ClientExecutionHandle {
     isSuccess: lifecycle === "success",
     isError: lifecycle === "error",
     isCancelled: lifecycle === "cancelled",
+    error: error ?? null,
     execute: startExecution,
     cancel: stopExecution,
   };
