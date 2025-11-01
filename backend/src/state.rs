@@ -1,5 +1,4 @@
 use eyre::Result;
-use minijinja::Environment;
 use std::{
     collections::HashMap,
     path::PathBuf,
@@ -61,11 +60,6 @@ pub(crate) struct AtuinState {
     // i cba it works fine
     pub child_processes: Arc<RwLock<HashMap<uuid::Uuid, Arc<RwLock<Child>>>>>,
 
-    /// Map a runbook id, to a Jinja environment
-    /// In the future it may make sense to map to our own abstracted
-    /// environment state, but atm this is fine.
-    pub template_state: RwLock<HashMap<Uuid, Arc<Environment<'static>>>>,
-
     // Persisted to the keychain, but cached here so that
     // we don't keep asking the user for keychain access.
     // Map of user -> password
@@ -112,7 +106,6 @@ impl AtuinState {
             gc_event_sender: Mutex::new(None),
             event_receiver: Arc::new(tokio::sync::Mutex::new(None)),
             child_processes: Default::default(),
-            template_state: Default::default(),
             runbooks_api_token: Default::default(),
             runbook_output_variables: Default::default(),
             block_executions: Default::default(),

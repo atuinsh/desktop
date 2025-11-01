@@ -46,10 +46,7 @@ pub enum HttpVerb {
 
 impl HttpVerb {
     pub fn is_body_allowed(&self) -> bool {
-        match self {
-            HttpVerb::Get | HttpVerb::Head => false,
-            _ => true,
-        }
+        !matches!(self, HttpVerb::Get | HttpVerb::Head)
     }
 }
 
@@ -319,9 +316,9 @@ struct HttpResponse {
     pub body: String,
 }
 
-impl Into<Method> for HttpVerb {
-    fn into(self) -> Method {
-        match self {
+impl From<HttpVerb> for Method {
+    fn from(verb: HttpVerb) -> Self {
+        match verb {
             HttpVerb::Get => Method::GET,
             HttpVerb::Post => Method::POST,
             HttpVerb::Put => Method::PUT,

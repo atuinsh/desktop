@@ -686,19 +686,21 @@ impl Script {
         if let Err(e) = exec_result {
             let error_msg = format!("Failed to start SSH execution: {}", e);
             let _ = context.emit_workflow_event(WorkflowEvent::BlockFinished { id: self.id });
-            let _ = context.send_output(
-                BlockOutput {
-                    block_id: self.id,
-                    stdout: None,
-                    stderr: None,
-                    binary: None,
-                    object: None,
-                    lifecycle: Some(BlockLifecycleEvent::Error(BlockErrorData {
-                        message: error_msg.clone(),
-                    })),
-                }
-                .into(),
-            );
+            let _ = context
+                .send_output(
+                    BlockOutput {
+                        block_id: self.id,
+                        stdout: None,
+                        stderr: None,
+                        binary: None,
+                        object: None,
+                        lifecycle: Some(BlockLifecycleEvent::Error(BlockErrorData {
+                            message: error_msg.clone(),
+                        })),
+                    }
+                    .into(),
+                )
+                .await;
             return (Err(error_msg.into()), String::new());
         }
 

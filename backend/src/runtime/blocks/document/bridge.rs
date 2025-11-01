@@ -21,11 +21,11 @@ pub enum DocumentBridgeMessage {
     },
 }
 
-impl Into<DocumentBridgeMessage> for handler::BlockOutput {
-    fn into(self) -> DocumentBridgeMessage {
+impl From<handler::BlockOutput> for DocumentBridgeMessage {
+    fn from(output: handler::BlockOutput) -> Self {
         DocumentBridgeMessage::BlockOutput {
-            block_id: self.block_id,
-            output: self,
+            block_id: output.block_id,
+            output,
         }
     }
 }

@@ -165,6 +165,7 @@ impl Prometheus {
     }
 
     /// Execute Prometheus range query
+    #[allow(clippy::too_many_arguments)]
     async fn execute_range_query(
         &self,
         client: &Client,

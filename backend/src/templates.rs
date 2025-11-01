@@ -357,6 +357,7 @@ pub async fn template_str(
 
 /// Template a string with the given variables and document context
 /// This is a simplified version of template_str that doesn't require Tauri state
+#[allow(dead_code)]
 pub fn template_with_context(
     source: &str,
     variables: &HashMap<String, String>,

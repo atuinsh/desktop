@@ -330,7 +330,7 @@ impl Clickhouse {
                 }
                 .into(),
             )
-            .await?;
+            .await;
 
         // Parse URI and create HTTP client
         let (endpoint, username, password) = {
@@ -544,33 +544,37 @@ impl Clickhouse {
         // Send completion events
         let _ = context.emit_workflow_event(WorkflowEvent::BlockFinished { id: block_id });
         // Send success message
-        let _ = context.send_output(
-            BlockOutput {
-                block_id: self.id,
-                stdout: Some("Query execution completed successfully".to_string()),
-                stderr: None,
-                binary: None,
-                object: None,
-                lifecycle: None,
-            }
-            .into(),
-        );
+        let _ = context
+            .send_output(
+                BlockOutput {
+                    block_id: self.id,
+                    stdout: Some("Query execution completed successfully".to_string()),
+                    stderr: None,
+                    binary: None,
+                    object: None,
+                    lifecycle: None,
+                }
+                .into(),
+            )
+            .await;
 
         // Send finished lifecycle event
-        let _ = context.send_output(
-            BlockOutput {
-                block_id: self.id,
-                stdout: None,
-                stderr: None,
-                binary: None,
-                object: None,
-                lifecycle: Some(BlockLifecycleEvent::Finished(BlockFinishedData {
-                    exit_code: Some(0),
-                    success: true,
-                })),
-            }
-            .into(),
-        );
+        let _ = context
+            .send_output(
+                BlockOutput {
+                    block_id: self.id,
+                    stdout: None,
+                    stderr: None,
+                    binary: None,
+                    object: None,
+                    lifecycle: Some(BlockLifecycleEvent::Finished(BlockFinishedData {
+                        exit_code: Some(0),
+                        success: true,
+                    })),
+                }
+                .into(),
+            )
+            .await;
 
         result
     }
