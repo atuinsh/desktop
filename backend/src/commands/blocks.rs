@@ -69,7 +69,7 @@ pub async fn execute_block(
     state: State<'_, AtuinState>,
     block_id: String,
     runbook_id: String,
-) -> Result<String, String> {
+) -> Result<Option<String>, String> {
     let block_id = Uuid::parse_str(&block_id).map_err(|e| e.to_string())?;
 
     let documents = state.documents.read().await;
@@ -109,9 +109,9 @@ pub async fn execute_block(
         let mut executions = state.block_executions.write().await;
         executions.insert(id, handle);
 
-        Ok(id.to_string())
+        Ok(Some(id.to_string()))
     } else {
-        Err("Failed to execute block".to_string())
+        Ok(None)
     }
 }
 

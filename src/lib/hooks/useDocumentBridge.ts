@@ -135,12 +135,26 @@ export function useBlockExecution(blockId: string): ClientExecutionHandle {
       `Starting execution of block ${blockId} in runbook ${documentBridge.runbookId}`,
     );
 
-    const executionId = await executeBlock(documentBridge.runbookId, blockId);
-    documentBridge.logger.debug(
-      `Execution of block ${blockId} in runbook ${documentBridge.runbookId} started with execution ID: ${executionId}`,
-    );
-    setExecutionId(executionId);
-  }, []);
+    let executionId: string | null = null;
+    try {
+      executionId = await executeBlock(documentBridge.runbookId, blockId);
+    } catch (error) {
+      documentBridge.logger.error(
+        `Failed to execute block ${blockId} in runbook ${documentBridge.runbookId} (block should send a BlockOutput with lifecycle set to error)`,
+        error,
+      );
+    }
+
+    if (executionId) {
+      documentBridge.logger.debug(
+        `Execution of block ${blockId} in runbook ${documentBridge.runbookId} started with execution ID: ${executionId}`,
+      );
+      setExecutionId(executionId);
+    } else {
+      documentBridge.logger.info("`startExecution` successful but did not return an execution ID");
+      setExecutionId(null);
+    }
+  }, [documentBridge, blockId, executionId, lifecycle]);
 
   const stopExecution = useCallback(async () => {
     if (!documentBridge) {

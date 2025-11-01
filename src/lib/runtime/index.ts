@@ -3,10 +3,10 @@ import Logger from "@/lib/logger";
 
 const logger = new Logger("Runtime");
 
-export async function executeBlock(runbookId: string, blockId: string) {
+export async function executeBlock(runbookId: string, blockId: string): Promise<string | null> {
   try {
     logger.info(`Executing block ${blockId} in runbook ${runbookId}`);
-    const result = await invoke<string>("execute_block", { runbookId, blockId });
+    const result = await invoke<string | null>("execute_block", { runbookId, blockId });
     logger.info(`Block ${blockId} in runbook ${runbookId} returned execution handle ID: ${result}`);
     return result;
   } catch (error) {
