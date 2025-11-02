@@ -105,19 +105,13 @@ export const RunBlock = ({
   const execution = useBlockExecution(terminal.id);
   const sshParent = context.sshHost;
 
-  useBlockOutput(terminal.id, (output) => {
-    if (output.object && typeof output.object === "object") {
-      const obj = output.object as Record<string, unknown>;
-      if (obj.pty) {
-        const pty = obj.pty as PtyMetadata;
-        if (pty.pid) {
-          addPty(pty);
-          onRun?.(pty.pid);
-        }
-      }
+  useBlockOutput<PtyMetadata>(terminal.id, (output) => {
+    if (output.object && output.object.pid) {
+      addPty(output.object);
+      onRun?.(output.object.pid);
     } else if (output.binary && pty?.pid) {
       const terminalData = terminals[pty.pid];
-      terminalData?.terminal.write(output.binary as unknown as Uint8Array<ArrayBufferLike>);
+      terminalData?.terminal.write(new Uint8Array(output.binary));
     }
   });
 

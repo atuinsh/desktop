@@ -7,6 +7,7 @@ import { ResolvedContext } from "@/rs-bindings/ResolvedContext";
 import { BlockOutput } from "@/rs-bindings/BlockOutput";
 import Logger from "../logger";
 import { cancelExecution, executeBlock } from "../runtime";
+import { JsonValue } from "@/rs-bindings/serde_json/JsonValue";
 
 export const DocumentBridgeContext = createContext<DocumentBridge | null>(null);
 
@@ -15,6 +16,12 @@ export default function useDocumentBridge(): DocumentBridge | null {
 }
 
 export type BlockContext = {};
+
+export type Omit<T, K> = Pick<T, Exclude<keyof T, K>>;
+export type GenericBlockOutput<T = JsonValue> = Omit<BlockOutput, "object"> &
+  Partial<{
+    object?: T;
+  }>;
 
 export class DocumentBridge {
   public readonly runbookId: string;
@@ -58,7 +65,10 @@ export class DocumentBridge {
     return this.emitter.on(`block_context:update:${blockId}`, callback);
   }
 
-  public onBlockOutput(blockId: string, callback: (output: BlockOutput) => void) {
+  public onBlockOutput<T = any>(
+    blockId: string,
+    callback: (output: GenericBlockOutput<T>) => void,
+  ) {
     return this.emitter.on(`block_output:${blockId}`, callback);
   }
 }
@@ -91,14 +101,19 @@ export function useBlockContext(blockId: string): ResolvedContext {
   return context ?? DEFAULT_CONTEXT;
 }
 
-export function useBlockOutput(blockId: string, callback: (output: BlockOutput) => void): void {
+export function useBlockOutput<T = JsonValue>(
+  blockId: string,
+  callback: (output: GenericBlockOutput<T>) => void,
+): void {
   const documentBridge = useDocumentBridge();
   useEffect(() => {
     if (!documentBridge) {
       return;
     }
 
-    return documentBridge.onBlockOutput(blockId, callback);
+    return documentBridge.onBlockOutput(blockId, (output) => {
+      callback(output as GenericBlockOutput<T>);
+    });
   }, [documentBridge, blockId, callback]);
 }
 
@@ -112,6 +127,7 @@ export interface ClientExecutionHandle {
   error: string | null;
   execute: () => Promise<void>;
   cancel: () => Promise<void>;
+  reset: () => void;
 }
 
 // TODO: since the state is stored locally based on messages,
@@ -186,7 +202,7 @@ export function useBlockExecution(blockId: string): ClientExecutionHandle {
     setError(null);
   }, [documentBridge, blockId, executionId, lifecycle]);
 
-  const handleBlockOutput = useCallback((output: BlockOutput) => {
+  const handleBlockOutput = useCallback((output: GenericBlockOutput<any>) => {
     switch (output.lifecycle?.type) {
       case "finished":
         setLifecycle("success");
@@ -223,5 +239,10 @@ export function useBlockExecution(blockId: string): ClientExecutionHandle {
     error: error ?? null,
     execute: startExecution,
     cancel: stopExecution,
+    reset: () => {
+      setLifecycle("idle");
+      setError(null);
+      setExecutionId(null);
+    },
   };
 }
