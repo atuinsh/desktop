@@ -61,8 +61,8 @@ export default function ResultTable({ columns, results, setColumns, width }: Res
   const rowData = useMemo(() => {
     return results.map((row) => {
       const rowObj: any = {};
-      columns.forEach((col, index) => {
-        rowObj[col.id] = row[index];
+      columns.forEach((col) => {
+        rowObj[col.id] = row[col.id];
       });
       return rowObj;
     });

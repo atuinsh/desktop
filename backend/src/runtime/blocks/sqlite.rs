@@ -3,7 +3,7 @@ use serde_json::{json, Value};
 use sqlx::{sqlite::SqliteConnectOptions, Column, Row, SqlitePool, TypeInfo};
 use std::str::FromStr;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
 use typed_builder::TypedBuilder;
 use uuid::Uuid;
@@ -88,13 +88,15 @@ impl FromDocument for SQLite {
 }
 
 impl SQLite {
-    /// Template SQLite query using the context resolver
-    fn template_sqlite_query(
-        &self,
-        context: &ExecutionContext,
-    ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
-        let rendered = context.context_resolver.resolve_template(&self.query)?;
-        Ok(rendered)
+    /// Convert SQLite column to JSON value
+    fn column_to_json(column: &sqlx::sqlite::SqliteColumn) -> Value {
+        let mut obj = serde_json::Map::new();
+        obj.insert("id".to_string(), json!(column.name()));
+        obj.insert("name".to_string(), json!(column.name()));
+        // Note: for NULL type info, the name is "NULL"
+        // This can occur with expressions like count(*).
+        obj.insert("type".to_string(), json!(column.type_info().name()));
+        Value::Object(obj)
     }
 
     /// Convert SQLite row to JSON value
@@ -104,7 +106,21 @@ impl SQLite {
         for (i, column) in row.columns().iter().enumerate() {
             let column_name = column.name().to_string();
             let value: Value = match column.type_info().name() {
-                "NULL" => Value::Null,
+                "NULL" => {
+                    // For NULL type info (common with expressions like count(*)),
+                    // try to decode as different types in order of preference
+                    if let Ok(val) = row.try_get::<i64, _>(i) {
+                        json!(val)
+                    } else if let Ok(val) = row.try_get::<f64, _>(i) {
+                        json!(val)
+                    } else if let Ok(val) = row.try_get::<String, _>(i) {
+                        json!(val)
+                    } else if let Ok(val) = row.try_get::<Vec<u8>, _>(i) {
+                        json!(base64::encode(val))
+                    } else {
+                        Value::Null
+                    }
+                }
                 "INTEGER" => {
                     if let Ok(val) = row.try_get::<i64, _>(i) {
                         json!(val)
@@ -166,10 +182,12 @@ impl SQLite {
             .to_lowercase();
 
         if first_word == "select" || first_word == "with" || first_word == "pragma" {
-            let rows = sqlx::query(statement)
+            let start_time = Instant::now();
+            let rows = sqlx::query(&statement)
                 .fetch_all(pool)
                 .await
                 .map_err(|e| format!("SQL query failed: {}", e))?;
+            let query_duration = start_time.elapsed();
 
             let mut results = Vec::new();
             let mut column_names = Vec::new();
@@ -178,7 +196,7 @@ impl SQLite {
                 column_names = first_row
                     .columns()
                     .iter()
-                    .map(|col| col.name().to_string())
+                    .map(|col| Self::column_to_json(col))
                     .collect();
             }
 
@@ -189,7 +207,9 @@ impl SQLite {
             let result_json = json!({
                 "columns": column_names,
                 "rows": results,
-                "rowCount": results.len()
+                "rowCount": results.len(),
+                "time": chrono::Utc::now(),
+                "duration": query_duration.as_secs_f64()
             });
 
             let _ = context
@@ -206,14 +226,18 @@ impl SQLite {
                 )
                 .await;
         } else {
-            let result = sqlx::query(statement)
+            let start_time = Instant::now();
+            let result = sqlx::query(&statement)
                 .execute(pool)
                 .await
                 .map_err(|e| format!("SQL execution failed: {}", e))?;
+            let query_duration = start_time.elapsed();
 
             let result_json = json!({
                 "rowsAffected": result.rows_affected(),
                 "lastInsertRowid": result.last_insert_rowid(),
+                "time": chrono::Utc::now().to_string(),
+                "duration": query_duration.as_secs_f64()
             });
 
             let _ = context
@@ -257,10 +281,7 @@ impl SQLite {
             )
             .await;
 
-        let query = self.template_sqlite_query(&context).unwrap_or_else(|e| {
-            eprintln!("Template error in SQLite query {}: {}", block_id, e);
-            self.query.clone()
-        });
+        let query = context.context_resolver.resolve_template(&self.query)?;
 
         let _ = context
             .send_output(
@@ -277,8 +298,9 @@ impl SQLite {
             .await;
 
         let pool = {
+            let uri = context.context_resolver.resolve_template(&self.uri)?;
             let connection_task = async {
-                let opts = SqliteConnectOptions::from_str(&self.uri)?.create_if_missing(true);
+                let opts = SqliteConnectOptions::from_str(&uri)?.create_if_missing(true);
                 SqlitePool::connect_with(opts).await
             };
 
@@ -726,44 +748,6 @@ mod tests {
 
         let result = SQLite::from_document(&json_data);
         assert!(result.is_err());
-    }
-
-    // Template resolution tests
-    #[tokio::test]
-    async fn test_template_sqlite_query_no_template() {
-        let sqlite = create_test_sqlite("SELECT * FROM users", "sqlite::memory:");
-        let context = create_test_context();
-
-        let result = sqlite.template_sqlite_query(&context).unwrap();
-        assert_eq!(result, "SELECT * FROM users");
-    }
-
-    #[tokio::test]
-    async fn test_template_sqlite_query_with_vars() {
-        let sqlite = create_test_sqlite(
-            "SELECT * FROM users WHERE id = {{ var.user_id }}",
-            "sqlite::memory:",
-        );
-        let context = create_test_context_with_vars(vec![("user_id", "123")]);
-
-        let result = sqlite.template_sqlite_query(&context).unwrap();
-        assert_eq!(result, "SELECT * FROM users WHERE id = 123");
-    }
-
-    #[tokio::test]
-    async fn test_template_sqlite_query_multiple_vars() {
-        let sqlite = create_test_sqlite(
-            "SELECT * FROM users WHERE id = {{ var.user_id }} AND name = '{{ var.user_name }}'",
-            "sqlite::memory:",
-        );
-        let context =
-            create_test_context_with_vars(vec![("user_id", "123"), ("user_name", "Alice")]);
-
-        let result = sqlite.template_sqlite_query(&context).unwrap();
-        assert_eq!(
-            result,
-            "SELECT * FROM users WHERE id = 123 AND name = 'Alice'"
-        );
     }
 
     // Execution tests

@@ -1,11 +1,8 @@
 import { DatabaseIcon } from "lucide-react";
 
-
-
 // @ts-ignore
 import { createReactBlockSpec } from "@blocknote/react";
 
-import { runQuery } from "./query";
 import { SQLiteBlock } from "@/lib/workflow/blocks/sqlite";
 import { DependencySpec } from "@/lib/workflow/dependency";
 import track_event from "@/tracking";
@@ -52,7 +49,6 @@ const SQLite = ({
       setUri={setUri}
       autoRefresh={sqlite.autoRefresh}
       setAutoRefresh={setAutoRefresh}
-      runQuery={runQuery}
       isEditable={isEditable}
       collapseQuery={collapseQuery}
       setCollapseQuery={setCollapseQuery}
@@ -94,7 +90,7 @@ export default createReactBlockSpec(
       const [collapseQuery, setCollapseQuery] = useBlockLocalState<boolean>(
         block.id,
         "collapsed",
-        false
+        false,
       );
 
       const handleCodeMirrorFocus = () => {

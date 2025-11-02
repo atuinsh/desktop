@@ -13,7 +13,9 @@ interface SQLProps {
 }
 
 const SQLResults = ({ results, error, dismiss, isFullscreen = false }: SQLProps) => {
-  const [columns, setColumns] = useState<{ id: string; title: string; grow?: number; width?: number }[] | null>(null);
+  const [columns, setColumns] = useState<
+    { id: string; title: string; grow?: number; width?: number }[] | null
+  >(null);
 
   useEffect(() => {
     if (!results) return;
@@ -64,7 +66,14 @@ const SQLResults = ({ results, error, dismiss, isFullscreen = false }: SQLProps)
   if (!results) return null;
 
   return (
-    <Card shadow="sm" className={isFullscreen ? "w-full h-full border border-default-200 flex flex-col" : "w-full max-w-full border border-default-200"}>
+    <Card
+      shadow="sm"
+      className={
+        isFullscreen
+          ? "w-full h-full border border-default-200 flex flex-col"
+          : "w-full max-w-full border border-default-200"
+      }
+    >
       <CardHeader className="flex justify-between items-center bg-default-50 flex-shrink-0">
         <div className="flex items-center gap-3">
           {dismiss && (
@@ -84,6 +93,11 @@ const SQLResults = ({ results, error, dismiss, isFullscreen = false }: SQLProps)
             <span className="text-success-700 font-semibold">
               {results.rows!.length.toLocaleString()} {results.rows!.length == 1 ? "row" : "rows"}{" "}
               returned
+            </span>
+          ) : (results.rowsAffected ?? null) != null ? (
+            <span className="text-success-700 font-semibold">
+              {results.rowsAffected!.toLocaleString()} {results.rowsAffected == 1 ? "row" : "rows"}{" "}
+              affected
             </span>
           ) : (
             <span className="text-default-700 font-semibold">Query successful</span>
@@ -115,14 +129,12 @@ const SQLResults = ({ results, error, dismiss, isFullscreen = false }: SQLProps)
           <Tooltip content="Request duration">
             <div className="flex items-center gap-1 text-default-500">
               <Clock size={14} />
-              <span className="text-sm select-text">
-                {parseFloat(results.duration.toFixed(3))}ms
-              </span>
+              <span className="text-sm select-text">{(results.duration * 1000).toFixed(3)}ms</span>
             </div>
           </Tooltip>
 
           <span className="text-sm text-default-400 select-text">
-            {results.time.toLocaleString()}
+            {new Date(results.time).toLocaleString()}
           </span>
         </div>
       </CardHeader>
@@ -131,7 +143,9 @@ const SQLResults = ({ results, error, dismiss, isFullscreen = false }: SQLProps)
         {error && <div className="bg-red-100 text-red-600 p-2 rounded">{error}</div>}
 
         {results && columns && (
-          <div className={isFullscreen ? "h-full w-full overflow-auto" : "h-64 w-full overflow-auto"}>
+          <div
+            className={isFullscreen ? "h-full w-full overflow-auto" : "h-64 w-full overflow-auto"}
+          >
             <ResultTable
               width={"100%"}
               columns={columns}

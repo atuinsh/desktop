@@ -1,3 +1,5 @@
+import { JsonValue } from "@/rs-bindings/serde_json/JsonValue";
+
 export interface ColumnSchema {
   name: string;
   type: string;
@@ -10,7 +12,7 @@ export interface TableSchema {
 
 export interface QueryResult {
   columns?: ColumnSchema[] | null;
-  rows?: any[] | null;
+  rows?: Record<string, JsonValue>[] | null;
 
   rowsRead?: number | null;
   bytesRead?: number | null;

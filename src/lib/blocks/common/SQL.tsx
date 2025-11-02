@@ -2,7 +2,7 @@
 // Intended for databases that have tables
 // postgres, sqlite, etc - not document stores.
 
-import { useCallback, useRef, useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import {
   Dropdown,
   DropdownTrigger,
@@ -37,17 +37,14 @@ import { QueryResult } from "./database";
 import SQLResults from "./SQLResults";
 import MaskedInput from "@/components/MaskedInput/MaskedInput";
 import Block from "./Block";
-import { templateString } from "@/state/templates";
 import { useBlockNoteEditor } from "@blocknote/react";
 import { cn, toSnakeCase } from "@/lib/utils";
-import { logExecution } from "@/lib/exec_log";
 import { DependencySpec } from "@/lib/workflow/dependency";
 import { useBlockBusRunSubscription } from "@/lib/hooks/useBlockBus";
-import BlockBus from "@/lib/workflow/block_bus";
 import useCodemirrorTheme from "@/lib/hooks/useCodemirrorTheme";
 import { useCodeMirrorValue } from "@/lib/hooks/useCodeMirrorValue";
 import EditableHeading from "@/components/EditableHeading/index";
-import { useCurrentRunbookId } from "@/context/runbook_id_context";
+import { useBlockExecution, useBlockOutput } from "@/lib/hooks/useDocumentBridge";
 
 interface SQLProps {
   id: string;
@@ -62,7 +59,6 @@ interface SQLProps {
   uri: string;
   query: string;
   autoRefresh: number;
-  runQuery: (uri: string, query: string) => Promise<QueryResult & { queryCount?: number; executedQueries?: string[] }>;
 
   setCollapseQuery: (collapseQuery: boolean) => void;
   setQuery: (query: string) => void;
@@ -102,28 +98,27 @@ const SQL = ({
   setCollapseQuery,
   setDependency,
   isEditable,
-  runQuery,
   sqlType,
   extensions = [],
   onCodeMirrorFocus,
 }: SQLProps) => {
   let editor = useBlockNoteEditor();
-  const [isRunning, setIsRunning] = useState<boolean>(false);
-
-  const [results, setResults] = useState<QueryResult & { queryCount?: number; executedQueries?: string[] } | null>(null);
-  const [columns, setColumns] = useState<
-    { id: string; title: string; grow?: number; width?: number }[]
-  >([]);
-
-  const [error, setError] = useState<string | null>(null);
-  const currentRunbookId = useCurrentRunbookId();
-  const elementRef = useRef<HTMLDivElement>(null);
+  const [results, setResults] = useState<
+    (QueryResult & { queryCount?: number; executedQueries?: string[] }) | null
+  >(null);
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
   const [isFullscreenQueryCollapsed, setIsFullscreenQueryCollapsed] = useState<boolean>(false);
 
+  const execution = useBlockExecution(block.id);
+  useBlockOutput<QueryResult>(id, (output) => {
+    if (output.object) {
+      setResults(output.object);
+    }
+  });
+
   const themeObj = useCodemirrorTheme();
   const codeMirrorValue = useCodeMirrorValue(query, setQuery);
-  
+
   // Get SQL language extension based on sqlType
   const getSqlExtension = () => {
     switch (sqlType) {
@@ -140,57 +135,16 @@ const SQL = ({
     }
   };
 
-  const handlePlay = useCallback(async () => {
-    console.log("sql handlePlay called");
-    setIsRunning(true);
-
-    let startTime = new Date().getTime() * 1000000;
-    try {
-      let tUri = await templateString(id, uri, editor.document, currentRunbookId);
-      let tQuery = await templateString(id, query, editor.document, currentRunbookId);
-
-      if (elementRef.current) {
-        elementRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
-      }
-
-      let res = await runQuery(tUri, tQuery);
-      let endTime = new Date().getTime() * 1000000;
-
-      // Don't log the actual data, but log the query and metadata
-      let output = {
-        query,
-        rowCount: res.rows?.length,
-        queryCount: res.queryCount || 1,
-        executedQueries: res.executedQueries || [],
-      };
-      await logExecution(block, block.typeName, startTime, endTime, JSON.stringify(output));
-      BlockBus.get().blockFinished(block);
-
-      setIsRunning(false);
-
-      setColumns(columns);
-      setResults(res);
-      setError(null);
-    } catch (e: any) {
-      if (e.message) {
-        e = e.message;
-      }
-
-      let endTime = new Date().getTime() * 1000000;
-      await logExecution(block, block.typeName, startTime, endTime, JSON.stringify({ error: e }));
-      BlockBus.get().blockFinished(block);
-
-      setError(e);
-      setIsRunning(false);
-    }
-  }, [block, editor.document, currentRunbookId, query, uri, runQuery]);
+  const handlePlay = async () => {
+    execution.execute();
+  };
 
   useBlockBusRunSubscription(block.id, handlePlay);
 
   useInterval(
     () => {
       // let's not stack queries
-      if (isRunning) return;
+      if (execution.isRunning) return;
 
       (async () => {
         await handlePlay();
@@ -340,17 +294,19 @@ const SQL = ({
             </Dropdown>
           </div>
 
-          <div className="flex flex-row gap-2 w-full" ref={elementRef}>
+          <div className="flex flex-row gap-2 w-full">
             <PlayButton
               eventName="runbooks.block.execute"
               eventProps={{ type: sqlType }}
-              isRunning={isRunning}
+              isRunning={execution.isRunning}
               onPlay={handlePlay}
               cancellable={false}
             />
-            <div className={cn("flex-grow relative transition-all duration-300 ease-in-out", {
-              "max-h-10 overflow-hidden": collapseQuery,
-            })}>
+            <div
+              className={cn("flex-grow relative transition-all duration-300 ease-in-out", {
+                "max-h-10 overflow-hidden": collapseQuery,
+              })}
+            >
               <CodeMirror
                 placeholder={"Write your query here..."}
                 className="!pt-0 max-w-full border border-gray-300 rounded"
@@ -421,20 +377,23 @@ const SQL = ({
               onPress={() => setCollapseQuery(!collapseQuery)}
             >
               <Tooltip content={collapseQuery ? "Expand query" : "Collapse query"}>
-                {collapseQuery ? <ArrowDownToLineIcon size={16} /> : <ArrowUpToLineIcon size={16} />}
+                {collapseQuery ? (
+                  <ArrowDownToLineIcon size={16} />
+                ) : (
+                  <ArrowUpToLineIcon size={16} />
+                )}
               </Tooltip>
             </Button>
           </ButtonGroup>
         </div>
       }
     >
-      {(results || error) && !isFullscreen && (
+      {(results || execution.error) && !isFullscreen && (
         <SQLResults
           results={results}
-          error={error}
+          error={execution.error}
           dismiss={() => {
             setResults(null);
-            setError(null);
           }}
         />
       )}
@@ -550,7 +509,7 @@ const SQL = ({
                       <PlayButton
                         eventName="runbooks.block.execute"
                         eventProps={{ type: sqlType }}
-                        isRunning={isRunning}
+                        isRunning={execution.isRunning}
                         onPlay={handlePlay}
                         cancellable={false}
                       />
@@ -573,18 +532,20 @@ const SQL = ({
               )}
 
               {/* Results Section - 2/3 height */}
-              <div className={cn("flex-1 min-h-0 overflow-hidden p-4", {
-                "h-2/3": !isFullscreenQueryCollapsed,
-                "h-full": isFullscreenQueryCollapsed
-              })}>
-                {(results || error) && (
+              <div
+                className={cn("flex-1 min-h-0 overflow-hidden p-4", {
+                  "h-2/3": !isFullscreenQueryCollapsed,
+                  "h-full": isFullscreenQueryCollapsed,
+                })}
+              >
+                {(results || execution.error) && (
                   <SQLResults
                     results={results}
-                    error={error}
+                    error={execution.error}
                     isFullscreen={true}
                     dismiss={() => {
                       setResults(null);
-                      setError(null);
+                      execution.reset();
                     }}
                   />
                 )}
