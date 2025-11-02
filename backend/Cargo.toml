@@ -88,7 +88,7 @@ chrono = { version = "0.4", features = ["serde", "clock"] }
 async-trait = "0.1.89"
 notify-debouncer-full = { version = "0.6.0", features = ["serde"] }
 toml = "0.9.2"
-ts-rs = { version = "11.0.1", features = ["serde-json-impl", "uuid-impl"] }
+ts-rs = { version = "11.1.0", features = ["serde-json-impl", "uuid-impl"] }
 json-digest = "0.0.16"
 trash = "5.2.2"
 tempfile = "3.10"
