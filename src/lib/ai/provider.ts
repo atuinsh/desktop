@@ -1,22 +1,22 @@
-// Setup the Blocknote AI Provider
-// They use the next ai sdk
-// Currently I'm thinking of taking the amp approach, and focus on a single model
-// and making the experience with it great.
-// Users will likely want to choose their own model though, but let's see how it goes.
-import { createAnthropic } from "@ai-sdk/anthropic";
+// Setup the AI Provider using OpenAI-compatible API
+// Supports OpenRouter, OpenAI, and any other OpenAI-compatible endpoint
+import { createOpenAI } from "@ai-sdk/openai";
 
-export const createModel = (key: string) => {
-    const provider = createAnthropic({
-        apiKey: key,
+export interface ModelConfig {
+    apiKey: string;
+    baseURL?: string;
+    model?: string;
+}
 
-        headers: {
-            // yes, we are a "browser"
-            "anthropic-dangerous-direct-browser-access": "true",
-        },
+export const createModel = (config: ModelConfig) => {
+    const provider = createOpenAI({
+        apiKey: config.apiKey,
+        baseURL: config.baseURL || "https://openrouter.ai/api/v1",
+        compatibility: "compatible",
     });
 
-    // https://docs.anthropic.com/en/docs/about-claude/models/overview
-    const model = provider("claude-sonnet-4-20250514");
+    // Default to a good general model, or use user-specified model
+    const modelName = config.model || "anthropic/claude-sonnet-4";
 
-    return model;
+    return provider(modelName);
 };

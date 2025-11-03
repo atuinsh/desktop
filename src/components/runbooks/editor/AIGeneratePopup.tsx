@@ -1,12 +1,13 @@
 import { useCallback } from "react";
-import { generateBlocks, GenerateBlocksRequest } from "@/lib/ai/block_generator";
+import { streamGenerateBlocks, StreamGenerateBlocksRequest, BlockSpec } from "@/lib/ai/block_generator";
 import { AIPopupBase } from "./ui/AIPopupBase";
 import track_event from "@/tracking";
 
 interface AIGeneratePopupProps {
   isVisible: boolean;
   position: { x: number; y: number };
-  onGenerate: (blocks: any[]) => void;
+  onBlockGenerated: (block: BlockSpec) => void;
+  onGenerateComplete: () => void;
   onClose: () => void;
   getEditorContext?: () => Promise<{
     blocks: any[];
@@ -15,26 +16,47 @@ interface AIGeneratePopupProps {
   } | undefined>;
 }
 
-export function AIGeneratePopup({ isVisible, position, onGenerate, onClose, getEditorContext }: AIGeneratePopupProps) {
+export function AIGeneratePopup({ 
+  isVisible, 
+  position, 
+  onBlockGenerated, 
+  onGenerateComplete, 
+  onClose, 
+  getEditorContext 
+}: AIGeneratePopupProps) {
   const handleGenerate = useCallback(async (prompt: string) => {
     track_event("runbooks.ai.generate_popup", { prompt_length: prompt.length });
     
     // Get editor context if available
     const editorContext = getEditorContext ? await getEditorContext() : undefined;
     
-    const request: GenerateBlocksRequest = { 
-      prompt,
-      editorContext 
-    };
-    const response = await generateBlocks(request);
+    let blockCount = 0;
     
-    track_event("runbooks.ai.generate_success", { 
-      blocks_generated: response.blocks.length,
-      prompt_length: prompt.length 
-    });
-
-    onGenerate(response.blocks);
-  }, [onGenerate, getEditorContext]);
+    const request: StreamGenerateBlocksRequest = { 
+      prompt,
+      editorContext,
+      onBlock: (block: BlockSpec) => {
+        blockCount++;
+        onBlockGenerated(block);
+      },
+      onComplete: () => {
+        track_event("runbooks.ai.generate_success", { 
+          blocks_generated: blockCount,
+          prompt_length: prompt.length 
+        });
+        onGenerateComplete();
+      },
+      onError: (error: Error) => {
+        track_event("runbooks.ai.generate_error", { 
+          error: error.message,
+          prompt_length: prompt.length 
+        });
+        throw error;
+      }
+    };
+    
+    await streamGenerateBlocks(request);
+  }, [onBlockGenerated, onGenerateComplete, getEditorContext]);
 
   return (
     <AIPopupBase
