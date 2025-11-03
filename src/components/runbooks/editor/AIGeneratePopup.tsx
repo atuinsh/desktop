@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useRef, useEffect } from "react";
 import { streamGenerateBlocks, StreamGenerateBlocksRequest, BlockSpec } from "@/lib/ai/block_generator";
 import { AIPopupBase } from "./ui/AIPopupBase";
 import track_event from "@/tracking";
@@ -24,8 +24,13 @@ export function AIGeneratePopup({
   onClose, 
   getEditorContext 
 }: AIGeneratePopupProps) {
+  const abortControllerRef = useRef<AbortController | null>(null);
+
   const handleGenerate = useCallback(async (prompt: string) => {
     track_event("runbooks.ai.generate_popup", { prompt_length: prompt.length });
+    
+    // Create abort controller for this generation
+    abortControllerRef.current = new AbortController();
     
     // Get editor context if available
     const editorContext = getEditorContext ? await getEditorContext() : undefined;
@@ -35,6 +40,7 @@ export function AIGeneratePopup({
     const request: StreamGenerateBlocksRequest = { 
       prompt,
       editorContext,
+      abortSignal: abortControllerRef.current.signal,
       onBlock: (block: BlockSpec) => {
         blockCount++;
         onBlockGenerated(block);
@@ -44,19 +50,43 @@ export function AIGeneratePopup({
           blocks_generated: blockCount,
           prompt_length: prompt.length 
         });
+        abortControllerRef.current = null;
         onGenerateComplete();
       },
       onError: (error: Error) => {
-        track_event("runbooks.ai.generate_error", { 
-          error: error.message,
-          prompt_length: prompt.length 
-        });
+        if (error.name === 'AbortError') {
+          track_event("runbooks.ai.generate_cancelled", { 
+            blocks_generated: blockCount,
+            prompt_length: prompt.length 
+          });
+        } else {
+          track_event("runbooks.ai.generate_error", { 
+            error: error.message,
+            prompt_length: prompt.length 
+          });
+        }
+        abortControllerRef.current = null;
         throw error;
       }
     };
     
-    await streamGenerateBlocks(request);
+    try {
+      await streamGenerateBlocks(request);
+    } catch (error) {
+      // Silently handle abort errors (user cancelled)
+      if (error instanceof Error && error.name !== 'AbortError') {
+        throw error;
+      }
+    }
   }, [onBlockGenerated, onGenerateComplete, getEditorContext]);
+
+  // Cancel ongoing generation when popup closes
+  useEffect(() => {
+    if (!isVisible && abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+  }, [isVisible]);
 
   return (
     <AIPopupBase

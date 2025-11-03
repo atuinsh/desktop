@@ -31,6 +31,7 @@ export interface StreamGenerateBlocksRequest extends GenerateBlocksRequest {
   onBlock: (block: BlockSpec) => void;
   onComplete: () => void;
   onError: (error: Error) => void;
+  abortSignal?: AbortSignal;
 }
 
 const SYSTEM_PROMPT = `You are an expert at generating runbooks for operational tasks. You will be fed a prompt, and need to generate blocks. 
@@ -353,12 +354,20 @@ ${JSON.stringify(blocks, null, 2)}
       model,
       system: SYSTEM_PROMPT,
       prompt: enhancedPrompt,
+      abortSignal: request.abortSignal,
     });
 
     let buffer = "";
     
     // Process the stream
     for await (const chunk of result.textStream) {
+      // Check if aborted
+      if (request.abortSignal?.aborted) {
+        const abortError = new Error('Generation cancelled');
+        abortError.name = 'AbortError';
+        throw abortError;
+      }
+      
       buffer += chunk;
       
       // Process complete lines
