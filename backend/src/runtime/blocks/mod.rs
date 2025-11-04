@@ -13,6 +13,7 @@ pub(crate) mod postgres;
 pub(crate) mod prometheus;
 pub(crate) mod script;
 pub(crate) mod sqlite;
+pub(crate) mod sqlx_block;
 pub(crate) mod ssh_connect;
 pub(crate) mod terminal;
 pub(crate) mod var;

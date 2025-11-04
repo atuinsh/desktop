@@ -92,6 +92,7 @@ ts-rs = { version = "11.1.0", features = ["serde-json-impl", "uuid-impl"] }
 json-digest = "0.0.16"
 trash = "5.2.2"
 tempfile = "3.10"
+sqlparser = "0.59.0"
 
 
 [dependencies.sqlx]

@@ -1,22 +1,23 @@
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::{json, Map, Value};
+use sqlparser::ast::Statement;
+use sqlparser::dialect::{Dialect, SQLiteDialect};
 use sqlx::{sqlite::SqliteConnectOptions, Column, Row, SqlitePool, TypeInfo};
 use std::str::FromStr;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 use tokio::sync::RwLock;
 use typed_builder::TypedBuilder;
 use uuid::Uuid;
 
-use crate::runtime::blocks::document::block_context::BlockExecutionOutput;
-use crate::runtime::blocks::handler::{
-    BlockErrorData, BlockFinishedData, BlockLifecycleEvent, BlockOutput, ExecutionStatus,
+use crate::runtime::blocks::handler::{CancellationToken, ExecutionHandle, ExecutionStatus};
+use crate::runtime::blocks::sqlx_block::{
+    SqlxBlockBehavior, SqlxBlockError, SqlxBlockExecutionResult, SqlxQueryResult,
+    SqlxStatementResult,
 };
 use crate::runtime::blocks::{Block, BlockBehavior};
-use crate::runtime::events::GCEvent;
-use crate::runtime::workflow::event::WorkflowEvent;
 
-use super::handler::{CancellationToken, ExecutionContext, ExecutionHandle};
+use super::handler::ExecutionContext;
 use super::FromDocument;
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, TypedBuilder)]
@@ -88,20 +89,9 @@ impl FromDocument for SQLite {
 }
 
 impl SQLite {
-    /// Convert SQLite column to JSON value
-    fn column_to_json(column: &sqlx::sqlite::SqliteColumn) -> Value {
-        let mut obj = serde_json::Map::new();
-        obj.insert("id".to_string(), json!(column.name()));
-        obj.insert("name".to_string(), json!(column.name()));
-        // Note: for NULL type info, the name is "NULL"
-        // This can occur with expressions like count(*).
-        obj.insert("type".to_string(), json!(column.type_info().name()));
-        Value::Object(obj)
-    }
-
     /// Convert SQLite row to JSON value
-    fn row_to_json(row: &sqlx::sqlite::SqliteRow) -> Result<Value, sqlx::Error> {
-        let mut obj = serde_json::Map::new();
+    fn row_to_json(row: &sqlx::sqlite::SqliteRow) -> Result<Map<String, Value>, sqlx::Error> {
+        let mut obj = Map::new();
 
         for (i, column) in row.columns().iter().enumerate() {
             let column_name = column.name().to_string();
@@ -160,350 +150,16 @@ impl SQLite {
             obj.insert(column_name, value);
         }
 
-        Ok(Value::Object(obj))
-    }
-
-    /// Execute a single SQLite statement
-    async fn execute_statement(
-        &self,
-        pool: &SqlitePool,
-        statement: &str,
-        context: &ExecutionContext,
-    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        let trimmed = statement.trim();
-        if trimmed.is_empty() {
-            return Ok(());
-        }
-
-        let first_word = trimmed
-            .split_whitespace()
-            .next()
-            .unwrap_or("")
-            .to_lowercase();
-
-        if first_word == "select" || first_word == "with" || first_word == "pragma" {
-            let start_time = Instant::now();
-            let rows = sqlx::query(&statement)
-                .fetch_all(pool)
-                .await
-                .map_err(|e| format!("SQL query failed: {}", e))?;
-            let query_duration = start_time.elapsed();
-
-            let mut results = Vec::new();
-            let mut column_names = Vec::new();
-
-            if let Some(first_row) = rows.first() {
-                column_names = first_row
-                    .columns()
-                    .iter()
-                    .map(|col| Self::column_to_json(col))
-                    .collect();
-            }
-
-            for row in &rows {
-                results.push(Self::row_to_json(row)?);
-            }
-
-            let result_json = json!({
-                "columns": column_names,
-                "rows": results,
-                "rowCount": results.len(),
-                "time": chrono::Utc::now(),
-                "duration": query_duration.as_secs_f64()
-            });
-
-            let _ = context
-                .send_output(
-                    BlockOutput {
-                        block_id: self.id,
-                        stdout: None,
-                        stderr: None,
-                        lifecycle: None,
-                        binary: None,
-                        object: Some(result_json),
-                    }
-                    .into(),
-                )
-                .await;
-        } else {
-            let start_time = Instant::now();
-            let result = sqlx::query(&statement)
-                .execute(pool)
-                .await
-                .map_err(|e| format!("SQL execution failed: {}", e))?;
-            let query_duration = start_time.elapsed();
-
-            let result_json = json!({
-                "rowsAffected": result.rows_affected(),
-                "lastInsertRowid": result.last_insert_rowid(),
-                "time": chrono::Utc::now().to_string(),
-                "duration": query_duration.as_secs_f64()
-            });
-
-            let _ = context
-                .send_output(
-                    BlockOutput {
-                        block_id: self.id,
-                        stdout: None,
-                        stderr: None,
-                        lifecycle: None,
-                        binary: None,
-                        object: Some(result_json),
-                    }
-                    .into(),
-                )
-                .await;
-        }
-
-        Ok(())
-    }
-
-    async fn run_sqlite_query(
-        &self,
-        context: ExecutionContext,
-        cancellation_token: CancellationToken,
-    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        let block_id = self.id;
-
-        let _ = context.emit_workflow_event(WorkflowEvent::BlockStarted { id: block_id });
-
-        let _ = context
-            .send_output(
-                BlockOutput {
-                    block_id: self.id,
-                    stdout: None,
-                    stderr: None,
-                    binary: None,
-                    object: None,
-                    lifecycle: Some(BlockLifecycleEvent::Started),
-                }
-                .into(),
-            )
-            .await;
-
-        let query = context.context_resolver.resolve_template(&self.query)?;
-
-        let _ = context
-            .send_output(
-                BlockOutput {
-                    block_id: self.id,
-                    stdout: Some("Connecting to database...".to_string()),
-                    stderr: None,
-                    binary: None,
-                    object: None,
-                    lifecycle: None,
-                }
-                .into(),
-            )
-            .await;
-
-        let pool = {
-            let uri = context.context_resolver.resolve_template(&self.uri)?;
-            let connection_task = async {
-                let opts = SqliteConnectOptions::from_str(&uri)?.create_if_missing(true);
-                SqlitePool::connect_with(opts).await
-            };
-
-            let timeout_task = tokio::time::sleep(Duration::from_secs(10));
-
-            tokio::select! {
-                result = connection_task => {
-                    match result {
-                        Ok(pool) => {
-                            let _ = context.send_output(BlockOutput {
-                                block_id: self.id,
-                                stdout: Some("Connected to database successfully".to_string()),
-                                stderr: None,
-                                binary: None,
-                                object: None,
-                                lifecycle: None,
-                            }.into())
-                            .await;
-                            pool
-                        },
-                        Err(e) => {
-                            let error_msg = format!("Failed to connect to database: {}", e);
-                            let _ = context.send_output(BlockOutput {
-                                block_id: self.id,
-                                stdout: None,
-                                stderr: Some(error_msg.clone()),
-                                binary: None,
-                                object: None,
-                                lifecycle: Some(BlockLifecycleEvent::Error(BlockErrorData {
-                                    message: error_msg.clone(),
-                                })),
-                            }.into())
-                            .await;
-                            return Err(error_msg.into());
-                        }
-                    }
-                }
-                _ = timeout_task => {
-                    let error_msg = "Database connection timed out after 10 seconds.";
-                        let _ = context.send_output(BlockOutput {
-                            block_id: self.id,
-                            stdout: None,
-                            stderr: Some(error_msg.to_string()),
-                            binary: None,
-                            object: None,
-                            lifecycle: Some(BlockLifecycleEvent::Error(BlockErrorData {
-                                message: error_msg.to_string(),
-                            })),
-                        }.into())
-                        .await;
-                    return Err(error_msg.into());
-                }
-            }
-        };
-
-        let query_clone = query.clone();
-        let context_clone = context.clone();
-        let cancellation_receiver = cancellation_token.take_receiver();
-        let pool_clone = pool.clone();
-
-        let execution_task = async move {
-            let statements: Vec<&str> = query_clone
-                .split(';')
-                .map(|s| s.trim())
-                .filter(|s| !s.is_empty())
-                .collect();
-
-            if statements.is_empty() {
-                let error_msg = "No SQL statements to execute";
-                let _ = context_clone
-                    .send_output(
-                        BlockOutput {
-                            block_id: self.id,
-                            stdout: None,
-                            stderr: Some(error_msg.to_string()),
-                            binary: None,
-                            object: None,
-                            lifecycle: Some(BlockLifecycleEvent::Error(BlockErrorData {
-                                message: error_msg.to_string(),
-                            })),
-                        }
-                        .into(),
-                    )
-                    .await;
-                return Err(error_msg.into());
-            }
-
-            let _ = context_clone
-                .send_output(
-                    BlockOutput {
-                        block_id: self.id,
-                        stdout: Some(format!(
-                            "Executing {} SQL statement(s)...",
-                            statements.len()
-                        )),
-                        stderr: None,
-                        binary: None,
-                        object: None,
-                        lifecycle: None,
-                    }
-                    .into(),
-                )
-                .await;
-
-            for (i, statement) in statements.iter().enumerate() {
-                if let Err(e) = self
-                    .execute_statement(&pool_clone, statement, &context_clone)
-                    .await
-                {
-                    let error_msg = format!("Statement {} failed: {}", i + 1, e);
-                    let _ = context_clone
-                        .send_output(
-                            BlockOutput {
-                                block_id: self.id,
-                                stdout: None,
-                                stderr: Some(error_msg.clone()),
-                                binary: None,
-                                object: None,
-                                lifecycle: Some(BlockLifecycleEvent::Error(BlockErrorData {
-                                    message: error_msg.clone(),
-                                })),
-                            }
-                            .into(),
-                        )
-                        .await;
-                    return Err(error_msg.into());
-                }
-            }
-
-            Ok(())
-        };
-
-        let result = if let Some(cancel_rx) = cancellation_receiver {
-            tokio::select! {
-                _ = cancel_rx => {
-                    pool.close().await;
-                    if let Some(event_bus) = &context.gc_event_bus {
-                        let _ = event_bus.emit(GCEvent::BlockCancelled {
-                            block_id: self.id,
-                            runbook_id: context.runbook_id,
-                        }).await;
-                    }
-                    let _ = context.emit_workflow_event(WorkflowEvent::BlockFinished { id: block_id });
-                    let _ = context.send_output(BlockOutput {
-                        block_id: self.id,
-                        stdout: None,
-                        stderr: None,
-                        binary: None,
-                        object: None,
-                        lifecycle: Some(BlockLifecycleEvent::Cancelled),
-                    }.into())
-                    .await;
-                    return Err("SQLite query execution cancelled".into());
-                }
-                result = execution_task => {
-                    pool.close().await;
-                    result
-                }
-            }
-        } else {
-            let result = execution_task.await;
-            pool.close().await;
-            result
-        };
-
-        let _ = context.emit_workflow_event(WorkflowEvent::BlockFinished { id: block_id });
-        let _ = context
-            .send_output(
-                BlockOutput {
-                    block_id: self.id,
-                    stdout: Some("Query execution completed successfully".to_string()),
-                    stderr: None,
-                    binary: None,
-                    object: None,
-                    lifecycle: None,
-                }
-                .into(),
-            )
-            .await;
-
-        let _ = context
-            .send_output(
-                BlockOutput {
-                    block_id: self.id,
-                    stdout: None,
-                    stderr: None,
-                    binary: None,
-                    object: None,
-                    lifecycle: Some(BlockLifecycleEvent::Finished(BlockFinishedData {
-                        exit_code: Some(0),
-                        success: true,
-                    })),
-                }
-                .into(),
-            )
-            .await;
-
-        result
+        Ok(obj)
     }
 }
 
 #[async_trait::async_trait]
 impl BlockBehavior for SQLite {
+    fn id(&self) -> Uuid {
+        self.id
+    }
+
     fn into_block(self) -> Block {
         Block::SQLite(self)
     }
@@ -520,100 +176,101 @@ impl BlockBehavior for SQLite {
             output_variable: None,
         };
 
-        let handle_clone = handle.clone();
-        let context_clone = context.clone();
-        let block_id = self.id;
-        let runbook_id = context.runbook_id;
-
-        tokio::spawn(async move {
-            if let Some(event_bus) = &context_clone.gc_event_bus {
-                let _ = event_bus
-                    .emit(GCEvent::BlockStarted {
-                        block_id: self.id,
-                        runbook_id,
-                    })
-                    .await;
-            }
-
-            let result = self
-                .run_sqlite_query(
-                    context_clone.clone(),
-                    handle_clone.cancellation_token.clone(),
-                )
-                .await;
-
-            let status = match result {
-                Ok(_) => {
-                    if let Some(event_bus) = &context_clone.gc_event_bus {
-                        let _ = event_bus
-                            .emit(GCEvent::BlockFinished {
-                                block_id: self.id,
-                                runbook_id,
-                                success: true,
-                            })
-                            .await;
-                    }
-
-                    let _ = context_clone
-                        .document_handle
-                        .update_passive_context(block_id, move |ctx| {
-                            ctx.insert(BlockExecutionOutput {
-                                exit_code: Some(0),
-                                stdout: Some("Query execution completed successfully".to_string()),
-                                stderr: None,
-                            });
-                        })
-                        .await;
-
-                    ExecutionStatus::Success("SQLite query completed successfully".to_string())
-                }
-                Err(e) => {
-                    if let Some(event_bus) = &context_clone.gc_event_bus {
-                        let _ = event_bus
-                            .emit(GCEvent::BlockFailed {
-                                block_id: self.id,
-                                runbook_id,
-                                error: e.to_string(),
-                            })
-                            .await;
-                    }
-
-                    let _ = context_clone
-                        .send_output(
-                            BlockOutput {
-                                block_id: self.id,
-                                stdout: None,
-                                stderr: Some(e.to_string()),
-                                binary: None,
-                                object: None,
-                                lifecycle: Some(BlockLifecycleEvent::Error(BlockErrorData {
-                                    message: e.to_string(),
-                                })),
-                            }
-                            .into(),
-                        )
-                        .await;
-
-                    let error_msg = e.to_string();
-                    let _ = context_clone
-                        .document_handle
-                        .update_passive_context(block_id, move |ctx| {
-                            ctx.insert(BlockExecutionOutput {
-                                exit_code: Some(1),
-                                stdout: None,
-                                stderr: Some(error_msg),
-                            });
-                        })
-                        .await;
-
-                    ExecutionStatus::Failed(e.to_string())
-                }
-            };
-
-            *handle_clone.status.write().await = status;
-        });
-
+        if let Err(e) = SqlxBlockBehavior::execute(&self, context, handle.clone()).await {
+            *handle.status.write().await = ExecutionStatus::Failed(e.to_string());
+        }
         Ok(Some(handle))
+    }
+}
+
+#[async_trait::async_trait]
+impl SqlxBlockBehavior for SQLite {
+    type Pool = SqlitePool;
+
+    fn dialect() -> Box<dyn Dialect> {
+        Box::new(SQLiteDialect {})
+    }
+
+    fn resolve_uri(&self, context: &ExecutionContext) -> Result<String, SqlxBlockError> {
+        context
+            .context_resolver
+            .resolve_template(&self.uri)
+            .map_err(|e| SqlxBlockError::InvalidTemplate(e.to_string()))
+    }
+
+    async fn connect(uri: String) -> Result<Self::Pool, SqlxBlockError> {
+        let opts = SqliteConnectOptions::from_str(&uri)?.create_if_missing(true);
+        Ok(SqlitePool::connect_with(opts).await?)
+    }
+
+    async fn disconnect(pool: &SqlitePool) -> Result<(), SqlxBlockError> {
+        pool.close().await;
+        Ok(())
+    }
+
+    fn resolve_query(&self, context: &ExecutionContext) -> Result<String, SqlxBlockError> {
+        context
+            .context_resolver
+            .resolve_template(&self.query)
+            .map_err(|e| SqlxBlockError::InvalidTemplate(e.to_string()))
+    }
+
+    fn is_query(statement: &Statement) -> bool {
+        match statement {
+            Statement::Explain { .. } => true,
+            Statement::Fetch { .. } => true,
+            Statement::Query { .. } => true,
+            Statement::Pragma { .. } => true,
+            _ => false,
+        }
+    }
+
+    async fn execute_query(
+        pool: &Self::Pool,
+        query: &str,
+    ) -> Result<SqlxBlockExecutionResult, SqlxBlockError> {
+        let start_time = Instant::now();
+        let rows = sqlx::query(query).fetch_all(pool).await?;
+        let duration = start_time.elapsed();
+        let mut columns = Vec::new();
+
+        if let Some(first_row) = rows.first() {
+            columns = first_row
+                .columns()
+                .iter()
+                .map(|col| col.name().to_string())
+                .collect();
+        }
+
+        let results = rows
+            .iter()
+            .map(Self::row_to_json)
+            .collect::<Result<_, _>>()?;
+
+        Ok(SqlxBlockExecutionResult::Query(
+            SqlxQueryResult::builder()
+                .columns(columns)
+                .rows(results)
+                .duration(duration)
+                .build(),
+        ))
+    }
+
+    async fn execute_statement(
+        pool: &Self::Pool,
+        statement: &str,
+    ) -> Result<SqlxBlockExecutionResult, SqlxBlockError> {
+        let start_time = Instant::now();
+        let result = sqlx::query(statement).execute(pool).await?;
+        let duration = start_time.elapsed();
+
+        Ok(SqlxBlockExecutionResult::Statement(
+            SqlxStatementResult::builder()
+                .rows_affected(result.rows_affected())
+                .last_insert_rowid(Some(result.last_insert_rowid() as u64))
+                .duration(duration)
+                .build(),
+        ))
     }
 }
 
@@ -622,8 +279,8 @@ mod tests {
     use super::*;
     use crate::runtime::blocks::document::actor::{DocumentCommand, DocumentHandle};
     use crate::runtime::blocks::document::block_context::ContextResolver;
-    use crate::runtime::events::MemoryEventBus;
-    use std::collections::HashMap;
+    use crate::runtime::blocks::handler::ExecutionStatus;
+    use crate::runtime::events::{GCEvent, MemoryEventBus};
     use std::sync::Arc;
     use tokio::sync::mpsc;
 
@@ -643,6 +300,7 @@ mod tests {
         let (event_sender, _event_receiver) = tokio::sync::broadcast::channel(16);
 
         ExecutionContext::builder()
+            .block_id(Uuid::new_v4())
             .runbook_id(Uuid::new_v4())
             .document_handle(document_handle)
             .context_resolver(Arc::new(context_resolver))
@@ -650,34 +308,17 @@ mod tests {
             .build()
     }
 
-    fn create_test_context_with_vars(vars: Vec<(&str, &str)>) -> ExecutionContext {
-        let (tx, _rx) = mpsc::unbounded_channel::<DocumentCommand>();
-        let document_handle = DocumentHandle::from_raw("test-runbook".to_string(), tx);
-
-        let vars_map: HashMap<String, String> = vars
-            .into_iter()
-            .map(|(k, v)| (k.to_string(), v.to_string()))
-            .collect();
-
-        let context_resolver = ContextResolver::with_vars(vars_map);
-
-        let (event_sender, _event_receiver) = tokio::sync::broadcast::channel(16);
-
-        ExecutionContext::builder()
-            .runbook_id(Uuid::new_v4())
-            .document_handle(document_handle)
-            .context_resolver(Arc::new(context_resolver))
-            .workflow_event_sender(event_sender)
-            .build()
-    }
-
-    fn create_test_context_with_event_bus(event_bus: Arc<MemoryEventBus>) -> ExecutionContext {
+    fn create_test_context_with_event_bus(
+        block_id: Uuid,
+        event_bus: Arc<MemoryEventBus>,
+    ) -> ExecutionContext {
         let (tx, _rx) = mpsc::unbounded_channel::<DocumentCommand>();
         let document_handle = DocumentHandle::from_raw("test-runbook".to_string(), tx);
         let context_resolver = Arc::new(ContextResolver::new());
         let (event_sender, _event_receiver) = tokio::sync::broadcast::channel(16);
 
         ExecutionContext::builder()
+            .block_id(block_id)
             .runbook_id(Uuid::new_v4())
             .document_handle(document_handle)
             .context_resolver(context_resolver)
@@ -829,7 +470,7 @@ mod tests {
             let status = handle.status.read().await.clone();
             match status {
                 ExecutionStatus::Failed(e) => {
-                    assert!(e.contains("No SQL statements"));
+                    assert!(e.contains("Query is empty"));
                     break;
                 }
                 ExecutionStatus::Success(_) => panic!("Query should have failed"),
@@ -882,11 +523,10 @@ mod tests {
     #[tokio::test]
     async fn test_grand_central_events_successful_query() {
         let event_bus = Arc::new(MemoryEventBus::new());
-        let context = create_test_context_with_event_bus(event_bus.clone());
-        let runbook_id = context.runbook_id;
-
         let sqlite = create_test_sqlite("SELECT 1", "sqlite::memory:");
         let sqlite_id = sqlite.id;
+        let context = create_test_context_with_event_bus(sqlite_id, event_bus.clone());
+        let runbook_id = context.runbook_id;
 
         let handle = sqlite.execute(context).await.unwrap().unwrap();
 
@@ -935,11 +575,10 @@ mod tests {
     #[tokio::test]
     async fn test_grand_central_events_failed_query() {
         let event_bus = Arc::new(MemoryEventBus::new());
-        let context = create_test_context_with_event_bus(event_bus.clone());
-        let runbook_id = context.runbook_id;
-
-        let sqlite = create_test_sqlite("INVALID SQL", "sqlite::memory:");
+        let sqlite = create_test_sqlite("SELECT * from ADFASDFSDFADFSDF", "sqlite::memory:");
         let sqlite_id = sqlite.id;
+        let context = create_test_context_with_event_bus(sqlite_id, event_bus.clone());
+        let runbook_id = context.runbook_id;
 
         let handle = sqlite.execute(context).await.unwrap().unwrap();
 
@@ -979,7 +618,7 @@ mod tests {
             } => {
                 assert_eq!(*block_id, sqlite_id);
                 assert_eq!(*rb_id, runbook_id);
-                assert!(error.contains("SQL") || error.contains("syntax"));
+                assert!(error.contains("no such table"));
             }
             _ => panic!("Expected BlockFailed event, got: {:?}", events[1]),
         }
