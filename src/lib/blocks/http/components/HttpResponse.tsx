@@ -83,9 +83,12 @@ const HttpResponseComponent = ({ response, error, dismiss, colorMode }: HttpResp
 
   const { status, statusText, headers, body } = response;
 
-  const headerEntries = Array.from(Object.entries(headers)).toSorted((a, b) =>
-    a[0].localeCompare(b[0]),
-  );
+  const headerEntries = Array.from(Object.entries(headers))
+    .toSorted((a, b) => a[0].localeCompare(b[0]))
+    .map(([key, value]) => ({
+      Header: key,
+      Value: value,
+    }));
 
   const getStatusInfo = (status: any) => {
     if (status >= 200 && status < 300) return { color: "success", icon: CheckCircle };
@@ -137,7 +140,7 @@ const HttpResponseComponent = ({ response, error, dismiss, colorMode }: HttpResp
               isIconOnly
               onClick={() => {
                 const headersText = headerEntries
-                  .map(([key, value]) => `${key}: ${value}`)
+                  .map(({ Header, Value }) => `${Header}: ${Value}`)
                   .join("\n");
                 copyToClipboard(headersText);
               }}
