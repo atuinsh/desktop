@@ -240,7 +240,7 @@ async fn run_agent_session(
 
     // Build agent
     log::debug!("Building agent for block {}", block_id);
-    let agent = match build_agent(tools, &context).await {
+    let agent = match build_agent(tools, &context, block_id).await {
         Ok(agent) => {
             log::debug!("Agent built successfully for block {}", block_id);
             agent
@@ -432,6 +432,8 @@ async fn process_agent_message(
     _messages: Arc<TokioMutex<Vec<Message>>>,
 ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
     use agents_sdk::messaging::{AgentMessage, MessageContent, MessageRole};
+    use agents_core::llm::StreamChunk;
+    use futures::StreamExt;
 
     log::debug!("Processing agent message: {}", message);
 
@@ -441,33 +443,147 @@ async fn process_agent_message(
         metadata: None,
     };
 
-    log::debug!("Calling agent.handle_message...");
-    let response = agent
-        .handle_message(agent_message, Arc::new(AgentStateSnapshot::default()))
+    log::debug!("Calling agent.handle_message_stream...");
+    let mut stream = agent
+        .handle_message_stream(agent_message, Arc::new(AgentStateSnapshot::default()))
         .await
         .map_err(|e| {
-            log::error!("Agent handle_message error: {:?}", e);
+            log::error!("Agent handle_message_stream error: {:?}", e);
             e
         })?;
 
-    log::debug!("Agent response received: {:?}", response);
+    let mut full_text = String::new();
 
-    let text = response.content.as_text().unwrap_or("").to_string();
+    while let Some(chunk_result) = stream.next().await {
+        match chunk_result {
+            Ok(StreamChunk::TextDelta(delta)) => {
+                full_text.push_str(&delta);
+                
+                log::debug!("Sending AssistantDelta: {}", delta);
+                let event_data = serde_json::to_value(AgentUiEvent::AssistantDelta { text: delta })
+                    .unwrap_or_default();
+                
+                let _ = context
+                    .send_output(
+                        BlockOutput::builder()
+                            .block_id(block_id)
+                            .object(event_data)
+                            .build(),
+                    )
+                    .await;
+            }
+            Ok(StreamChunk::Done { .. }) => {
+                log::debug!("Stream completed, full text length: {}", full_text.len());
+                break;
+            }
+            Ok(StreamChunk::Error(e)) => {
+                log::error!("Stream error: {}", e);
+                return Err(e.into());
+            }
+            Err(e) => {
+                log::error!("Stream chunk error: {:?}", e);
+                return Err(e.into());
+            }
+        }
+    }
 
-    log::debug!("Sending AssistantDelta to frontend: block_id={}, text_len={}", block_id, text.len());
-    let event_data = serde_json::to_value(AgentUiEvent::AssistantDelta { text: text.clone() })
-        .unwrap_or_default();
-    
-    let _ = context
-        .send_output(
-            BlockOutput::builder()
-                .block_id(block_id)
-                .object(event_data)
-                .build(),
-        )
-        .await;
+    Ok(full_text)
+}
 
-    Ok(text)
+// ============================================================================
+// Agent Event Broadcaster
+// ============================================================================
+
+struct AgentEventBroadcaster {
+    block_id: Uuid,
+    context: ExecutionContext,
+}
+
+#[async_trait::async_trait]
+impl agents_core::events::EventBroadcaster for AgentEventBroadcaster {
+    fn id(&self) -> &str {
+        "atuin-agent-broadcaster"
+    }
+
+    async fn broadcast(&self, event: &agents_core::events::AgentEvent) -> anyhow::Result<()> {
+        use agents_core::events::AgentEvent;
+
+        match event {
+            AgentEvent::PlanningComplete(e) => {
+                log::debug!("Planning: {} - {}", e.action_type, e.action_summary);
+                let event_data = serde_json::to_value(AgentUiEvent::ToolCall {
+                    name: format!("Planning: {}", e.action_type),
+                    args_json: e.action_summary.clone(),
+                })
+                .unwrap_or_default();
+                
+                let _ = self.context
+                    .send_output(
+                        BlockOutput::builder()
+                            .block_id(self.block_id)
+                            .object(event_data)
+                            .build(),
+                    )
+                    .await;
+            }
+            AgentEvent::ToolStarted(e) => {
+                log::debug!("Tool started: {}", e.tool_name);
+                let event_data = serde_json::to_value(AgentUiEvent::ToolCall {
+                    name: e.tool_name.clone(),
+                    args_json: e.input_summary.clone(),
+                })
+                .unwrap_or_default();
+                
+                let _ = self.context
+                    .send_output(
+                        BlockOutput::builder()
+                            .block_id(self.block_id)
+                            .object(event_data)
+                            .build(),
+                    )
+                    .await;
+            }
+            AgentEvent::ToolCompleted(e) => {
+                log::debug!("Tool completed: {} in {}ms", e.tool_name, e.duration_ms);
+                let event_data = serde_json::to_value(AgentUiEvent::ToolResult {
+                    name: e.tool_name.clone(),
+                    ok: true,
+                    result_json: e.result_summary.clone(),
+                })
+                .unwrap_or_default();
+                
+                let _ = self.context
+                    .send_output(
+                        BlockOutput::builder()
+                            .block_id(self.block_id)
+                            .object(event_data)
+                            .build(),
+                    )
+                    .await;
+            }
+            AgentEvent::ToolFailed(e) => {
+                log::error!("Tool failed: {} - {}", e.tool_name, e.error_message);
+                let event_data = serde_json::to_value(AgentUiEvent::ToolResult {
+                    name: e.tool_name.clone(),
+                    ok: false,
+                    result_json: e.error_message.clone(),
+                })
+                .unwrap_or_default();
+                
+                let _ = self.context
+                    .send_output(
+                        BlockOutput::builder()
+                            .block_id(self.block_id)
+                            .object(event_data)
+                            .build(),
+                    )
+                    .await;
+            }
+            _ => {}
+        }
+
+        Ok(())
+    }
 }
 
 // ============================================================================
@@ -523,6 +639,7 @@ fn create_agent_tools() -> Vec<Arc<dyn agents_core::Tool>> {
 async fn build_agent(
     tools: Vec<Arc<dyn agents_core::Tool>>,
     context: &ExecutionContext,
+    block_id: Uuid,
 ) -> Result<Arc<dyn AgentHandle>, Box<dyn std::error::Error + Send + Sync>> {
     // Get AI settings from RuntimeConfig
     let ai_config = context.runtime_config.ai_config().clone();
@@ -578,9 +695,15 @@ Be precise with block structure and helpful in your responses."#,
 
     let checkpointer = Arc::new(InMemoryCheckpointer::new());
 
+    let broadcaster = Arc::new(AgentEventBroadcaster {
+        block_id,
+        context: context.clone(),
+    });
+
     let mut builder = ConfigurableAgentBuilder::new(&system_prompt)
         .with_model(model)
-        .with_checkpointer(checkpointer);
+        .with_checkpointer(checkpointer)
+        .with_event_broadcasters(vec![broadcaster]);
 
     for tool in tools {
         builder = builder.with_tool(tool);

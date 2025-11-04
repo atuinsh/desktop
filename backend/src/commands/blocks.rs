@@ -91,6 +91,38 @@ async fn build_runtime_config(
 }
 
 #[tauri::command]
+pub async fn block_write_input(
+    state: State<'_, AtuinState>,
+    runbook_id: String,
+    block_id: String,
+    input: crate::runtime::blocks::handler::BlockInput,
+) -> Result<(), String> {
+    let runbook_uuid = Uuid::parse_str(&runbook_id).map_err(|e| e.to_string())?;
+    let block_uuid = Uuid::parse_str(&block_id).map_err(|e| e.to_string())?;
+
+    // Try agent session first
+    if let Some(session) = state.agent_session_registry
+        .get_session(runbook_uuid, block_uuid)
+        .await
+    {
+        // Agent expects text input
+        if let Some(text) = input.text {
+            session
+                .user_message_tx
+                .send(text)
+                .await
+                .map_err(|e| format!("Failed to send input to agent: {}", e))?;
+            return Ok(());
+        }
+        return Err("Agent requires text input".to_string());
+    }
+
+    // TODO: Handle other block types (e.g., PTY with binary input)
+
+    Err(format!("No active session found for block {}", block_id))
+}
+
+#[tauri::command]
 pub async fn execute_block(
     app: AppHandle,
     state: State<'_, AtuinState>,

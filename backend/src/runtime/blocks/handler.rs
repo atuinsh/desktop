@@ -220,6 +220,17 @@ pub struct BlockOutput {
     pub object: Option<serde_json::Value>, // For structured JSON data
 }
 
+#[derive(TS, Debug, Clone, Serialize, Deserialize, TypedBuilder)]
+#[ts(export)]
+pub struct BlockInput {
+    #[builder(default, setter(strip_option(fallback = text_opt)))]
+    pub text: Option<String>,
+    #[builder(default, setter(strip_option(fallback = binary_opt)))]
+    pub binary: Option<Vec<u8>>,
+    #[builder(default, setter(strip_option(fallback = object_opt)))]
+    pub object: Option<serde_json::Value>,
+}
+
 #[derive(TS, Debug, Clone, Serialize, Deserialize)]
 #[ts(export)]
 pub struct BlockFinishedData {

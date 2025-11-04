@@ -127,6 +127,7 @@ export interface ClientExecutionHandle {
   error: string | null;
   execute: () => Promise<void>;
   cancel: () => Promise<void>;
+  sendInput: (input: string) => Promise<void>;
   reset: () => void;
 }
 
@@ -231,6 +232,23 @@ export function useBlockExecution(blockId: string): ClientExecutionHandle {
 
   useBlockOutput(blockId, handleBlockOutput);
 
+  const sendInput = useCallback(async (input: string) => {
+    if (!documentBridge) {
+      console.error("`sendInput` called but document bridge not found");
+      return;
+    }
+
+    await invoke("block_write_input", {
+      runbookId: documentBridge.runbookId,
+      blockId: blockId,
+      input: {
+        text: input,
+        binary: null,
+        object: null,
+      },
+    });
+  }, [documentBridge, blockId]);
+
   return {
     isRunning: lifecycle === "running",
     isSuccess: lifecycle === "success",
@@ -239,6 +257,7 @@ export function useBlockExecution(blockId: string): ClientExecutionHandle {
     error: error ?? null,
     execute: startExecution,
     cancel: stopExecution,
+    sendInput: sendInput,
     reset: () => {
       setLifecycle("idle");
       setError(null);

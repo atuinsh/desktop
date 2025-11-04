@@ -2,9 +2,8 @@ import { useState, useRef, useEffect } from "react";
 import { Button, Input, ScrollShadow, Textarea } from "@heroui/react";
 import { BotIcon, SendIcon, Loader2Icon, StopCircleIcon } from "lucide-react";
 import { useCurrentRunbookId } from "@/context/runbook_id_context";
-import { invoke } from "@tauri-apps/api/core";
 import PlayButton from "@/lib/blocks/common/PlayButton";
-import { useBlockOutput } from "@/lib/hooks/useDocumentBridge";
+import { useBlockExecution, useBlockOutput } from "@/lib/hooks/useDocumentBridge";
 
 interface Message {
   role: "user" | "assistant" | "system";
@@ -25,7 +24,7 @@ export const AgentBackend = ({ id, isEditable, blockId }: AgentProps) => {
   const [isLoading, setIsLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const currentRunbookId = useCurrentRunbookId();
-  const [sessionStarted, setSessionStarted] = useState(false);
+  const execution = useBlockExecution(id);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -85,47 +84,23 @@ export const AgentBackend = ({ id, isEditable, blockId }: AgentProps) => {
   });
 
   const handleStop = async () => {
-    if (!currentRunbookId) return;
-
-    try {
-      await invoke("agent_cancel_session", {
-        runbookId: currentRunbookId,
-        blockId: blockId,
-      });
-      setIsLoading(false);
-    } catch (error) {
-      console.error("Failed to cancel agent:", error);
-    }
+    await execution.cancel();
+    setIsLoading(false);
   };
 
   const handleRun = async () => {
-    if (!currentRunbookId || isLoading) return;
+    if (execution.isRunning || isLoading) return;
 
     const message = initialPrompt.trim() || "Hello";
 
     // Start the session
-    try {
-      await invoke("execute_block", {
-        blockId: blockId,
-        runbookId: currentRunbookId,
-      });
-      setSessionStarted(true);
-    } catch (error) {
-      console.error("Failed to start agent session:", error);
-      return;
-    }
-
-    // Send the initial message
     const userMessage: Message = { role: "user", content: message };
     setMessages([userMessage]);
     setIsLoading(true);
 
     try {
-      await invoke("agent_send_message", {
-        runbookId: currentRunbookId,
-        blockId: blockId,
-        request: { message },
-      });
+      await execution.execute();
+      await execution.sendInput(message);
     } catch (error: any) {
       const errorMessage: Message = {
         role: "assistant",
@@ -137,7 +112,7 @@ export const AgentBackend = ({ id, isEditable, blockId }: AgentProps) => {
   };
 
   const handleSend = async () => {
-    if (!input.trim() || isLoading || !currentRunbookId || !sessionStarted) return;
+    if (!input.trim() || isLoading || !execution.isRunning) return;
 
     const userMessage: Message = { role: "user", content: input };
     setMessages((prev) => [...prev, userMessage]);
@@ -145,13 +120,7 @@ export const AgentBackend = ({ id, isEditable, blockId }: AgentProps) => {
     setIsLoading(true);
 
     try {
-      await invoke("agent_send_message", {
-        runbookId: currentRunbookId,
-        blockId: blockId,
-        request: {
-          message: input,
-        },
-      });
+      await execution.sendInput(input);
     } catch (error: any) {
       const errorMessage: Message = {
         role: "assistant",
@@ -168,7 +137,7 @@ export const AgentBackend = ({ id, isEditable, blockId }: AgentProps) => {
         <PlayButton
           onPlay={handleRun}
           onStop={handleStop}
-          isRunning={sessionStarted && isLoading}
+          isRunning={execution.isRunning && isLoading}
           isLoading={isLoading}
           cancellable={true}
           disabled={!isEditable}
@@ -181,7 +150,7 @@ export const AgentBackend = ({ id, isEditable, blockId }: AgentProps) => {
             placeholder="Initial prompt for the agent..."
             value={initialPrompt}
             onChange={(e) => setInitialPrompt(e.target.value)}
-            disabled={!isEditable || sessionStarted}
+            disabled={!isEditable || execution.isRunning}
             minRows={1}
             maxRows={3}
             size="sm"
@@ -244,6 +213,9 @@ export const AgentBackend = ({ id, isEditable, blockId }: AgentProps) => {
             disabled={!isEditable}
             size="sm"
             className="flex-1"
+            classNames={{
+              inputWrapper: "!ring-0 !ring-offset-0 focus-within:!ring-0"
+            }}
           />
           {isLoading ? (
             <Button
