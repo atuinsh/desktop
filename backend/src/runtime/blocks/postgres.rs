@@ -1,9 +1,11 @@
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::{json, Map, Value};
+use sqlparser::ast::Statement;
+use sqlparser::dialect::{Dialect, PostgreSqlDialect};
 use sqlx::{postgres::PgConnectOptions, Column, PgPool, Row, TypeInfo};
 use std::str::FromStr;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
 use typed_builder::TypedBuilder;
 use uuid::Uuid;
@@ -11,6 +13,10 @@ use uuid::Uuid;
 use crate::runtime::blocks::document::block_context::BlockExecutionOutput;
 use crate::runtime::blocks::handler::{
     BlockErrorData, BlockFinishedData, BlockLifecycleEvent, BlockOutput, ExecutionStatus,
+};
+use crate::runtime::blocks::sqlx_block::{
+    SqlxBlockBehavior, SqlxBlockError, SqlxBlockExecutionResult, SqlxQueryResult,
+    SqlxStatementResult,
 };
 use crate::runtime::blocks::{Block, BlockBehavior};
 use crate::runtime::events::GCEvent;
@@ -119,8 +125,8 @@ impl Postgres {
     }
 
     /// Convert Postgres row to JSON value
-    fn row_to_json(row: &sqlx::postgres::PgRow) -> Result<Value, sqlx::Error> {
-        let mut obj = serde_json::Map::new();
+    fn row_to_json(row: &sqlx::postgres::PgRow) -> Result<Map<String, Value>, sqlx::Error> {
+        let mut obj = Map::new();
 
         for (i, column) in row.columns().iter().enumerate() {
             let column_name = column.name().to_string();
@@ -215,327 +221,104 @@ impl Postgres {
             obj.insert(column_name, value);
         }
 
-        Ok(Value::Object(obj))
+        Ok(obj)
+    }
+}
+
+#[async_trait::async_trait]
+impl SqlxBlockBehavior for Postgres {
+    type Pool = PgPool;
+
+    fn dialect() -> Box<dyn Dialect> {
+        Box::new(PostgreSqlDialect {})
     }
 
-    /// Execute a single Postgres statement
-    async fn execute_statement(
-        &self,
-        pool: &PgPool,
-        statement: &str,
-        context: &ExecutionContext,
-    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        let trimmed = statement.trim();
-        if trimmed.is_empty() {
-            return Ok(());
+    fn resolve_query(&self, context: &ExecutionContext) -> Result<String, SqlxBlockError> {
+        context
+            .context_resolver
+            .resolve_template(&self.query)
+            .map_err(|e| SqlxBlockError::InvalidTemplate(e.to_string()))
+    }
+
+    fn resolve_uri(&self, context: &ExecutionContext) -> Result<String, SqlxBlockError> {
+        let uri = context
+            .context_resolver
+            .resolve_template(&self.uri)
+            .map_err(|e| SqlxBlockError::InvalidTemplate(e.to_string()))?;
+
+        if let Err(e) = Self::validate_postgres_uri(&uri) {
+            return Err(SqlxBlockError::InvalidUri(e.to_string()));
         }
 
-        // Check if this is a SELECT statement
-        let first_word = trimmed
-            .split_whitespace()
-            .next()
-            .unwrap_or("")
-            .to_lowercase();
+        Ok(uri)
+    }
 
-        if first_word == "select" || first_word == "with" {
-            // Handle SELECT query or CTE
-            let rows = sqlx::query(statement)
-                .fetch_all(pool)
-                .await
-                .map_err(|e| format!("SQL query failed: {}", e))?;
+    async fn connect(uri: String) -> Result<Self::Pool, SqlxBlockError> {
+        let opts = PgConnectOptions::from_str(&uri)?;
+        Ok(PgPool::connect_with(opts).await?)
+    }
 
-            let mut results = Vec::new();
-            let mut column_names = Vec::new();
-
-            if let Some(first_row) = rows.first() {
-                column_names = first_row
-                    .columns()
-                    .iter()
-                    .map(|col| col.name().to_string())
-                    .collect();
-            }
-
-            for row in &rows {
-                results.push(Self::row_to_json(row)?);
-            }
-
-            // Send results as structured JSON object
-            let result_json = json!({
-                "columns": column_names,
-                "rows": results,
-                "rowCount": results.len()
-            });
-
-            let _ = context
-                .send_output(
-                    BlockOutput::builder()
-                        .block_id(self.id)
-                        .object(result_json)
-                        .build(),
-                )
-                .await;
-        } else {
-            // Handle non-SELECT statement (INSERT, UPDATE, DELETE, CREATE, etc.)
-            let result = sqlx::query(statement)
-                .execute(pool)
-                .await
-                .map_err(|e| format!("SQL execution failed: {}", e))?;
-
-            // Send execution result as structured JSON object
-            let result_json = json!({
-                "rowsAffected": result.rows_affected(),
-            });
-
-            let _ = context
-                .send_output(
-                    BlockOutput::builder()
-                        .block_id(self.id)
-                        .object(result_json)
-                        .build(),
-                )
-                .await;
-        }
-
+    async fn disconnect(pool: &Self::Pool) -> Result<(), SqlxBlockError> {
+        pool.close().await;
         Ok(())
     }
 
-    async fn run_postgres_query(
-        &self,
-        context: ExecutionContext,
-        cancellation_token: CancellationToken,
-    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        let block_id = self.id;
+    fn is_query(statement: &Statement) -> bool {
+        match statement {
+            Statement::Query { .. } => true,
+            Statement::Explain { .. } => true,
+            Statement::Fetch { .. } => true,
+            Statement::Pragma { .. } => true,
+            Statement::ShowVariable { .. } => true,
+            _ => false,
+        }
+    }
 
-        // Send start event
-        let _ = context.emit_workflow_event(WorkflowEvent::BlockStarted { id: block_id });
+    async fn execute_query(
+        pool: &Self::Pool,
+        query: &str,
+    ) -> Result<SqlxBlockExecutionResult, SqlxBlockError> {
+        let start_time = Instant::now();
+        let rows = sqlx::query(query).fetch_all(pool).await?;
+        let duration = start_time.elapsed();
+        let mut columns = Vec::new();
 
-        // Send started lifecycle event to output channel
-        let _ = context
-            .send_output(
-                BlockOutput::builder()
-                    .block_id(self.id)
-                    .lifecycle(BlockLifecycleEvent::Started)
-                    .build(),
-            )
-            .await;
-
-        // Template the query using context resolver
-        let query = self.template_postgres_query(&context).unwrap_or_else(|e| {
-            eprintln!("Template error in Postgres query {}: {}", block_id, e);
-            self.query.clone() // Fallback to original query
-        });
-
-        // Validate URI format
-        if let Err(e) = Self::validate_postgres_uri(&self.uri) {
-            // Send error lifecycle event
-            let _ = context
-                .send_output(
-                    BlockOutput::builder()
-                        .block_id(self.id)
-                        .stderr(e.clone())
-                        .lifecycle(BlockLifecycleEvent::Error(BlockErrorData {
-                            message: e.clone(),
-                        }))
-                        .build(),
-                )
-                .await;
-            return Err(e.into());
+        if let Some(first_row) = rows.first() {
+            columns = first_row
+                .columns()
+                .iter()
+                .map(|col| col.name().to_string())
+                .collect();
         }
 
-        // Send connecting status
-        let _ = context
-            .send_output(
-                BlockOutput::builder()
-                    .block_id(self.id)
-                    .stdout("Connecting to database...".to_string())
-                    .build(),
-            )
-            .await;
+        let results = rows
+            .iter()
+            .map(Self::row_to_json)
+            .collect::<Result<_, _>>()?;
 
-        // Create Postgres connection pool with reliable timeout using tokio::select!
-        let pool = {
-            let connection_task = async {
-                let opts = PgConnectOptions::from_str(&self.uri)?;
-                PgPool::connect_with(opts).await
-            };
+        Ok(SqlxBlockExecutionResult::Query(
+            SqlxQueryResult::builder()
+                .columns(columns)
+                .rows(results)
+                .duration(duration)
+                .build(),
+        ))
+    }
 
-            let timeout_task = tokio::time::sleep(Duration::from_secs(10));
+    async fn execute_statement(
+        pool: &Self::Pool,
+        statement: &str,
+    ) -> Result<SqlxBlockExecutionResult, SqlxBlockError> {
+        let start_time = Instant::now();
+        let result = sqlx::query(statement).execute(pool).await?;
+        let duration = start_time.elapsed();
 
-            tokio::select! {
-                result = connection_task => {
-                    match result {
-                        Ok(pool) => {
-                            // Send successful connection status
-                                let _ = context.send_output(
-                                    BlockOutput::builder()
-                                        .block_id(self.id)
-                                        .stdout("Connected to database successfully".to_string())
-                                        .build(),
-                                ).await;
-                            pool
-                        },
-                        Err(e) => {
-                            let error_msg = format!("Failed to connect to database: {}", e);
-                                let _ = context.send_output(
-                                    BlockOutput::builder()
-                                        .block_id(self.id)
-                                        .stderr(error_msg.clone())
-                                        .lifecycle(BlockLifecycleEvent::Error(BlockErrorData {
-                                            message: error_msg.clone(),
-                                        }))
-                                        .build(),
-                                ).await;
-                            return Err(error_msg.into());
-                        }
-                    }
-                }
-                _ = timeout_task => {
-                    let error_msg = "Database connection timed out after 10 seconds. Please check your connection string and network.";
-                        let _ = context.send_output(
-                            BlockOutput::builder()
-                                .block_id(self.id)
-                                .stderr(error_msg.to_string())
-                                .lifecycle(BlockLifecycleEvent::Error(BlockErrorData {
-                                    message: error_msg.to_string(),
-                                }))
-                                .build(),
-                        ).await;
-                    return Err(error_msg.into());
-                }
-            }
-        };
-
-        let query_clone = query.clone();
-        let context_clone = context.clone();
-        let cancellation_receiver = cancellation_token.take_receiver();
-        let pool_clone = pool.clone();
-
-        let execution_task = async move {
-            // Split query into statements
-            let statements: Vec<&str> = query_clone
-                .split(';')
-                .map(|s| s.trim())
-                .filter(|s| !s.is_empty())
-                .collect();
-
-            if statements.is_empty() {
-                let error_msg = "No SQL statements to execute";
-                let _ = context_clone
-                    .send_output(
-                        BlockOutput::builder()
-                            .block_id(self.id)
-                            .stderr(error_msg.to_string())
-                            .lifecycle(BlockLifecycleEvent::Error(BlockErrorData {
-                                message: error_msg.to_string(),
-                            }))
-                            .build(),
-                    )
-                    .await;
-                return Err(error_msg.into());
-            }
-
-            // Send executing status
-            let _ = context_clone
-                .send_output(
-                    BlockOutput::builder()
-                        .block_id(self.id)
-                        .stdout(format!(
-                            "Executing {} SQL statement(s)...",
-                            statements.len()
-                        ))
-                        .build(),
-                )
-                .await;
-
-            // Execute each statement
-            for (i, statement) in statements.iter().enumerate() {
-                if let Err(e) = self
-                    .execute_statement(&pool_clone, statement, &context_clone)
-                    .await
-                {
-                    let error_msg = format!("Statement {} failed: {}", i + 1, e);
-                    let _ = context_clone
-                        .send_output(
-                            BlockOutput::builder()
-                                .block_id(self.id)
-                                .stderr(error_msg.clone())
-                                .lifecycle(BlockLifecycleEvent::Error(BlockErrorData {
-                                    message: error_msg.clone(),
-                                }))
-                                .build(),
-                        )
-                        .await;
-                    return Err(error_msg.into());
-                }
-            }
-
-            Ok(())
-        };
-
-        // Handle execution with cancellation
-        let result = if let Some(cancel_rx) = cancellation_receiver {
-            tokio::select! {
-                _ = cancel_rx => {
-                    // Close the pool
-                    pool.close().await;
-
-                    // Emit BlockCancelled event via Grand Central
-                    if let Some(event_bus) = &context.gc_event_bus {
-                        let _ = event_bus.emit(GCEvent::BlockCancelled {
-                            block_id: self.id,
-                            runbook_id: context.runbook_id,
-                        }).await;
-                    }
-
-                    // Send completion events
-                    let _ = context.emit_workflow_event(WorkflowEvent::BlockFinished { id: block_id });
-                        let _ = context.send_output(
-                            BlockOutput::builder()
-                                .block_id(self.id)
-                                .lifecycle(BlockLifecycleEvent::Cancelled)
-                                .build(),
-                        ).await;
-                    return Err("Postgres query execution cancelled".into());
-                }
-                result = execution_task => {
-                    // Close the pool after execution
-                    pool.close().await;
-                    result
-                }
-            }
-        } else {
-            let result = execution_task.await;
-            // Close the pool after execution
-            pool.close().await;
-            result
-        };
-
-        // Send completion events
-        let _ = context.emit_workflow_event(WorkflowEvent::BlockFinished { id: block_id });
-        // Send success message
-        let _ = context
-            .send_output(
-                BlockOutput::builder()
-                    .block_id(self.id)
-                    .stdout("Query execution completed successfully".to_string())
-                    .build(),
-            )
-            .await;
-
-        // Send finished lifecycle event
-        let _ = context
-            .send_output(
-                BlockOutput::builder()
-                    .block_id(self.id)
-                    .lifecycle(BlockLifecycleEvent::Finished(BlockFinishedData {
-                        exit_code: Some(0),
-                        success: true,
-                    }))
-                    .build(),
-            )
-            .await;
-
-        result
+        Ok(SqlxBlockExecutionResult::Statement(
+            SqlxStatementResult::builder()
+                .rows_affected(result.rows_affected())
+                .duration(duration)
+                .build(),
+        ))
     }
 }
 
@@ -561,101 +344,9 @@ impl BlockBehavior for Postgres {
             output_variable: None,
         };
 
-        let handle_clone = handle.clone();
-        let context_clone = context.clone();
-        let block_id = self.id;
-        let runbook_id = context.runbook_id;
-
-        tokio::spawn(async move {
-            // Emit BlockStarted event via Grand Central
-            if let Some(event_bus) = &context_clone.gc_event_bus {
-                let _ = event_bus
-                    .emit(GCEvent::BlockStarted {
-                        block_id: self.id,
-                        runbook_id,
-                    })
-                    .await;
-            }
-
-            let result = self
-                .run_postgres_query(
-                    context_clone.clone(),
-                    handle_clone.cancellation_token.clone(),
-                )
-                .await;
-
-            // Determine status based on result
-            let status = match result {
-                Ok(_) => {
-                    // Emit BlockFinished event via Grand Central
-                    if let Some(event_bus) = &context_clone.gc_event_bus {
-                        let _ = event_bus
-                            .emit(GCEvent::BlockFinished {
-                                block_id: self.id,
-                                runbook_id,
-                                success: true,
-                            })
-                            .await;
-                    }
-
-                    // Store execution output in context
-                    let _ = context_clone
-                        .document_handle
-                        .update_passive_context(block_id, move |ctx| {
-                            ctx.insert(BlockExecutionOutput {
-                                exit_code: Some(0),
-                                stdout: Some("Query execution completed successfully".to_string()),
-                                stderr: None,
-                            });
-                        })
-                        .await;
-
-                    ExecutionStatus::Success("Postgres query completed successfully".to_string())
-                }
-                Err(e) => {
-                    // Emit BlockFailed event via Grand Central
-                    if let Some(event_bus) = &context_clone.gc_event_bus {
-                        let _ = event_bus
-                            .emit(GCEvent::BlockFailed {
-                                block_id: self.id,
-                                runbook_id,
-                                error: e.to_string(),
-                            })
-                            .await;
-                    }
-
-                    // Send error lifecycle event to output channel
-                    let _ = context
-                        .send_output(
-                            BlockOutput::builder()
-                                .block_id(self.id)
-                                .stderr(e.to_string())
-                                .lifecycle(BlockLifecycleEvent::Error(BlockErrorData {
-                                    message: e.to_string(),
-                                }))
-                                .build(),
-                        )
-                        .await;
-
-                    // Store execution output in context
-                    let error_msg = e.to_string();
-                    let _ = context_clone
-                        .document_handle
-                        .update_passive_context(block_id, move |ctx| {
-                            ctx.insert(BlockExecutionOutput {
-                                exit_code: Some(1),
-                                stdout: None,
-                                stderr: Some(error_msg),
-                            });
-                        })
-                        .await;
-
-                    ExecutionStatus::Failed(e.to_string())
-                }
-            };
-
-            *handle_clone.status.write().await = status;
-        });
+        if let Err(e) = SqlxBlockBehavior::execute(&self, context, handle.clone()).await {
+            *handle.status.write().await = ExecutionStatus::Failed(e.to_string());
+        }
 
         Ok(Some(handle))
     }

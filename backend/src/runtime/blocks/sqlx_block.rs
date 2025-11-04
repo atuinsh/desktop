@@ -33,6 +33,9 @@ pub enum SqlxBlockError {
     #[error("Invalid SQL: {0}")]
     InvalidSql(String),
 
+    #[error("Invalid URI: {0}")]
+    InvalidUri(String),
+
     #[error("Connection error: {0}")]
     ConnectionError(String),
 
