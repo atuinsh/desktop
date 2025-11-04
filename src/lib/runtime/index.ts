@@ -10,7 +10,7 @@ export async function executeBlock(runbookId: string, blockId: string): Promise<
     logger.info(`Block ${blockId} in runbook ${runbookId} returned execution handle ID: ${result}`);
     return result;
   } catch (error) {
-    logger.error(`Failed to execute block ${blockId} in runbook ${runbookId}`, error);
+    logger.warn(`Failed to execute block ${blockId} in runbook ${runbookId}`, error);
     throw error;
   }
 }
@@ -21,7 +21,7 @@ export async function cancelExecution(executionId: string) {
     await invoke<void>("cancel_block_execution", { executionId });
     logger.info(`Execution ${executionId} cancelled`);
   } catch (error) {
-    logger.error(`Failed to cancel execution ${executionId}`, error);
+    logger.warn(`Failed to cancel execution ${executionId}`, error);
     throw error;
   }
 }
@@ -32,7 +32,7 @@ export async function resetRunbookState(runbookId: string) {
     await invoke<void>("reset_runbook_state", { documentId: runbookId });
     logger.info(`Runbook state for ${runbookId} reset`);
   } catch (error) {
-    logger.error(`Failed to reset runbook state for ${runbookId}`, error);
+    logger.warn(`Failed to reset runbook state for ${runbookId}`, error);
     throw error;
   }
 }

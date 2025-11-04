@@ -158,7 +158,7 @@ export function useBlockExecution(blockId: string): ClientExecutionHandle {
     try {
       executionId = await executeBlock(documentBridge.runbookId, blockId);
     } catch (error) {
-      documentBridge.logger.error(
+      documentBridge.logger.warn(
         `Failed to execute block ${blockId} in runbook ${documentBridge.runbookId} (block should send a BlockOutput with lifecycle set to error)`,
         error,
       );
