@@ -143,19 +143,7 @@ impl BlockBehavior for Mysql {
         self,
         context: ExecutionContext,
     ) -> Result<Option<ExecutionHandle>, Box<dyn std::error::Error + Send + Sync>> {
-        let handle = ExecutionHandle {
-            id: Uuid::new_v4(),
-            block_id: self.id,
-            cancellation_token: CancellationToken::new(),
-            status: Arc::new(RwLock::new(ExecutionStatus::Running)),
-            output_variable: None,
-        };
-
-        if let Err(e) = SqlxBlockBehavior::execute(&self, context, handle.clone()).await {
-            *handle.status.write().await = ExecutionStatus::Failed(e.to_string());
-        }
-
-        Ok(Some(handle))
+        SqlxBlockBehavior::execute(&self, context).await
     }
 }
 

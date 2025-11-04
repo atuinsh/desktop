@@ -501,7 +501,7 @@ impl BlockBehavior for Prometheus {
                         })
                         .await;
 
-                    ExecutionStatus::Success("Prometheus query completed successfully".to_string())
+                    ExecutionStatus::Success
                 }
                 Err(e) => {
                     if let Some(event_bus) = &context_clone.gc_event_bus {

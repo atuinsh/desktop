@@ -157,23 +157,7 @@ impl BlockBehavior for Http {
     ) -> Result<Option<ExecutionHandle>, Box<dyn std::error::Error + Send + Sync>> {
         log::trace!("Executing HTTP block {id}", id = self.id);
 
-        if let Some(event_bus) = &context.gc_event_bus {
-            let _ = event_bus
-                .emit(GCEvent::BlockStarted {
-                    block_id: self.id,
-                    runbook_id: context.runbook_id,
-                })
-                .await;
-        }
-
-        context
-            .send_output(
-                BlockOutput::builder()
-                    .block_id(self.id)
-                    .lifecycle(BlockLifecycleEvent::Started)
-                    .build(),
-            )
-            .await?;
+        let _ = context.block_started().await;
 
         let block_id = self.id;
         let response = self.make_http_request(&context).await;
@@ -192,57 +176,16 @@ impl BlockBehavior for Http {
                 HttpError::Other(ref e) => e.to_string(),
             };
 
-            let _ = context
-                .send_output(
-                    BlockOutput::builder()
-                        .block_id(block_id)
-                        .lifecycle(BlockLifecycleEvent::Error(BlockErrorData {
-                            message: error_message.clone(),
-                        }))
-                        .build(),
-                )
-                .await?;
-
-            if let Some(event_bus) = &context.gc_event_bus {
-                let _ = event_bus
-                    .emit(GCEvent::BlockFailed {
-                        block_id,
-                        runbook_id: context.runbook_id,
-                        error: error_message,
-                    })
-                    .await;
-            }
-
+            let _ = context.block_failed(error_message).await;
             return Err(e.into());
         }
 
         let response = response.unwrap();
         let was_success = response.status_success;
 
-        if let Some(event_bus) = &context.gc_event_bus {
-            let _ = event_bus
-                .emit(GCEvent::BlockFinished {
-                    block_id,
-                    runbook_id: context.runbook_id,
-                    success: was_success,
-                })
-                .await;
-        }
+        let _ = context.block_finished(None, was_success).await;
 
-        let _ = context
-            .send_output(
-                BlockOutput::builder()
-                    .block_id(block_id)
-                    .lifecycle(BlockLifecycleEvent::Finished(BlockFinishedData {
-                        exit_code: Some(0),
-                        success: was_success,
-                    }))
-                    .object(serde_json::to_value(response)?)
-                    .build(),
-            )
-            .await?;
-
-        Ok(None)
+        Ok(Some(context.handle()))
     }
 }
 
@@ -383,13 +326,15 @@ mod tests {
         let (event_sender, _event_receiver) = tokio::sync::broadcast::channel(16);
         let message_channel = TestMessageChannel::new();
 
+        let block_id = Uuid::new_v4();
         let context = ExecutionContext::builder()
-            .block_id(Uuid::new_v4())
+            .block_id(block_id)
             .runbook_id(Uuid::new_v4())
             .document_handle(document_handle)
             .context_resolver(Arc::new(context_resolver))
             .workflow_event_sender(event_sender)
             .output_channel(Arc::new(message_channel.clone()))
+            .handle(ExecutionHandle::new(block_id))
             .build();
 
         (context, message_channel)
@@ -411,13 +356,15 @@ mod tests {
         let (event_sender, _event_receiver) = tokio::sync::broadcast::channel(16);
         let message_channel = TestMessageChannel::new();
 
+        let block_id = Uuid::new_v4();
         let context = ExecutionContext::builder()
-            .block_id(Uuid::new_v4())
+            .block_id(block_id)
             .runbook_id(Uuid::new_v4())
             .document_handle(document_handle)
             .context_resolver(Arc::new(context_resolver))
             .workflow_event_sender(event_sender)
             .output_channel(Arc::new(message_channel.clone()))
+            .handle(ExecutionHandle::new(block_id))
             .build();
 
         (context, message_channel)
@@ -441,6 +388,7 @@ mod tests {
             .workflow_event_sender(event_sender)
             .gc_event_bus(event_bus)
             .output_channel(Arc::new(message_channel.clone()))
+            .handle(ExecutionHandle::new(block_id))
             .build();
 
         (context, message_channel)

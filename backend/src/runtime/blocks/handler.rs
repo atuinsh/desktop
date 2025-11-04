@@ -29,6 +29,7 @@ pub struct ExecutionContext {
     pub pty_store: Option<PtyStoreHandle>,
     #[builder(default, setter(strip_option(fallback = event_bus_opt)))]
     pub gc_event_bus: Option<Arc<dyn EventBus>>,
+    handle: ExecutionHandle,
 }
 
 impl Debug for ExecutionContext {
@@ -41,6 +42,11 @@ impl Debug for ExecutionContext {
 }
 
 impl ExecutionContext {
+    /// Get the execution handle
+    pub fn handle(&self) -> ExecutionHandle {
+        self.handle.clone()
+    }
+
     /// Emit a Workflow event
     pub fn emit_workflow_event(&self, event: WorkflowEvent) -> Result<(), DocumentError> {
         self.workflow_event_sender
@@ -100,7 +106,7 @@ impl ExecutionContext {
     }
 
     /// Emit a BlockStarted event via Grand Central
-    pub async fn emit_block_started(&self) -> Result<(), DocumentError> {
+    async fn emit_block_started(&self) -> Result<(), DocumentError> {
         self.emit_gc_event(GCEvent::BlockStarted {
             block_id: self.block_id,
             runbook_id: self.runbook_id,
@@ -109,7 +115,7 @@ impl ExecutionContext {
     }
 
     /// Emit a BlockFinished event via Grand Central
-    pub async fn emit_block_finished(&self, success: bool) -> Result<(), DocumentError> {
+    async fn emit_block_finished(&self, success: bool) -> Result<(), DocumentError> {
         self.emit_gc_event(GCEvent::BlockFinished {
             block_id: self.block_id,
             runbook_id: self.runbook_id,
@@ -119,7 +125,7 @@ impl ExecutionContext {
     }
 
     /// Emit a BlockFailed event via Grand Central
-    pub async fn emit_block_failed(&self, error: String) -> Result<(), DocumentError> {
+    async fn emit_block_failed(&self, error: String) -> Result<(), DocumentError> {
         self.emit_gc_event(GCEvent::BlockFailed {
             block_id: self.block_id,
             runbook_id: self.runbook_id,
@@ -129,12 +135,97 @@ impl ExecutionContext {
     }
 
     /// Emit a BlockCancelled event via Grand Central
-    pub async fn emit_block_cancelled(&self) -> Result<(), DocumentError> {
+    async fn emit_block_cancelled(&self) -> Result<(), DocumentError> {
         self.emit_gc_event(GCEvent::BlockCancelled {
             block_id: self.block_id,
             runbook_id: self.runbook_id,
         })
         .await
+    }
+
+    /// Mark a block as started
+    /// Sends appropriate events to Grand Centra, the workflow event bus, and the output channel
+    pub async fn block_started(&self) -> Result<(), DocumentError> {
+        let _ = self.handle().set_running().await;
+        let _ = self.emit_block_started().await;
+        let _ = self.emit_workflow_event(WorkflowEvent::BlockStarted { id: self.block_id });
+        let _ = self
+            .send_output(
+                BlockOutput::builder()
+                    .block_id(self.block_id)
+                    .lifecycle(BlockLifecycleEvent::Started)
+                    .build(),
+            )
+            .await;
+        Ok(())
+    }
+
+    /// Mark a block as finished
+    /// Sends appropriate events to Grand Centra, the workflow event bus, and the output channel
+    pub async fn block_finished(
+        &self,
+        exit_code: Option<i32>,
+        success: bool,
+    ) -> Result<(), DocumentError> {
+        let _ = self.handle().set_success().await;
+        let _ = self.emit_block_finished(success).await;
+        let _ = self.emit_workflow_event(WorkflowEvent::BlockFinished { id: self.block_id });
+        let _ = self
+            .send_output(
+                BlockOutput::builder()
+                    .block_id(self.block_id)
+                    .lifecycle(BlockLifecycleEvent::Finished(BlockFinishedData {
+                        exit_code,
+                        success,
+                    }))
+                    .build(),
+            )
+            .await;
+        Ok(())
+    }
+
+    /// Mark a block as failed
+    /// Sends appropriate events to Grand Centra, the workflow event bus, and the output channel
+    pub async fn block_failed(&self, error: String) -> Result<(), DocumentError> {
+        let _ = self.handle().set_failed(error.clone()).await;
+        let _ = self.emit_block_failed(error.clone()).await;
+        let _ = self.emit_workflow_event(WorkflowEvent::BlockFinished { id: self.block_id });
+        let _ = self
+            .send_output(
+                BlockOutput::builder()
+                    .block_id(self.block_id)
+                    .lifecycle(BlockLifecycleEvent::Error(BlockErrorData {
+                        message: error,
+                    }))
+                    .build(),
+            )
+            .await;
+        Ok(())
+    }
+
+    /// Mark a block as cancelled
+    /// Sends appropriate events to Grand Centra, the workflow event bus, and the output channel
+    pub async fn block_cancelled(&self) -> Result<(), DocumentError> {
+        let _ = self.handle().set_cancelled().await;
+        let _ = self.emit_block_cancelled().await;
+        let _ = self.emit_workflow_event(WorkflowEvent::BlockFinished { id: self.block_id });
+        let _ = self
+            .send_output(
+                BlockOutput::builder()
+                    .block_id(self.block_id)
+                    .lifecycle(BlockLifecycleEvent::Cancelled)
+                    .build(),
+            )
+            .await;
+        Ok(())
+    }
+
+    pub fn cancellation_token(&self) -> CancellationToken {
+        self.handle().cancellation_token.clone()
+    }
+
+    pub fn cancellation_receiver(&self) -> Option<oneshot::Receiver<()>> {
+        self.handle().cancellation_token.clone().take_receiver()
     }
 }
 
@@ -187,11 +278,39 @@ pub struct ExecutionHandle {
     pub output_variable: Option<String>,
 }
 
-#[derive(TS, Clone, Debug, Serialize, Deserialize)]
+impl ExecutionHandle {
+    pub fn new(block_id: Uuid) -> Self {
+        Self {
+            id: Uuid::new_v4(),
+            block_id,
+            cancellation_token: CancellationToken::new(),
+            status: Arc::new(RwLock::new(ExecutionStatus::Running)),
+            output_variable: None,
+        }
+    }
+
+    pub async fn set_running(&self) {
+        *self.status.write().await = ExecutionStatus::Running;
+    }
+
+    pub async fn set_success(&self) {
+        *self.status.write().await = ExecutionStatus::Success;
+    }
+
+    pub async fn set_failed(&self, error: impl Into<String>) {
+        *self.status.write().await = ExecutionStatus::Failed(error.into());
+    }
+
+    pub async fn set_cancelled(&self) {
+        *self.status.write().await = ExecutionStatus::Cancelled;
+    }
+}
+
+#[derive(TS, Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[ts(tag = "type", content = "data", export)]
 pub enum ExecutionStatus {
     Running,
-    Success(String), // The output value
+    Success, // The output value
     #[allow(dead_code)] // Error message is used but compiler doesn't see reads
     Failed(String), // Error message
     #[allow(dead_code)] // Used for cancellation but not currently constructed in tests

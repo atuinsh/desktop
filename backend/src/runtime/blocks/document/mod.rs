@@ -12,7 +12,7 @@ use crate::runtime::{
             block_context::{BlockContext, BlockWithContext, ContextResolver, ResolvedContext},
             bridge::DocumentBridgeMessage,
         },
-        handler::ExecutionContext,
+        handler::{ExecutionContext, ExecutionHandle},
         Block, KNOWN_UNSUPPORTED_BLOCKS,
     },
     events::{EventBus, GCEvent},
@@ -275,6 +275,7 @@ impl Document {
             .ssh_pool_opt(ssh_pool)
             .pty_store_opt(pty_store)
             .gc_event_bus(event_bus)
+            .handle(ExecutionHandle::new(*block_id))
             .build())
     }
 

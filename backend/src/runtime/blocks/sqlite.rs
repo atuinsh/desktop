@@ -168,18 +168,7 @@ impl BlockBehavior for SQLite {
         self,
         context: ExecutionContext,
     ) -> Result<Option<ExecutionHandle>, Box<dyn std::error::Error + Send + Sync>> {
-        let handle = ExecutionHandle {
-            id: Uuid::new_v4(),
-            block_id: self.id,
-            cancellation_token: CancellationToken::new(),
-            status: Arc::new(RwLock::new(ExecutionStatus::Running)),
-            output_variable: None,
-        };
-
-        if let Err(e) = SqlxBlockBehavior::execute(&self, context, handle.clone()).await {
-            *handle.status.write().await = ExecutionStatus::Failed(e.to_string());
-        }
-        Ok(Some(handle))
+        SqlxBlockBehavior::execute(&self, context).await
     }
 }
 
@@ -299,12 +288,14 @@ mod tests {
         let context_resolver = ContextResolver::new();
         let (event_sender, _event_receiver) = tokio::sync::broadcast::channel(16);
 
+        let block_id = Uuid::new_v4();
         ExecutionContext::builder()
-            .block_id(Uuid::new_v4())
+            .block_id(block_id)
             .runbook_id(Uuid::new_v4())
             .document_handle(document_handle)
             .context_resolver(Arc::new(context_resolver))
             .workflow_event_sender(event_sender)
+            .handle(ExecutionHandle::new(block_id))
             .build()
     }
 
@@ -324,6 +315,7 @@ mod tests {
             .context_resolver(context_resolver)
             .workflow_event_sender(event_sender)
             .gc_event_bus(event_bus)
+            .handle(ExecutionHandle::new(block_id))
             .build()
     }
 
@@ -404,7 +396,7 @@ mod tests {
             tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
             let status = handle.status.read().await.clone();
             match status {
-                ExecutionStatus::Success(_) => break,
+                ExecutionStatus::Success => break,
                 ExecutionStatus::Failed(e) => panic!("Query failed: {}", e),
                 ExecutionStatus::Cancelled => panic!("Query was cancelled"),
                 ExecutionStatus::Running => continue,
@@ -428,7 +420,7 @@ mod tests {
             tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
             let status = handle.status.read().await.clone();
             match status {
-                ExecutionStatus::Success(_) => break,
+                ExecutionStatus::Success => break,
                 ExecutionStatus::Failed(e) => panic!("Query failed: {}", e),
                 ExecutionStatus::Cancelled => panic!("Query was cancelled"),
                 ExecutionStatus::Running => continue,
@@ -451,7 +443,7 @@ mod tests {
                     assert!(e.contains("SQL"));
                     break;
                 }
-                ExecutionStatus::Success(_) => panic!("Query should have failed"),
+                ExecutionStatus::Success => panic!("Query should have failed"),
                 ExecutionStatus::Cancelled => panic!("Query was cancelled"),
                 ExecutionStatus::Running => continue,
             }
@@ -473,7 +465,7 @@ mod tests {
                     assert!(e.contains("Query is empty"));
                     break;
                 }
-                ExecutionStatus::Success(_) => panic!("Query should have failed"),
+                ExecutionStatus::Success => panic!("Query should have failed"),
                 ExecutionStatus::Cancelled => panic!("Query was cancelled"),
                 ExecutionStatus::Running => continue,
             }
@@ -492,7 +484,7 @@ mod tests {
             tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
             let status = handle.status.read().await.clone();
             match status {
-                ExecutionStatus::Success(_) => break,
+                ExecutionStatus::Success => break,
                 ExecutionStatus::Failed(e) => panic!("Query failed: {}", e),
                 ExecutionStatus::Cancelled => panic!("Query was cancelled"),
                 ExecutionStatus::Running => continue,
@@ -512,7 +504,7 @@ mod tests {
             let status = handle.status.read().await.clone();
             match status {
                 ExecutionStatus::Failed(_) => break,
-                ExecutionStatus::Success(_) => panic!("Query should have failed with invalid URI"),
+                ExecutionStatus::Success => panic!("Query should have failed with invalid URI"),
                 ExecutionStatus::Cancelled => panic!("Query was cancelled"),
                 ExecutionStatus::Running => continue,
             }
@@ -534,7 +526,7 @@ mod tests {
             tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
             let status = handle.status.read().await.clone();
             match status {
-                ExecutionStatus::Success(_) => break,
+                ExecutionStatus::Success => break,
                 ExecutionStatus::Failed(e) => panic!("Query failed: {}", e),
                 ExecutionStatus::Cancelled => panic!("Query was cancelled"),
                 ExecutionStatus::Running => continue,
@@ -587,7 +579,7 @@ mod tests {
             let status = handle.status.read().await.clone();
             match status {
                 ExecutionStatus::Failed(_) => break,
-                ExecutionStatus::Success(_) => panic!("Query should have failed"),
+                ExecutionStatus::Success => panic!("Query should have failed"),
                 ExecutionStatus::Cancelled => panic!("Query was cancelled"),
                 ExecutionStatus::Running => continue,
             }
@@ -645,9 +637,7 @@ mod tests {
         let status = handle.status.read().await.clone();
         // The query might complete before cancellation, or it might be cancelled
         match status {
-            ExecutionStatus::Cancelled
-            | ExecutionStatus::Success(_)
-            | ExecutionStatus::Failed(_) => {
+            ExecutionStatus::Cancelled | ExecutionStatus::Success | ExecutionStatus::Failed(_) => {
                 // Any of these outcomes is acceptable for this test
             }
             ExecutionStatus::Running => {

@@ -539,15 +539,7 @@ impl BlockBehavior for Clickhouse {
         self,
         context: ExecutionContext,
     ) -> Result<Option<ExecutionHandle>, Box<dyn std::error::Error + Send + Sync>> {
-        let handle = ExecutionHandle {
-            id: Uuid::new_v4(),
-            block_id: self.id,
-            cancellation_token: CancellationToken::new(),
-            status: Arc::new(RwLock::new(ExecutionStatus::Running)),
-            output_variable: None,
-        };
-
-        let handle_clone = handle.clone();
+        let handle_clone = context.handle();
         let context_clone = context.clone();
         let block_id = self.id;
         let runbook_id = context.runbook_id;
@@ -596,7 +588,7 @@ impl BlockBehavior for Clickhouse {
                         })
                         .await;
 
-                    ExecutionStatus::Success("Clickhouse query completed successfully".to_string())
+                    ExecutionStatus::Success
                 }
                 Err(e) => {
                     // Emit BlockFailed event via Grand Central
@@ -643,6 +635,6 @@ impl BlockBehavior for Clickhouse {
             *handle_clone.status.write().await = status;
         });
 
-        Ok(Some(handle))
+        Ok(Some(context.handle()))
     }
 }

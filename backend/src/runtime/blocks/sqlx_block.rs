@@ -107,13 +107,29 @@ pub(crate) trait SqlxBlockBehavior: BlockBehavior + 'static {
     /// The type of the SQLx connection pool
     type Pool: Clone + Send + Sync + 'static;
 
+    /// Execute the block. Creates an execution handle and manages all lifecycle events.
     async fn execute(
         &self,
         context: ExecutionContext,
-        handle: ExecutionHandle,
-    ) -> Result<(), SqlxBlockError> {
-        let cancellation_receiver = handle.clone().cancellation_token.take_receiver();
-        let execution_status = handle.status.clone();
+    ) -> Result<Option<ExecutionHandle>, Box<dyn std::error::Error + Send + Sync>> {
+        let context_clone = context.clone();
+        match self.do_execute(context_clone).await {
+            Ok(_) => Ok(Some(context.handle())),
+            Err(e) => match e {
+                SqlxBlockError::Cancelled => {
+                    let _ = context.block_cancelled().await;
+                    Ok(None)
+                }
+                _ => {
+                    let _ = context.block_failed(e.to_string()).await;
+                    Err(Box::new(e))
+                }
+            },
+        }
+    }
+
+    async fn do_execute(&self, context: ExecutionContext) -> Result<(), SqlxBlockError> {
+        let cancellation_receiver = context.handle().cancellation_token.take_receiver();
 
         let context_clone = context.clone();
         let block_id = self.id();
@@ -140,13 +156,12 @@ pub(crate) trait SqlxBlockBehavior: BlockBehavior + 'static {
         let query_count = queries.len();
 
         tokio::spawn(async move {
-            let _ = context_clone.emit_block_started().await;
-            let _ = context_clone.emit_workflow_event(WorkflowEvent::BlockStarted { id: block_id });
+            let _ = context_clone.block_started().await;
+
             let _ = context_clone
                 .send_output(
                     BlockOutput::builder()
                         .block_id(block_id)
-                        .lifecycle(BlockLifecycleEvent::Started)
                         .object(json!({ "type": "queryCount", "count": query_count }))
                         .build(),
                 )
@@ -177,31 +192,12 @@ pub(crate) trait SqlxBlockBehavior: BlockBehavior + 'static {
                                 pool
                             },
                             Err(e) => {
-                                let message = format!("Failed to connect to database: {}", e);
-                                let _ = context_clone.send_output(
-                                    BlockOutput::builder()
-                                        .block_id(block_id)
-                                        .stderr(message.clone())
-                                        .lifecycle(BlockLifecycleEvent::Error(BlockErrorData {
-                                            message: message,
-                                        }))
-                                        .build(),
-                                ).await;
                                 return Err(e);
                             }
                         }
                     }
                     _ = timeout => {
                         let message = "Database connection timed out after 10 seconds.".to_string();
-                        let _ = context_clone.send_output(
-                            BlockOutput::builder()
-                                .block_id(block_id)
-                                .stderr(message.clone())
-                                .lifecycle(BlockLifecycleEvent::Error(BlockErrorData {
-                                    message: message.clone(),
-                                }))
-                                .build(),
-                        ).await;
                         return Err(SqlxBlockError::ConnectionError(message))
                     }
                 }
@@ -211,19 +207,7 @@ pub(crate) trait SqlxBlockBehavior: BlockBehavior + 'static {
             let pool_clone = pool.clone();
             let execution_task = async move {
                 if query.is_empty() {
-                    let message = "Query is empty".to_string();
-                    let _ = context_clone
-                        .send_output(
-                            BlockOutput::builder()
-                                .block_id(block_id)
-                                .stderr(message.clone())
-                                .lifecycle(BlockLifecycleEvent::Error(BlockErrorData {
-                                    message: message.clone(),
-                                }))
-                                .build(),
-                        )
-                        .await;
-                    return Err(SqlxBlockError::InvalidSql(message));
+                    return Err(SqlxBlockError::InvalidSql("Query is empty".to_string()));
                 }
 
                 let _ = context_clone
@@ -258,7 +242,7 @@ pub(crate) trait SqlxBlockBehavior: BlockBehavior + 'static {
                         return Err(e);
                     }
 
-                    let mut result = result.unwrap();
+                    let result = result.unwrap();
                     let _ = context_clone
                         .send_output(
                             BlockOutput::builder()
@@ -282,14 +266,7 @@ pub(crate) trait SqlxBlockBehavior: BlockBehavior + 'static {
                 tokio::select! {
                     _ = cancel_rx => {
                         let _ = Self::disconnect(&pool).await;
-                        let _ = context_clone.emit_block_cancelled().await;
-                        let _ = context_clone.emit_workflow_event(WorkflowEvent::BlockFinished { id: block_id });
-                        let _ = context_clone.send_output(
-                            BlockOutput::builder()
-                            .block_id(block_id)
-                            .lifecycle(BlockLifecycleEvent::Cancelled)
-                            .build(),
-                        ).await;
+                        let _ = context_clone.block_cancelled().await;
                         return Err(SqlxBlockError::Cancelled);
                     }
                     result = execution_task => {
@@ -303,45 +280,16 @@ pub(crate) trait SqlxBlockBehavior: BlockBehavior + 'static {
                 result
             };
 
-            match &result {
-                Ok(_) => {
-                    *execution_status.write().await =
-                        ExecutionStatus::Success("Query executed successfully".to_string());
-                    let _ = context_clone.emit_block_finished(true).await;
-                    let _ = context_clone
-                        .emit_workflow_event(WorkflowEvent::BlockFinished { id: block_id });
-                    let _ = context_clone
-                        .send_output(
-                            BlockOutput::builder()
-                                .block_id(block_id)
-                                .lifecycle(BlockLifecycleEvent::Finished(BlockFinishedData {
-                                    exit_code: Some(0),
-                                    success: true,
-                                }))
-                                .build(),
-                        )
-                        .await;
-                }
-                Err(e) => {
-                    *execution_status.write().await = ExecutionStatus::Failed(e.to_string());
-                    let _ = context_clone.emit_block_failed(e.to_string()).await;
-                    let _ = context_clone
-                        .emit_workflow_event(WorkflowEvent::BlockFinished { id: block_id });
-                    let _ = context_clone
-                        .send_output(
-                            BlockOutput::builder()
-                                .block_id(block_id)
-                                .lifecycle(BlockLifecycleEvent::Error(BlockErrorData {
-                                    message: e.to_string(),
-                                }))
-                                .build(),
-                        )
-                        .await;
-                }
+            if let Err(e) = result {
+                return Err(e);
             }
 
+            let _ = context_clone.block_finished(None, true).await;
+
             result
-        }).await.map_err(|e| SqlxBlockError::GenericError(e.to_string()))?
+        })
+        .await
+        .map_err(|e| SqlxBlockError::GenericError(e.to_string()))?
     }
 
     /// The dialect of the SQL database; used to parse queries

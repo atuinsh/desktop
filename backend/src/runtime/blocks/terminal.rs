@@ -3,7 +3,8 @@ use serde_json::json;
 use typed_builder::TypedBuilder;
 use uuid::Uuid;
 
-use crate::runtime::blocks::{Block, BlockBehavior};
+use crate::runtime::blocks::handler::BlockOutput;
+use crate::runtime::blocks::{handler::ExecutionStatus, Block, BlockBehavior};
 
 use super::FromDocument;
 
@@ -80,42 +81,7 @@ impl BlockBehavior for Terminal {
         context: super::handler::ExecutionContext,
     ) -> Result<Option<super::handler::ExecutionHandle>, Box<dyn std::error::Error + Send + Sync>>
     {
-        use crate::runtime::blocks::handler::{
-            BlockLifecycleEvent, BlockOutput, CancellationToken, ExecutionHandle, ExecutionStatus,
-        };
-        use crate::runtime::events::GCEvent;
-        use crate::runtime::workflow::event::WorkflowEvent;
-        use std::sync::Arc;
-        use tokio::sync::RwLock;
-
-        let handle = ExecutionHandle {
-            id: self.id, // Use block ID as execution ID for simplicity
-            block_id: self.id,
-            cancellation_token: CancellationToken::new(),
-            status: Arc::new(RwLock::new(ExecutionStatus::Running)),
-            output_variable: None,
-        };
-
-        // Send started event
-        let _ = context.emit_workflow_event(WorkflowEvent::BlockStarted { id: self.id });
-        let _ = context
-            .send_output(
-                BlockOutput::builder()
-                    .block_id(self.id)
-                    .lifecycle(BlockLifecycleEvent::Started)
-                    .build(),
-            )
-            .await;
-
-        // Emit BlockStarted event via Grand Central
-        if let Some(event_bus) = &context.gc_event_bus {
-            let _ = event_bus
-                .emit(GCEvent::BlockStarted {
-                    block_id: self.id,
-                    runbook_id: context.runbook_id,
-                })
-                .await;
-        }
+        let _ = context.block_started().await;
 
         let pty_id = self.id;
         let nanoseconds_now = time::OffsetDateTime::now_utc().unix_timestamp_nanos();
@@ -138,39 +104,16 @@ impl BlockBehavior for Terminal {
             )
             .await;
 
-        let handle_clone = handle.clone();
+        let handle_clone = context.handle();
 
         tokio::spawn(async move {
-            let result = self
-                .run_terminal(
-                    context.clone(),
-                    metadata,
-                    handle_clone.cancellation_token.clone(),
-                )
+            // `run_terminal` handles all lifecycle events.
+            let _ = self
+                .run_terminal(context.clone(), metadata, context.cancellation_token())
                 .await;
-
-            let status = match result {
-                Ok(false) => ExecutionStatus::Success("Terminal session ended".to_string()),
-                Ok(true) => ExecutionStatus::Cancelled,
-                Err(e) => {
-                    // Emit BlockFailed event via Grand Central
-                    if let Some(event_bus) = &context.gc_event_bus {
-                        let _ = event_bus
-                            .emit(GCEvent::BlockFailed {
-                                block_id: self.id,
-                                runbook_id: context.runbook_id,
-                                error: e.to_string(),
-                            })
-                            .await;
-                    }
-                    ExecutionStatus::Failed(e.to_string())
-                }
-            };
-
-            *handle_clone.status.write().await = status;
         });
 
-        Ok(Some(handle))
+        Ok(Some(handle_clone))
     }
 }
 
@@ -205,13 +148,10 @@ impl Terminal {
         cancellation_token: super::handler::CancellationToken,
     ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
         use crate::pty::Pty;
-        use crate::runtime::blocks::handler::{
-            BlockErrorData, BlockFinishedData, BlockLifecycleEvent, BlockOutput,
-        };
+        use crate::runtime::blocks::handler::BlockOutput;
         use crate::runtime::events::GCEvent;
         use crate::runtime::pty_store::PtyLike;
         use crate::runtime::ssh_pool::SshPty;
-        use crate::runtime::workflow::event::WorkflowEvent;
         use std::io::Read;
 
         // Get PTY store from context
@@ -221,6 +161,7 @@ impl Terminal {
             .ok_or("PTY store not available in execution context")?;
 
         // Open PTY based on context (local or SSH)
+        let cancellation_token_clone = cancellation_token.clone();
         let pty: Box<dyn PtyLike + Send> =
             if let Some(ssh_host) = context.context_resolver.ssh_host() {
                 // Parse SSH host
@@ -260,6 +201,8 @@ impl Terminal {
                             )
                             .await;
                     }
+
+                    cancellation_token_clone.cancel();
                 });
 
                 // Create SshPty wrapper
@@ -292,6 +235,7 @@ impl Terminal {
                 let context_clone = context.clone();
                 let block_id = self.id;
 
+                let cancellation_token_clone = cancellation_token_clone.clone();
                 tokio::spawn(async move {
                     loop {
                         // Use blocking read in a blocking task
@@ -310,19 +254,8 @@ impl Terminal {
                         match read_result {
                             Ok(Ok((0, _))) => {
                                 // EOF - PTY terminated naturally
-                                let _ = context_clone
-                                    .send_output(
-                                        BlockOutput::builder()
-                                            .block_id(block_id)
-                                            .lifecycle(BlockLifecycleEvent::Finished(
-                                                BlockFinishedData {
-                                                    exit_code: Some(0), // We don't have access to actual exit code here
-                                                    success: true,
-                                                },
-                                            ))
-                                            .build(),
-                                    )
-                                    .await;
+                                let _ = context_clone.block_finished(Some(0), true).await;
+                                cancellation_token_clone.cancel();
                                 break;
                             }
                             Ok(Ok((n, buf))) => {
@@ -339,29 +272,17 @@ impl Terminal {
                             Ok(Err(e)) => {
                                 // Send error
                                 let _ = context_clone
-                                    .send_output(
-                                        BlockOutput::builder()
-                                            .block_id(block_id)
-                                            .lifecycle(BlockLifecycleEvent::Error(BlockErrorData {
-                                                message: format!("PTY read error: {}", e),
-                                            }))
-                                            .build(),
-                                    )
+                                    .block_failed(format!("PTY read error: {}", e))
                                     .await;
+                                cancellation_token_clone.cancel();
                                 break;
                             }
                             Err(e) => {
                                 // Task join error
                                 let _ = context_clone
-                                    .send_output(
-                                        BlockOutput::builder()
-                                            .block_id(block_id)
-                                            .lifecycle(BlockLifecycleEvent::Error(BlockErrorData {
-                                                message: format!("Task error: {}", e),
-                                            }))
-                                            .build(),
-                                    )
+                                    .block_failed(format!("Task error: {}", e))
                                     .await;
+                                cancellation_token_clone.cancel();
                                 break;
                             }
                         }
@@ -378,9 +299,10 @@ impl Terminal {
             .map_err(|e| format!("Failed to add PTY to store: {}", e))?;
 
         // Emit PTY open event via Grand Central
-        if let Some(event_bus) = &context.gc_event_bus {
-            let _ = event_bus.emit(GCEvent::PtyOpened(metadata.clone())).await;
-        }
+        // TODO: do we need this?? doesn't seem to be used on client.
+        let _ = context
+            .emit_gc_event(GCEvent::PtyOpened(metadata.clone()))
+            .await;
 
         // Write the command to the PTY after started event
         if !self.code.is_empty() {
@@ -394,14 +316,7 @@ impl Terminal {
             if let Err(e) = pty_store.write_pty(self.id, command.into()).await {
                 // Send error event if command writing fails
                 let _ = context
-                    .send_output(
-                        BlockOutput::builder()
-                            .block_id(self.id)
-                            .lifecycle(BlockLifecycleEvent::Error(BlockErrorData {
-                                message: format!("Failed to write command to PTY: {}", e),
-                            }))
-                            .build(),
-                    )
+                    .block_failed(format!("Failed to write command to PTY: {}", e))
                     .await;
             }
         }
@@ -423,27 +338,15 @@ impl Terminal {
 
             // Remove PTY from store (this will also kill it)
             let _ = pty_store.remove_pty(self.id).await;
-
-            // Emit BlockCancelled event via Grand Central
-            if let Some(event_bus) = &context.gc_event_bus {
-                let _ = event_bus
-                    .emit(GCEvent::BlockCancelled {
-                        block_id: self.id,
-                        runbook_id: context.runbook_id,
-                    })
-                    .await;
-            }
-
-            // Send cancelled event to the block channel
-            let _ = context.emit_workflow_event(WorkflowEvent::BlockFinished { id: self.id });
             let _ = context
-                .send_output(
-                    BlockOutput::builder()
-                        .block_id(self.id)
-                        .lifecycle(BlockLifecycleEvent::Cancelled)
-                        .build(),
-                )
+                .emit_gc_event(GCEvent::PtyClosed { pty_id: self.id })
                 .await;
+
+            // If the block is still running, cancel it.
+            // This will happen when the user manually cancels the block execution.
+            if *context.handle().status.read().await == ExecutionStatus::Running {
+                let _ = context.block_cancelled().await;
+            }
             Ok(true)
         } else {
             Ok(false)

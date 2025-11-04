@@ -120,32 +120,23 @@ impl BlockBehavior for Script {
     ) -> Result<Option<ExecutionHandle>, Box<dyn std::error::Error + Send + Sync>> {
         log::trace!("Executing script block {id}", id = self.id);
 
-        let handle = crate::runtime::blocks::handler::ExecutionHandle {
-            id: uuid::Uuid::new_v4(),
-            block_id: self.id,
-            cancellation_token: CancellationToken::new(),
-            status: Arc::new(RwLock::new(ExecutionStatus::Running)),
-            output_variable: self.output_variable.clone(),
-        };
-
         log::trace!(
             "Script block {id} execution handle created; ID = {handle_id}",
             id = self.id,
-            handle_id = handle.id
+            handle_id = context.handle().id
         );
 
-        let handle_clone = handle.clone();
-
+        let context_clone = context.clone();
         tokio::spawn(async move {
             // Emit BlockStarted event via Grand Central
             log::trace!(
                 "Emitting BlockStarted event for script block {id}",
                 id = self.id
             );
-            let _ = context.emit_block_started().await;
+            let _ = context.block_started().await;
 
             let (exit_code, captured_output) = self
-                .run_script(context.clone(), handle_clone.cancellation_token.clone())
+                .run_script(context.clone(), context.cancellation_token())
                 .await;
 
             log::trace!(
@@ -158,7 +149,7 @@ impl BlockBehavior for Script {
             );
 
             // Determine status based on exit code
-            let status = match exit_code {
+            match exit_code {
                 Ok(0) => {
                     let output = captured_output.trim().to_string();
 
@@ -184,21 +175,20 @@ impl BlockBehavior for Script {
                     // Store execution output in context
                     let block_id = self.id;
                     let document_handle = context.document_handle.clone();
-                    let output_for_context = output.clone();
                     let _ = document_handle
                         .update_active_context(block_id, move |ctx| {
                             ctx.insert(BlockExecutionOutput {
                                 exit_code: Some(0),
-                                stdout: Some(output_for_context),
+                                stdout: Some(output),
                                 stderr: None,
                             });
                         })
                         .await;
 
                     // Emit BlockFinished event via Grand Central
-                    let _ = context.emit_block_finished(true).await;
+                    let _ = context.block_finished(Some(0), true).await;
 
-                    ExecutionStatus::Success(output)
+                    ExecutionStatus::Success
                 }
                 Ok(code) => {
                     // Store execution output in context (failed)
@@ -217,23 +207,21 @@ impl BlockBehavior for Script {
 
                     // Emit BlockFailed event via Grand Central
                     let _ = context
-                        .emit_block_failed(format!("Process exited with code {}", code))
+                        .block_failed(format!("Process exited with code {}", code))
                         .await;
 
                     ExecutionStatus::Failed(format!("Process exited with code {}", code))
                 }
                 Err(e) => {
                     // Emit BlockFailed event via Grand Central
-                    let _ = context.emit_block_failed(e.to_string()).await;
+                    let _ = context.block_failed(e.to_string()).await;
 
                     ExecutionStatus::Failed(e.to_string())
                 }
             };
-
-            *handle_clone.status.write().await = status.clone();
         });
 
-        Ok(Some(handle))
+        Ok(Some(context_clone.handle()))
     }
 }
 
@@ -725,12 +713,14 @@ mod tests {
         let context_resolver = ContextResolver::new();
         let (event_sender, _event_receiver) = tokio::sync::broadcast::channel(16);
 
+        let block_id = Uuid::new_v4();
         ExecutionContext::builder()
-            .block_id(Uuid::new_v4())
+            .block_id(block_id)
             .runbook_id(Uuid::new_v4())
             .document_handle(document_handle)
             .context_resolver(Arc::new(context_resolver))
             .workflow_event_sender(event_sender)
+            .handle(ExecutionHandle::new(block_id))
             .build()
     }
 
@@ -747,12 +737,14 @@ mod tests {
 
         let (event_sender, _event_receiver) = tokio::sync::broadcast::channel(16);
 
+        let block_id = Uuid::new_v4();
         ExecutionContext::builder()
-            .block_id(Uuid::new_v4())
+            .block_id(block_id)
             .runbook_id(Uuid::new_v4())
             .document_handle(document_handle)
             .context_resolver(Arc::new(context_resolver))
             .workflow_event_sender(event_sender)
+            .handle(ExecutionHandle::new(block_id))
             .build()
     }
 
@@ -772,6 +764,7 @@ mod tests {
             .context_resolver(Arc::new(context_resolver))
             .workflow_event_sender(event_sender)
             .gc_event_bus(event_bus)
+            .handle(ExecutionHandle::new(block_id))
             .build()
     }
 
@@ -787,8 +780,7 @@ mod tests {
             tokio::time::sleep(Duration::from_millis(50)).await;
             let status = handle.status.read().await.clone();
             match status {
-                ExecutionStatus::Success(output) => {
-                    assert!(output.contains("Hello, World!"));
+                ExecutionStatus::Success => {
                     break;
                 }
                 ExecutionStatus::Failed(e) => panic!("Script failed: {}", e),
@@ -814,7 +806,7 @@ mod tests {
                     assert!(msg.contains("Process exited with code 1"));
                     break;
                 }
-                ExecutionStatus::Success(_) => panic!("Script should have failed"),
+                ExecutionStatus::Success => panic!("Script should have failed"),
                 ExecutionStatus::Cancelled => panic!("Script was cancelled"),
                 ExecutionStatus::Running => continue,
             }
@@ -838,9 +830,7 @@ mod tests {
             tokio::time::sleep(Duration::from_millis(50)).await;
             let status = handle.status.read().await.clone();
             match status {
-                ExecutionStatus::Success(output) => {
-                    assert!(output.contains("test_value"), "got output: {}", output);
-                    assert!(output.contains("another_value"), "got output: {}", output);
+                ExecutionStatus::Success => {
                     break;
                 }
                 ExecutionStatus::Failed(e) => panic!("Script failed: {}", e),
@@ -867,7 +857,7 @@ mod tests {
             let status = handle.status.read().await.clone();
             match status {
                 ExecutionStatus::Failed(e) if e.contains("cancelled") => break,
-                ExecutionStatus::Success(_) => panic!("Script should have been cancelled"),
+                ExecutionStatus::Success => panic!("Script should have been cancelled"),
                 ExecutionStatus::Cancelled => break,
                 ExecutionStatus::Running => continue,
                 ExecutionStatus::Failed(_) => break, // May fail due to cancellation
@@ -887,10 +877,7 @@ mod tests {
             tokio::time::sleep(Duration::from_millis(50)).await;
             let status = handle.status.read().await.clone();
             match status {
-                ExecutionStatus::Success(output) => {
-                    assert!(output.contains("Line 1"));
-                    assert!(output.contains("Line 2"));
-                    assert!(output.contains("Line 3"));
+                ExecutionStatus::Success => {
                     break;
                 }
                 ExecutionStatus::Failed(e) => panic!("Script failed: {}", e),
@@ -938,7 +925,7 @@ mod tests {
             tokio::time::sleep(Duration::from_millis(50)).await;
             let status = handle.status.read().await.clone();
             match status {
-                ExecutionStatus::Success(_) => break,
+                ExecutionStatus::Success => break,
                 ExecutionStatus::Failed(e) => panic!("Script failed: {}", e),
                 ExecutionStatus::Cancelled => panic!("Script was cancelled"),
                 ExecutionStatus::Running => continue,
@@ -993,7 +980,7 @@ mod tests {
             let status = handle.status.read().await.clone();
             match status {
                 ExecutionStatus::Failed(_) => break,
-                ExecutionStatus::Success(_) => panic!("Script should have failed"),
+                ExecutionStatus::Success => panic!("Script should have failed"),
                 ExecutionStatus::Cancelled => panic!("Script was cancelled"),
                 ExecutionStatus::Running => continue,
             }

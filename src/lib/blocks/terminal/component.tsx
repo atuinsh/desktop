@@ -138,23 +138,32 @@ export const RunBlock = ({
       const terminalData = terminals[pty.pid];
       terminalData?.terminal.clear();
     }
-  }, [execution.isRunning]);
+  }, [execution.isRunning, pty]);
 
-  const handleStop = useCallback(async () => {
+  const onTerminalStop = useCallback(() => {
     if (pty === null) return;
 
-    terminals[pty.pid].dispose();
+    removePty(pty.pid);
+    terminals[pty.pid]?.dispose();
     cleanupPtyTerm(pty.pid);
 
-    removePty(pty.pid);
-    await execution.cancel();
-
     if (onStop) onStop(pty.pid);
-
     setCommandRunning(false);
     setExitCode(null);
     setCommandDuration(null);
   }, [pty, terminals, cleanupPtyTerm, onStop]);
+
+  const handleStop = useCallback(async () => {
+    if (pty === null) return;
+    onTerminalStop();
+    await execution.cancel();
+  }, [pty, execution.cancel, onTerminalStop]);
+
+  useEffect(() => {
+    if (!execution.isRunning && pty) {
+      onTerminalStop();
+    }
+  }, [execution.isRunning, pty, onTerminalStop]);
 
   const handlePlay = useCallback(
     async (force: boolean = false) => {
@@ -164,8 +173,9 @@ export const RunBlock = ({
       setIsLoading(true);
       try {
         await execution.execute();
-        setIsLoading(false);
       } catch (error) {
+        console.error("handlePlay error", error);
+      } finally {
         setIsLoading(false);
       }
 
