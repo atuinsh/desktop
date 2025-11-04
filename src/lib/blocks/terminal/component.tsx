@@ -106,9 +106,10 @@ export const RunBlock = ({
   const sshParent = context.sshHost;
 
   useBlockOutput<PtyMetadata>(terminal.id, (output) => {
-    if (output.object && output.object.pid) {
-      addPty(output.object);
-      onRun?.(output.object.pid);
+    if (output.object) {
+      const newPty = output.object;
+      addPty(newPty);
+      onRun?.(newPty.pid);
     } else if (output.binary && pty?.pid) {
       const terminalData = terminals[pty.pid];
       terminalData?.terminal.write(new Uint8Array(output.binary));

@@ -130,9 +130,10 @@ impl BlockBehavior for Terminal {
             .send_output(
                 BlockOutput::builder()
                     .block_id(self.id)
-                    .object(json!({
-                        "pty": metadata,
-                    }))
+                    .object(
+                        serde_json::to_value(metadata.clone())
+                            .map_err(|e| format!("Failed to serialize PTY metadata: {}", e))?,
+                    )
                     .build(),
             )
             .await;
