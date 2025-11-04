@@ -96,15 +96,10 @@ impl BlockBehavior for Terminal {
         let _ = context.emit_workflow_event(WorkflowEvent::BlockStarted { id: self.id });
         let _ = context
             .send_output(
-                BlockOutput {
-                    block_id: self.id,
-                    stdout: None,
-                    stderr: None,
-                    lifecycle: Some(BlockLifecycleEvent::Started),
-                    binary: None,
-                    object: None,
-                }
-                .into(),
+                BlockOutput::builder()
+                    .block_id(self.id)
+                    .lifecycle(BlockLifecycleEvent::Started)
+                    .build(),
             )
             .await;
 
@@ -129,17 +124,12 @@ impl BlockBehavior for Terminal {
 
         let _ = context
             .send_output(
-                BlockOutput {
-                    block_id: self.id,
-                    stdout: None,
-                    stderr: None,
-                    lifecycle: None,
-                    binary: None,
-                    object: Some(json!({
+                BlockOutput::builder()
+                    .block_id(self.id)
+                    .object(json!({
                         "pty": metadata,
-                    })),
-                }
-                .into(),
+                    }))
+                    .build(),
             )
             .await;
 
@@ -258,15 +248,10 @@ impl Terminal {
                     while let Some(output) = output_receiver.recv().await {
                         let _ = context_clone
                             .send_output(
-                                BlockOutput {
-                                    block_id,
-                                    stdout: None,
-                                    stderr: None,
-                                    lifecycle: None,
-                                    binary: Some(output.as_bytes().to_vec()),
-                                    object: None,
-                                }
-                                .into(),
+                                BlockOutput::builder()
+                                    .block_id(block_id)
+                                    .binary(output.as_bytes().to_vec())
+                                    .build(),
                             )
                             .await;
                     }
@@ -322,20 +307,15 @@ impl Terminal {
                                 // EOF - PTY terminated naturally
                                 let _ = context_clone
                                     .send_output(
-                                        BlockOutput {
-                                            block_id,
-                                            stdout: None,
-                                            stderr: None,
-                                            lifecycle: Some(BlockLifecycleEvent::Finished(
+                                        BlockOutput::builder()
+                                            .block_id(block_id)
+                                            .lifecycle(BlockLifecycleEvent::Finished(
                                                 BlockFinishedData {
                                                     exit_code: Some(0), // We don't have access to actual exit code here
                                                     success: true,
                                                 },
-                                            )),
-                                            binary: None,
-                                            object: None,
-                                        }
-                                        .into(),
+                                            ))
+                                            .build(),
                                     )
                                     .await;
                                 break;
@@ -344,15 +324,10 @@ impl Terminal {
                                 // Send raw binary data
                                 let _ = context_clone
                                     .send_output(
-                                        BlockOutput {
-                                            block_id,
-                                            stdout: None,
-                                            stderr: None,
-                                            lifecycle: None,
-                                            binary: Some(buf[..n].to_vec()),
-                                            object: None,
-                                        }
-                                        .into(),
+                                        BlockOutput::builder()
+                                            .block_id(block_id)
+                                            .binary(buf[..n].to_vec())
+                                            .build(),
                                     )
                                     .await;
                             }
@@ -360,19 +335,12 @@ impl Terminal {
                                 // Send error
                                 let _ = context_clone
                                     .send_output(
-                                        BlockOutput {
-                                            block_id,
-                                            stdout: None,
-                                            stderr: None,
-                                            lifecycle: Some(BlockLifecycleEvent::Error(
-                                                BlockErrorData {
-                                                    message: format!("PTY read error: {}", e),
-                                                },
-                                            )),
-                                            binary: None,
-                                            object: None,
-                                        }
-                                        .into(),
+                                        BlockOutput::builder()
+                                            .block_id(block_id)
+                                            .lifecycle(BlockLifecycleEvent::Error(BlockErrorData {
+                                                message: format!("PTY read error: {}", e),
+                                            }))
+                                            .build(),
                                     )
                                     .await;
                                 break;
@@ -381,19 +349,12 @@ impl Terminal {
                                 // Task join error
                                 let _ = context_clone
                                     .send_output(
-                                        BlockOutput {
-                                            block_id,
-                                            stdout: None,
-                                            stderr: None,
-                                            lifecycle: Some(BlockLifecycleEvent::Error(
-                                                BlockErrorData {
-                                                    message: format!("Task error: {}", e),
-                                                },
-                                            )),
-                                            binary: None,
-                                            object: None,
-                                        }
-                                        .into(),
+                                        BlockOutput::builder()
+                                            .block_id(block_id)
+                                            .lifecycle(BlockLifecycleEvent::Error(BlockErrorData {
+                                                message: format!("Task error: {}", e),
+                                            }))
+                                            .build(),
                                     )
                                     .await;
                                 break;
@@ -429,17 +390,12 @@ impl Terminal {
                 // Send error event if command writing fails
                 let _ = context
                     .send_output(
-                        BlockOutput {
-                            block_id: self.id,
-                            stdout: None,
-                            stderr: None,
-                            lifecycle: Some(BlockLifecycleEvent::Error(BlockErrorData {
+                        BlockOutput::builder()
+                            .block_id(self.id)
+                            .lifecycle(BlockLifecycleEvent::Error(BlockErrorData {
                                 message: format!("Failed to write command to PTY: {}", e),
-                            })),
-                            binary: None,
-                            object: None,
-                        }
-                        .into(),
+                            }))
+                            .build(),
                     )
                     .await;
             }
@@ -477,15 +433,10 @@ impl Terminal {
             let _ = context.emit_workflow_event(WorkflowEvent::BlockFinished { id: self.id });
             let _ = context
                 .send_output(
-                    BlockOutput {
-                        block_id: self.id,
-                        stdout: None,
-                        stderr: None,
-                        lifecycle: Some(BlockLifecycleEvent::Cancelled),
-                        binary: None,
-                        object: None,
-                    }
-                    .into(),
+                    BlockOutput::builder()
+                        .block_id(self.id)
+                        .lifecycle(BlockLifecycleEvent::Cancelled)
+                        .build(),
                 )
                 .await;
             Ok(true)

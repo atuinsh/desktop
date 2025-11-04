@@ -224,15 +224,10 @@ impl Clickhouse {
 
             let _ = context
                 .send_output(
-                    BlockOutput {
-                        block_id: self.id,
-                        stdout: None,
-                        stderr: None,
-                        lifecycle: None,
-                        binary: None,
-                        object: Some(result_json),
-                    }
-                    .into(),
+                    BlockOutput::builder()
+                        .block_id(self.id)
+                        .object(result_json)
+                        .build(),
                 )
                 .await;
         } else {
@@ -247,15 +242,10 @@ impl Clickhouse {
 
             let _ = context
                 .send_output(
-                    BlockOutput {
-                        block_id: self.id,
-                        stdout: None,
-                        stderr: None,
-                        lifecycle: None,
-                        binary: None,
-                        object: Some(result_json),
-                    }
-                    .into(),
+                    BlockOutput::builder()
+                        .block_id(self.id)
+                        .object(result_json)
+                        .build(),
                 )
                 .await;
         }
@@ -276,15 +266,10 @@ impl Clickhouse {
         // Send started lifecycle event to output channel
         let _ = context
             .send_output(
-                BlockOutput {
-                    block_id: self.id,
-                    stdout: None,
-                    stderr: None,
-                    binary: None,
-                    object: None,
-                    lifecycle: Some(BlockLifecycleEvent::Started),
-                }
-                .into(),
+                BlockOutput::builder()
+                    .block_id(self.id)
+                    .lifecycle(BlockLifecycleEvent::Started)
+                    .build(),
             )
             .await;
 
@@ -301,17 +286,13 @@ impl Clickhouse {
             // Send error lifecycle event
             let _ = context
                 .send_output(
-                    BlockOutput {
-                        block_id: self.id,
-                        stdout: None,
-                        stderr: Some(e.clone()),
-                        binary: None,
-                        object: None,
-                        lifecycle: Some(BlockLifecycleEvent::Error(BlockErrorData {
+                    BlockOutput::builder()
+                        .block_id(self.id)
+                        .stderr(e.clone())
+                        .lifecycle(BlockLifecycleEvent::Error(BlockErrorData {
                             message: e.clone(),
-                        })),
-                    }
-                    .into(),
+                        }))
+                        .build(),
                 )
                 .await;
             return Err(e.into());
@@ -320,15 +301,10 @@ impl Clickhouse {
         // Send connecting status
         let _ = context
             .send_output(
-                BlockOutput {
-                    block_id: self.id,
-                    stdout: Some("Connecting to Clickhouse...".to_string()),
-                    stderr: None,
-                    binary: None,
-                    object: None,
-                    lifecycle: None,
-                }
-                .into(),
+                BlockOutput::builder()
+                    .block_id(self.id)
+                    .stdout("Connecting to Clickhouse...".to_string())
+                    .build(),
             )
             .await;
 
@@ -370,44 +346,39 @@ impl Clickhouse {
                     match result {
                         Ok((endpoint, username, password)) => {
                             // Send successful connection status
-                            let _ = context.send_output(BlockOutput {
-                                block_id: self.id,
-                                stdout: Some("Connected to Clickhouse successfully".to_string()),
-                                stderr: None,
-                                binary: None,
-                                object: None,
-                                lifecycle: None,
-                            }.into()).await;
+                            let _ = context.send_output(
+                                BlockOutput::builder()
+                                    .block_id(self.id)
+                                    .stdout("Connected to Clickhouse successfully".to_string())
+                                    .build(),
+                            ).await;
                             (endpoint, username, password)
                         },
                         Err(e) => {
                             let error_msg = format!("Failed to connect to Clickhouse: {}", e);
-                                let _ = context.send_output(BlockOutput {
-                                        block_id: self.id,
-                                    stdout: None,
-                                    stderr: Some(error_msg.clone()),
-                                    binary: None,
-                                    object: None,
-                                    lifecycle: Some(BlockLifecycleEvent::Error(BlockErrorData {
-                                        message: error_msg.clone(),
-                                    })),
-                                }.into()).await;
+                                let _ = context.send_output(
+                                    BlockOutput::builder()
+                                        .block_id(self.id)
+                                        .stderr(error_msg.clone())
+                                        .lifecycle(BlockLifecycleEvent::Error(BlockErrorData {
+                                            message: error_msg.clone(),
+                                        }))
+                                        .build(),
+                                ).await;
                             return Err(error_msg.into());
                         }
                     }
                 }
                 _ = timeout_task => {
                     let error_msg = "Clickhouse connection timed out after 10 seconds. Please check your connection string and network.";
-                        let _ = context.send_output(BlockOutput {
-                                block_id: self.id,
-                            stdout: None,
-                            stderr: Some(error_msg.to_string()),
-                            binary: None,
-                            object: None,
-                            lifecycle: Some(BlockLifecycleEvent::Error(BlockErrorData {
-                                message: error_msg.to_string(),
-                            })),
-                        }.into()
+                        let _ = context.send_output(
+                            BlockOutput::builder()
+                                .block_id(self.id)
+                                .stderr(error_msg.to_string())
+                                .lifecycle(BlockLifecycleEvent::Error(BlockErrorData {
+                                    message: error_msg.to_string(),
+                                }))
+                                .build()
                         ).await;
                     return Err(error_msg.into());
                 }
@@ -438,17 +409,13 @@ impl Clickhouse {
                 let error_msg = "No SQL statements to execute";
                 let _ = context_clone
                     .send_output(
-                        BlockOutput {
-                            block_id: self.id,
-                            stdout: None,
-                            stderr: Some(error_msg.to_string()),
-                            binary: None,
-                            object: None,
-                            lifecycle: Some(BlockLifecycleEvent::Error(BlockErrorData {
+                        BlockOutput::builder()
+                            .block_id(self.id)
+                            .stderr(error_msg.to_string())
+                            .lifecycle(BlockLifecycleEvent::Error(BlockErrorData {
                                 message: error_msg.to_string(),
-                            })),
-                        }
-                        .into(),
+                            }))
+                            .build(),
                     )
                     .await;
                 return Err(error_msg.into());
@@ -457,18 +424,13 @@ impl Clickhouse {
             // Send executing status
             let _ = context_clone
                 .send_output(
-                    BlockOutput {
-                        block_id: self.id,
-                        stdout: Some(format!(
+                    BlockOutput::builder()
+                        .block_id(self.id)
+                        .stdout(format!(
                             "Executing {} SQL statement(s)...",
                             statements.len()
-                        )),
-                        stderr: None,
-                        binary: None,
-                        object: None,
-                        lifecycle: None,
-                    }
-                    .into(),
+                        ))
+                        .build(),
                 )
                 .await;
 
@@ -488,17 +450,13 @@ impl Clickhouse {
                     let error_msg = format!("Statement {} failed: {}", i + 1, e);
                     let _ = context_clone
                         .send_output(
-                            BlockOutput {
-                                block_id: self.id,
-                                stdout: None,
-                                stderr: Some(error_msg.clone()),
-                                binary: None,
-                                object: None,
-                                lifecycle: Some(BlockLifecycleEvent::Error(BlockErrorData {
+                            BlockOutput::builder()
+                                .block_id(self.id)
+                                .stderr(error_msg.clone())
+                                .lifecycle(BlockLifecycleEvent::Error(BlockErrorData {
                                     message: error_msg.clone(),
-                                })),
-                            }
-                            .into(),
+                                }))
+                                .build(),
                         )
                         .await;
                     return Err(error_msg.into());
@@ -522,14 +480,11 @@ impl Clickhouse {
 
                     // Send completion events
                     let _ = context.emit_workflow_event(WorkflowEvent::BlockFinished { id: block_id });
-                        let _ = context.send_output(BlockOutput {
-                            block_id: self.id,
-                                stdout: None,
-                            stderr: None,
-                            binary: None,
-                            object: None,
-                            lifecycle: Some(BlockLifecycleEvent::Cancelled),
-                        }.into(),
+                        let _ = context.send_output(
+                            BlockOutput::builder()
+                                .block_id(self.id)
+                                .lifecycle(BlockLifecycleEvent::Cancelled)
+                                .build(),
                 ).await;
                     return Err("Clickhouse query execution cancelled".into());
                 }
@@ -546,33 +501,23 @@ impl Clickhouse {
         // Send success message
         let _ = context
             .send_output(
-                BlockOutput {
-                    block_id: self.id,
-                    stdout: Some("Query execution completed successfully".to_string()),
-                    stderr: None,
-                    binary: None,
-                    object: None,
-                    lifecycle: None,
-                }
-                .into(),
+                BlockOutput::builder()
+                    .block_id(self.id)
+                    .stdout("Query execution completed successfully".to_string())
+                    .build(),
             )
             .await;
 
         // Send finished lifecycle event
         let _ = context
             .send_output(
-                BlockOutput {
-                    block_id: self.id,
-                    stdout: None,
-                    stderr: None,
-                    binary: None,
-                    object: None,
-                    lifecycle: Some(BlockLifecycleEvent::Finished(BlockFinishedData {
+                BlockOutput::builder()
+                    .block_id(self.id)
+                    .lifecycle(BlockLifecycleEvent::Finished(BlockFinishedData {
                         exit_code: Some(0),
                         success: true,
-                    })),
-                }
-                .into(),
+                    }))
+                    .build(),
             )
             .await;
 
@@ -664,17 +609,13 @@ impl BlockBehavior for Clickhouse {
                     // Send error lifecycle event to output channel
                     let _ = context_clone
                         .send_output(
-                            BlockOutput {
-                                block_id: self.id,
-                                stdout: None,
-                                stderr: Some(e.to_string()),
-                                binary: None,
-                                object: None,
-                                lifecycle: Some(BlockLifecycleEvent::Error(BlockErrorData {
+                            BlockOutput::builder()
+                                .block_id(self.id)
+                                .stderr(e.to_string())
+                                .lifecycle(BlockLifecycleEvent::Error(BlockErrorData {
                                     message: e.to_string(),
-                                })),
-                            }
-                            .into(),
+                                }))
+                                .build(),
                         )
                         .await;
 

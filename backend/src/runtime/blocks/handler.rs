@@ -47,9 +47,12 @@ impl ExecutionContext {
         Ok(())
     }
 
-    pub async fn send_output(&self, message: DocumentBridgeMessage) -> Result<(), DocumentError> {
+    /// Send a message to the output channel
+    pub async fn send_output(
+        &self,
+        message: impl Into<DocumentBridgeMessage>,
+    ) -> Result<(), DocumentError> {
         if let Some(chan) = &self.output_channel {
-            chan.send(message)
                 .await
                 .map_err(|_| DocumentError::OutputSendError)?;
         }
@@ -143,14 +146,19 @@ pub enum ExecutionStatus {
     Cancelled,
 }
 
-#[derive(TS, Debug, Clone, Serialize, Deserialize)]
+#[derive(TS, Debug, Clone, Serialize, Deserialize, TypedBuilder)]
 #[ts(export)]
 pub struct BlockOutput {
     pub block_id: Uuid,
+    #[builder(default, setter(strip_option(fallback = stdout_opt)))]
     pub stdout: Option<String>,
+    #[builder(default, setter(strip_option(fallback = stderr_opt)))]
     pub stderr: Option<String>,
+    #[builder(default, setter(strip_option(fallback = lifecycle_opt)))]
     pub lifecycle: Option<BlockLifecycleEvent>,
-    pub binary: Option<Vec<u8>>,           // For terminal raw data
+    #[builder(default, setter(strip_option(fallback = binary_opt)))]
+    pub binary: Option<Vec<u8>>, // For terminal raw data
+    #[builder(default, setter(strip_option(fallback = object_opt)))]
     pub object: Option<serde_json::Value>, // For structured JSON data
 }
 

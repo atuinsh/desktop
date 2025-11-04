@@ -191,15 +191,10 @@ impl Mysql {
 
             let _ = context
                 .send_output(
-                    BlockOutput {
-                        block_id: self.id,
-                        stdout: None,
-                        stderr: None,
-                        lifecycle: None,
-                        binary: None,
-                        object: Some(result_json),
-                    }
-                    .into(),
+                    BlockOutput::builder()
+                        .block_id(self.id)
+                        .object(result_json)
+                        .build(),
                 )
                 .await;
         } else {
@@ -217,15 +212,10 @@ impl Mysql {
 
             let _ = context
                 .send_output(
-                    BlockOutput {
-                        block_id: self.id,
-                        stdout: None,
-                        stderr: None,
-                        lifecycle: None,
-                        binary: None,
-                        object: Some(result_json),
-                    }
-                    .into(),
+                    BlockOutput::builder()
+                        .block_id(self.id)
+                        .object(result_json)
+                        .build(),
                 )
                 .await;
         }
@@ -246,15 +236,10 @@ impl Mysql {
         // Send started lifecycle event to output channel
         let _ = context
             .send_output(
-                BlockOutput {
-                    block_id: self.id,
-                    stdout: None,
-                    stderr: None,
-                    binary: None,
-                    object: None,
-                    lifecycle: Some(BlockLifecycleEvent::Started),
-                }
-                .into(),
+                BlockOutput::builder()
+                    .block_id(self.id)
+                    .lifecycle(BlockLifecycleEvent::Started)
+                    .build(),
             )
             .await;
 
@@ -269,17 +254,13 @@ impl Mysql {
             // Send error lifecycle event
             let _ = context
                 .send_output(
-                    BlockOutput {
-                        block_id: self.id,
-                        stdout: None,
-                        stderr: Some(e.clone()),
-                        binary: None,
-                        object: None,
-                        lifecycle: Some(BlockLifecycleEvent::Error(BlockErrorData {
+                    BlockOutput::builder()
+                        .block_id(self.id)
+                        .stderr(e.clone())
+                        .lifecycle(BlockLifecycleEvent::Error(BlockErrorData {
                             message: e.clone(),
-                        })),
-                    }
-                    .into(),
+                        }))
+                        .build(),
                 )
                 .await;
             return Err(e.into());
@@ -288,15 +269,10 @@ impl Mysql {
         // Send connecting status
         let _ = context
             .send_output(
-                BlockOutput {
-                    block_id: self.id,
-                    stdout: Some("Connecting to database...".to_string()),
-                    stderr: None,
-                    binary: None,
-                    object: None,
-                    lifecycle: None,
-                }
-                .into(),
+                BlockOutput::builder()
+                    .block_id(self.id)
+                    .stdout("Connecting to database...".to_string())
+                    .build(),
             )
             .await;
 
@@ -314,29 +290,24 @@ impl Mysql {
                     match result {
                         Ok(pool) => {
                             // Send successful connection status
-                                let _ = context.send_output(BlockOutput {
-                                    block_id: self.id,
-                                    stdout: Some("Connected to database successfully".to_string()),
-                                    stderr: None,
-                                    binary: None,
-                                    object: None,
-                                    lifecycle: None,
-                                }.into(),
+                                let _ = context.send_output(
+                                    BlockOutput::builder()
+                                        .block_id(self.id)
+                                        .stdout("Connected to database successfully".to_string())
+                                        .build(),
                                 ).await;
                             pool
                         },
                         Err(e) => {
                             let error_msg = format!("Failed to connect to database: {}", e);
-                                let _ = context.send_output(BlockOutput {
-                                    block_id: self.id,
-                                    stdout: None,
-                                    stderr: Some(error_msg.clone()),
-                                    binary: None,
-                                    object: None,
-                                    lifecycle: Some(BlockLifecycleEvent::Error(BlockErrorData {
-                                        message: error_msg.clone(),
-                                    })),
-                                }.into(),
+                                let _ = context.send_output(
+                                    BlockOutput::builder()
+                                        .block_id(self.id)
+                                        .stderr(error_msg.clone())
+                                        .lifecycle(BlockLifecycleEvent::Error(BlockErrorData {
+                                            message: error_msg.clone(),
+                                        }))
+                                        .build(),
                                 ).await;
                             return Err(error_msg.into());
                         }
@@ -344,16 +315,14 @@ impl Mysql {
                 }
                 _ = timeout_task => {
                     let error_msg = "Database connection timed out after 10 seconds. Please check your connection string and network.";
-                        let _ = context.send_output(BlockOutput {
-                            block_id: self.id,
-                            stdout: None,
-                            stderr: Some(error_msg.to_string()),
-                            binary: None,
-                            object: None,
-                            lifecycle: Some(BlockLifecycleEvent::Error(BlockErrorData {
-                                message: error_msg.to_string(),
-                            })),
-                        }.into(),
+                        let _ = context.send_output(
+                            BlockOutput::builder()
+                                .block_id(self.id)
+                                .stderr(error_msg.to_string())
+                                .lifecycle(BlockLifecycleEvent::Error(BlockErrorData {
+                                    message: error_msg.to_string(),
+                                }))
+                                .build(),
                         ).await;
                     return Err(error_msg.into());
                 }
@@ -377,17 +346,13 @@ impl Mysql {
                 let error_msg = "No SQL statements to execute";
                 let _ = context_clone
                     .send_output(
-                        BlockOutput {
-                            block_id: self.id,
-                            stdout: None,
-                            stderr: Some(error_msg.to_string()),
-                            binary: None,
-                            object: None,
-                            lifecycle: Some(BlockLifecycleEvent::Error(BlockErrorData {
+                        BlockOutput::builder()
+                            .block_id(self.id)
+                            .stderr(error_msg.to_string())
+                            .lifecycle(BlockLifecycleEvent::Error(BlockErrorData {
                                 message: error_msg.to_string(),
-                            })),
-                        }
-                        .into(),
+                            }))
+                            .build(),
                     )
                     .await;
                 return Err(error_msg.into());
@@ -396,18 +361,13 @@ impl Mysql {
             // Send executing status
             let _ = context_clone
                 .send_output(
-                    BlockOutput {
-                        block_id: self.id,
-                        stdout: Some(format!(
+                    BlockOutput::builder()
+                        .block_id(self.id)
+                        .stdout(format!(
                             "Executing {} SQL statement(s)...",
                             statements.len()
-                        )),
-                        stderr: None,
-                        binary: None,
-                        object: None,
-                        lifecycle: None,
-                    }
-                    .into(),
+                        ))
+                        .build(),
                 )
                 .await;
 
@@ -420,17 +380,13 @@ impl Mysql {
                     let error_msg = format!("Statement {} failed: {}", i + 1, e);
                     let _ = context_clone
                         .send_output(
-                            BlockOutput {
-                                block_id: self.id,
-                                stdout: None,
-                                stderr: Some(error_msg.clone()),
-                                binary: None,
-                                object: None,
-                                lifecycle: Some(BlockLifecycleEvent::Error(BlockErrorData {
+                            BlockOutput::builder()
+                                .block_id(self.id)
+                                .stderr(error_msg.clone())
+                                .lifecycle(BlockLifecycleEvent::Error(BlockErrorData {
                                     message: error_msg.clone(),
-                                })),
-                            }
-                            .into(),
+                                }))
+                                .build(),
                         )
                         .await;
                     return Err(error_msg.into());
@@ -457,14 +413,11 @@ impl Mysql {
 
                     // Send completion events
                     let _ = context.emit_workflow_event(WorkflowEvent::BlockFinished { id: block_id });
-                    let _ = context.send_output(BlockOutput {
-                        block_id: self.id,
-                        stdout: None,
-                        stderr: None,
-                        binary: None,
-                        object: None,
-                        lifecycle: Some(BlockLifecycleEvent::Cancelled),
-                    }.into(),
+                    let _ = context.send_output(
+                        BlockOutput::builder()
+                            .block_id(self.id)
+                            .lifecycle(BlockLifecycleEvent::Cancelled)
+                            .build(),
                     ).await;
                     return Err("MySQL query execution cancelled".into());
                 }
@@ -486,33 +439,23 @@ impl Mysql {
         // Send success message
         let _ = context
             .send_output(
-                BlockOutput {
-                    block_id: self.id,
-                    stdout: Some("Query execution completed successfully".to_string()),
-                    stderr: None,
-                    binary: None,
-                    object: None,
-                    lifecycle: None,
-                }
-                .into(),
+                BlockOutput::builder()
+                    .block_id(self.id)
+                    .stdout("Query execution completed successfully".to_string())
+                    .build(),
             )
             .await;
 
         // Send finished lifecycle event
         let _ = context
             .send_output(
-                BlockOutput {
-                    block_id: self.id,
-                    stdout: None,
-                    stderr: None,
-                    binary: None,
-                    object: None,
-                    lifecycle: Some(BlockLifecycleEvent::Finished(BlockFinishedData {
+                BlockOutput::builder()
+                    .block_id(self.id)
+                    .lifecycle(BlockLifecycleEvent::Finished(BlockFinishedData {
                         exit_code: Some(0),
                         success: true,
-                    })),
-                }
-                .into(),
+                    }))
+                    .build(),
             )
             .await;
 
@@ -604,17 +547,13 @@ impl BlockBehavior for Mysql {
                     // Send error lifecycle event to output channel
                     let _ = context
                         .send_output(
-                            BlockOutput {
-                                block_id: self.id,
-                                stdout: None,
-                                stderr: Some(e.to_string()),
-                                binary: None,
-                                object: None,
-                                lifecycle: Some(BlockLifecycleEvent::Error(BlockErrorData {
+                            BlockOutput::builder()
+                                .block_id(self.id)
+                                .stderr(e.to_string())
+                                .lifecycle(BlockLifecycleEvent::Error(BlockErrorData {
                                     message: e.to_string(),
-                                })),
-                            }
-                            .into(),
+                                }))
+                                .build(),
                         )
                         .await;
 

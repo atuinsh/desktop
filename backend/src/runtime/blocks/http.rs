@@ -164,15 +164,10 @@ impl BlockBehavior for Http {
 
         context
             .send_output(
-                BlockOutput {
-                    block_id: self.id,
-                    stdout: None,
-                    stderr: None,
-                    lifecycle: Some(BlockLifecycleEvent::Started),
-                    binary: None,
-                    object: None,
-                }
-                .into(),
+                BlockOutput::builder()
+                    .block_id(self.id)
+                    .lifecycle(BlockLifecycleEvent::Started)
+                    .build(),
             )
             .await?;
 
@@ -195,17 +190,12 @@ impl BlockBehavior for Http {
 
             let _ = context
                 .send_output(
-                    BlockOutput {
-                        block_id,
-                        stdout: None,
-                        stderr: None,
-                        binary: None,
-                        object: None,
-                        lifecycle: Some(BlockLifecycleEvent::Error(BlockErrorData {
+                    BlockOutput::builder()
+                        .block_id(block_id)
+                        .lifecycle(BlockLifecycleEvent::Error(BlockErrorData {
                             message: error_message.clone(),
-                        })),
-                    }
-                    .into(),
+                        }))
+                        .build(),
                 )
                 .await?;
 
@@ -237,18 +227,14 @@ impl BlockBehavior for Http {
 
         let _ = context
             .send_output(
-                BlockOutput {
-                    block_id,
-                    stdout: None,
-                    stderr: None,
-                    lifecycle: Some(BlockLifecycleEvent::Finished(BlockFinishedData {
+                BlockOutput::builder()
+                    .block_id(block_id)
+                    .lifecycle(BlockLifecycleEvent::Finished(BlockFinishedData {
                         exit_code: Some(0),
                         success: was_success,
-                    })),
-                    binary: None,
-                    object: Some(serde_json::to_value(response)?),
-                }
-                .into(),
+                    }))
+                    .object(serde_json::to_value(response)?)
+                    .build(),
             )
             .await?;
 

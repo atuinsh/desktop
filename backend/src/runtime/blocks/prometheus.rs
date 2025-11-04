@@ -187,15 +187,10 @@ impl Prometheus {
 
         let _ = context
             .send_output(
-                BlockOutput {
-                    block_id: self.id,
-                    stdout: Some(format!("Executing Prometheus query: {}", query)),
-                    stderr: None,
-                    binary: None,
-                    object: None,
-                    lifecycle: None,
-                }
-                .into(),
+                BlockOutput::builder()
+                    .block_id(self.id)
+                    .stdout(format!("Executing Prometheus query: {}", query))
+                    .build(),
             )
             .await;
 
@@ -289,15 +284,10 @@ impl Prometheus {
 
         let _ = context
             .send_output(
-                BlockOutput {
-                    block_id: self.id,
-                    stdout: None,
-                    stderr: None,
-                    lifecycle: None,
-                    binary: None,
-                    object: Some(result_json),
-                }
-                .into(),
+                BlockOutput::builder()
+                    .block_id(self.id)
+                    .object(result_json)
+                    .build(),
             )
             .await;
 
@@ -313,15 +303,10 @@ impl Prometheus {
 
         let _ = context
             .send_output(
-                BlockOutput {
-                    block_id: self.id,
-                    stdout: None,
-                    stderr: None,
-                    binary: None,
-                    object: None,
-                    lifecycle: Some(BlockLifecycleEvent::Started),
-                }
-                .into(),
+                BlockOutput::builder()
+                    .block_id(self.id)
+                    .lifecycle(BlockLifecycleEvent::Started)
+                    .build(),
             )
             .await;
 
@@ -335,17 +320,13 @@ impl Prometheus {
         if let Err(e) = Self::validate_prometheus_endpoint(&self.endpoint) {
             let _ = context
                 .send_output(
-                    BlockOutput {
-                        block_id: self.id,
-                        stdout: None,
-                        stderr: Some(e.clone()),
-                        binary: None,
-                        object: None,
-                        lifecycle: Some(BlockLifecycleEvent::Error(BlockErrorData {
+                    BlockOutput::builder()
+                        .block_id(self.id)
+                        .stderr(e.clone())
+                        .lifecycle(BlockLifecycleEvent::Error(BlockErrorData {
                             message: e.clone(),
-                        })),
-                    }
-                    .into(),
+                        }))
+                        .build(),
                 )
                 .await;
             return Err(e.into());
@@ -355,17 +336,13 @@ impl Prometheus {
             let error_msg = "Prometheus query cannot be empty";
             let _ = context
                 .send_output(
-                    BlockOutput {
-                        block_id: self.id,
-                        stdout: None,
-                        stderr: Some(error_msg.to_string()),
-                        binary: None,
-                        object: None,
-                        lifecycle: Some(BlockLifecycleEvent::Error(BlockErrorData {
+                    BlockOutput::builder()
+                        .block_id(self.id)
+                        .stderr(error_msg.to_string())
+                        .lifecycle(BlockLifecycleEvent::Error(BlockErrorData {
                             message: error_msg.to_string(),
-                        })),
-                    }
-                    .into(),
+                        }))
+                        .build(),
                 )
                 .await;
             return Err(error_msg.into());
@@ -373,15 +350,10 @@ impl Prometheus {
 
         let _ = context
             .send_output(
-                BlockOutput {
-                    block_id: self.id,
-                    stdout: Some(format!("Connecting to Prometheus: {}", self.endpoint)),
-                    stderr: None,
-                    binary: None,
-                    object: None,
-                    lifecycle: None,
-                }
-                .into(),
+                BlockOutput::builder()
+                    .block_id(self.id)
+                    .stdout(format!("Connecting to Prometheus: {}", self.endpoint))
+                    .build(),
             )
             .await;
 
@@ -420,14 +392,12 @@ impl Prometheus {
                     }
 
                     let _ = context.emit_workflow_event(WorkflowEvent::BlockFinished { id: self.id });
-                        let _ = context.send_output(BlockOutput {
-                            block_id: self.id,
-                            stdout: None,
-                            stderr: None,
-                            binary: None,
-                            object: None,
-                            lifecycle: Some(BlockLifecycleEvent::Cancelled),
-                        }.into()).await;
+                        let _ = context.send_output(
+                            BlockOutput::builder()
+                                .block_id(self.id)
+                                .lifecycle(BlockLifecycleEvent::Cancelled)
+                                .build(),
+                        ).await;
                     return Err("Prometheus query execution cancelled".into());
                 }
                 result = execution_task => {
@@ -441,32 +411,22 @@ impl Prometheus {
         let _ = context.emit_workflow_event(WorkflowEvent::BlockFinished { id: self.id });
         let _ = context
             .send_output(
-                BlockOutput {
-                    block_id: self.id,
-                    stdout: Some("Prometheus query completed successfully".to_string()),
-                    stderr: None,
-                    binary: None,
-                    object: None,
-                    lifecycle: None,
-                }
-                .into(),
+                BlockOutput::builder()
+                    .block_id(self.id)
+                    .stdout("Prometheus query completed successfully".to_string())
+                    .build(),
             )
             .await;
 
         let _ = context
             .send_output(
-                BlockOutput {
-                    block_id: self.id,
-                    stdout: None,
-                    stderr: None,
-                    binary: None,
-                    object: None,
-                    lifecycle: Some(BlockLifecycleEvent::Finished(BlockFinishedData {
+                BlockOutput::builder()
+                    .block_id(self.id)
+                    .lifecycle(BlockLifecycleEvent::Finished(BlockFinishedData {
                         exit_code: Some(0),
                         success: true,
-                    })),
-                }
-                .into(),
+                    }))
+                    .build(),
             )
             .await;
 
@@ -552,17 +512,13 @@ impl BlockBehavior for Prometheus {
 
                     let _ = context
                         .send_output(
-                            BlockOutput {
-                                block_id: self.id,
-                                stdout: None,
-                                stderr: Some(e.to_string()),
-                                binary: None,
-                                object: None,
-                                lifecycle: Some(BlockLifecycleEvent::Error(BlockErrorData {
+                            BlockOutput::builder()
+                                .block_id(self.id)
+                                .stderr(e.to_string())
+                                .lifecycle(BlockLifecycleEvent::Error(BlockErrorData {
                                     message: e.to_string(),
-                                })),
-                            }
-                            .into(),
+                                }))
+                                .build(),
                         )
                         .await;
 

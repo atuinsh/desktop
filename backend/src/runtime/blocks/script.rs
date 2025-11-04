@@ -312,15 +312,10 @@ impl Script {
 
         let _ = context
             .send_output(
-                BlockOutput {
-                    block_id: self.id,
-                    stdout: None,
-                    stderr: None,
-                    binary: None,
-                    object: None,
-                    lifecycle: Some(BlockLifecycleEvent::Started),
-                }
-                .into(),
+                BlockOutput::builder()
+                    .block_id(self.id)
+                    .lifecycle(BlockLifecycleEvent::Started)
+                    .build(),
             )
             .await;
 
@@ -370,17 +365,12 @@ impl Script {
 
                 let _ = context
                     .send_output(
-                        BlockOutput {
-                            block_id: self.id,
-                            stdout: None,
-                            stderr: None,
-                            binary: None,
-                            object: None,
-                            lifecycle: Some(BlockLifecycleEvent::Error(BlockErrorData {
+                        BlockOutput::builder()
+                            .block_id(self.id)
+                            .lifecycle(BlockLifecycleEvent::Error(BlockErrorData {
                                 message: format!("Failed to spawn process: {}", e),
-                            })),
-                        }
-                        .into(),
+                            }))
+                            .build(),
                     )
                     .await;
                 return (Err(e.into()), String::new());
@@ -410,15 +400,10 @@ impl Script {
 
                     let _ = context_clone
                         .send_output(
-                            BlockOutput {
-                                block_id,
-                                stdout: Some(line.clone()),
-                                stderr: None,
-                                lifecycle: None,
-                                binary: None,
-                                object: None,
-                            }
-                            .into(),
+                            BlockOutput::builder()
+                                .block_id(block_id)
+                                .stdout(line.clone())
+                                .build(),
                         )
                         .await;
                     let mut captured = capture.write().await;
@@ -447,15 +432,10 @@ impl Script {
 
                     let _ = context_clone
                         .send_output(
-                            BlockOutput {
-                                block_id,
-                                stdout: None,
-                                stderr: Some(line.clone()),
-                                lifecycle: None,
-                                binary: None,
-                                object: None,
-                            }
-                            .into(),
+                            BlockOutput::builder()
+                                .block_id(block_id)
+                                .stderr(line.clone())
+                                .build(),
                         )
                         .await;
                     line.clear();
@@ -503,14 +483,10 @@ impl Script {
                             "Sending cancelled lifecycle event to output channel for script block {id}",
                             id = self.id
                         );
-                        let _ = context.send_output(BlockOutput {
-                            block_id: self.id,
-                            stdout: None,
-                            stderr: None,
-                            binary: None,
-                            object: None,
-                            lifecycle: Some(BlockLifecycleEvent::Cancelled),
-                        }.into(),
+                        let _ = context.send_output(BlockOutput::builder()
+                            .block_id(self.id)
+                            .lifecycle(BlockLifecycleEvent::Cancelled)
+                            .build(),
                         )
                         .await;
                     return (Err("Script execution cancelled".into()), captured);
@@ -525,16 +501,12 @@ impl Script {
                                     "Sending error lifecycle event to output channel for script block {id}",
                                     id = self.id
                                 );
-                                let _ = context.send_output(BlockOutput {
-                                    block_id: self.id,
-                                    stdout: None,
-                                    stderr: None,
-                                    binary: None,
-                                    object: None,
-                                    lifecycle: Some(BlockLifecycleEvent::Error(BlockErrorData {
+                                let _ = context.send_output(BlockOutput::builder()
+                                    .block_id(self.id)
+                                    .lifecycle(BlockLifecycleEvent::Error(BlockErrorData {
                                         message: format!("Failed to wait for process: {}", e)
-                                    })),
-                                }.into(),
+                                    }))
+                                    .build(),
                                 )
                                 .await;
                             return (Err(format!("Failed to wait for process: {}", e).into()), captured);
@@ -555,17 +527,12 @@ impl Script {
                     );
                     let _ = context
                         .send_output(
-                            BlockOutput {
-                                block_id: self.id,
-                                stdout: None,
-                                stderr: None,
-                                binary: None,
-                                object: None,
-                                lifecycle: Some(BlockLifecycleEvent::Error(BlockErrorData {
+                            BlockOutput::builder()
+                                .block_id(self.id)
+                                .lifecycle(BlockLifecycleEvent::Error(BlockErrorData {
                                     message: format!("Failed to wait for process: {}", e),
-                                })),
-                            }
-                            .into(),
+                                }))
+                                .build(),
                         )
                         .await;
                     return (
@@ -585,18 +552,13 @@ impl Script {
         );
         let _ = context
             .send_output(
-                BlockOutput {
-                    block_id: self.id,
-                    stdout: None,
-                    stderr: None,
-                    binary: None,
-                    object: None,
-                    lifecycle: Some(BlockLifecycleEvent::Finished(BlockFinishedData {
+                BlockOutput::builder()
+                    .block_id(self.id)
+                    .lifecycle(BlockLifecycleEvent::Finished(BlockFinishedData {
                         exit_code: Some(exit_code),
                         success: exit_code == 0,
-                    })),
-                }
-                .into(),
+                    }))
+                    .build(),
             )
             .await;
 
@@ -626,15 +588,10 @@ impl Script {
 
         let _ = context
             .send_output(
-                BlockOutput {
-                    block_id: self.id,
-                    stdout: None,
-                    stderr: None,
-                    binary: None,
-                    object: None,
-                    lifecycle: Some(BlockLifecycleEvent::Started),
-                }
-                .into(),
+                BlockOutput::builder()
+                    .block_id(self.id)
+                    .lifecycle(BlockLifecycleEvent::Started)
+                    .build(),
             )
             .await;
 
@@ -647,20 +604,15 @@ impl Script {
                 let _ = context.emit_workflow_event(WorkflowEvent::BlockFinished { id: self.id });
                 let _ = context
                     .send_output(
-                        BlockOutput {
-                            block_id: self.id,
-                            stdout: None,
-                            stderr: None,
-                            binary: None,
-                            object: None,
-                            lifecycle: Some(BlockLifecycleEvent::Error(BlockErrorData {
+                        BlockOutput::builder()
+                            .block_id(self.id)
+                            .lifecycle(BlockLifecycleEvent::Error(BlockErrorData {
                                 message: error_msg.to_string(),
-                            })),
-                        }
-                        .into(),
+                            }))
+                            .build(),
                     )
                     .await;
-                return (Err(error_msg.into()), String::new());
+                return (Err(error_msg.into()), String::new().into());
             }
         };
 
@@ -688,17 +640,12 @@ impl Script {
             let _ = context.emit_workflow_event(WorkflowEvent::BlockFinished { id: self.id });
             let _ = context
                 .send_output(
-                    BlockOutput {
-                        block_id: self.id,
-                        stdout: None,
-                        stderr: None,
-                        binary: None,
-                        object: None,
-                        lifecycle: Some(BlockLifecycleEvent::Error(BlockErrorData {
+                    BlockOutput::builder()
+                        .block_id(self.id)
+                        .lifecycle(BlockLifecycleEvent::Error(BlockErrorData {
                             message: error_msg.clone(),
-                        })),
-                    }
-                    .into(),
+                        }))
+                        .build(),
                 )
                 .await;
             return (Err(error_msg.into()), String::new());
@@ -714,15 +661,10 @@ impl Script {
             while let Some(line) = output_receiver.recv().await {
                 let _ = context_clone
                     .send_output(
-                        BlockOutput {
-                            block_id,
-                            stdout: Some(line.clone()),
-                            stderr: None,
-                            lifecycle: None,
-                            binary: None,
-                            object: None,
-                        }
-                        .into(),
+                        BlockOutput::builder()
+                            .block_id(block_id)
+                            .stdout(line.clone())
+                            .build(),
                     )
                     .await;
                 let mut captured = captured_output_clone.write().await;
@@ -744,14 +686,12 @@ impl Script {
                     }
 
                     let _ = context.emit_workflow_event(WorkflowEvent::BlockFinished { id: block_id });
-                    let _ = context.send_output(BlockOutput {
-                        block_id,
-                        stdout: None,
-                        stderr: None,
-                        binary: None,
-                        object: None,
-                        lifecycle: Some(BlockLifecycleEvent::Cancelled),
-                    }.into())
+                    let _ = context.send_output(
+                        BlockOutput::builder()
+                            .block_id(block_id)
+                            .lifecycle(BlockLifecycleEvent::Cancelled)
+                            .build(),
+                    )
                     .await;
                     return (Err("SSH script execution cancelled".into()), captured);
                 }
@@ -767,18 +707,13 @@ impl Script {
         let _ = context.emit_workflow_event(WorkflowEvent::BlockFinished { id: self.id });
         let _ = context
             .send_output(
-                BlockOutput {
-                    block_id: self.id,
-                    stdout: None,
-                    stderr: None,
-                    binary: None,
-                    object: None,
-                    lifecycle: Some(BlockLifecycleEvent::Finished(BlockFinishedData {
+                BlockOutput::builder()
+                    .block_id(self.id)
+                    .lifecycle(BlockLifecycleEvent::Finished(BlockFinishedData {
                         exit_code: Some(exit_code),
                         success: exit_code == 0,
-                    })),
-                }
-                .into(),
+                    }))
+                    .build(),
             )
             .await;
 
