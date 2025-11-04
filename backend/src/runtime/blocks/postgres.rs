@@ -5,22 +5,17 @@ use sqlparser::dialect::{Dialect, PostgreSqlDialect};
 use sqlx::{postgres::PgConnectOptions, Column, PgPool, Row, TypeInfo};
 use std::str::FromStr;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 use tokio::sync::RwLock;
 use typed_builder::TypedBuilder;
 use uuid::Uuid;
 
-use crate::runtime::blocks::document::block_context::BlockExecutionOutput;
-use crate::runtime::blocks::handler::{
-    BlockErrorData, BlockFinishedData, BlockLifecycleEvent, BlockOutput, ExecutionStatus,
-};
+use crate::runtime::blocks::handler::ExecutionStatus;
 use crate::runtime::blocks::sqlx_block::{
     SqlxBlockBehavior, SqlxBlockError, SqlxBlockExecutionResult, SqlxQueryResult,
     SqlxStatementResult,
 };
 use crate::runtime::blocks::{Block, BlockBehavior};
-use crate::runtime::events::GCEvent;
-use crate::runtime::workflow::event::WorkflowEvent;
 
 use super::handler::{CancellationToken, ExecutionContext, ExecutionHandle};
 use super::FromDocument;
@@ -45,7 +40,7 @@ pub struct Postgres {
 }
 
 impl FromDocument for Postgres {
-    fn from_document(block_data: &serde_json::Value) -> Result<Self, String> {
+    fn from_document(block_data: &Value) -> Result<Self, String> {
         let block_id = block_data
             .get("id")
             .and_then(|v| v.as_str())
@@ -113,15 +108,6 @@ impl Postgres {
         }
 
         Ok(())
-    }
-
-    /// Template Postgres query using the context resolver
-    fn template_postgres_query(
-        &self,
-        context: &ExecutionContext,
-    ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
-        let rendered = context.context_resolver.resolve_template(&self.query)?;
-        Ok(rendered)
     }
 
     /// Convert Postgres row to JSON value
