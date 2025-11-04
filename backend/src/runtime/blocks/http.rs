@@ -183,6 +183,15 @@ impl BlockBehavior for Http {
         let response = response.unwrap();
         let was_success = response.status_success;
 
+        let _ = context
+            .send_output(
+                BlockOutput::builder()
+                    .block_id(block_id)
+                    .object(serde_json::to_value(response).map_err(|e| HttpError::Other(e.into()))?)
+                    .build(),
+            )
+            .await;
+
         let _ = context.block_finished(None, was_success).await;
 
         Ok(Some(context.handle()))
@@ -319,14 +328,13 @@ mod tests {
             .build()
     }
 
-    fn create_test_context() -> (ExecutionContext, TestMessageChannel) {
+    fn create_test_context(block_id: Uuid) -> (ExecutionContext, TestMessageChannel) {
         let (tx, _rx) = mpsc::unbounded_channel::<DocumentCommand>();
         let document_handle = DocumentHandle::from_raw("test-runbook".to_string(), tx);
         let context_resolver = ContextResolver::new();
         let (event_sender, _event_receiver) = tokio::sync::broadcast::channel(16);
         let message_channel = TestMessageChannel::new();
 
-        let block_id = Uuid::new_v4();
         let context = ExecutionContext::builder()
             .block_id(block_id)
             .runbook_id(Uuid::new_v4())
@@ -404,7 +412,7 @@ mod tests {
 
         let http = create_test_http(&server.url("/test"), HttpVerb::Get);
         let http_id = http.id;
-        let (context, message_channel) = create_test_context();
+        let (context, message_channel) = create_test_context(http_id);
 
         let _ = http.execute(context).await;
 
@@ -415,7 +423,11 @@ mod tests {
 
         // Verify we received lifecycle messages
         let messages = message_channel.get_messages().await;
-        assert_eq!(messages.len(), 2, "Expected 2 messages (Started, Finished)");
+        assert_eq!(
+            messages.len(),
+            3,
+            "Expected 3 messages (Started, Output, Finished)"
+        );
 
         // Check Started message
         match &messages[0] {
@@ -429,8 +441,20 @@ mod tests {
             _ => panic!("Expected BlockOutput message"),
         }
 
-        // Check Finished message
+        // Check Output message
         match &messages[1] {
+            DocumentBridgeMessage::BlockOutput { block_id, output } => {
+                assert_eq!(*block_id, http_id);
+                assert!(output.object.is_some(), "Expected response object");
+                let response = output.object.as_ref().unwrap();
+                assert_eq!(response["status"], 200);
+                assert_eq!(response["body"], "Hello, World!");
+            }
+            _ => panic!("Expected BlockOutput message"),
+        }
+
+        // Check Finished message
+        match &messages[2] {
             DocumentBridgeMessage::BlockOutput { block_id, output } => {
                 assert_eq!(*block_id, http_id);
                 match &output.lifecycle {
@@ -439,11 +463,6 @@ mod tests {
                     }
                     _ => panic!("Expected Finished lifecycle event"),
                 }
-                // Verify we got the response object
-                assert!(output.object.is_some(), "Expected response object");
-                let response = output.object.as_ref().unwrap();
-                assert_eq!(response["status"], 200);
-                assert_eq!(response["body"], "Hello, World!");
             }
             _ => panic!("Expected BlockOutput message"),
         }
@@ -464,7 +483,7 @@ mod tests {
         let http_id = http.id;
         http.body = "{\"key\":\"value\"}".to_string();
 
-        let (context, message_channel) = create_test_context();
+        let (context, message_channel) = create_test_context(http.id());
         let _ = http.execute(context).await;
 
         tokio::time::sleep(Duration::from_millis(100)).await;
@@ -473,11 +492,16 @@ mod tests {
 
         // Verify we received messages
         let messages = message_channel.get_messages().await;
-        assert_eq!(messages.len(), 2);
+        assert_eq!(
+            messages.len(),
+            3,
+            "Expected 3 messages (Started, Output, Finished)"
+        );
 
         // Check the finished message includes the JSON response
         match &messages[1] {
             DocumentBridgeMessage::BlockOutput { block_id, output } => {
+                println!("output: {:?}", output);
                 assert_eq!(*block_id, http_id);
                 let response = output.object.as_ref().unwrap();
                 assert_eq!(response["status"], 201);
@@ -504,7 +528,7 @@ mod tests {
         http.headers
             .insert("X-Custom-Header".to_string(), "custom-value".to_string());
 
-        let (context, _) = create_test_context();
+        let (context, _) = create_test_context(http.id());
         let _ = http.execute(context).await;
 
         tokio::time::sleep(Duration::from_millis(100)).await;
@@ -521,7 +545,7 @@ mod tests {
         });
 
         let http = create_test_http(&server.url("/notfound"), HttpVerb::Get);
-        let (context, _) = create_test_context();
+        let (context, _) = create_test_context(http.id());
 
         let _ = http.execute(context).await;
 
@@ -539,7 +563,7 @@ mod tests {
         });
 
         let http = create_test_http(&server.url("/error"), HttpVerb::Get);
-        let (context, _) = create_test_context();
+        let (context, _) = create_test_context(http.id());
 
         let _ = http.execute(context).await;
 
@@ -626,7 +650,7 @@ mod tests {
         let mut http = create_test_http(&server.url("/users/123"), HttpVerb::Put);
         http.body = "{\"name\":\"Jane\"}".to_string();
 
-        let (context, _) = create_test_context();
+        let (context, _) = create_test_context(http.id());
         let _ = http.execute(context).await;
 
         mock.assert();
@@ -641,7 +665,7 @@ mod tests {
         });
 
         let http = create_test_http(&server.url("/users/123"), HttpVerb::Delete);
-        let (context, _) = create_test_context();
+        let (context, _) = create_test_context(http.id());
 
         let _ = http.execute(context).await;
 
@@ -661,7 +685,7 @@ mod tests {
         let mut http = create_test_http(&server.url("/users/123"), HttpVerb::Patch);
         http.body = "{\"email\":\"newemail@example.com\"}".to_string();
 
-        let (context, _) = create_test_context();
+        let (context, _) = create_test_context(http.id());
         let _ = http.execute(context).await;
 
         mock.assert();
@@ -676,7 +700,7 @@ mod tests {
         });
 
         let http = create_test_http(&server.url("/check"), HttpVerb::Head);
-        let (context, _) = create_test_context();
+        let (context, _) = create_test_context(http.id());
 
         let _ = http.execute(context).await;
 
@@ -694,7 +718,7 @@ mod tests {
         let mut http = create_test_http(&server.url("/test"), HttpVerb::Get);
         http.body = "This should be ignored".to_string();
 
-        let (context, _) = create_test_context();
+        let (context, _) = create_test_context(http.id());
         let _ = http.execute(context).await;
 
         mock.assert();

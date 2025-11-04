@@ -432,8 +432,9 @@ mod tests {
     async fn test_invalid_sql_syntax() {
         let sqlite = create_test_sqlite("SELECT FROM users", "sqlite::memory:");
         let context = create_test_context();
+        let handle = context.handle();
 
-        let handle = sqlite.execute(context).await.unwrap().unwrap();
+        let _ = sqlite.execute(context).await;
 
         loop {
             tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
@@ -454,8 +455,9 @@ mod tests {
     async fn test_empty_query() {
         let sqlite = create_test_sqlite("", "sqlite::memory:");
         let context = create_test_context();
+        let handle = context.handle();
 
-        let handle = sqlite.execute(context).await.unwrap().unwrap();
+        let _ = sqlite.execute(context).await;
 
         loop {
             tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
@@ -477,8 +479,9 @@ mod tests {
         let query = "SELECT 1; SELECT 2; SELECT 3";
         let sqlite = create_test_sqlite(query, "sqlite::memory:");
         let context = create_test_context();
+        let handle = context.handle();
 
-        let handle = sqlite.execute(context).await.unwrap().unwrap();
+        let _ = sqlite.execute(context).await;
 
         loop {
             tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
@@ -496,8 +499,9 @@ mod tests {
     async fn test_invalid_uri() {
         let sqlite = create_test_sqlite("SELECT 1", "invalid://uri");
         let context = create_test_context();
+        let handle = context.handle();
 
-        let handle = sqlite.execute(context).await.unwrap().unwrap();
+        let _ = sqlite.execute(context).await;
 
         loop {
             tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
@@ -518,9 +522,10 @@ mod tests {
         let sqlite = create_test_sqlite("SELECT 1", "sqlite::memory:");
         let sqlite_id = sqlite.id;
         let context = create_test_context_with_event_bus(sqlite_id, event_bus.clone());
+        let handle = context.handle();
         let runbook_id = context.runbook_id;
 
-        let handle = sqlite.execute(context).await.unwrap().unwrap();
+        let _ = sqlite.execute(context).await;
 
         loop {
             tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
@@ -570,9 +575,10 @@ mod tests {
         let sqlite = create_test_sqlite("SELECT * from ADFASDFSDFADFSDF", "sqlite::memory:");
         let sqlite_id = sqlite.id;
         let context = create_test_context_with_event_bus(sqlite_id, event_bus.clone());
+        let handle = context.handle();
         let runbook_id = context.runbook_id;
 
-        let handle = sqlite.execute(context).await.unwrap().unwrap();
+        let _ = sqlite.execute(context).await;
 
         loop {
             tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;

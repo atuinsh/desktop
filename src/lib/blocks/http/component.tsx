@@ -52,7 +52,7 @@ export const Http = ({
   // const context = useBlockContext(http.id);
   const execution = useBlockExecution(http.id);
   useBlockOutput<HttpResponse>(http.id, (output) => {
-    if (output.lifecycle?.type === "finished") {
+    if (output.object) {
       const response = output.object;
       setResponse(response);
     }
