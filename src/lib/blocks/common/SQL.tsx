@@ -133,12 +133,9 @@ const SQL = ({
 
   let rows = null;
   let columns = null;
-  let rowsAffected = null;
   if (results?.type === "Query") {
     rows = results.data.rows;
     columns = results.data.columns;
-  } else if (results?.type === "Statement") {
-    rowsAffected = results.data.rowsAffected;
   }
 
   // Get SQL language extension based on sqlType

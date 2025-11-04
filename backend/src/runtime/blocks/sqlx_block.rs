@@ -52,6 +52,12 @@ impl From<&str> for SqlxBlockError {
 pub(crate) struct SqlxQueryResult {
     columns: Vec<String>,
     rows: Vec<Map<String, Value>>,
+    #[builder(default = None)]
+    #[ts(type = "number | null")]
+    rows_read: Option<u64>,
+    #[builder(default = None)]
+    #[ts(type = "number | null")]
+    bytes_read: Option<u64>,
     #[serde(serialize_with = "serialize_duration")]
     #[ts(type = "number")]
     duration: Duration,

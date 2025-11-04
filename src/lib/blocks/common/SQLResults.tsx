@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import ResultTable from "./ResultTable";
 import { Card, CardBody, CardHeader, Chip, Tooltip, Button, Divider } from "@heroui/react";
-import { CheckCircle, CircleXIcon, Clock } from "lucide-react";
+import { CheckCircle, CircleXIcon, Clock, HardDriveIcon, Rows4Icon } from "lucide-react";
 import { SqlxBlockExecutionResult } from "@/rs-bindings/SqlxBlockExecutionResult";
+import { formatBytes } from "@/lib/utils";
 
 interface SQLProps {
   error: any;
@@ -34,8 +35,12 @@ const SQLResults = ({ results, error, dismiss, isFullscreen = false }: SQLProps)
 
   let rows = null;
   let rowsAffected = null;
+  let rowsRead = null;
+  let bytesRead = null;
   if (results?.type === "Query") {
     rows = results.data.rows;
+    rowsRead = results.data.rowsRead;
+    bytesRead = results.data.bytesRead;
   } else if (results?.type === "Statement") {
     rowsAffected = results.data.rowsAffected;
   }
@@ -110,27 +115,27 @@ const SQLResults = ({ results, error, dismiss, isFullscreen = false }: SQLProps)
           )}
         </div>
         <div className="flex items-center gap-4">
-          {/* {results.rowsRead && (
+          {rowsRead && (
             <Tooltip content="Rows read">
               <div className="flex items-center gap-1 text-default-500">
                 <Rows4Icon size={14} />
 
                 <span className="text-sm select-text">
-                  {results.rowsRead?.toLocaleString()} {results.rowsRead > 1 ? "rows" : "row"}
+                  {rowsRead?.toLocaleString()} {rowsRead > 1 ? "rows" : "row"}
                 </span>
               </div>
             </Tooltip>
           )}
 
-          {results.bytesRead && (
+          {bytesRead && (
             <Tooltip content="Bytes read">
               <div className="flex items-center gap-1 text-default-500">
                 <HardDriveIcon size={14} />
 
-                <span className="text-sm select-text">{formatBytes(results.bytesRead)}</span>
+                <span className="text-sm select-text">{formatBytes(bytesRead)}</span>
               </div>
             </Tooltip>
-          )} */}
+          )}
 
           <Tooltip content="Request duration">
             <div className="flex items-center gap-1 text-default-500">
