@@ -384,6 +384,7 @@ mod tests {
         let message_channel = TestMessageChannel::new();
 
         let context = ExecutionContext::builder()
+            .block_id(Uuid::new_v4())
             .runbook_id(Uuid::new_v4())
             .document_handle(document_handle)
             .context_resolver(Arc::new(context_resolver))
@@ -411,6 +412,7 @@ mod tests {
         let message_channel = TestMessageChannel::new();
 
         let context = ExecutionContext::builder()
+            .block_id(Uuid::new_v4())
             .runbook_id(Uuid::new_v4())
             .document_handle(document_handle)
             .context_resolver(Arc::new(context_resolver))
@@ -422,6 +424,7 @@ mod tests {
     }
 
     fn create_test_context_with_event_bus(
+        block_id: Uuid,
         event_bus: Arc<MemoryEventBus>,
     ) -> (ExecutionContext, TestMessageChannel) {
         let (tx, _rx) = mpsc::unbounded_channel::<DocumentCommand>();
@@ -431,6 +434,7 @@ mod tests {
         let message_channel = TestMessageChannel::new();
 
         let context = ExecutionContext::builder()
+            .block_id(block_id)
             .runbook_id(Uuid::new_v4())
             .document_handle(document_handle)
             .context_resolver(Arc::new(context_resolver))
@@ -750,10 +754,6 @@ mod tests {
 
     #[tokio::test]
     async fn test_grand_central_events_successful_request() {
-        let event_bus = Arc::new(MemoryEventBus::new());
-        let (context, _) = create_test_context_with_event_bus(event_bus.clone());
-        let runbook_id = context.runbook_id;
-
         let server = MockServer::start();
         let mock = server.mock(|when, then| {
             when.method(GET).path("/test");
@@ -762,6 +762,10 @@ mod tests {
 
         let http = create_test_http(&server.url("/test"), HttpVerb::Get);
         let http_id = http.id;
+
+        let event_bus = Arc::new(MemoryEventBus::new());
+        let (context, _) = create_test_context_with_event_bus(http_id, event_bus.clone());
+        let runbook_id = context.runbook_id;
 
         let _ = http.execute(context).await;
 
@@ -801,10 +805,6 @@ mod tests {
 
     #[tokio::test]
     async fn test_grand_central_events_failed_request() {
-        let event_bus = Arc::new(MemoryEventBus::new());
-        let (context, _) = create_test_context_with_event_bus(event_bus.clone());
-        let runbook_id = context.runbook_id;
-
         let server = MockServer::start();
         let mock = server.mock(|when, then| {
             when.method(GET).path("/error");
@@ -813,6 +813,10 @@ mod tests {
 
         let http = create_test_http(&server.url("/error"), HttpVerb::Get);
         let http_id = http.id;
+
+        let event_bus = Arc::new(MemoryEventBus::new());
+        let (context, _) = create_test_context_with_event_bus(http_id, event_bus.clone());
+        let runbook_id = context.runbook_id;
 
         let _ = http.execute(context).await;
 
@@ -852,12 +856,12 @@ mod tests {
 
     #[tokio::test]
     async fn test_grand_central_events_bad_request() {
-        let event_bus = Arc::new(MemoryEventBus::new());
-        let (context, _) = create_test_context_with_event_bus(event_bus.clone());
-        let runbook_id = context.runbook_id;
-
         let http = create_test_http(&"httasdfa2085!!!!", HttpVerb::Get);
         let http_id = http.id;
+
+        let event_bus = Arc::new(MemoryEventBus::new());
+        let (context, _) = create_test_context_with_event_bus(http_id, event_bus.clone());
+        let runbook_id = context.runbook_id;
 
         let _ = http.execute(context).await;
 

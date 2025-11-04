@@ -1,7 +1,7 @@
 use crate::runtime::blocks::document::actor::DocumentError;
 use crate::runtime::blocks::document::block_context::{BlockContext, ContextResolver};
 use crate::runtime::blocks::document::{actor::DocumentHandle, bridge::DocumentBridgeMessage};
-use crate::runtime::events::EventBus;
+use crate::runtime::events::{EventBus, GCEvent};
 use crate::runtime::pty_store::PtyStoreHandle;
 use crate::runtime::ssh_pool::SshPoolHandle;
 use crate::runtime::workflow::event::WorkflowEvent;
@@ -16,6 +16,7 @@ use uuid::Uuid;
 
 #[derive(TypedBuilder, Clone)]
 pub struct ExecutionContext {
+    pub block_id: Uuid,
     pub runbook_id: Uuid,
     pub document_handle: Arc<DocumentHandle>,
     pub context_resolver: Arc<ContextResolver>,
@@ -40,6 +41,7 @@ impl Debug for ExecutionContext {
 }
 
 impl ExecutionContext {
+    /// Emit a Workflow event
     pub fn emit_workflow_event(&self, event: WorkflowEvent) -> Result<(), DocumentError> {
         self.workflow_event_sender
             .send(event)
@@ -53,18 +55,21 @@ impl ExecutionContext {
         message: impl Into<DocumentBridgeMessage>,
     ) -> Result<(), DocumentError> {
         if let Some(chan) = &self.output_channel {
+            chan.send(message.into())
                 .await
                 .map_err(|_| DocumentError::OutputSendError)?;
         }
         Ok(())
     }
 
+    /// Clear the active context for a block
     pub async fn clear_active_context(&self, block_id: Uuid) -> Result<(), DocumentError> {
         self.document_handle
             .update_active_context(block_id, |ctx| *ctx = BlockContext::new())
             .await
     }
 
+    /// Update the passive context for a block
     pub async fn update_passive_context(
         &self,
         block_id: Uuid,
@@ -75,6 +80,7 @@ impl ExecutionContext {
             .await
     }
 
+    /// Update the active context for a block
     pub async fn update_active_context(
         &self,
         block_id: Uuid,
@@ -83,6 +89,52 @@ impl ExecutionContext {
         self.document_handle
             .update_active_context(block_id, update_fn)
             .await
+    }
+
+    /// Emit a Grand Central event
+    pub async fn emit_gc_event(&self, event: GCEvent) -> Result<(), DocumentError> {
+        if let Some(event_bus) = &self.gc_event_bus {
+            let _ = event_bus.emit(event).await;
+        }
+        Ok(())
+    }
+
+    /// Emit a BlockStarted event via Grand Central
+    pub async fn emit_block_started(&self) -> Result<(), DocumentError> {
+        self.emit_gc_event(GCEvent::BlockStarted {
+            block_id: self.block_id,
+            runbook_id: self.runbook_id,
+        })
+        .await
+    }
+
+    /// Emit a BlockFinished event via Grand Central
+    pub async fn emit_block_finished(&self, success: bool) -> Result<(), DocumentError> {
+        self.emit_gc_event(GCEvent::BlockFinished {
+            block_id: self.block_id,
+            runbook_id: self.runbook_id,
+            success,
+        })
+        .await
+    }
+
+    /// Emit a BlockFailed event via Grand Central
+    pub async fn emit_block_failed(&self, error: String) -> Result<(), DocumentError> {
+        self.emit_gc_event(GCEvent::BlockFailed {
+            block_id: self.block_id,
+            runbook_id: self.runbook_id,
+            error,
+        })
+        .await
+    }
+
+    /// Emit a BlockCancelled event via Grand Central
+    pub async fn emit_block_cancelled(&self) -> Result<(), DocumentError> {
+        self.emit_gc_event(GCEvent::BlockCancelled {
+            block_id: self.block_id,
+            runbook_id: self.runbook_id,
+        })
+        .await
     }
 }
 

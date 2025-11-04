@@ -3,7 +3,6 @@ use crate::runtime::blocks::handler::{
     BlockErrorData, BlockFinishedData, BlockLifecycleEvent, BlockOutput,
 };
 use crate::runtime::blocks::handler::{CancellationToken, ExecutionStatus};
-use crate::runtime::events::GCEvent;
 use crate::runtime::workflow::event::WorkflowEvent;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
@@ -139,18 +138,11 @@ impl BlockBehavior for Script {
 
         tokio::spawn(async move {
             // Emit BlockStarted event via Grand Central
-            if let Some(event_bus) = &context.gc_event_bus {
-                log::trace!(
-                    "Emitting BlockStarted event for script block {id}",
-                    id = self.id
-                );
-                let _ = event_bus
-                    .emit(GCEvent::BlockStarted {
-                        block_id: self.id,
-                        runbook_id: context.runbook_id,
-                    })
-                    .await;
-            }
+            log::trace!(
+                "Emitting BlockStarted event for script block {id}",
+                id = self.id
+            );
+            let _ = context.emit_block_started().await;
 
             let (exit_code, captured_output) = self
                 .run_script(context.clone(), handle_clone.cancellation_token.clone())
@@ -204,15 +196,7 @@ impl BlockBehavior for Script {
                         .await;
 
                     // Emit BlockFinished event via Grand Central
-                    if let Some(event_bus) = &context.gc_event_bus {
-                        let _ = event_bus
-                            .emit(GCEvent::BlockFinished {
-                                block_id: self.id,
-                                runbook_id: context.runbook_id,
-                                success: true,
-                            })
-                            .await;
-                    }
+                    let _ = context.emit_block_finished(true).await;
 
                     ExecutionStatus::Success(output)
                 }
@@ -232,29 +216,15 @@ impl BlockBehavior for Script {
                         .await;
 
                     // Emit BlockFailed event via Grand Central
-                    if let Some(event_bus) = &context.gc_event_bus {
-                        let _ = event_bus
-                            .emit(GCEvent::BlockFailed {
-                                block_id: self.id,
-                                runbook_id: context.runbook_id,
-                                error: format!("Process exited with code {}", code),
-                            })
-                            .await;
-                    }
+                    let _ = context
+                        .emit_block_failed(format!("Process exited with code {}", code))
+                        .await;
 
                     ExecutionStatus::Failed(format!("Process exited with code {}", code))
                 }
                 Err(e) => {
                     // Emit BlockFailed event via Grand Central
-                    if let Some(event_bus) = &context.gc_event_bus {
-                        let _ = event_bus
-                            .emit(GCEvent::BlockFailed {
-                                block_id: self.id,
-                                runbook_id: context.runbook_id,
-                                error: e.to_string(),
-                            })
-                            .await;
-                    }
+                    let _ = context.emit_block_failed(e.to_string()).await;
 
                     ExecutionStatus::Failed(e.to_string())
                 }
@@ -756,6 +726,7 @@ mod tests {
         let (event_sender, _event_receiver) = tokio::sync::broadcast::channel(16);
 
         ExecutionContext::builder()
+            .block_id(Uuid::new_v4())
             .runbook_id(Uuid::new_v4())
             .document_handle(document_handle)
             .context_resolver(Arc::new(context_resolver))
@@ -777,6 +748,7 @@ mod tests {
         let (event_sender, _event_receiver) = tokio::sync::broadcast::channel(16);
 
         ExecutionContext::builder()
+            .block_id(Uuid::new_v4())
             .runbook_id(Uuid::new_v4())
             .document_handle(document_handle)
             .context_resolver(Arc::new(context_resolver))
@@ -784,13 +756,17 @@ mod tests {
             .build()
     }
 
-    fn create_test_context_with_event_bus(event_bus: Arc<MemoryEventBus>) -> ExecutionContext {
+    fn create_test_context_with_event_bus(
+        block_id: Uuid,
+        event_bus: Arc<MemoryEventBus>,
+    ) -> ExecutionContext {
         let (tx, _rx) = mpsc::unbounded_channel::<DocumentCommand>();
         let document_handle = DocumentHandle::from_raw("test-runbook".to_string(), tx);
         let context_resolver = ContextResolver::new();
         let (event_sender, _event_receiver) = tokio::sync::broadcast::channel(16);
 
         ExecutionContext::builder()
+            .block_id(block_id)
             .runbook_id(Uuid::new_v4())
             .document_handle(document_handle)
             .context_resolver(Arc::new(context_resolver))
@@ -950,11 +926,10 @@ mod tests {
     #[tokio::test]
     async fn test_grand_central_events_successful_script() {
         let event_bus = Arc::new(MemoryEventBus::new());
-        let context = create_test_context_with_event_bus(event_bus.clone());
-        let runbook_id = context.runbook_id;
-
         let script = create_test_script("echo 'test'", "bash");
         let script_id = script.id;
+        let context = create_test_context_with_event_bus(script.id, event_bus.clone());
+        let runbook_id = context.runbook_id;
 
         let handle = script.execute(context).await.unwrap().unwrap();
 
@@ -1005,11 +980,10 @@ mod tests {
     #[tokio::test]
     async fn test_grand_central_events_failed_script() {
         let event_bus = Arc::new(MemoryEventBus::new());
-        let context = create_test_context_with_event_bus(event_bus.clone());
-        let runbook_id = context.runbook_id;
-
         let script = create_test_script("exit 1", "bash");
         let script_id = script.id;
+        let context = create_test_context_with_event_bus(script_id, event_bus.clone());
+        let runbook_id = context.runbook_id;
 
         let handle = script.execute(context).await.unwrap().unwrap();
 

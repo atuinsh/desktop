@@ -260,11 +260,13 @@ impl Document {
         let document_handle = handle.clone();
 
         // Parse runbook ID
-        let runbook_id = Uuid::parse_str(&self.id).unwrap_or_else(|_| Uuid::new_v4());
+        let runbook_id = Uuid::parse_str(&self.id)
+            .map_err(|_| DocumentError::InvalidRunbookId(self.id.clone()))?;
 
         let output_channel = self.document_bridge.clone();
 
         Ok(ExecutionContext::builder()
+            .block_id(*block_id)
             .runbook_id(runbook_id)
             .document_handle(document_handle)
             .context_resolver(Arc::new(context_resolver))

@@ -66,6 +66,9 @@ pub enum DocumentError {
 
     #[error("Invalid document structure: {0}")]
     InvalidStructure(String),
+
+    #[error("Invalid runbook ID: {0}")]
+    InvalidRunbookId(String),
 }
 
 impl<T> From<mpsc::error::SendError<T>> for DocumentError {
