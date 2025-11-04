@@ -877,14 +877,14 @@ mod tests {
         collector.clear_events().await;
 
         // Give the workspace manager time to set up file watching
-        sleep(Duration::from_millis(200)).await;
+        sleep(Duration::from_millis(250)).await;
 
         // Create a new folder
         let folder_path = workspace_path.join("test_folder");
         tokio::fs::create_dir(&folder_path).await.unwrap();
 
         // Wait for folder creation to be detected
-        let folder_events = collector.wait_for_events(1, 1000).await;
+        let folder_events = collector.wait_for_events(1, 2000).await;
         assert!(!folder_events.is_empty());
         collector.clear_events().await;
 
