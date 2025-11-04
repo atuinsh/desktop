@@ -24,6 +24,7 @@ import {
   LinkIcon,
   BlocksIcon,
   MinusIcon,
+  BotIcon,
 } from "lucide-react";
 
 import { AIGeneratePopup } from "./AIGeneratePopup";
@@ -217,6 +218,27 @@ const insertHorizontalRule = (editor: typeof schema.BlockNoteEditor) => ({
   icon: <MinusIcon size={18} />,
   aliases: ["hr", "horizontal", "rule", "divider", "separator", "line"],
   group: "Content",
+});
+
+const insertAgent = (editor: typeof schema.BlockNoteEditor) => ({
+  title: "Agent",
+  subtext: "AI agent that can edit the document and read variables",
+  onItemClick: () => {
+    track_event("runbooks.block.create", { type: "agent" });
+
+    editor.insertBlocks(
+      [
+        {
+          type: "agent",
+        },
+      ],
+      editor.getTextCursorPosition().block.id,
+      "before",
+    );
+  },
+  icon: <BotIcon size={18} />,
+  aliases: ["agent", "ai", "assistant", "bot"],
+  group: "Misc",
 });
 
 // AI Generate function
@@ -718,6 +740,7 @@ export default function Editor({ runbook, editable, runbookEditor }: EditorProps
                 insertHostSelect(schema)(editor),
 
                 // Misc group
+                insertAgent(editor as any),
                 insertEditor(schema)(editor),
 
                 ...getDefaultReactSlashMenuItems(editor),

@@ -138,6 +138,7 @@
     "y-protocols": "^1.0.6",
     "yaml": "^2.8.0",
     "yjs": "^13.6.27",
+    "zod": "^3.25.76",
     "zustand": "^4.5.6"
   },
   "devDependencies": {

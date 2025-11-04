@@ -39,6 +39,7 @@ import type { ListApi } from "@/components/runbooks/List/List";
 import { KVStore } from "@/state/kv";
 import Runbook from "@/state/runbooks/runbook";
 import RunbookIndexService from "@/state/runbooks/search";
+import { setAISearchIndex } from "@/lib/ai/tools";
 import {
   ChartBarBigIcon,
   HistoryIcon,
@@ -120,6 +121,8 @@ type MoveBundle =
     };
 
 const runbookIndex = new RunbookIndexService();
+// Make the search index available to AI tools
+setAISearchIndex(runbookIndex);
 
 async function isOnboardingComplete(): Promise<boolean> {
   let db = await KVStore.open_default();

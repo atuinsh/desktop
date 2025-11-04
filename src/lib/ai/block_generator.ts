@@ -3,6 +3,10 @@ import { createModel, type ModelConfig } from "./provider";
 import { Settings } from "@/state/settings";
 import { invoke } from "@tauri-apps/api/core";
 import DevConsole from "../dev/dev_console";
+import { 
+  searchWorkspaceTool, 
+  getRunbookContentTool,
+} from "./tools";
 
 export interface BlockSpec {
   type: string;
@@ -39,6 +43,37 @@ const SYSTEM_PROMPT = `You are an expert at generating runbooks for operational 
 Blocks are the building blocks of a runbook, and can be anything from a terminal to a postgresql client.
 
 You have spent your career as a devops engineer, and you are now an expert at creating practical, executable runbooks.
+
+IMPORTANT - SEARCH FIRST APPROACH:
+Before generating ANY new runbook content, you MUST search the workspace for existing runbooks that might be relevant.
+Searches are extremely fast (< 100ms) so there is NO performance penalty for searching.
+
+ALWAYS follow this workflow:
+1. FIRST: Search the workspace for relevant existing runbooks using search_workspace()
+2. IF relevant runbooks exist: Read them with get_runbook_content() and reference/adapt them
+3. ONLY THEN: Generate new blocks, incorporating knowledge from existing runbooks
+
+WORKSPACE TOOLS (USE THESE LIBERALLY):
+- search_workspace: Deep semantic search for runbooks by content, concepts, keywords (e.g., "postgres", "docker deployment", "api monitoring") - FAST, use this first!
+- get_runbook_content: Get the full content of a runbook by ID after searching
+
+The search tool uses advanced full-text indexing that searches:
+- Runbook titles
+- Full runbook content (commands, scripts, documentation)
+- Related concepts and keywords
+
+Search is VERY fast (< 100ms) and uses semantic matching, so you can search for:
+- Technologies: "postgres", "redis", "kubernetes"
+- Actions: "deployment", "backup", "monitoring"
+- Concepts: "database connection", "api setup", "troubleshooting"
+
+EXAMPLES:
+- User: "Connect to postgres" → search_workspace("postgres connection") or search_workspace("postgres")
+- User: "Deploy the app" → search_workspace("deployment") or search_workspace("deploy")
+- User: "Monitor API" → search_workspace("api monitoring") or search_workspace("api")
+- User: "Docker setup" → search_workspace("docker") or search_workspace("docker compose")
+
+Never reinvent the wheel - always check existing runbooks first!
 
 DEPENDENCY MANAGEMENT:
 - Only include dependency checks when the user explicitly asks for installation steps
@@ -350,15 +385,35 @@ ${JSON.stringify(blocks, null, 2)}
   }
 
   try {
+    console.log('[AI Block Generator] Starting block generation with tools enabled');
+    console.log('[AI Block Generator] User prompt:', request.prompt);
+    
     const result = await streamText({
       model,
       system: SYSTEM_PROMPT,
       prompt: enhancedPrompt,
       abortSignal: request.abortSignal,
+      tools: {
+        search_workspace: searchWorkspaceTool,
+        get_runbook_content: getRunbookContentTool,
+      },
+      maxSteps: 10, // Allow up to 10 tool calls (searches are fast!)
+      onStepFinish({ text, toolCalls, toolResults, finishReason, usage }) {
+        console.log('[AI Block Generator] Step finished:', {
+          finishReason,
+          toolCallsCount: toolCalls?.length || 0,
+          toolCalls: toolCalls?.map(tc => ({ name: tc.toolName, args: tc.args })),
+          toolResultsCount: toolResults?.length || 0,
+          hasText: !!text,
+          textLength: text?.length || 0,
+          usage,
+        });
+      },
     });
 
     let buffer = "";
     
+    console.log('[AI Block Generator] Processing text stream...');
     // Process the stream
     for await (const chunk of result.textStream) {
       // Check if aborted
@@ -405,9 +460,10 @@ ${JSON.stringify(blocks, null, 2)}
       }
     }
     
+    console.log('[AI Block Generator] Stream processing complete');
     request.onComplete();
   } catch (error) {
-    console.error("Failed to stream generate blocks:", error);
+    console.error('[AI Block Generator] Failed to stream generate blocks:', error);
     const err = new Error(
       `Block generation failed: ${error instanceof Error ? error.message : "Unknown error"}`,
     );

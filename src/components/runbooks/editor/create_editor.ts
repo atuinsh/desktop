@@ -34,6 +34,8 @@ import { KubernetesBlockSpec } from "@/lib/blocks/kubernetes";
 import { RunbookLink } from "./inline/RunbookLink";
 import HorizontalRule from "./blocks/HorizontalRule";
 import { withoutProperties } from "@/lib/utils";
+import Agent from "./blocks/Agent";
+
 
 // Our schema with block specs, which contain the configs and implementations for blocks
 // that we want our editor to use.
@@ -70,6 +72,7 @@ export const schema = BlockNoteSchema.create({
     // Misc
     editor: CodeEditor(),
     horizontal_rule: HorizontalRule(),
+    agent: Agent(),
   },
   inlineContentSpecs: {
     // Adds all default inline content.
