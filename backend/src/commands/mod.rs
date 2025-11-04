@@ -1,3 +1,4 @@
+pub(crate) mod agent;
 pub(crate) mod block_state;
 pub(crate) mod blocks;
 pub(crate) mod dependency;

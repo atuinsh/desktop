@@ -19,12 +19,6 @@ pub enum DocumentBridgeMessage {
         block_id: Uuid,
         output: handler::BlockOutput,
     },
-
-    AgentEvent {
-        #[serde(rename = "blockId")]
-        block_id: Uuid,
-        event: AgentUiEvent,
-    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]

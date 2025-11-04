@@ -64,8 +64,35 @@ impl BlockLocalValueProvider for KvBlockLocalValueProvider {
     }
 }
 
+async fn build_runtime_config(
+    app: &tauri::AppHandle,
+) -> Result<crate::runtime::config::RuntimeConfig, String> {
+    use crate::runtime::config::{AiConfig, RuntimeConfig};
+
+    let db = kv::open_db(app).await.map_err(|e| e.to_string())?;
+
+    let ai_enabled: Option<bool> = kv::get(&db, "settings.ai.enabled").await?;
+    let ai_api_key: Option<String> = kv::get(&db, "settings.ai.api_key").await?;
+    let ai_api_endpoint: Option<String> = kv::get(&db, "settings.ai.api_endpoint").await?;
+    let ai_model: Option<String> = kv::get(&db, "settings.ai.model").await?;
+
+    let ai_enabled = ai_enabled.unwrap_or(false) || ai_api_key.is_some();
+    let ai_api_endpoint =
+        ai_api_endpoint.unwrap_or("https://openrouter.ai/api/v1/chat/completions".to_string());
+
+    let ai_config = AiConfig {
+        enabled: ai_enabled,
+        api_key: ai_api_key,
+        api_endpoint: Some(ai_api_endpoint),
+        model: ai_model.or(Some("anthropic/claude-sonnet-4".to_string())),
+    };
+
+    Ok(RuntimeConfig::with_ai(ai_config))
+}
+
 #[tauri::command]
 pub async fn execute_block(
+    app: AppHandle,
     state: State<'_, AtuinState>,
     block_id: String,
     runbook_id: String,
@@ -82,11 +109,21 @@ pub async fn execute_block(
 
     log::debug!("Starting execution of block {block_id} in runbook {runbook_id}");
 
+    // Build runtime config from KV store
+    let runtime_config = Arc::new(build_runtime_config(&app).await?);
+
+    // Get agent session registry
+    let agent_registry = state.agent_session_registry.clone();
+
     // Get execution context
-    let context = document
+    let mut context = document
         .start_execution(block_id, event_sender, Some(ssh_pool), Some(pty_store))
         .await
         .map_err(|e| e.to_string())?;
+
+    // Add runtime config and agent registry to context
+    context.runtime_config = runtime_config;
+    context.agent_session_registry = Some(agent_registry);
     // Reset the active context for the block
     context
         .clear_active_context(block_id)

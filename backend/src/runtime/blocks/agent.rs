@@ -5,11 +5,18 @@ use tokio::sync::{mpsc, oneshot, Mutex as TokioMutex, RwLock};
 use typed_builder::TypedBuilder;
 use uuid::Uuid;
 
-// TODO: Uncomment when agents_sdk is available
-// use agents_core::tool::Tool;
-// use agents_sdk::{get_default_model, ConfigurableAgentBuilder};
+use agents_sdk::{
+    agent::AgentHandle, persistence::InMemoryCheckpointer, state::AgentStateSnapshot, tool,
+    ConfigurableAgentBuilder, OpenAiChatModel, OpenAiConfig,
+};
 
-use crate::runtime::blocks::document::bridge::{AgentUiEvent, DocumentBridgeMessage};
+// Required for #[tool] macro
+extern crate agents_core;
+extern crate anyhow;
+extern crate async_trait;
+
+use crate::commands::agent::{AgentSessionRegistry, HitlRequest, HitlResponse};
+use crate::runtime::blocks::document::bridge::AgentUiEvent;
 use crate::runtime::blocks::handler::{
     BlockErrorData, BlockFinishedData, BlockLifecycleEvent, BlockOutput, CancellationToken,
     ExecutionContext, ExecutionHandle, ExecutionStatus,
@@ -92,9 +99,21 @@ impl BlockBehavior for Agent {
         let handle_clone = handle.clone();
         let block_id = self.id;
 
+        // Get agent session registry from context
+        let registry = context
+            .agent_session_registry
+            .clone()
+            .ok_or("Agent session registry not available in execution context")?;
+
         // Spawn agent session
         tokio::spawn(async move {
-            let result = run_agent_session(block_id, context.clone(), handle_clone.cancellation_token.clone()).await;
+            let result = run_agent_session(
+                block_id,
+                context.clone(),
+                handle_clone.cancellation_token.clone(),
+                registry,
+            )
+            .await;
 
             let status = match result {
                 Ok(()) => {
@@ -190,6 +209,7 @@ async fn run_agent_session(
     block_id: Uuid,
     context: ExecutionContext,
     cancellation_token: CancellationToken,
+    registry: Arc<AgentSessionRegistry>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     log::debug!("Starting agent session for block {}", block_id);
 
@@ -199,25 +219,43 @@ async fn run_agent_session(
     let hitl_responses: Arc<TokioMutex<HashMap<String, oneshot::Sender<HitlResponse>>>> =
         Arc::new(TokioMutex::new(HashMap::new()));
 
-    // Register agent session in a global registry so API endpoints can send messages
-    // TODO: Implement AgentSessionRegistry
-    // AGENT_SESSION_REGISTRY.register(block_id, context.runbook_id, user_message_tx, hitl_request_tx, hitl_responses.clone()).await;
+    // Register agent session in global registry so API endpoints can send messages
+    registry
+        .register(
+            context.runbook_id,
+            block_id,
+            user_message_tx.clone(),
+            hitl_request_tx.clone(),
+            hitl_responses.clone(),
+        )
+        .await;
 
     // Load or initialize session state from passive context
     let initial_state = load_session_state(&context, block_id).await?;
     let messages = Arc::new(TokioMutex::new(initial_state.messages));
 
-    // Create agent tools
-    let tools = create_agent_tools(block_id, context.clone());
+    // Create agent tools - DISABLED until SDK tool format is fixed
+    // let tools = create_agent_tools();
+    let tools = Vec::new();
 
     // Build agent
+    log::debug!("Building agent for block {}", block_id);
     let agent = match build_agent(tools, &context).await {
-        Ok(agent) => agent,
+        Ok(agent) => {
+            log::debug!("Agent built successfully for block {}", block_id);
+            agent
+        }
         Err(e) => {
             log::error!("Failed to build agent: {}", e);
+            registry.unregister(context.runbook_id, block_id).await;
             return Err(format!("Failed to build agent: {}", e).into());
         }
     };
+
+    log::info!(
+        "Agent session ready for block {} - waiting for messages",
+        block_id
+    );
 
     // Main agent loop - wait for user messages
     let cancellation_receiver = cancellation_token.take_receiver();
@@ -227,7 +265,7 @@ async fn run_agent_session(
                 // Handle user messages
                 Some(user_message) = user_message_rx.recv() => {
                     log::debug!("Received user message: {}", user_message);
-                    
+
                     // Add user message to history
                     {
                         let mut msgs = messages.lock().await;
@@ -250,22 +288,34 @@ async fn run_agent_session(
                             }
 
                             // Send final assistant message
-                            let _ = context.send_output(DocumentBridgeMessage::AgentEvent {
-                                block_id,
-                                event: AgentUiEvent::AssistantMessage { text: response },
-                            }).await;
+                            let event_data = serde_json::to_value(AgentUiEvent::AssistantMessage { text: response })
+                                .unwrap_or_default();
+                            let _ = context
+                                .send_output(
+                                    BlockOutput::builder()
+                                        .block_id(block_id)
+                                        .object(event_data)
+                                        .build(),
+                                )
+                                .await;
 
                             // Save state
                             save_session_state(&context, block_id, messages.clone()).await?;
                         }
                         Err(e) => {
                             log::error!("Agent processing error: {}", e);
-                            let _ = context.send_output(DocumentBridgeMessage::AgentEvent {
-                                block_id,
-                                event: AgentUiEvent::AssistantMessage {
-                                    text: format!("Error: {}", e)
-                                },
-                            }).await;
+                            let event_data = serde_json::to_value(AgentUiEvent::AssistantMessage {
+                                text: format!("Error: {}", e)
+                            })
+                            .unwrap_or_default();
+                            let _ = context
+                                .send_output(
+                                    BlockOutput::builder()
+                                        .block_id(block_id)
+                                        .object(event_data)
+                                        .build(),
+                                )
+                                .await;
                         }
                     }
                 }
@@ -273,7 +323,7 @@ async fn run_agent_session(
                 // Handle cancellation
                 _ = &mut cancel_rx => {
                     log::debug!("Agent session cancelled for block {}", block_id);
-                    
+
                     // Emit BlockCancelled event
                     if let Some(event_bus) = &context.gc_event_bus {
                         let _ = event_bus
@@ -292,8 +342,9 @@ async fn run_agent_session(
                                 .build(),
                         )
                         .await;
-                    
-                    // TODO: Unregister from session registry
+
+                    // Unregister from session registry
+                    registry.unregister(context.runbook_id, block_id).await;
                     return Ok(());
                 }
             }
@@ -303,7 +354,7 @@ async fn run_agent_session(
         loop {
             if let Some(user_message) = user_message_rx.recv().await {
                 log::debug!("Received user message: {}", user_message);
-                
+
                 // Add user message to history
                 {
                     let mut msgs = messages.lock().await;
@@ -314,7 +365,15 @@ async fn run_agent_session(
                 }
 
                 // Process message with agent
-                match process_agent_message(&agent, &user_message, &context, block_id, messages.clone()).await {
+                match process_agent_message(
+                    &agent,
+                    &user_message,
+                    &context,
+                    block_id,
+                    messages.clone(),
+                )
+                .await
+                {
                     Ok(response) => {
                         // Add assistant response to history
                         {
@@ -326,22 +385,34 @@ async fn run_agent_session(
                         }
 
                         // Send final assistant message
-                        let _ = context.send_output(DocumentBridgeMessage::AgentEvent {
-                            block_id,
-                            event: AgentUiEvent::AssistantMessage { text: response },
-                        }).await;
+                        let event_data = serde_json::to_value(AgentUiEvent::AssistantMessage { text: response })
+                            .unwrap_or_default();
+                        let _ = context
+                            .send_output(
+                                BlockOutput::builder()
+                                    .block_id(block_id)
+                                    .object(event_data)
+                                    .build(),
+                            )
+                            .await;
 
                         // Save state
                         save_session_state(&context, block_id, messages.clone()).await?;
                     }
                     Err(e) => {
                         log::error!("Agent processing error: {}", e);
-                        let _ = context.send_output(DocumentBridgeMessage::AgentEvent {
-                            block_id,
-                            event: AgentUiEvent::AssistantMessage {
-                                text: format!("Error: {}", e)
-                            },
-                        }).await;
+                        let event_data = serde_json::to_value(AgentUiEvent::AssistantMessage {
+                            text: format!("Error: {}", e)
+                        })
+                        .unwrap_or_default();
+                        let _ = context
+                            .send_output(
+                                BlockOutput::builder()
+                                    .block_id(block_id)
+                                    .object(event_data)
+                                    .build(),
+                            )
+                            .await;
                     }
                 }
             }
@@ -354,63 +425,115 @@ async fn run_agent_session(
 // ============================================================================
 
 async fn process_agent_message(
-    _agent: &AgentStub,
+    agent: &Arc<dyn AgentHandle>,
     message: &str,
     context: &ExecutionContext,
     block_id: Uuid,
     _messages: Arc<TokioMutex<Vec<Message>>>,
 ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
-    // For now, return a simple echo response
-    // TODO: Integrate with agents_sdk properly
+    use agents_sdk::messaging::{AgentMessage, MessageContent, MessageRole};
+
+    log::debug!("Processing agent message: {}", message);
+
+    let agent_message = AgentMessage {
+        role: MessageRole::User,
+        content: MessageContent::Text(message.to_string()),
+        metadata: None,
+    };
+
+    log::debug!("Calling agent.handle_message...");
+    let response = agent
+        .handle_message(agent_message, Arc::new(AgentStateSnapshot::default()))
+        .await
+        .map_err(|e| {
+            log::error!("Agent handle_message error: {:?}", e);
+            e
+        })?;
+
+    log::debug!("Agent response received: {:?}", response);
+
+    let text = response.content.as_text().unwrap_or("").to_string();
+
+    log::debug!("Sending AssistantDelta to frontend: block_id={}, text_len={}", block_id, text.len());
+    let event_data = serde_json::to_value(AgentUiEvent::AssistantDelta { text: text.clone() })
+        .unwrap_or_default();
     
-    let response = format!("Received: {}", message);
-    
-    // Stream as delta
-    let _ = context.send_output(DocumentBridgeMessage::AgentEvent {
-        block_id,
-        event: AgentUiEvent::AssistantDelta {
-            text: response.clone(),
-        },
-    }).await;
+    let _ = context
+        .send_output(
+            BlockOutput::builder()
+                .block_id(block_id)
+                .object(event_data)
+                .build(),
+        )
+        .await;
 
-    Ok(response)
+    Ok(text)
 }
 
 // ============================================================================
-// Agent Tools (stub - TODO: implement with agents_sdk)
+// Agent Tools - Document Editing
 // ============================================================================
 
-// Placeholder Tool trait until agents_sdk is available
-#[allow(dead_code)]
-trait Tool: Send + Sync {
-    fn name(&self) -> &str;
+// Note: Tools need access to context for document operations
+// Since agents_sdk tools are static, we'll return placeholder responses
+// and implement actual document editing via a different mechanism
+
+#[tool("Get the value of a template variable from the current runbook")]
+fn get_template_variable(name: String) -> String {
+    format!("To get variable '{}', use the template system. This is a stub - actual implementation needs context access.", name)
 }
 
-fn create_agent_tools(
-    _block_id: Uuid,
-    _context: ExecutionContext,
-) -> Vec<Box<dyn Tool>> {
-    // TODO: Implement actual tools using agents_sdk's tool macro
-    vec![]
+#[tool("Insert blocks at a specific position in the document")]
+fn insert_blocks(blocks_json: String, position: i32, placement: String) -> String {
+    format!(
+        "To insert blocks at position {} {}, the blocks are: {}. This is a stub - actual implementation needs DocumentHandle.",
+        position, placement, blocks_json
+    )
+}
+
+#[tool("Update a block's properties by position")]
+fn update_block(position: i32, props_json: String) -> String {
+    format!(
+        "To update block at position {} with props: {}. This is a stub - actual implementation needs DocumentHandle.",
+        position, props_json
+    )
+}
+
+#[tool("Remove blocks by their positions")]
+fn remove_blocks(positions_json: String) -> String {
+    format!(
+        "To remove blocks at positions: {}. This is a stub - actual implementation needs DocumentHandle.",
+        positions_json
+    )
+}
+
+fn create_agent_tools() -> Vec<Arc<dyn agents_core::Tool>> {
+    vec![
+        GetTemplateVariableTool::as_tool(),
+        InsertBlocksTool::as_tool(),
+        UpdateBlockTool::as_tool(),
+        RemoveBlocksTool::as_tool(),
+    ]
 }
 
 // ============================================================================
-// Agent Builder (stub - TODO: implement with agents_sdk)
+// Agent Builder
 // ============================================================================
-
-// Placeholder Agent struct until agents_sdk is available
-#[allow(dead_code)]
-struct AgentStub;
 
 async fn build_agent(
-    _tools: Vec<Box<dyn Tool>>,
+    tools: Vec<Arc<dyn agents_core::Tool>>,
     context: &ExecutionContext,
-) -> Result<AgentStub, Box<dyn std::error::Error + Send + Sync>> {
-    // Get AI settings from context
-    // TODO: Access AI settings from app state
-    // let model = get_default_model()?;
+) -> Result<Arc<dyn AgentHandle>, Box<dyn std::error::Error + Send + Sync>> {
+    // Get AI settings from RuntimeConfig
+    let ai_config = context.runtime_config.ai_config().clone();
+    log::debug!("building agent with config: {ai_config:?}");
+    let api_key = get_ai_api_key(context).await?;
+    let model_name = get_ai_model(context).await?;
 
-    let _system_prompt = format!(
+    let config = OpenAiConfig::new(api_key, &model_name).with_api_url(ai_config.api_endpoint);
+    let model = Arc::new(OpenAiChatModel::new(config)?);
+
+    let system_prompt = format!(
         r#"You are an expert runbook editor AI agent. You can read variables and edit the document using these tools:
 - get_template_variable: Read variable values from the current runbook
 - insert_blocks: Add new blocks at a specific position (before/after)
@@ -453,14 +576,18 @@ Be precise with block structure and helpful in your responses."#,
         context.runbook_id
     );
 
-    // TODO: Implement when agents_sdk is available
-    // let mut builder = ConfigurableAgentBuilder::new(&system_prompt).with_model(model);
-    // for tool in tools {
-    //     builder = builder.with_tool(tool);
-    // }
-    // let agent = builder.build()?;
-    
-    Ok(AgentStub)
+    let checkpointer = Arc::new(InMemoryCheckpointer::new());
+
+    let mut builder = ConfigurableAgentBuilder::new(&system_prompt)
+        .with_model(model)
+        .with_checkpointer(checkpointer);
+
+    for tool in tools {
+        builder = builder.with_tool(tool);
+    }
+
+    let agent = builder.build()?;
+    Ok(Arc::new(agent))
 }
 
 // ============================================================================
@@ -488,18 +615,33 @@ async fn save_session_state(
 }
 
 // ============================================================================
-// HITL Types (for future implementation)
+// AI Settings from RuntimeConfig
 // ============================================================================
 
-#[derive(Debug, Clone)]
-struct HitlRequest {
-    id: String,
-    prompt: String,
-    options: serde_json::Value,
+async fn get_ai_api_key(
+    context: &ExecutionContext,
+) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+    let ai_config = &context.runtime_config.ai_config();
+
+    if !ai_config.enabled {
+        return Err("AI is not enabled. Please enable AI in settings.".into());
+    }
+
+    ai_config
+        .api_key
+        .clone()
+        .ok_or_else(|| "No API key configured. Please set your API key in Settings.".into())
 }
 
-#[derive(Debug, Clone)]
-struct HitlResponse {
-    decision: String,
-    data: Option<serde_json::Value>,
+async fn get_ai_model(
+    context: &ExecutionContext,
+) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+    let ai_config = &context.runtime_config.ai_config();
+    Ok(ai_config
+        .model
+        .clone()
+        .unwrap_or_else(|| "gpt-4o-mini".to_string()))
 }
+
+// Note: HitlRequest and HitlResponse are defined in commands/agent.rs
+// and re-exported via crate::commands::agent

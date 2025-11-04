@@ -1,6 +1,8 @@
+use crate::commands::agent::AgentSessionRegistry;
 use crate::runtime::blocks::document::actor::DocumentError;
 use crate::runtime::blocks::document::block_context::{BlockContext, ContextResolver};
 use crate::runtime::blocks::document::{actor::DocumentHandle, bridge::DocumentBridgeMessage};
+use crate::runtime::config::RuntimeConfig;
 use crate::runtime::events::{EventBus, GCEvent};
 use crate::runtime::pty_store::PtyStoreHandle;
 use crate::runtime::ssh_pool::SshPoolHandle;
@@ -29,6 +31,10 @@ pub struct ExecutionContext {
     pub pty_store: Option<PtyStoreHandle>,
     #[builder(default, setter(strip_option(fallback = event_bus_opt)))]
     pub gc_event_bus: Option<Arc<dyn EventBus>>,
+    #[builder(default)]
+    pub runtime_config: Arc<RuntimeConfig>,
+    #[builder(default, setter(strip_option(fallback = agent_session_registry_opt)))]
+    pub agent_session_registry: Option<Arc<AgentSessionRegistry>>,
 }
 
 impl Debug for ExecutionContext {

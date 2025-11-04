@@ -21,6 +21,7 @@ atuin-dotfiles = { git = "https://github.com/atuinsh/atuin.git" }
 atuin-history = { git = "https://github.com/atuinsh/atuin.git" }
 
 eyre = "0.6"
+anyhow = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0", features = [
     "preserve_order",
@@ -93,8 +94,9 @@ json-digest = "0.0.16"
 trash = "5.2.2"
 tempfile = "3.10"
 sqlparser = "0.59.0"
-# agents-sdk = { git = "https://github.com/atuinsh/agents" }
-# agents-core = { git = "https://github.com/atuinsh/agents" }
+agents-sdk = "0.0.24"
+agents-core = "0.0.24"
+futures = "0.3"
 
 
 [dependencies.sqlx]

@@ -13,6 +13,7 @@ use tokio::{
 use uuid::Uuid;
 
 use crate::{
+    commands::agent::AgentSessionRegistry,
     runtime::{
         blocks::document::actor::DocumentHandle,
         events::GCEvent,
@@ -86,6 +87,9 @@ pub(crate) struct AtuinState {
 
     // Map of document handles per runbook
     pub documents: Arc<RwLock<HashMap<String, Arc<DocumentHandle>>>>,
+
+    // Agent session registry for routing messages to active agent sessions
+    pub agent_session_registry: Arc<AgentSessionRegistry>,
 }
 
 impl AtuinState {
@@ -110,6 +114,7 @@ impl AtuinState {
             runbook_output_variables: Default::default(),
             block_executions: Default::default(),
             documents: Default::default(),
+            agent_session_registry: Arc::new(AgentSessionRegistry::new()),
             dev_prefix,
             app_path,
             use_hub_updater_service,

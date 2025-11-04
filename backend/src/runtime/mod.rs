@@ -2,6 +2,7 @@ use async_trait::async_trait;
 use serde::Serialize;
 
 pub(crate) mod blocks;
+pub(crate) mod config;
 pub(crate) mod events;
 pub(crate) mod exec_log;
 pub(crate) mod pty_store;
