@@ -38,6 +38,10 @@ impl FromDocument for VarDisplay {
 }
 
 impl BlockBehavior for VarDisplay {
+    fn id(&self) -> Uuid {
+        self.id
+    }
+
     fn into_block(self) -> Block {
         Block::VarDisplay(self)
     }

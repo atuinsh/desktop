@@ -25,6 +25,10 @@ pub struct Environment {
 
 #[async_trait]
 impl BlockBehavior for Environment {
+    fn id(&self) -> Uuid {
+        self.id
+    }
+
     fn into_block(self) -> Block {
         Block::Environment(self)
     }

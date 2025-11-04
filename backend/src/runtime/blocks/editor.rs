@@ -80,6 +80,10 @@ impl FromDocument for Editor {
 
 #[async_trait]
 impl BlockBehavior for Editor {
+    fn id(&self) -> Uuid {
+        self.id
+    }
+
     fn into_block(self) -> Block {
         Block::Editor(self)
     }

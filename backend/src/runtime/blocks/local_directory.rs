@@ -19,6 +19,10 @@ pub struct LocalDirectory {
 
 #[async_trait]
 impl BlockBehavior for LocalDirectory {
+    fn id(&self) -> Uuid {
+        self.id
+    }
+
     fn into_block(self) -> Block {
         Block::LocalDirectory(self)
     }

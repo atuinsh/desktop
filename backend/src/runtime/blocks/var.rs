@@ -54,6 +54,10 @@ impl FromDocument for Var {
 
 #[async_trait]
 impl BlockBehavior for Var {
+    fn id(&self) -> Uuid {
+        self.id
+    }
+
     fn into_block(self) -> Block {
         Block::Var(self)
     }

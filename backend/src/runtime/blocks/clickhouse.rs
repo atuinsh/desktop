@@ -527,6 +527,10 @@ impl Clickhouse {
 
 #[async_trait::async_trait]
 impl BlockBehavior for Clickhouse {
+    fn id(&self) -> Uuid {
+        self.id
+    }
+
     fn into_block(self) -> Block {
         Block::Clickhouse(self)
     }

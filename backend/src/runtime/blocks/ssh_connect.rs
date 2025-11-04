@@ -79,6 +79,10 @@ impl SshConnect {
 
 #[async_trait]
 impl BlockBehavior for SshConnect {
+    fn id(&self) -> Uuid {
+        self.id
+    }
+
     fn into_block(self) -> Block {
         Block::SshConnect(self)
     }

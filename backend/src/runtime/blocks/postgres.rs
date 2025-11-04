@@ -541,6 +541,10 @@ impl Postgres {
 
 #[async_trait::async_trait]
 impl BlockBehavior for Postgres {
+    fn id(&self) -> Uuid {
+        self.id
+    }
+
     fn into_block(self) -> Block {
         Block::Postgres(self)
     }

@@ -22,6 +22,10 @@ pub struct Directory {
 
 #[async_trait]
 impl BlockBehavior for Directory {
+    fn id(&self) -> Uuid {
+        self.id
+    }
+
     fn into_block(self) -> Block {
         Block::Directory(self)
     }

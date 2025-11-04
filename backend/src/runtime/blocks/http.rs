@@ -143,6 +143,10 @@ impl FromDocument for Http {
 
 #[async_trait::async_trait]
 impl BlockBehavior for Http {
+    fn id(&self) -> Uuid {
+        self.id
+    }
+
     fn into_block(self) -> Block {
         Block::Http(self)
     }

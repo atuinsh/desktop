@@ -54,6 +54,8 @@ pub trait FromDocument: Sized {
 pub trait BlockBehavior: Sized + Send + Sync {
     fn into_block(self) -> Block;
 
+    fn id(&self) -> Uuid;
+
     async fn passive_context(
         &self,
         _resolver: &ContextResolver,

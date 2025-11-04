@@ -67,6 +67,10 @@ impl FromDocument for Terminal {
 
 #[async_trait::async_trait]
 impl BlockBehavior for Terminal {
+    fn id(&self) -> Uuid {
+        self.id
+    }
+
     fn into_block(self) -> Block {
         Block::Terminal(self)
     }

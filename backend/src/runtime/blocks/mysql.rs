@@ -465,6 +465,10 @@ impl Mysql {
 
 #[async_trait::async_trait]
 impl BlockBehavior for Mysql {
+    fn id(&self) -> Uuid {
+        self.id
+    }
+
     fn into_block(self) -> Block {
         Block::Mysql(self)
     }

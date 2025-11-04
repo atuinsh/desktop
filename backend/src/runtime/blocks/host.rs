@@ -90,6 +90,10 @@ impl Host {
 
 #[async_trait]
 impl BlockBehavior for Host {
+    fn id(&self) -> Uuid {
+        self.id
+    }
+
     fn into_block(self) -> Block {
         Block::Host(self)
     }

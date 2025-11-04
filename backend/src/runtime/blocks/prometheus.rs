@@ -436,6 +436,10 @@ impl Prometheus {
 
 #[async_trait::async_trait]
 impl BlockBehavior for Prometheus {
+    fn id(&self) -> Uuid {
+        self.id
+    }
+
     fn into_block(self) -> Block {
         Block::Prometheus(self)
     }
