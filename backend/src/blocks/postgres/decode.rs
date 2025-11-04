@@ -1,7 +1,10 @@
 use eyre::{eyre, Result};
 use serde_json::Value as JsonValue;
 use sqlx::postgres::types::{Oid, PgInterval};
-use sqlx::{postgres::PgValueRef, TypeInfo, Value, ValueRef};
+use sqlx::{
+    postgres::{PgTypeKind, PgValueRef},
+    Decode, Postgres, TypeInfo, Value, ValueRef,
+};
 use time::{Date, OffsetDateTime, PrimitiveDateTime, Time};
 
 pub(crate) fn to_json(v: PgValueRef) -> Result<JsonValue> {
@@ -110,12 +113,21 @@ pub(crate) fn to_json(v: PgValueRef) -> Result<JsonValue> {
                 _ => JsonValue::Null,
             }
         }
-        _ => {
-            return Err(eyre!(
-                "Unsupported data type: {}",
-                v.type_info().name().to_string()
-            ))
-        }
+        _ => match v.type_info().kind() {
+            PgTypeKind::Enum(_) => {
+                if let Ok(v) = <&str as Decode<Postgres>>::decode(v.clone()) {
+                    JsonValue::String(v.to_string())
+                } else {
+                    JsonValue::Null
+                }
+            }
+            _ => {
+                return Err(eyre!(
+                    "Unsupported data type: {}",
+                    v.type_info().name().to_string(),
+                ))
+            }
+        },
     };
 
     Ok(res)

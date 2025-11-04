@@ -387,17 +387,36 @@ export default function Editor({ runbook, editable, runbookEditor }: EditorProps
     }
   }, [editor]);
 
-  const handleAIGenerate = useCallback(
-    (blocks: any[]) => {
+  const insertionAnchorRef = useRef<string | null>(null);
+  const lastInsertedBlockRef = useRef<string | null>(null);
+
+  const handleBlockGenerated = useCallback(
+    (block: any) => {
       if (!editor) return;
 
-      const currentPosition = editor.getTextCursorPosition();
-
-      editor.insertBlocks(blocks, currentPosition.block.id, "after");
-      closeAIPopup();
+      // On first block, store the anchor (cursor position) and insert after it
+      if (!insertionAnchorRef.current) {
+        insertionAnchorRef.current = editor.getTextCursorPosition().block.id;
+      }
+      
+      // Insert after the last inserted block, or after anchor if this is the first
+      const insertAfterId = lastInsertedBlockRef.current || insertionAnchorRef.current;
+      
+      const insertedBlocks = editor.insertBlocks([block], insertAfterId, "after");
+      
+      // Track the last inserted block for the next one
+      if (insertedBlocks && insertedBlocks.length > 0) {
+        lastInsertedBlockRef.current = insertedBlocks[0].id;
+      }
     },
-    [editor, closeAIPopup],
+    [editor],
   );
+
+  const handleGenerateComplete = useCallback(() => {
+    insertionAnchorRef.current = null;
+    lastInsertedBlockRef.current = null;
+    closeAIPopup();
+  }, [closeAIPopup]);
 
   const serialExecuteCallback = useCallback(async () => {
     if (!editor || !runbook) {
@@ -732,7 +751,8 @@ export default function Editor({ runbook, editable, runbookEditor }: EditorProps
         <AIGeneratePopup
           isVisible={aiPopupVisible}
           position={aiPopupPosition}
-          onGenerate={handleAIGenerate}
+          onBlockGenerated={handleBlockGenerated}
+          onGenerateComplete={handleGenerateComplete}
           onClose={closeAIPopup}
           getEditorContext={getEditorContext}
         />

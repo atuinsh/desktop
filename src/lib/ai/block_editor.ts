@@ -1,5 +1,5 @@
 import { generateText } from "ai";
-import { createModel } from "./provider";
+import { createModel, type ModelConfig } from "./provider";
 import { Settings } from "@/state/settings";
 import { HTTP_LLM_PROMPT as HTTP_LLM_PROMPT } from "@/lib/blocks/http/schema";
 
@@ -7,6 +7,8 @@ export interface EditBlockRequest {
   prompt: string;
   currentBlock: any;
   apiKey?: string;
+  apiEndpoint?: string;
+  model?: string;
   editorContext?: {
     blocks: any[];
     currentBlockId: string;
@@ -124,17 +126,29 @@ export async function editBlock(request: EditBlockRequest): Promise<EditBlockRes
     throw new Error("AI is not enabled. Please enable AI in settings.");
   }
   
+  // Get API configuration from settings or use provided values
   const storedApiKey = await Settings.aiApiKey();
+  const storedEndpoint = await Settings.aiApiEndpoint();
+  const storedModel = await Settings.aiModel();
+  
   const apiKey = request.apiKey || storedApiKey;
+  const apiEndpoint = request.apiEndpoint || storedEndpoint;
+  const modelName = request.model || storedModel;
   
   if (!apiKey || apiKey.trim() === '') {
-    throw new Error("No API key configured. Please set your Anthropic API key in Settings.");
+    throw new Error("No API key configured. Please set your API key in Settings.");
   }
   
-  const model = createModel(apiKey);
+  const modelConfig: ModelConfig = {
+    apiKey,
+    baseURL: apiEndpoint || undefined,
+    model: modelName || undefined,
+  };
+
+  const model = createModel(modelConfig);
 
   if (!model) {
-    throw new Error("AI model not configured. Please set up your API key in settings.");
+    throw new Error("AI model not configured. Please set up your API settings.");
   }
 
   const systemPrompt = getSystemPromptForBlockType(request.currentBlock.type);

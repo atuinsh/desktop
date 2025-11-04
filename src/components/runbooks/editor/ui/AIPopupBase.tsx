@@ -62,19 +62,41 @@ export function AIPopupBase({
     if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
       e.preventDefault();
       handleSubmit();
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      onClose();
     }
   };
 
   useEffect(() => {
-    if (isVisible && textareaRef.current) {
-      // Focus after a brief delay to ensure the popup is rendered
-      setTimeout(() => {
-        textareaRef.current?.focus();
-      }, 50);
+    if (isVisible) {
       setPrompt("");
       setError(null);
+      
+      // Focus after a brief delay to ensure the popup is rendered
+      const timeoutId = setTimeout(() => {
+        textareaRef.current?.focus();
+      }, 100);
+      
+      return () => clearTimeout(timeoutId);
     }
   }, [isVisible]);
+
+  const handlePopupClick = useCallback((e: React.MouseEvent) => {
+    // Stop event from reaching BlockNote editor which steals focus
+    e.stopPropagation();
+    
+    // If clicking on the popup but not on an interactive element, refocus textarea
+    const target = e.target as HTMLElement;
+    const isButton = target.closest('button');
+    const isTextarea = target.closest('textarea');
+    const isInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA';
+    
+    if (!isButton && !isTextarea && !isInput && textareaRef.current) {
+      e.preventDefault();
+      textareaRef.current.focus();
+    }
+  }, []);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -109,6 +131,9 @@ export function AIPopupBase({
   return (
     <div
       ref={popupRef}
+      onClick={handlePopupClick}
+      onMouseDown={(e) => e.stopPropagation()}
+      onMouseUp={(e) => e.stopPropagation()}
       className="absolute z-50 w-2/3 bg-white dark:bg-gray-900 border border-purple-200 dark:border-purple-800 rounded-lg shadow-xl"
       style={{
         left: position.x,
@@ -162,6 +187,11 @@ export function AIPopupBase({
               disabled={isLoading}
               className="text-sm"
               variant="bordered"
+              autoFocus
+              classNames={{
+                input: "focus:ring-0 focus:outline-none",
+                inputWrapper: "focus-within:ring-0 focus-within:outline-none"
+              }}
             />
             
             {error && (
