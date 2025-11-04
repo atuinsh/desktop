@@ -86,18 +86,18 @@ pub async fn execute_block(
     let context = document
         .start_execution(block_id, event_sender, Some(ssh_pool), Some(pty_store))
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| format!("Failed to start execution: {}", e))?;
     // Reset the active context for the block
     context
         .clear_active_context(block_id)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| format!("Failed to clear active context: {}", e))?;
 
     // Get the block to execute
     let block = document
         .get_block(block_id)
         .await
-        .ok_or("Block not found")?;
+        .ok_or("Failed to execute block: block not found")?;
 
     // Execute the block
     let execution_handle = block.execute(context).await.map_err(|e| e.to_string())?;
@@ -154,7 +154,7 @@ pub async fn open_document(
         document
             .update_bridge_channel(document_bridge)
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| format!("Failed to update document bridge channel: {}", e))?;
         return Ok(());
     }
 
@@ -171,7 +171,7 @@ pub async fn open_document(
     document_handle
         .put_document(document)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| format!("Failed to put document: {}", e))?;
 
     documents.insert(document_id, document_handle);
 
@@ -189,7 +189,7 @@ pub async fn update_document(
     document
         .put_document(document_content)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| format!("Failed to update document: {}", e))?;
 
     Ok(())
 }
@@ -210,7 +210,7 @@ pub async fn notify_block_kv_value_changed(
     document
         .block_local_value_changed(block_id)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| format!("Failed to notify block KV value changed: {}", e))?;
     Ok(())
 }
 
@@ -225,7 +225,7 @@ pub async fn get_flattened_block_context(
     let context = document
         .get_resolved_context(Uuid::parse_str(&block_id).map_err(|e| e.to_string())?)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| format!("Failed to get flattened block context: {}", e))?;
     Ok(context)
 }
 
@@ -236,6 +236,9 @@ pub async fn reset_runbook_state(
 ) -> Result<(), String> {
     let documents = state.documents.read().await;
     let document = documents.get(&document_id).ok_or("Document not found")?;
-    document.reset_state().await.map_err(|e| e.to_string())?;
+    document
+        .reset_state()
+        .await
+        .map_err(|e| format!("Failed to reset runbook state: {}", e))?;
     Ok(())
 }
