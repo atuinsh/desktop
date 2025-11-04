@@ -33,7 +33,6 @@ import { CardHeader } from "@/components/ui/card";
 
 import { useInterval } from "usehooks-ts";
 import PlayButton from "./PlayButton";
-import { QueryResult } from "./database";
 import SQLResults from "./SQLResults";
 import MaskedInput from "@/components/MaskedInput/MaskedInput";
 import Block from "./Block";
@@ -45,6 +44,12 @@ import useCodemirrorTheme from "@/lib/hooks/useCodemirrorTheme";
 import { useCodeMirrorValue } from "@/lib/hooks/useCodeMirrorValue";
 import EditableHeading from "@/components/EditableHeading/index";
 import { useBlockExecution, useBlockOutput } from "@/lib/hooks/useDocumentBridge";
+import { SqlxBlockExecutionResult } from "@/rs-bindings/SqlxBlockExecutionResult";
+
+type QueryCountMessage = {
+  type: "queryCount";
+  count: number;
+};
 
 interface SQLProps {
   id: string;
@@ -103,21 +108,38 @@ const SQL = ({
   onCodeMirrorFocus,
 }: SQLProps) => {
   let editor = useBlockNoteEditor();
-  const [results, setResults] = useState<
-    (QueryResult & { queryCount?: number; executedQueries?: string[] }) | null
-  >(null);
+  const [results, setResults] = useState<SqlxBlockExecutionResult | null>(null);
+  const [queryCount, setQueryCount] = useState<Option<number>>(None);
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
   const [isFullscreenQueryCollapsed, setIsFullscreenQueryCollapsed] = useState<boolean>(false);
 
   const execution = useBlockExecution(block.id);
-  useBlockOutput<QueryResult>(id, (output) => {
+  useBlockOutput<SqlxBlockExecutionResult | QueryCountMessage>(id, (output) => {
+    if (output.lifecycle && output.lifecycle.type === "started") {
+      setQueryCount(None);
+    }
+
     if (output.object) {
-      setResults(output.object);
+      if (output.object.type === "Query") {
+        setResults(output.object);
+      } else if (output.object.type === "queryCount") {
+        setQueryCount(Some(output.object.count));
+      }
     }
   });
 
   const themeObj = useCodemirrorTheme();
   const codeMirrorValue = useCodeMirrorValue(query, setQuery);
+
+  let rows = null;
+  let columns = null;
+  let rowsAffected = null;
+  if (results?.type === "Query") {
+    rows = results.data.rows;
+    columns = results.data.columns;
+  } else if (results?.type === "Statement") {
+    rowsAffected = results.data.rowsAffected;
+  }
 
   // Get SQL language extension based on sqlType
   const getSqlExtension = () => {
@@ -329,10 +351,10 @@ const SQL = ({
       footer={
         <div className="flex flex-row justify-between items-center w-full">
           <div className="flex flex-row items-center gap-2">
-            {results?.queryCount && results.queryCount > 1 && (
+            {queryCount.isSome() && queryCount.unwrap() > 1 && (
               <span className="text-xs text-default-500 px-2 py-1 bg-default-100 rounded">
-                Executed {results.queryCount} queries
-                {results.rows && results.columns && " • Showing last result with data"}
+                Executed {queryCount.unwrap()} queries
+                {rows && columns && " • Showing last result with data"}
               </span>
             )}
           </div>

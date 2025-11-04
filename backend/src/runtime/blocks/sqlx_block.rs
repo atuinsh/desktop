@@ -2,9 +2,10 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use serde::Serialize;
-use serde_json::{Map, Value};
+use serde::{Serialize, Serializer};
+use serde_json::{json, Map, Value};
 use sqlparser::{ast::Statement, dialect::Dialect};
+use ts_rs::TS;
 use typed_builder::TypedBuilder;
 
 use crate::runtime::{
@@ -45,32 +46,50 @@ impl From<&str> for SqlxBlockError {
     }
 }
 
-#[derive(Debug, Clone, Serialize, TypedBuilder)]
+#[derive(Debug, Clone, Serialize, TypedBuilder, TS)]
 #[serde(rename_all = "camelCase")]
+#[ts(export)]
 pub(crate) struct SqlxQueryResult {
     columns: Vec<String>,
     rows: Vec<Map<String, Value>>,
+    #[serde(serialize_with = "serialize_duration")]
+    #[ts(type = "number")]
     duration: Duration,
     #[builder(default = Utc::now())]
+    #[ts(type = "string")]
     time: DateTime<Utc>,
 }
 
-#[derive(Debug, Clone, Serialize, TypedBuilder)]
+#[derive(Debug, Clone, Serialize, TypedBuilder, TS)]
 #[serde(rename_all = "camelCase")]
+#[ts(export)]
 pub(crate) struct SqlxStatementResult {
+    #[ts(type = "number")]
     rows_affected: u64,
     #[builder(default = None)]
+    #[ts(type = "number | null")]
     last_insert_rowid: Option<u64>,
+    #[serde(serialize_with = "serialize_duration")]
+    #[ts(type = "number")]
     duration: Duration,
     #[builder(default = Utc::now())]
+    #[ts(type = "string")]
     time: DateTime<Utc>,
 }
 
-#[derive(Debug, Clone, Serialize)]
-#[serde(tag = "type")]
+#[derive(Debug, Clone, Serialize, TS)]
+#[serde(tag = "type", content = "data")]
+#[ts(export)]
 pub(crate) enum SqlxBlockExecutionResult {
     Query(SqlxQueryResult),
     Statement(SqlxStatementResult),
+}
+
+fn serialize_duration<S>(duration: &Duration, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    serializer.serialize_f64(duration.as_secs_f64())
 }
 
 #[async_trait]
@@ -109,6 +128,7 @@ pub(crate) trait SqlxBlockBehavior: BlockBehavior + 'static {
         };
 
         let connection = Self::connect(uri.clone());
+        let query_count = queries.len();
 
         tokio::spawn(async move {
             let _ = context_clone.emit_block_started().await;
@@ -118,6 +138,7 @@ pub(crate) trait SqlxBlockBehavior: BlockBehavior + 'static {
                     BlockOutput::builder()
                         .block_id(block_id)
                         .lifecycle(BlockLifecycleEvent::Started)
+                        .object(json!({ "type": "queryCount", "count": query_count }))
                         .build(),
                 )
                 .await;
@@ -228,11 +249,12 @@ pub(crate) trait SqlxBlockBehavior: BlockBehavior + 'static {
                         return Err(e);
                     }
 
+                    let mut result = result.unwrap();
                     let _ = context_clone
                         .send_output(
                             BlockOutput::builder()
                                 .block_id(block_id)
-                                .object(serde_json::to_value(result.unwrap()).map_err(|_| {
+                                .object(serde_json::to_value(result).map_err(|_| {
                                     SqlxBlockError::GenericError(
                                         "Unable to serialize query result".to_string(),
                                     )

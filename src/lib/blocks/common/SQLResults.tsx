@@ -1,13 +1,12 @@
 import { useEffect, useState } from "react";
-import { QueryResult } from "./database";
 import ResultTable from "./ResultTable";
 import { Card, CardBody, CardHeader, Chip, Tooltip, Button, Divider } from "@heroui/react";
-import { CheckCircle, CircleXIcon, Clock, HardDriveIcon, Rows4Icon } from "lucide-react";
-import { formatBytes } from "@/lib/utils";
+import { CheckCircle, CircleXIcon, Clock } from "lucide-react";
+import { SqlxBlockExecutionResult } from "@/rs-bindings/SqlxBlockExecutionResult";
 
 interface SQLProps {
   error: any;
-  results: QueryResult | null;
+  results: SqlxBlockExecutionResult | null;
   dismiss?: () => void;
   isFullscreen?: boolean;
 }
@@ -19,18 +18,27 @@ const SQLResults = ({ results, error, dismiss, isFullscreen = false }: SQLProps)
 
   useEffect(() => {
     if (!results) return;
-    if (!results.columns) return;
+    if (results?.type !== "Query") return;
+    if (!results?.data?.columns) return;
 
-    let cols = results.columns.map((key: any) => {
+    let cols = results.data.columns.map((key: any) => {
       return {
-        id: key.name,
-        title: key.name,
+        id: key,
+        title: key,
         grow: 1,
       };
     });
 
     setColumns(cols);
   }, [results]);
+
+  let rows = null;
+  let rowsAffected = null;
+  if (results?.type === "Query") {
+    rows = results.data.rows;
+  } else if (results?.type === "Statement") {
+    rowsAffected = results.data.rowsAffected;
+  }
 
   if (error) {
     return (
@@ -89,22 +97,20 @@ const SQLResults = ({ results, error, dismiss, isFullscreen = false }: SQLProps)
           >
             Success
           </Chip>
-          {results.rows?.length || 0 > 0 ? (
+          {rows && rows.length > 0 ? (
             <span className="text-success-700 font-semibold">
-              {results.rows!.length.toLocaleString()} {results.rows!.length == 1 ? "row" : "rows"}{" "}
-              returned
+              {rows!.length.toLocaleString()} {rows!.length == 1 ? "row" : "rows"} returned
             </span>
-          ) : (results.rowsAffected ?? null) != null ? (
+          ) : (rowsAffected ?? null) != null ? (
             <span className="text-success-700 font-semibold">
-              {results.rowsAffected!.toLocaleString()} {results.rowsAffected == 1 ? "row" : "rows"}{" "}
-              affected
+              {rowsAffected!.toLocaleString()} {rowsAffected === 1 ? "row" : "rows"} affected
             </span>
           ) : (
             <span className="text-default-700 font-semibold">Query successful</span>
           )}
         </div>
         <div className="flex items-center gap-4">
-          {results.rowsRead && (
+          {/* {results.rowsRead && (
             <Tooltip content="Rows read">
               <div className="flex items-center gap-1 text-default-500">
                 <Rows4Icon size={14} />
@@ -124,17 +130,19 @@ const SQLResults = ({ results, error, dismiss, isFullscreen = false }: SQLProps)
                 <span className="text-sm select-text">{formatBytes(results.bytesRead)}</span>
               </div>
             </Tooltip>
-          )}
+          )} */}
 
           <Tooltip content="Request duration">
             <div className="flex items-center gap-1 text-default-500">
               <Clock size={14} />
-              <span className="text-sm select-text">{(results.duration * 1000).toFixed(3)}ms</span>
+              <span className="text-sm select-text">
+                {(results.data.duration * 1000).toFixed(3)}ms
+              </span>
             </div>
           </Tooltip>
 
           <span className="text-sm text-default-400 select-text">
-            {new Date(results.time).toLocaleString()}
+            {new Date(results.data.time).toLocaleString()}
           </span>
         </div>
       </CardHeader>
@@ -149,7 +157,7 @@ const SQLResults = ({ results, error, dismiss, isFullscreen = false }: SQLProps)
             <ResultTable
               width={"100%"}
               columns={columns}
-              results={results.rows || []}
+              results={rows || []}
               setColumns={setColumns}
             />
           </div>
