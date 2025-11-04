@@ -93,6 +93,8 @@ json-digest = "0.0.16"
 trash = "5.2.2"
 tempfile = "3.10"
 sqlparser = "0.59.0"
+# agents-sdk = { git = "https://github.com/atuinsh/agents" }
+# agents-core = { git = "https://github.com/atuinsh/agents" }
 
 
 [dependencies.sqlx]

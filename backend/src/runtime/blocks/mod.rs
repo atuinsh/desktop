@@ -1,3 +1,4 @@
+pub(crate) mod agent;
 pub(crate) mod clickhouse;
 pub(crate) mod directory;
 pub(crate) mod document;
@@ -37,6 +38,7 @@ pub const KNOWN_UNSUPPORTED_BLOCKS: &[&str] = &[
     "quote",
     "table",
     "video",
+    // Note: "agent" is now supported
 ];
 
 use crate::runtime::blocks::{
@@ -77,6 +79,7 @@ pub trait BlockBehavior: Sized + Send + Sync {
 #[serde(tag = "type")]
 #[serde(rename_all = "camelCase")]
 pub enum Block {
+    Agent(agent::Agent),
     Terminal(terminal::Terminal),
     Script(script::Script),
     Postgres(postgres::Postgres),
@@ -102,6 +105,7 @@ pub enum Block {
 impl Block {
     pub fn id(&self) -> Uuid {
         match self {
+            Block::Agent(agent) => agent.id,
             Block::Terminal(terminal) => terminal.id,
             Block::Script(script) => script.id,
             Block::SQLite(sqlite) => sqlite.id,
@@ -126,6 +130,7 @@ impl Block {
     #[allow(dead_code)]
     pub fn name(&self) -> String {
         match self {
+            Block::Agent(_) => "Agent".to_string(),
             Block::Terminal(terminal) => terminal.name.clone(),
             Block::Script(script) => script.name.clone(),
             Block::SQLite(sqlite) => sqlite.name.clone(),
@@ -154,6 +159,7 @@ impl Block {
             .ok_or("Block has no type")?;
 
         match block_type {
+            "agent" => Ok(Block::Agent(agent::Agent::from_document(block_data)?)),
             "script" => Ok(Block::Script(script::Script::from_document(block_data)?)),
             "terminal" | "run" => Ok(Block::Terminal(terminal::Terminal::from_document(
                 block_data,
@@ -201,6 +207,7 @@ impl Block {
         block_local_value_provider: Option<&dyn BlockLocalValueProvider>,
     ) -> Result<Option<BlockContext>, Box<dyn std::error::Error + Send + Sync>> {
         match self {
+            Block::Agent(_) => Ok(None),
             Block::LocalVar(local_var) => {
                 local_var
                     .passive_context(resolver, block_local_value_provider)
@@ -291,6 +298,7 @@ impl Block {
         context: ExecutionContext,
     ) -> Result<Option<ExecutionHandle>, Box<dyn std::error::Error + Send + Sync>> {
         match self {
+            Block::Agent(agent) => agent.execute(context).await,
             Block::Terminal(terminal) => terminal.execute(context).await,
             Block::Script(script) => script.execute(context).await,
             Block::Postgres(postgres) => postgres.execute(context).await,
