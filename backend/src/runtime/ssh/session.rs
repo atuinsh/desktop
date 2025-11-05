@@ -380,12 +380,10 @@ impl Session {
 
         log::debug!("Key loaded successfully, authenticating...");
 
-        // For RSA keys, try with SHA2-256 signature algorithm (modern standard)
-        // russh will fall back to other algorithms if needed
-        let key_with_alg = russh::keys::PrivateKeyWithHashAlg::new(
-            Arc::new(key_pair),
-            Some(russh::keys::HashAlg::Sha256),
-        );
+        // Query the server for the best RSA hash algorithm it supports
+        // This ensures compatibility with both modern (SHA-256/SHA-512) and legacy (SHA-1) servers
+        let best_hash = self.session.best_supported_rsa_hash().await?.flatten();
+        let key_with_alg = russh::keys::PrivateKeyWithHashAlg::new(Arc::new(key_pair), best_hash);
 
         let auth_res = self
             .session
