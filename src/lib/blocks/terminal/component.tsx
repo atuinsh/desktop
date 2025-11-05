@@ -140,30 +140,32 @@ export const RunBlock = ({
     }
   }, [execution.isRunning, pty]);
 
-  const onTerminalStop = useCallback(() => {
-    if (pty === null) return;
+  const [replay, setReplay] = useState<boolean>(false);
 
-    removePty(pty.pid);
-    terminals[pty.pid]?.dispose();
-    cleanupPtyTerm(pty.pid);
+  const onTerminalStop = useCallback(
+    (replay = false) => {
+      if (pty === null) return;
 
-    if (onStop) onStop(pty.pid);
-    setCommandRunning(false);
-    setExitCode(null);
-    setCommandDuration(null);
-  }, [pty, terminals, cleanupPtyTerm, onStop]);
+      removePty(pty.pid);
+      terminals[pty.pid]?.dispose();
+      cleanupPtyTerm(pty.pid);
+
+      if (onStop) onStop(pty.pid);
+      setCommandRunning(false);
+      setExitCode(null);
+      setCommandDuration(null);
+
+      if (replay) {
+        handlePlay(true);
+      }
+    },
+    [pty, terminals, cleanupPtyTerm, onStop],
+  );
 
   const handleStop = useCallback(async () => {
-    if (pty === null) return;
-    onTerminalStop();
+    if (!execution.isRunning) return;
     await execution.cancel();
-  }, [pty, execution.cancel, onTerminalStop]);
-
-  useEffect(() => {
-    if (!execution.isRunning && pty) {
-      onTerminalStop();
-    }
-  }, [execution.isRunning, pty, onTerminalStop]);
+  }, [execution.isRunning, execution.cancel]);
 
   const handlePlay = useCallback(
     async (force: boolean = false) => {
@@ -181,17 +183,27 @@ export const RunBlock = ({
 
       track_event("runbooks.block.execute", { type: "terminal" });
     },
-    [execution.isRunning, terminal.code, terminal.id, currentRunbookId, onRun],
+    [execution.isRunning, execution.execute, terminal.code, terminal.id, currentRunbookId, onRun],
   );
+
+  useEffect(() => {
+    if (!execution.isRunning && pty) {
+      onTerminalStop();
+
+      if (replay) {
+        setReplay(false);
+        handlePlay(true);
+      }
+    }
+  }, [execution.isRunning, pty, onTerminalStop, handlePlay, replay]);
 
   const handleRefresh = useCallback(async () => {
     if (!execution.isRunning) return;
     if (pty === null) return;
 
+    setReplay(true);
     await handleStop();
-    // Using `force` to get around React state issues
-    await handlePlay(true);
-  }, [execution.isRunning, pty, handleStop, handlePlay]);
+  }, [execution.isRunning, pty, handleStop, setReplay]);
 
   const handleCmdEnter: Command = useCallback(() => {
     if (!execution.isRunning) {

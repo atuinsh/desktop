@@ -206,14 +206,17 @@ export function useBlockExecution(blockId: string): ClientExecutionHandle {
     switch (output.lifecycle?.type) {
       case "finished":
         setLifecycle("success");
+        setExecutionId(null);
         setError(null);
         break;
       case "cancelled":
         setLifecycle("cancelled");
+        setExecutionId(null);
         setError(null);
         break;
       case "error":
         setLifecycle("error");
+        setExecutionId(null);
         setError(output.lifecycle?.data.message);
         break;
       case "started":
