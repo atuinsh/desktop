@@ -8,6 +8,7 @@ import { BlockOutput } from "@/rs-bindings/BlockOutput";
 import Logger from "../logger";
 import { cancelExecution, executeBlock } from "../runtime";
 import { JsonValue } from "@/rs-bindings/serde_json/JsonValue";
+import { handleClientPrompt } from "../runtime_prompt";
 
 export const DocumentBridgeContext = createContext<DocumentBridge | null>(null);
 
@@ -41,13 +42,21 @@ export class DocumentBridge {
   }
 
   @autobind
-  private onMessage(message: DocumentBridgeMessage) {
+  private async onMessage(message: DocumentBridgeMessage) {
     switch (message.type) {
       case "blockContextUpdate":
         this.emitter.emit(`block_context:update:${message.data.blockId}`, message.data.context);
         break;
       case "blockOutput":
         this.emitter.emit(`block_output:${message.data.blockId}`, message.data.output);
+        break;
+      case "clientPrompt":
+        const result = await handleClientPrompt(message.data.prompt);
+        await invoke("respond_to_block_prompt", {
+          executionId: message.data.executionId,
+          promptId: message.data.promptId,
+          answer: result,
+        });
         break;
       default:
         break;

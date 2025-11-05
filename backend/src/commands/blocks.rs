@@ -8,7 +8,7 @@ use crate::commands::events::ChannelEventBus;
 use crate::kv;
 use crate::runtime::blocks::document::actor::{BlockLocalValueProvider, DocumentHandle};
 use crate::runtime::blocks::document::block_context::ResolvedContext;
-use crate::runtime::blocks::document::bridge::DocumentBridgeMessage;
+use crate::runtime::blocks::document::bridge::{ClientPromptResult, DocumentBridgeMessage};
 use crate::runtime::ClientMessageChannel;
 use crate::state::AtuinState;
 
@@ -241,4 +241,24 @@ pub async fn reset_runbook_state(
         .await
         .map_err(|e| format!("Failed to reset runbook state: {}", e))?;
     Ok(())
+}
+
+#[tauri::command]
+pub async fn respond_to_block_prompt(
+    state: State<'_, AtuinState>,
+    execution_id: Uuid,
+    prompt_id: Uuid,
+    answer: ClientPromptResult,
+) -> Result<(), String> {
+    let executions = state.block_executions.write().await;
+    if let Some(handle) = executions.get(&execution_id) {
+        let mut callbacks = handle.prompt_callbacks.lock().await;
+        let sender = callbacks.remove(&prompt_id).ok_or("Prompt not found")?;
+        sender
+            .send(answer)
+            .map_err(|_| "Failed to send answer to prompt".to_string())?;
+        Ok(())
+    } else {
+        Err("Execution not found".to_string())
+    }
 }
