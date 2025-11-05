@@ -473,7 +473,7 @@ impl Session {
         }
     }
 
-    /// Authenticate the session. If a username is provided, use it for authentication - otherwise we will use SSH config or "root"
+    /// Authenticate the session. If a username is provided, use it for authentication - otherwise we will use SSH config or the current user
     ///
     /// The authentication order matches the ssh command:
     /// 1. SSH Agent authentication
@@ -488,9 +488,12 @@ impl Session {
         // Clone values we need before any mutable borrows
         let config_username = self.ssh_config.username.clone();
         let identity_files = self.ssh_config.identity_files.clone();
+        let current_user = whoami::username();
 
-        // Use provided username, or SSH config username, or default to "root"
-        let username = username.or(config_username.as_deref()).unwrap_or("root");
+        // Use provided username, or SSH config username, or default to current user
+        let username = username
+            .or(config_username.as_deref())
+            .unwrap_or(&current_user);
 
         log::info!(
             "Starting SSH authentication for {username}@{}",
