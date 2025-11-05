@@ -39,6 +39,7 @@ import InterpreterSelector, { supportedShells } from "@/lib/blocks/common/Interp
 import { exportPropMatter, cn } from "@/lib/utils";
 import { useBlockLocalState } from "@/lib/hooks/useBlockLocalState";
 import { useBlockContext, useBlockExecution, useBlockOutput } from "@/lib/hooks/useDocumentBridge";
+import { ScriptStreamOutput } from "@/rs-bindings/ScriptStreamOutput";
 
 interface ScriptBlockProps {
   onChange: (val: string) => void;
@@ -103,13 +104,9 @@ const ScriptBlock = ({
   const blockContext = useBlockContext(script.id);
   const sshParent = blockContext.sshHost;
 
-  useBlockOutput(script.id, (output) => {
-    if (output.stdout) {
-      terminal?.write(output.stdout);
-    }
-
-    if (output.stderr) {
-      terminal?.write(output.stderr);
+  useBlockOutput<ScriptStreamOutput>(script.id, (output) => {
+    if (output.object) {
+      terminal?.write(output.object.data);
     }
   });
 

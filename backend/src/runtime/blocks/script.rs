@@ -11,6 +11,7 @@ use std::sync::Arc;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
 use tokio::sync::RwLock;
+use ts_rs::TS;
 use typed_builder::TypedBuilder;
 use uuid::Uuid;
 
@@ -20,6 +21,14 @@ use crate::runtime::blocks::{
 };
 
 use super::FromDocument;
+
+#[derive(Debug, Serialize, Clone, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, tag = "type", content = "data")]
+pub enum ScriptStreamOutput {
+    StdOut(String),
+    StdErr(String),
+}
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, TypedBuilder)]
 #[serde(rename_all = "camelCase")]
@@ -128,13 +137,6 @@ impl BlockBehavior for Script {
 
         let context_clone = context.clone();
         tokio::spawn(async move {
-            // Emit BlockStarted event via Grand Central
-            log::trace!(
-                "Emitting BlockStarted event for script block {id}",
-                id = self.id
-            );
-            let _ = context.block_started().await;
-
             let (exit_code, captured_output) = self
                 .run_script(context.clone(), context.cancellation_token())
                 .await;
@@ -185,9 +187,6 @@ impl BlockBehavior for Script {
                         })
                         .await;
 
-                    // Emit BlockFinished event via Grand Central
-                    let _ = context.block_finished(Some(0), true).await;
-
                     ExecutionStatus::Success
                 }
                 Ok(code) => {
@@ -205,19 +204,9 @@ impl BlockBehavior for Script {
                         })
                         .await;
 
-                    // Emit BlockFailed event via Grand Central
-                    let _ = context
-                        .block_failed(format!("Process exited with code {}", code))
-                        .await;
-
                     ExecutionStatus::Failed(format!("Process exited with code {}", code))
                 }
-                Err(e) => {
-                    // Emit BlockFailed event via Grand Central
-                    let _ = context.block_failed(e.to_string()).await;
-
-                    ExecutionStatus::Failed(e.to_string())
-                }
+                Err(e) => ExecutionStatus::Failed(e.to_string()),
             };
         });
 
@@ -247,14 +236,6 @@ impl Script {
         }
     }
 
-    /// Template script code using ContextResolver
-    fn template_script_code(
-        &self,
-        context: &ExecutionContext,
-    ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
-        context.context_resolver.resolve_template(&self.code)
-    }
-
     async fn run_script(
         &self,
         context: ExecutionContext,
@@ -263,29 +244,22 @@ impl Script {
         Result<i32, Box<dyn std::error::Error + Send + Sync>>,
         String,
     ) {
-        // Send start event
-        let _ = context.emit_workflow_event(WorkflowEvent::BlockStarted { id: self.id });
-
         // Send started lifecycle event to output channel
         log::trace!(
             "Sending started lifecycle event to output channel for script block {id}",
             id = self.id
         );
 
-        let _ = context
-            .send_output(
-                BlockOutput::builder()
-                    .block_id(self.id)
-                    .lifecycle(BlockLifecycleEvent::Started)
-                    .build(),
-            )
-            .await;
+        let _ = context.block_started().await;
 
         // Template the script code
-        let code = self.template_script_code(&context).unwrap_or_else(|e| {
-            log::warn!("Templating error in script {id}: {e}", id = self.id, e = e);
-            self.code.clone()
-        });
+        let code = context
+            .context_resolver
+            .resolve_template(&self.code)
+            .unwrap_or_else(|e| {
+                log::warn!("Templating error in script {id}: {e}", id = self.id, e = e);
+                self.code.clone()
+            });
 
         // Check if SSH execution is needed
         let ssh_host = context.context_resolver.ssh_host().cloned();
@@ -319,22 +293,6 @@ impl Script {
         let mut child = match cmd.spawn() {
             Ok(child) => child,
             Err(e) => {
-                let _ = context.emit_workflow_event(WorkflowEvent::BlockFinished { id: self.id });
-                log::trace!(
-                    "Sending error lifecycle event to output channel for script block {id}",
-                    id = self.id
-                );
-
-                let _ = context
-                    .send_output(
-                        BlockOutput::builder()
-                            .block_id(self.id)
-                            .lifecycle(BlockLifecycleEvent::Error(BlockErrorData {
-                                message: format!("Failed to spawn process: {}", e),
-                            }))
-                            .build(),
-                    )
-                    .await;
                 return (Err(e.into()), String::new());
             }
         };
@@ -360,11 +318,13 @@ impl Script {
                         id = block_id
                     );
 
+                    let object = serde_json::to_value(ScriptStreamOutput::StdOut(line.clone()))
+                        .expect("Failed to serialize stdout line");
                     let _ = context_clone
                         .send_output(
                             BlockOutput::builder()
                                 .block_id(block_id)
-                                .stdout(line.clone())
+                                .object(object)
                                 .build(),
                         )
                         .await;
@@ -392,11 +352,13 @@ impl Script {
                         id = block_id
                     );
 
+                    let object = serde_json::to_value(ScriptStreamOutput::StdErr(line.clone()))
+                        .expect("Failed to serialize stderr line");
                     let _ = context_clone
                         .send_output(
                             BlockOutput::builder()
                                 .block_id(block_id)
-                                .stderr(line.clone())
+                                .object(object)
                                 .build(),
                         )
                         .await;
@@ -427,30 +389,8 @@ impl Script {
                     }
                     let captured = captured_output.read().await.clone();
 
-                    // Emit BlockCancelled event
-                    if let Some(event_bus) = &context.gc_event_bus {
-                        log::trace!(
-                            "Emitting BlockCancelled event for script block {id}",
-                            id = self.id
-                        );
+                    let _ = context.block_cancelled().await;
 
-                        let _ = event_bus.emit(crate::runtime::events::GCEvent::BlockCancelled {
-                            block_id: self.id,
-                            runbook_id: context.runbook_id,
-                        }).await;
-                    }
-
-                    let _ = context.emit_workflow_event(WorkflowEvent::BlockFinished { id: self.id });
-                        log::trace!(
-                            "Sending cancelled lifecycle event to output channel for script block {id}",
-                            id = self.id
-                        );
-                        let _ = context.send_output(BlockOutput::builder()
-                            .block_id(self.id)
-                            .lifecycle(BlockLifecycleEvent::Cancelled)
-                            .build(),
-                        )
-                        .await;
                     return (Err("Script execution cancelled".into()), captured);
                 }
                 result = child.wait() => {
@@ -458,19 +398,7 @@ impl Script {
                         Ok(status) => status.code().unwrap_or(-1),
                         Err(e) => {
                             let captured = captured_output.read().await.clone();
-                            let _ = context.emit_workflow_event(WorkflowEvent::BlockFinished { id: self.id });
-                                log::trace!(
-                                    "Sending error lifecycle event to output channel for script block {id}",
-                                    id = self.id
-                                );
-                                let _ = context.send_output(BlockOutput::builder()
-                                    .block_id(self.id)
-                                    .lifecycle(BlockLifecycleEvent::Error(BlockErrorData {
-                                        message: format!("Failed to wait for process: {}", e)
-                                    }))
-                                    .build(),
-                                )
-                                .await;
+                            let _ = context.block_failed(format!("Failed to wait for process: {}", e)).await;
                             return (Err(format!("Failed to wait for process: {}", e).into()), captured);
                         }
                     }
@@ -481,21 +409,8 @@ impl Script {
                 Ok(status) => status.code().unwrap_or(-1),
                 Err(e) => {
                     let captured = captured_output.read().await.clone();
-                    let _ =
-                        context.emit_workflow_event(WorkflowEvent::BlockFinished { id: self.id });
-                    log::trace!(
-                        "Sending error lifecycle event to output channel for script block {id}",
-                        id = self.id
-                    );
                     let _ = context
-                        .send_output(
-                            BlockOutput::builder()
-                                .block_id(self.id)
-                                .lifecycle(BlockLifecycleEvent::Error(BlockErrorData {
-                                    message: format!("Failed to wait for process: {}", e),
-                                }))
-                                .build(),
-                        )
+                        .block_failed(format!("Failed to wait for process: {}", e))
                         .await;
                     return (
                         Err(format!("Failed to wait for process: {}", e).into()),
@@ -505,24 +420,15 @@ impl Script {
             }
         };
 
-        // Send completion event
-        let _ = context.emit_workflow_event(WorkflowEvent::BlockFinished { id: self.id });
-
-        log::trace!(
-            "Sending finished lifecycle event to output channel for script block {id}",
-            id = self.id
-        );
-        let _ = context
-            .send_output(
-                BlockOutput::builder()
-                    .block_id(self.id)
-                    .lifecycle(BlockLifecycleEvent::Finished(BlockFinishedData {
-                        exit_code: Some(exit_code),
-                        success: exit_code == 0,
-                    }))
-                    .build(),
-            )
-            .await;
+        if exit_code == 0 {
+            let _ = context
+                .block_finished(Some(exit_code), exit_code == 0)
+                .await;
+        } else {
+            let _ = context
+                .block_failed(format!("Script exited with code {}", exit_code))
+                .await;
+        }
 
         let captured = captured_output.read().await.clone();
         (Ok(exit_code), captured)
@@ -538,24 +444,10 @@ impl Script {
         Result<i32, Box<dyn std::error::Error + Send + Sync>>,
         String,
     ) {
-        use crate::runtime::blocks::handler::{
-            BlockErrorData, BlockFinishedData, BlockLifecycleEvent, BlockOutput,
-        };
-        use crate::runtime::workflow::event::WorkflowEvent;
+        use crate::runtime::blocks::handler::BlockOutput;
         use std::sync::Arc;
         use tokio::sync::RwLock;
         use tokio::sync::{mpsc, oneshot};
-
-        let _ = context.emit_workflow_event(WorkflowEvent::BlockStarted { id: self.id });
-
-        let _ = context
-            .send_output(
-                BlockOutput::builder()
-                    .block_id(self.id)
-                    .lifecycle(BlockLifecycleEvent::Started)
-                    .build(),
-            )
-            .await;
 
         let (username, hostname) = Self::parse_ssh_host(ssh_host);
 
@@ -563,17 +455,7 @@ impl Script {
             Some(pool) => pool,
             None => {
                 let error_msg = "SSH pool not available in execution context";
-                let _ = context.emit_workflow_event(WorkflowEvent::BlockFinished { id: self.id });
-                let _ = context
-                    .send_output(
-                        BlockOutput::builder()
-                            .block_id(self.id)
-                            .lifecycle(BlockLifecycleEvent::Error(BlockErrorData {
-                                message: error_msg.to_string(),
-                            }))
-                            .build(),
-                    )
-                    .await;
+                let _ = context.block_failed(error_msg.to_string()).await;
                 return (Err(error_msg.into()), String::new().into());
             }
         };
@@ -599,17 +481,7 @@ impl Script {
 
         if let Err(e) = exec_result {
             let error_msg = format!("Failed to start SSH execution: {}", e);
-            let _ = context.emit_workflow_event(WorkflowEvent::BlockFinished { id: self.id });
-            let _ = context
-                .send_output(
-                    BlockOutput::builder()
-                        .block_id(self.id)
-                        .lifecycle(BlockLifecycleEvent::Error(BlockErrorData {
-                            message: error_msg.clone(),
-                        }))
-                        .build(),
-                )
-                .await;
+            let _ = context.block_failed(error_msg.to_string()).await;
             return (Err(error_msg.into()), String::new());
         }
 
@@ -625,7 +497,10 @@ impl Script {
                     .send_output(
                         BlockOutput::builder()
                             .block_id(block_id)
-                            .stdout(line.clone())
+                            .object(
+                                serde_json::to_value(ScriptStreamOutput::StdOut(line.clone()))
+                                    .expect("Failed to serialize stdout line"),
+                            )
                             .build(),
                     )
                     .await;
@@ -640,21 +515,7 @@ impl Script {
                     let _ = ssh_pool_clone.exec_cancel(&channel_id_clone).await;
                     let captured = captured_output.read().await.clone();
 
-                    if let Some(event_bus) = &context.gc_event_bus {
-                        let _ = event_bus.emit(crate::runtime::events::GCEvent::BlockCancelled {
-                            block_id: self.id,
-                            runbook_id: context.runbook_id,
-                        }).await;
-                    }
-
-                    let _ = context.emit_workflow_event(WorkflowEvent::BlockFinished { id: block_id });
-                    let _ = context.send_output(
-                        BlockOutput::builder()
-                            .block_id(block_id)
-                            .lifecycle(BlockLifecycleEvent::Cancelled)
-                            .build(),
-                    )
-                    .await;
+                    let _ = context.block_cancelled().await;
                     return (Err("SSH script execution cancelled".into()), captured);
                 }
                 _ = result_rx => {
@@ -666,17 +527,8 @@ impl Script {
             0
         };
 
-        let _ = context.emit_workflow_event(WorkflowEvent::BlockFinished { id: self.id });
         let _ = context
-            .send_output(
-                BlockOutput::builder()
-                    .block_id(self.id)
-                    .lifecycle(BlockLifecycleEvent::Finished(BlockFinishedData {
-                        exit_code: Some(exit_code),
-                        success: exit_code == 0,
-                    }))
-                    .build(),
-            )
+            .block_finished(Some(exit_code), exit_code == 0)
             .await;
 
         let captured = captured_output.read().await.clone();
@@ -803,7 +655,7 @@ mod tests {
             let status = handle.status.read().await.clone();
             match status {
                 ExecutionStatus::Failed(msg) => {
-                    assert!(msg.contains("Process exited with code 1"));
+                    assert!(msg.contains("Script exited with code 1"));
                     break;
                 }
                 ExecutionStatus::Success => panic!("Script should have failed"),
@@ -1010,9 +862,10 @@ mod tests {
                 runbook_id: rb_id,
                 error,
             } => {
+                println!("BlockFailed event: {:?}", error);
                 assert_eq!(*block_id, script_id);
                 assert_eq!(*rb_id, runbook_id);
-                assert!(error.contains("Process exited with code 1"));
+                assert!(error.contains("Script exited with code 1"));
             }
             _ => panic!("Expected BlockFailed event, got: {:?}", events[1]),
         }
