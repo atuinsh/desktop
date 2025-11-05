@@ -6,15 +6,9 @@ use ts_rs::TS;
 use typed_builder::TypedBuilder;
 use uuid::Uuid;
 
-use crate::runtime::{
-    blocks::{
-        handler::{
-            BlockErrorData, BlockFinishedData, BlockLifecycleEvent, BlockOutput, ExecutionContext,
-            ExecutionHandle,
-        },
-        Block, BlockBehavior,
-    },
-    events::GCEvent,
+use crate::runtime::blocks::{
+    handler::{BlockOutput, ExecutionContext, ExecutionHandle},
+    Block, BlockBehavior,
 };
 
 use super::FromDocument;
@@ -277,6 +271,7 @@ mod tests {
     use crate::runtime::blocks::document::actor::{DocumentCommand, DocumentHandle};
     use crate::runtime::blocks::document::block_context::ContextResolver;
     use crate::runtime::blocks::document::bridge::DocumentBridgeMessage;
+    use crate::runtime::blocks::handler::BlockLifecycleEvent;
     use crate::runtime::events::MemoryEventBus;
     use crate::runtime::ClientMessageChannel;
     use async_trait::async_trait;

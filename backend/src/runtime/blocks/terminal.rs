@@ -1,5 +1,4 @@
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 use typed_builder::TypedBuilder;
 use uuid::Uuid;
 

@@ -1,8 +1,6 @@
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::RwLock;
 use typed_builder::TypedBuilder;
 use url::Url;
 use uuid::Uuid;

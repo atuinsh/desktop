@@ -4,20 +4,17 @@ use sqlparser::ast::Statement;
 use sqlparser::dialect::{Dialect, PostgreSqlDialect};
 use sqlx::{postgres::PgConnectOptions, Column, PgPool, Row, TypeInfo};
 use std::str::FromStr;
-use std::sync::Arc;
 use std::time::Instant;
-use tokio::sync::RwLock;
 use typed_builder::TypedBuilder;
 use uuid::Uuid;
 
-use crate::runtime::blocks::handler::ExecutionStatus;
 use crate::runtime::blocks::sqlx_block::{
     SqlxBlockBehavior, SqlxBlockError, SqlxBlockExecutionResult, SqlxQueryResult,
     SqlxStatementResult,
 };
 use crate::runtime::blocks::{Block, BlockBehavior};
 
-use super::handler::{CancellationToken, ExecutionContext, ExecutionHandle};
+use super::handler::{ExecutionContext, ExecutionHandle};
 use super::FromDocument;
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, TypedBuilder)]

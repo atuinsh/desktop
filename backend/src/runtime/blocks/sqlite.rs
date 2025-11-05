@@ -4,13 +4,11 @@ use sqlparser::ast::Statement;
 use sqlparser::dialect::{Dialect, SQLiteDialect};
 use sqlx::{sqlite::SqliteConnectOptions, Column, Row, SqlitePool, TypeInfo};
 use std::str::FromStr;
-use std::sync::Arc;
 use std::time::Instant;
-use tokio::sync::RwLock;
 use typed_builder::TypedBuilder;
 use uuid::Uuid;
 
-use crate::runtime::blocks::handler::{CancellationToken, ExecutionHandle, ExecutionStatus};
+use crate::runtime::blocks::handler::ExecutionHandle;
 use crate::runtime::blocks::sqlx_block::{
     SqlxBlockBehavior, SqlxBlockError, SqlxBlockExecutionResult, SqlxQueryResult,
     SqlxStatementResult,

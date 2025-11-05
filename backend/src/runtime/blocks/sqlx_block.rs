@@ -8,15 +8,11 @@ use sqlparser::{ast::Statement, dialect::Dialect};
 use ts_rs::TS;
 use typed_builder::TypedBuilder;
 
-use crate::runtime::{
-    blocks::{
-        handler::{
-            BlockErrorData, BlockFinishedData, BlockLifecycleEvent, BlockOutput, ExecutionContext,
-            ExecutionHandle, ExecutionStatus,
-        },
-        BlockBehavior,
+use crate::runtime::blocks::{
+    handler::{
+        BlockErrorData, BlockLifecycleEvent, BlockOutput, ExecutionContext, ExecutionHandle,
     },
-    workflow::event::WorkflowEvent,
+    BlockBehavior,
 };
 
 #[derive(Debug, thiserror::Error)]
