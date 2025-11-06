@@ -1,4 +1,7 @@
 use crate::runtime::blocks::document::block_context::{BlockExecutionOutput, DocumentVar};
+use crate::runtime::blocks::document::bridge::{
+    ClientPrompt, PromptIcon, PromptInput, PromptOption, PromptOptionColor, PromptOptionVariant,
+};
 use crate::runtime::blocks::handler::{
     BlockErrorData, BlockFinishedData, BlockLifecycleEvent, BlockOutput,
 };
@@ -21,14 +24,6 @@ use crate::runtime::blocks::{
 };
 
 use super::FromDocument;
-
-#[derive(Debug, Serialize, Clone, TS)]
-#[serde(rename_all = "camelCase")]
-#[ts(export, tag = "type", content = "data")]
-pub enum ScriptStreamOutput {
-    StdOut(String),
-    StdErr(String),
-}
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, TypedBuilder)]
 #[serde(rename_all = "camelCase")]
@@ -318,13 +313,11 @@ impl Script {
                         id = block_id
                     );
 
-                    let object = serde_json::to_value(ScriptStreamOutput::StdOut(line.clone()))
-                        .expect("Failed to serialize stdout line");
                     let _ = context_clone
                         .send_output(
                             BlockOutput::builder()
                                 .block_id(block_id)
-                                .object(object)
+                                .stdout(line.clone())
                                 .build(),
                         )
                         .await;
@@ -352,13 +345,11 @@ impl Script {
                         id = block_id
                     );
 
-                    let object = serde_json::to_value(ScriptStreamOutput::StdErr(line.clone()))
-                        .expect("Failed to serialize stderr line");
                     let _ = context_clone
                         .send_output(
                             BlockOutput::builder()
                                 .block_id(block_id)
-                                .object(object)
+                                .stderr(line.clone())
                                 .build(),
                         )
                         .await;
@@ -497,10 +488,7 @@ impl Script {
                     .send_output(
                         BlockOutput::builder()
                             .block_id(block_id)
-                            .object(
-                                serde_json::to_value(ScriptStreamOutput::StdOut(line.clone()))
-                                    .expect("Failed to serialize stdout line"),
-                            )
+                            .stdout(line.clone())
                             .build(),
                     )
                     .await;
