@@ -7507,8 +7507,7 @@ dependencies = [
 [[package]]
 name = "sqlparser"
 version = "0.59.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4591acadbcf52f0af60eafbb2c003232b2b4cd8de5f0e9437cb8b1b59046cc0f"
+source = "git+https://github.com/atuinsh/datafusion-sqlparser-rs.git?branch=mkt%2Fparse-sql-with-byte-offsets#bae2d8e199ead940d26c3a68a4d10ae1c4453b62"
 dependencies = [
  "log",
  "recursive",
