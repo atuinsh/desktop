@@ -120,7 +120,7 @@ const SQL = ({
     }
 
     if (output.object) {
-      if (output.object.type === "Query") {
+      if (output.object.type === "Query" || output.object.type === "Statement") {
         setResults(output.object);
       } else if (output.object.type === "queryCount") {
         setQueryCount(Some(output.object.count));

@@ -141,7 +141,7 @@ const SQLResults = ({ results, error, dismiss, isFullscreen = false }: SQLProps)
             <div className="flex items-center gap-1 text-default-500">
               <Clock size={14} />
               <span className="text-sm select-text">
-                {(results.data.duration * 1000).toFixed(3)}ms
+                {secondsToTimeDisplay(results.data.duration)}
               </span>
             </div>
           </Tooltip>
@@ -171,5 +171,13 @@ const SQLResults = ({ results, error, dismiss, isFullscreen = false }: SQLProps)
     </Card>
   );
 };
+
+function secondsToTimeDisplay(seconds: number) {
+  if (seconds >= 10) {
+    return `${seconds.toFixed(3)}s`;
+  } else {
+    return `${(seconds * 1000).toFixed(3)}ms`;
+  }
+}
 
 export default SQLResults;

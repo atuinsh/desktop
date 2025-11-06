@@ -9,9 +9,7 @@ use ts_rs::TS;
 use typed_builder::TypedBuilder;
 
 use crate::runtime::blocks::{
-    handler::{
-        BlockErrorData, BlockLifecycleEvent, BlockOutput, ExecutionContext, ExecutionHandle,
-    },
+    handler::{BlockOutput, ExecutionContext, ExecutionHandle},
     BlockBehavior,
 };
 
@@ -19,6 +17,9 @@ use crate::runtime::blocks::{
 pub enum SqlxBlockError {
     #[error("Database driver error: {0}")]
     SqlxError(#[from] sqlx::Error),
+
+    #[error("Query error: {0}")]
+    QueryError(String),
 
     #[error("Generic error: {0}")]
     GenericError(String),
@@ -69,8 +70,9 @@ pub(crate) struct SqlxQueryResult {
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub(crate) struct SqlxStatementResult {
-    #[ts(type = "number")]
-    rows_affected: u64,
+    #[ts(type = "number | null")]
+    #[builder(default = None, setter(strip_option))]
+    rows_affected: Option<u64>,
     #[builder(default = None)]
     #[ts(type = "number | null")]
     last_insert_rowid: Option<u64>,
@@ -108,20 +110,25 @@ pub(crate) trait SqlxBlockBehavior: BlockBehavior + 'static {
         self,
         context: ExecutionContext,
     ) -> Result<Option<ExecutionHandle>, Box<dyn std::error::Error + Send + Sync>> {
-        let context_clone = context.clone();
-        match self.do_execute(context_clone).await {
-            Ok(_) => Ok(Some(context.handle())),
-            Err(e) => match e {
-                SqlxBlockError::Cancelled => {
-                    let _ = context.block_cancelled().await;
-                    Ok(None)
+        let handle = context.handle();
+
+        tokio::spawn(async move {
+            match self.do_execute(context.clone()).await {
+                Ok(_) => {
+                    let _ = context.block_finished(None, true).await;
                 }
-                _ => {
-                    let _ = context.block_failed(e.to_string()).await;
-                    Err(Box::new(e))
-                }
-            },
-        }
+                Err(e) => match e {
+                    SqlxBlockError::Cancelled => {
+                        let _ = context.block_cancelled().await;
+                    }
+                    _ => {
+                        let _ = context.block_failed(e.to_string()).await;
+                    }
+                },
+            }
+        });
+
+        Ok(Some(handle))
     }
 
     async fn do_execute(&self, context: ExecutionContext) -> Result<(), SqlxBlockError> {
@@ -135,16 +142,26 @@ pub(crate) trait SqlxBlockBehavior: BlockBehavior + 'static {
         // Parse queries synchronously in a scope to ensure dialect is dropped, since it is not Send
         let queries: Vec<(String, bool)> = {
             let dialect = Self::dialect();
-            let statements = sqlparser::parser::Parser::parse_sql(dialect.as_ref(), &query)
-                .map_err(|e| SqlxBlockError::InvalidSql(e.to_string()))?;
+            let statements =
+                sqlparser::parser::Parser::parse_sql_with_offsets(dialect.as_ref(), &query)
+                    .map_err(|e| SqlxBlockError::InvalidSql(e.to_string()))?;
 
             if statements.is_empty() {
                 return Err(SqlxBlockError::InvalidSql("Query is empty".to_string()));
             }
 
+            for statement in statements.iter() {
+                log::info!("Statement: {:?}", statement);
+            }
+
             statements
                 .iter()
-                .map(|s| (s.to_string(), Self::is_query(s)))
+                .map(|(s, offset)| {
+                    (
+                        query[offset.start()..offset.end()].to_string(),
+                        Self::is_query(s),
+                    )
+                })
                 .collect()
         };
 
@@ -215,7 +232,7 @@ pub(crate) trait SqlxBlockBehavior: BlockBehavior + 'static {
                     )
                     .await;
 
-                for (i, (query, is_query)) in queries.iter().enumerate() {
+                for (query, is_query) in queries.iter() {
                     let result = if *is_query {
                         Self::execute_query(&pool_clone, &query).await
                     } else {
@@ -223,18 +240,6 @@ pub(crate) trait SqlxBlockBehavior: BlockBehavior + 'static {
                     };
 
                     if let Err(e) = result {
-                        let message = format!("Statement {} failed: {}", i + 1, e);
-                        let _ = context_clone
-                            .send_output(
-                                BlockOutput::builder()
-                                    .block_id(block_id)
-                                    .stderr(message.clone())
-                                    .lifecycle(BlockLifecycleEvent::Error(BlockErrorData {
-                                        message: message.clone(),
-                                    }))
-                                    .build(),
-                            )
-                            .await;
                         return Err(e);
                     }
 
@@ -256,13 +261,10 @@ pub(crate) trait SqlxBlockBehavior: BlockBehavior + 'static {
                 Ok(())
             };
 
-            let context_clone = context.clone();
-
             let result = if let Some(cancel_rx) = cancellation_receiver {
                 tokio::select! {
                     _ = cancel_rx => {
                         let _ = Self::disconnect(&pool).await;
-                        let _ = context_clone.block_cancelled().await;
                         return Err(SqlxBlockError::Cancelled);
                     }
                     result = execution_task => {
@@ -279,8 +281,6 @@ pub(crate) trait SqlxBlockBehavior: BlockBehavior + 'static {
             if let Err(e) = result {
                 return Err(e);
             }
-
-            let _ = context_clone.block_finished(None, true).await;
 
             result
         })
@@ -317,4 +317,20 @@ pub(crate) trait SqlxBlockBehavior: BlockBehavior + 'static {
         pool: &Self::Pool,
         statement: &str,
     ) -> Result<SqlxBlockExecutionResult, SqlxBlockError>;
+}
+
+fn line_col_to_offset(text: &str, line: u64, col: u64) -> usize {
+    let mut offset = 0;
+    let mut cur_line = 1;
+
+    for ch in text.chars() {
+        if cur_line == line {
+            return offset + (col - 1) as usize;
+        }
+        if ch == '\n' {
+            cur_line += 1;
+        }
+        offset += ch.len_utf8();
+    }
+    offset
 }

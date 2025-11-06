@@ -105,8 +105,11 @@ const ScriptBlock = ({
   const sshParent = blockContext.sshHost;
 
   useBlockOutput<ScriptStreamOutput>(script.id, (output) => {
-    if (output.object) {
-      terminal?.write(output.object.data);
+    if (output.stdout) {
+      terminal?.write(output.stdout);
+    }
+    if (output.stderr) {
+      terminal?.write(output.stderr);
     }
   });
 
