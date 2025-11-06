@@ -42,6 +42,7 @@ import { Rc } from "@binarymuse/ts-stdlib";
 import track_event from "@/tracking";
 import { open } from "@tauri-apps/plugin-shell";
 import AtuinEnv from "@/atuin_env";
+import Workspace from "@/state/runbooks/workspace";
 
 const scrollWorkspaceIntoViewGenerator =
   (elRef: React.RefObject<HTMLDivElement | null>) => async (workspaceId: string) => {
@@ -113,6 +114,7 @@ const NoteSidebar = forwardRef((props: NotesSidebarProps, ref: React.ForwardedRe
   const [focusedWorkspaceId, setFocusedWorkspaceId] = useState<string | null>(null);
 
   const currentWorkspaceId = useStore((state: AtuinState) => state.currentWorkspaceId);
+  const setCurrentWorkspaceId = useStore((state: AtuinState) => state.setCurrentWorkspaceId);
 
   const elRef = useRef<HTMLDivElement>(null);
   const scrollWorkspaceIntoView = scrollWorkspaceIntoViewGenerator(elRef);
@@ -263,6 +265,14 @@ const NoteSidebar = forwardRef((props: NotesSidebarProps, ref: React.ForwardedRe
   }
 
   const org = userOrgs.find((org) => org.id === selectedOrg);
+
+  useEffect(() => {
+    Workspace.all({ orgId: selectedOrg }).then((workspaces) => {
+      if (currentWorkspaceId && !workspaces.some((ws) => ws.get("id") === currentWorkspaceId)) {
+        setCurrentWorkspaceId(workspaces[0].get("id")!);
+      }
+    });
+  }, [selectedOrg]);
 
   return (
     <div
