@@ -143,7 +143,7 @@ impl BlockBehavior for Mysql {
         self,
         context: ExecutionContext,
     ) -> Result<Option<ExecutionHandle>, Box<dyn std::error::Error + Send + Sync>> {
-        SqlxBlockBehavior::execute(&self, context).await
+        SqlxBlockBehavior::execute_query_block(self, context).await
     }
 }
 

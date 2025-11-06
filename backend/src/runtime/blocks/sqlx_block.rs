@@ -104,8 +104,8 @@ pub(crate) trait SqlxBlockBehavior: BlockBehavior + 'static {
     type Pool: Clone + Send + Sync + 'static;
 
     /// Execute the block. Creates an execution handle and manages all lifecycle events.
-    async fn execute(
-        &self,
+    async fn execute_query_block(
+        self,
         context: ExecutionContext,
     ) -> Result<Option<ExecutionHandle>, Box<dyn std::error::Error + Send + Sync>> {
         let context_clone = context.clone();
