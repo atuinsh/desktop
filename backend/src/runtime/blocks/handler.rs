@@ -1,5 +1,6 @@
 use crate::runtime::blocks::document::actor::DocumentError;
 use crate::runtime::blocks::document::block_context::{BlockContext, ContextResolver};
+use crate::runtime::blocks::document::bridge::{ClientPrompt, ClientPromptResult};
 use crate::runtime::blocks::document::{actor::DocumentHandle, bridge::DocumentBridgeMessage};
 use crate::runtime::events::{EventBus, GCEvent};
 use crate::runtime::pty_store::PtyStoreHandle;
@@ -7,9 +8,10 @@ use crate::runtime::ssh_pool::SshPoolHandle;
 use crate::runtime::workflow::event::WorkflowEvent;
 use crate::runtime::ClientMessageChannel;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fmt::Debug;
 use std::sync::Arc;
-use tokio::sync::{broadcast, oneshot, RwLock};
+use tokio::sync::{broadcast, oneshot, Mutex, RwLock};
 use ts_rs::TS;
 use typed_builder::TypedBuilder;
 use uuid::Uuid;
@@ -227,6 +229,32 @@ impl ExecutionContext {
     pub fn cancellation_receiver(&self) -> Option<oneshot::Receiver<()>> {
         self.handle().cancellation_token.clone().take_receiver()
     }
+
+    pub async fn prompt_client(
+        &self,
+        prompt: ClientPrompt,
+    ) -> Result<ClientPromptResult, DocumentError> {
+        let prompt_id = Uuid::new_v4();
+        let (sender, receiver) = oneshot::channel();
+
+        self.handle()
+            .prompt_callbacks
+            .lock()
+            .await
+            .insert(prompt_id, sender);
+
+        self.send_output(DocumentBridgeMessage::ClientPrompt {
+            execution_id: self.handle().id,
+            prompt_id,
+            prompt,
+        })
+        .await
+        .map_err(|_| DocumentError::OutputSendError)?;
+
+        let result = receiver.await.map_err(|_| DocumentError::EventSendError)?;
+
+        Ok(result)
+    }
 }
 
 // Channel-based cancellation token
@@ -276,6 +304,7 @@ pub struct ExecutionHandle {
     pub cancellation_token: CancellationToken,
     pub status: Arc<RwLock<ExecutionStatus>>,
     pub output_variable: Option<String>,
+    pub prompt_callbacks: Arc<Mutex<HashMap<Uuid, oneshot::Sender<ClientPromptResult>>>>,
 }
 
 impl ExecutionHandle {
@@ -286,6 +315,7 @@ impl ExecutionHandle {
             cancellation_token: CancellationToken::new(),
             status: Arc::new(RwLock::new(ExecutionStatus::Running)),
             output_variable: None,
+            prompt_callbacks: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
