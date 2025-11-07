@@ -350,8 +350,6 @@ impl Document {
                 }
             }
 
-            context_resolver.push_block(&self.blocks[i]);
-
             let document_bridge = self.document_bridge.clone();
 
             let _ = document_bridge
@@ -360,6 +358,9 @@ impl Document {
                     context: ResolvedContext::from_resolver(&context_resolver),
                 })
                 .await;
+
+            // Update the context resolver for the next block
+            context_resolver.push_block(&self.blocks[i]);
         }
 
         if errors.is_empty() {
