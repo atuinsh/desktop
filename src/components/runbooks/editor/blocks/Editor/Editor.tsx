@@ -10,7 +10,13 @@ import track_event from "@/tracking";
 import CodeMirror, { Extension } from "@uiw/react-codemirror";
 
 import "@xterm/xterm/css/xterm.css";
-import { ChevronDownIcon, CodeIcon, RefreshCwIcon, RefreshCwOffIcon, ArrowDownToLineIcon, ArrowUpToLineIcon } from "lucide-react";
+import {
+  ChevronDownIcon,
+  CodeIcon,
+  ArrowDownToLineIcon,
+  ArrowUpToLineIcon,
+  FileInputIcon,
+} from "lucide-react";
 import {
   Dropdown,
   DropdownTrigger,
@@ -18,8 +24,12 @@ import {
   DropdownMenu,
   DropdownItem,
   Input,
-  Switch,
   Tooltip,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+  Select,
+  SelectItem,
 } from "@heroui/react";
 import EditableHeading from "@/components/EditableHeading/index.tsx";
 
@@ -31,12 +41,12 @@ import { DependencySpec } from "@/lib/workflow/dependency.ts";
 import useCodemirrorTheme from "@/lib/hooks/useCodemirrorTheme.ts";
 import { useCodeMirrorValue } from "@/lib/hooks/useCodeMirrorValue";
 import Block from "@/lib/blocks/common/Block";
-import { getTemplateVar, setTemplateVar } from "@/state/templates";
+import { setTemplateVar } from "@/state/templates";
 import { exportPropMatter, cn } from "@/lib/utils";
 import { useCurrentRunbookId } from "@/context/runbook_id_context";
-import RunbookBus from "@/lib/app/runbook_bus";
 import { useBlockLocalState } from "@/lib/hooks/useBlockLocalState";
 import { createBlockNoteExtension } from "@blocknote/core";
+import { useBlockContext } from "@/lib/hooks/useDocumentBridge";
 
 interface LanguageLoader {
   name: string;
@@ -75,14 +85,12 @@ interface CodeBlockProps {
   onChange: (val: string) => void;
   onLanguageChange: (val: string) => void;
   onVariableNameChange: (val: string) => void;
-  onSyncVariableChange: (val: boolean) => void;
   code: string;
   language: string;
   variableName: string;
-  syncVariable: boolean;
   isEditable: boolean;
   onCodeMirrorFocus?: () => void;
-  
+
   collapseCode: boolean;
   setCollapseCode: (collapse: boolean) => void;
 }
@@ -93,9 +101,7 @@ const EditorBlock = ({
   language,
   onLanguageChange,
   onVariableNameChange,
-  onSyncVariableChange,
   variableName,
-  syncVariable,
   isEditable,
   name,
   setName,
@@ -105,8 +111,6 @@ const EditorBlock = ({
   setCollapseCode,
 }: CodeBlockProps) => {
   const languages: LanguageLoader[] = useMemo(() => languageLoaders(), []);
-  const currentRunbookId = useCurrentRunbookId();
-
   const codeMirrorValue = useCodeMirrorValue(code, onChange);
 
   const [extension, setExtension] = useState<Extension | null>(null);
@@ -115,6 +119,11 @@ const EditorBlock = ({
   );
   const [filterText, setFilterText] = useState("");
   const [isOpen, setIsOpen] = useState(false);
+
+  const [copyFromVar, setCopyFromVar] = useState<string | null>(null);
+
+  const context = useBlockContext(editor.id);
+  const variables = Object.keys(context.variables);
 
   const filteredItems = useMemo(() => {
     return languages
@@ -140,17 +149,6 @@ const EditorBlock = ({
     })();
   }, [language]);
 
-  useEffect(() => {
-    if (syncVariable && currentRunbookId && variableName) {
-      const bus = RunbookBus.get(currentRunbookId);
-      return bus.onVariableChanged((name, value) => {
-        if (name === variableName) {
-          onChange(value);
-        }
-      });
-    }
-  }, [syncVariable, currentRunbookId, variableName, onChange]);
-
   const themeObj = useCodemirrorTheme();
 
   return (
@@ -166,6 +164,47 @@ const EditorBlock = ({
           <div className="flex flex-row justify-between w-full">
             <EditableHeading initialText={name} onTextChange={setName} />
             <div className="flex flex-row gap-2 items-center">
+              <Popover showArrow offset={10} placement="bottom-start">
+                <Tooltip content="Set editor contents to the value of a template variable">
+                  <PopoverTrigger>
+                    <Button size="sm" variant="flat" isIconOnly className="mr-4">
+                      <FileInputIcon size={16} />
+                    </Button>
+                  </PopoverTrigger>
+                </Tooltip>
+                <PopoverContent>
+                  <div className="flex flex-col gap-2 w-[350px] my-2">
+                    <div>Set editor contents to the value of a template variable:</div>
+                    <div className="flex flex-row gap-2 items-center">
+                      <Select
+                        size="sm"
+                        variant="flat"
+                        placeholder="Select variable"
+                        value={variableName}
+                        onSelectionChange={(e) => setCopyFromVar(e.currentKey ?? null)}
+                        disabled={!isEditable}
+                      >
+                        {variables.map((variable) => (
+                          <SelectItem key={variable}>{variable}</SelectItem>
+                        ))}
+                      </Select>
+                      <Button
+                        size="sm"
+                        variant="flat"
+                        isDisabled={!copyFromVar}
+                        onPress={() => {
+                          if (copyFromVar) {
+                            onChange(context.variables[copyFromVar] || "");
+                            setCopyFromVar(null);
+                          }
+                        }}
+                      >
+                        Apply
+                      </Button>
+                    </div>
+                  </div>
+                </PopoverContent>
+              </Popover>
               <Input
                 autoComplete="off"
                 autoCapitalize="off"
@@ -178,16 +217,6 @@ const EditorBlock = ({
                 disabled={!isEditable}
                 className="font-mono text-xs"
               />
-              <Tooltip content="When on, the editor content will update when the variable content changes">
-                <Switch
-                  isSelected={syncVariable}
-                  onValueChange={(val) => onSyncVariableChange(val)}
-                  thumbIcon={
-                    syncVariable ? <RefreshCwIcon size={16} /> : <RefreshCwOffIcon size={16} />
-                  }
-                  isDisabled={!isEditable || variableName.trim() === ""}
-                />
-              </Tooltip>
               <Tooltip content={collapseCode ? "Expand code" : "Collapse code"}>
                 <Button
                   onPress={() => setCollapseCode(!collapseCode)}
@@ -195,7 +224,11 @@ const EditorBlock = ({
                   variant="flat"
                   isIconOnly
                 >
-                  {collapseCode ? <ArrowDownToLineIcon size={20} /> : <ArrowUpToLineIcon size={20} />}
+                  {collapseCode ? (
+                    <ArrowDownToLineIcon size={20} />
+                  ) : (
+                    <ArrowUpToLineIcon size={20} />
+                  )}
                 </Button>
               </Tooltip>
               <Dropdown
@@ -253,9 +286,11 @@ const EditorBlock = ({
         </div>
       }
     >
-      <div className={cn("w-full transition-all duration-300 ease-in-out relative", {
-        "max-h-10 overflow-hidden": collapseCode,
-      })}>
+      <div
+        className={cn("w-full transition-all duration-300 ease-in-out relative", {
+          "max-h-10 overflow-hidden": collapseCode,
+        })}
+      >
         <CodeMirror
           className="!pt-0 max-w-full border border-gray-300 rounded flex-grow max-h-1/2 overflow-scroll"
           placeholder={"Write some code..."}
@@ -283,7 +318,6 @@ export default createReactBlockSpec(
       code: { default: "" },
       language: { default: "" },
       variableName: { default: "" },
-      syncVariable: { default: false },
     },
     content: "none",
   },
@@ -305,7 +339,7 @@ export default createReactBlockSpec(
       const [collapseCode, setCollapseCode] = useBlockLocalState<boolean>(
         block.id,
         "collapsed",
-        false
+        false,
       );
 
       const handleCodeMirrorFocus = () => {
@@ -339,19 +373,6 @@ export default createReactBlockSpec(
         });
       };
 
-      const onSyncVariableChange = async (sync: boolean) => {
-        if (sync && currentRunbookId && block.props.variableName) {
-          const value = await getTemplateVar(currentRunbookId, block.props.variableName);
-          editor.updateBlock(block, {
-            props: { ...block.props, code: value || "", syncVariable: sync },
-          });
-        } else {
-          editor.updateBlock(block, {
-            props: { ...block.props, syncVariable: sync },
-          });
-        }
-      };
-
       const setName = (name: string) => {
         editor.updateBlock(block, {
           props: { ...block.props, name: name },
@@ -376,11 +397,9 @@ export default createReactBlockSpec(
           onChange={onCodeChange}
           onLanguageChange={onLanguageChange}
           onVariableNameChange={onVariableNameChange}
-          onSyncVariableChange={onSyncVariableChange}
           code={block.props.code}
           language={block.props.language}
           variableName={block.props.variableName}
-          syncVariable={block.props.syncVariable}
           isEditable={editor.isEditable}
           onCodeMirrorFocus={handleCodeMirrorFocus}
           collapseCode={collapseCode}
