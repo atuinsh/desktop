@@ -61,7 +61,7 @@ impl FromDocument for Editor {
             )
             .var_name(
                 props
-                    .get("outputVariable")
+                    .get("variableName")
                     .and_then(|v| v.as_str())
                     .map(|s| s.to_string()),
             )
