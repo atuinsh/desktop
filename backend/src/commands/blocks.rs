@@ -6,10 +6,12 @@ use uuid::Uuid;
 
 use crate::commands::events::ChannelEventBus;
 use crate::kv;
-use crate::runtime::blocks::document::actor::{BlockLocalValueProvider, DocumentHandle};
-use crate::runtime::blocks::document::block_context::ResolvedContext;
+use crate::runtime::blocks::document::actor::{DocumentHandle, LocalValueProvider};
+use crate::runtime::blocks::document::block_context::{
+    BlockContext, BlockContextStorage, ResolvedContext,
+};
 use crate::runtime::blocks::document::bridge::{ClientPromptResult, DocumentBridgeMessage};
-use crate::runtime::ClientMessageChannel;
+use crate::runtime::MessageChannel;
 use crate::state::AtuinState;
 
 #[derive(Clone)]
@@ -19,7 +21,7 @@ struct DocumentBridgeChannel {
 }
 
 #[async_trait]
-impl ClientMessageChannel<DocumentBridgeMessage> for DocumentBridgeChannel {
+impl MessageChannel<DocumentBridgeMessage> for DocumentBridgeChannel {
     async fn send(
         &self,
         message: DocumentBridgeMessage,
@@ -50,7 +52,7 @@ impl KvBlockLocalValueProvider {
 }
 
 #[async_trait]
-impl BlockLocalValueProvider for KvBlockLocalValueProvider {
+impl LocalValueProvider for KvBlockLocalValueProvider {
     async fn get_block_local_value(
         &self,
         block_id: Uuid,

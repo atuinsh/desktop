@@ -1,6 +1,6 @@
 use crate::runtime::blocks::{
     document::{
-        actor::BlockLocalValueProvider,
+        actor::LocalValueProvider,
         block_context::{BlockContext, ContextResolver, DocumentEnvVar},
     },
     Block, BlockBehavior,
@@ -36,7 +36,7 @@ impl BlockBehavior for Environment {
     async fn passive_context(
         &self,
         resolver: &ContextResolver,
-        _block_local_value_provider: Option<&dyn BlockLocalValueProvider>,
+        _block_local_value_provider: Option<&dyn LocalValueProvider>,
     ) -> Result<Option<BlockContext>, Box<dyn std::error::Error + Send + Sync>> {
         let mut context = BlockContext::new();
         if self.name.is_empty() {

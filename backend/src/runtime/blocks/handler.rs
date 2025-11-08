@@ -6,7 +6,7 @@ use crate::runtime::events::{EventBus, GCEvent};
 use crate::runtime::pty_store::PtyStoreHandle;
 use crate::runtime::ssh_pool::SshPoolHandle;
 use crate::runtime::workflow::event::WorkflowEvent;
-use crate::runtime::ClientMessageChannel;
+use crate::runtime::MessageChannel;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt::Debug;
@@ -23,7 +23,7 @@ pub struct ExecutionContext {
     pub document_handle: Arc<DocumentHandle>,
     pub context_resolver: Arc<ContextResolver>,
     #[builder(default, setter(strip_option(fallback = output_channel_opt)))]
-    output_channel: Option<Arc<dyn ClientMessageChannel<DocumentBridgeMessage>>>,
+    output_channel: Option<Arc<dyn MessageChannel<DocumentBridgeMessage>>>,
     workflow_event_sender: broadcast::Sender<WorkflowEvent>,
     #[builder(default, setter(strip_option(fallback = ssh_pool_opt)))]
     pub ssh_pool: Option<SshPoolHandle>,

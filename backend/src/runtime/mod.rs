@@ -10,12 +10,12 @@ pub(crate) mod ssh_pool;
 pub(crate) mod workflow;
 
 #[async_trait]
-pub trait ClientMessageChannel<M: Serialize + Send + Sync>: Send + Sync {
+pub trait MessageChannel<M: Serialize + Send + Sync>: Send + Sync {
     async fn send(&self, message: M) -> Result<(), Box<dyn std::error::Error + Send + Sync>>;
 }
 
 #[async_trait]
-impl<M: Serialize + Send + Sync> ClientMessageChannel<M>
+impl<M: Serialize + Send + Sync> MessageChannel<M>
     for fn(M) -> Result<(), Box<dyn std::error::Error + Send + Sync>>
 {
     async fn send(&self, message: M) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {

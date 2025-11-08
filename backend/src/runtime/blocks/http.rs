@@ -273,7 +273,7 @@ mod tests {
     use crate::runtime::blocks::document::bridge::DocumentBridgeMessage;
     use crate::runtime::blocks::handler::BlockLifecycleEvent;
     use crate::runtime::events::MemoryEventBus;
-    use crate::runtime::ClientMessageChannel;
+    use crate::runtime::MessageChannel;
     use async_trait::async_trait;
     use httpmock::prelude::*;
     use httpmock::Method::HEAD;
@@ -302,7 +302,7 @@ mod tests {
     }
 
     #[async_trait]
-    impl ClientMessageChannel<DocumentBridgeMessage> for TestMessageChannel {
+    impl MessageChannel<DocumentBridgeMessage> for TestMessageChannel {
         async fn send(
             &self,
             message: DocumentBridgeMessage,

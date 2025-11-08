@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 use uuid::Uuid;
 
-use crate::runtime::blocks::{document::actor::BlockLocalValueProvider, Block, BlockBehavior};
+use crate::runtime::blocks::{document::actor::LocalValueProvider, Block, BlockBehavior};
 
 /// A single block's context - can store multiple typed values
 #[derive(Default, Debug)]
@@ -61,7 +61,7 @@ impl ResolvedContext {
 
     pub async fn from_block(
         block: &(impl BlockBehavior + Clone),
-        block_local_value_provider: Option<&dyn BlockLocalValueProvider>,
+        block_local_value_provider: Option<&dyn LocalValueProvider>,
     ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         if let Some(context) = block
             .passive_context(&ContextResolver::new(), block_local_value_provider)

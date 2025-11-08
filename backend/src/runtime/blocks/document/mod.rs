@@ -8,8 +8,11 @@ use uuid::Uuid;
 use crate::runtime::{
     blocks::{
         document::{
-            actor::{BlockLocalValueProvider, DocumentError, DocumentHandle},
-            block_context::{BlockContext, BlockWithContext, ContextResolver, ResolvedContext},
+            actor::{DocumentError, DocumentHandle, LocalValueProvider},
+            block_context::{
+                BlockContext, BlockContextStorage, BlockWithContext, ContextResolver,
+                ResolvedContext,
+            },
             bridge::DocumentBridgeMessage,
         },
         handler::{ExecutionContext, ExecutionHandle},
@@ -19,7 +22,7 @@ use crate::runtime::{
     pty_store::PtyStoreHandle,
     ssh_pool::SshPoolHandle,
     workflow::event::WorkflowEvent,
-    ClientMessageChannel,
+    MessageChannel,
 };
 
 pub mod actor;
@@ -31,18 +34,18 @@ pub mod bridge;
 pub struct Document {
     id: String,
     blocks: Vec<BlockWithContext>,
-    document_bridge: Arc<dyn ClientMessageChannel<DocumentBridgeMessage>>,
+    document_bridge: Arc<dyn MessageChannel<DocumentBridgeMessage>>,
     known_unsupported_blocks: HashSet<String>,
-    block_local_value_provider: Option<Box<dyn BlockLocalValueProvider>>,
+    block_local_value_provider: Option<Box<dyn LocalValueProvider>>,
 }
 
 impl Document {
     pub fn new(
         id: String,
         document: Vec<serde_json::Value>,
-        document_bridge: Arc<dyn ClientMessageChannel<DocumentBridgeMessage>>,
-        block_local_value_provider: Option<Box<dyn BlockLocalValueProvider>>,
     ) -> Result<Self, Box<dyn std::error::Error>> {
+        document_bridge: Arc<dyn MessageChannel<DocumentBridgeMessage>>,
+        block_local_value_provider: Option<Box<dyn LocalValueProvider>>,
         let mut doc = Self {
             id,
             blocks: vec![],
@@ -66,7 +69,7 @@ impl Document {
 
     pub fn update_document_bridge(
         &mut self,
-        document_bridge: Arc<dyn ClientMessageChannel<DocumentBridgeMessage>>,
+        document_bridge: Arc<dyn MessageChannel<DocumentBridgeMessage>>,
     ) {
         self.document_bridge = document_bridge;
     }

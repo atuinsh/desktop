@@ -1,6 +1,6 @@
 use crate::runtime::blocks::{
     document::{
-        actor::BlockLocalValueProvider,
+        actor::LocalValueProvider,
         block_context::{BlockContext, ContextResolver, DocumentSshHost},
     },
     Block, BlockBehavior, FromDocument,
@@ -90,7 +90,7 @@ impl BlockBehavior for SshConnect {
     async fn passive_context(
         &self,
         resolver: &ContextResolver,
-        _block_local_value_provider: Option<&dyn BlockLocalValueProvider>,
+        _block_local_value_provider: Option<&dyn LocalValueProvider>,
     ) -> Result<Option<BlockContext>, Box<dyn std::error::Error + Send + Sync>> {
         let mut context = BlockContext::new();
         // Basic validation of user_host format

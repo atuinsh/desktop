@@ -4,16 +4,18 @@ use std::sync::Arc;
 use tokio::sync::{mpsc, oneshot};
 use uuid::Uuid;
 
-use crate::runtime::blocks::document::block_context::{BlockContext, ResolvedContext};
+use crate::runtime::blocks::document::block_context::{
+    BlockContext, BlockContextStorage, ResolvedContext,
+};
 use crate::runtime::blocks::document::bridge::DocumentBridgeMessage;
 use crate::runtime::blocks::document::Document;
 use crate::runtime::blocks::handler::ExecutionContext;
 use crate::runtime::blocks::Block;
 use crate::runtime::events::EventBus;
-use crate::runtime::ClientMessageChannel;
+use crate::runtime::MessageChannel;
 
 #[async_trait]
-pub trait BlockLocalValueProvider: Send + Sync {
+pub trait LocalValueProvider: Send + Sync {
     async fn get_block_local_value(
         &self,
         block_id: Uuid,
@@ -36,7 +38,7 @@ impl MemoryBlockLocalValueProvider {
 }
 
 #[async_trait]
-impl BlockLocalValueProvider for MemoryBlockLocalValueProvider {
+impl LocalValueProvider for MemoryBlockLocalValueProvider {
     async fn get_block_local_value(
         &self,
         _block_id: Uuid,
@@ -94,7 +96,7 @@ pub enum DocumentCommand {
 
     /// Update the bridge channel for the document
     UpdateBridgeChannel {
-        document_bridge: Arc<dyn ClientMessageChannel<DocumentBridgeMessage>>,
+        document_bridge: Arc<dyn MessageChannel<DocumentBridgeMessage>>,
         reply: Reply<()>,
     },
 
@@ -162,8 +164,8 @@ impl DocumentHandle {
     pub fn new(
         runbook_id: String,
         event_bus: Arc<dyn EventBus>,
-        document_bridge: Arc<dyn ClientMessageChannel<DocumentBridgeMessage>>,
-        block_local_value_provider: Option<Box<dyn BlockLocalValueProvider>>,
+        document_bridge: Arc<dyn MessageChannel<DocumentBridgeMessage>>,
+        block_local_value_provider: Option<Box<dyn LocalValueProvider>>,
     ) -> Arc<Self> {
         let (tx, rx) = mpsc::unbounded_channel();
 
@@ -210,7 +212,7 @@ impl DocumentHandle {
 
     pub async fn update_bridge_channel(
         &self,
-        document_bridge: Arc<dyn ClientMessageChannel<DocumentBridgeMessage>>,
+        document_bridge: Arc<dyn MessageChannel<DocumentBridgeMessage>>,
     ) -> Result<(), DocumentError> {
         let (tx, rx) = oneshot::channel();
         self.command_tx
@@ -412,8 +414,8 @@ impl DocumentActor {
     fn new(
         runbook_id: String,
         event_bus: Arc<dyn EventBus>,
-        document_bridge: Arc<dyn ClientMessageChannel<DocumentBridgeMessage>>,
-        block_local_value_provider: Option<Box<dyn BlockLocalValueProvider>>,
+        document_bridge: Arc<dyn MessageChannel<DocumentBridgeMessage>>,
+        block_local_value_provider: Option<Box<dyn LocalValueProvider>>,
         handle: Arc<DocumentHandle>,
     ) -> Self {
         let document = Document::new(

@@ -1,6 +1,6 @@
 use crate::runtime::blocks::{
     document::{
-        actor::BlockLocalValueProvider,
+        actor::LocalValueProvider,
         block_context::{BlockContext, ContextResolver, DocumentVar},
     },
     Block, BlockBehavior, FromDocument,
@@ -57,7 +57,7 @@ impl BlockBehavior for LocalVar {
     async fn passive_context(
         &self,
         resolver: &ContextResolver,
-        block_local_value_provider: Option<&dyn BlockLocalValueProvider>,
+        block_local_value_provider: Option<&dyn LocalValueProvider>,
     ) -> Result<Option<BlockContext>, Box<dyn std::error::Error + Send + Sync>> {
         // Validate name
         if self.name.is_empty() {
@@ -94,7 +94,7 @@ mod tests {
     use super::*;
     use uuid::Uuid;
 
-    fn local_value_provider() -> impl BlockLocalValueProvider {
+    fn local_value_provider() -> impl LocalValueProvider {
         MemoryBlockLocalValueProvider::new(vec![("value".to_string(), "test_value".to_string())])
     }
 

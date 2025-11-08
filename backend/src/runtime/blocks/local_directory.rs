@@ -1,6 +1,6 @@
 use crate::runtime::blocks::{
     document::{
-        actor::BlockLocalValueProvider,
+        actor::LocalValueProvider,
         block_context::{BlockContext, ContextResolver, DocumentCwd},
     },
     Block, BlockBehavior, FromDocument,
@@ -30,7 +30,7 @@ impl BlockBehavior for LocalDirectory {
     async fn passive_context(
         &self,
         resolver: &ContextResolver,
-        block_local_value_provider: Option<&dyn BlockLocalValueProvider>,
+        block_local_value_provider: Option<&dyn LocalValueProvider>,
     ) -> Result<Option<BlockContext>, Box<dyn std::error::Error + Send + Sync>> {
         let local_value = if let Some(block_local_value_provider) = block_local_value_provider {
             block_local_value_provider
@@ -68,7 +68,7 @@ mod tests {
 
     use super::*;
 
-    fn local_value_provider(path: String) -> impl BlockLocalValueProvider {
+    fn local_value_provider(path: String) -> impl LocalValueProvider {
         MemoryBlockLocalValueProvider::new(vec![("path".to_string(), path)])
     }
 
