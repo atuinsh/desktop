@@ -57,6 +57,8 @@ The `BlockBehavior` trait defines how blocks behave:
 pub trait BlockBehavior: Sized + Send + Sync {
     fn into_block(self) -> Block;
 
+    fn id(&self) -> Uuid;
+
     async fn passive_context(
         &self,
         resolver: &ContextResolver,
@@ -76,6 +78,7 @@ pub trait BlockBehavior: Sized + Send + Sync {
 
 **Key Methods:**
 - `into_block()` - Converts the block into the generic `Block` enum
+- `id()` - Returns the unique identifier (UUID) for this block instance
 - `passive_context()` - For context blocks, returns the context this block provides (evaluated on document changes)
 - `execute()` - For execution blocks, performs the actual block execution (returns immediately with a handle)
 
@@ -85,20 +88,48 @@ The `ExecutionContext` contains all the information needed to execute a block:
 
 ```rust
 pub struct ExecutionContext {
+    pub block_id: Uuid,                       // ID of the block being executed
     pub runbook_id: Uuid,                     // Which runbook this execution belongs to
     pub document_handle: Arc<DocumentHandle>, // Handle to the document actor for context updates
-    pub context_resolver: ContextResolver,    // Resolves templates and provides context values
-    pub output_channel: Option<Arc<dyn ClientMessageChannel<DocumentBridgeMessage>>>, // For sending output to frontend
-    pub event_sender: broadcast::Sender<WorkflowEvent>, // For sending workflow events
+    pub context_resolver: Arc<ContextResolver>, // Resolves templates and provides context values
+    output_channel: Option<Arc<dyn ClientMessageChannel<DocumentBridgeMessage>>>, // For sending output to frontend
+    workflow_event_sender: broadcast::Sender<WorkflowEvent>, // For sending workflow events
     pub ssh_pool: Option<SshPoolHandle>,      // SSH connection pool (if available)
     pub pty_store: Option<PtyStoreHandle>,    // PTY store for terminal blocks (if available)
-    pub event_bus: Option<Arc<dyn EventBus>>, // Grand Central event bus
+    pub gc_event_bus: Option<Arc<dyn EventBus>>, // Grand Central event bus
+    handle: ExecutionHandle,                  // Handle for this execution
 }
 ```
 
 **Key Fields:**
-- `context_resolver` - Provides access to variables, cwd, env vars, ssh_host via `resolve_template()` and getter methods
-- `document_handle` - Used to update block's active context (e.g., storing output variables)
+- `block_id` - The UUID of the block currently being executed
+- `context_resolver` - Wrapped in Arc, provides access to variables, cwd, env vars, ssh_host via `resolve_template()` and getter methods
+- `document_handle` - Used to update block's active or passive context (e.g., storing output variables)
+- `handle` - The execution handle for this block execution
+
+**Helper Methods:**
+The ExecutionContext provides several convenience methods to simplify block implementations:
+
+- **Lifecycle management:**
+  - `block_started()` - Marks block as started and sends appropriate events
+  - `block_finished(exit_code, success)` - Marks block as finished
+  - `block_failed(error)` - Marks block as failed with an error message
+  - `block_cancelled()` - Marks block as cancelled
+
+- **Context management:**
+  - `update_passive_context(block_id, update_fn)` - Update a block's passive context
+  - `update_active_context(block_id, update_fn)` - Update a block's active context
+  - `clear_active_context(block_id)` - Clear a block's active context
+
+- **Communication:**
+  - `send_output(message)` - Send output to the frontend via the document bridge
+  - `emit_workflow_event(event)` - Emit a workflow event
+  - `emit_gc_event(event)` - Emit a Grand Central event
+  - `prompt_client(prompt)` - Prompt the client for input (e.g., password, confirmation)
+
+- **Cancellation:**
+  - `cancellation_token()` - Get the cancellation token
+  - `cancellation_receiver()` - Get a receiver for cancellation signals
 
 **Lifecycle:**
 1. **Created** by `Document::build_execution_context()` when a block execution is requested
@@ -112,11 +143,12 @@ The `ExecutionHandle` represents a running or completed block execution:
 
 ```rust
 pub struct ExecutionHandle {
-    pub id: Uuid,                   // Unique execution ID
-    pub block_id: Uuid,             // ID of the block being executed
-    pub cancellation_token: CancellationToken, // For graceful cancellation
-    pub status: Arc<RwLock<ExecutionStatus>>,   // Current execution status
-    pub output_variable: Option<String>,        // Output variable name (if any)
+    pub id: Uuid,                                    // Unique execution ID
+    pub block_id: Uuid,                              // ID of the block being executed
+    pub cancellation_token: CancellationToken,       // For graceful cancellation
+    pub status: Arc<RwLock<ExecutionStatus>>,        // Current execution status
+    pub output_variable: Option<String>,             // Output variable name (if any)
+    pub prompt_callbacks: Arc<Mutex<HashMap<Uuid, oneshot::Sender<ClientPromptResult>>>>, // Callbacks for client prompts
 }
 ```
 
@@ -125,6 +157,14 @@ pub struct ExecutionHandle {
 - **Cancellation**: Provides mechanism to stop execution gracefully
 - **Status Monitoring**: Frontend can poll execution status
 - **Output Capture**: Links execution results to variables for use in subsequent blocks
+- **Client Prompts**: Manages callbacks for prompting the client for input (e.g., passwords, confirmations)
+
+**Helper Methods:**
+- `new(block_id)` - Creates a new handle with a unique execution ID
+- `set_running()` - Updates status to Running
+- `set_success()` - Updates status to Success
+- `set_failed(error)` - Updates status to Failed with an error message
+- `set_cancelled()` - Updates status to Cancelled
 
 ### ExecutionStatus
 
@@ -133,16 +173,18 @@ Tracks the current state of a block execution:
 ```rust
 pub enum ExecutionStatus {
     Running,
-    Success(String),    // Contains the output value
+    Success,            // Block completed successfully
     Failed(String),     // Contains error message
     Cancelled,
 }
 ```
 
+**Note:** In earlier versions, `Success` contained the output value, but this is now stored in the block's active context instead, allowing it to persist across app restarts.
+
 ### Context System Components
 
 **BlockContext**
-A type-safe storage for context values using `TypeId`:
+A type-safe storage for context values:
 
 ```rust
 pub struct BlockContext {
@@ -150,9 +192,24 @@ pub struct BlockContext {
 }
 ```
 
-Each block has two contexts:
-- **Passive context** - Evaluated when the document changes, provides context for blocks below it
-- **Active context** - Set during execution, stores output variables and execution results
+BlockContext stores typed values (like `DocumentVar`, `DocumentCwd`, etc.) that can be retrieved type-safely. Context items are serializable using `typetag::serde`, enabling persistence to disk.
+
+Each block has two independent contexts:
+- **Passive context** - Evaluated when the document changes, provides context for blocks below it (e.g., working directory, environment variables). Not persisted to disk.
+- **Active context** - Set during execution, stores output variables and execution results. Persisted to disk via `ContextStorage`, allowing state to survive app restarts.
+
+**BlockWithContext**
+Wrapper that pairs a block with its contexts:
+
+```rust
+pub struct BlockWithContext {
+    block: Block,
+    passive_context: BlockContext,
+    active_context: BlockContext,
+}
+```
+
+When constructing a `BlockWithContext`, you can optionally provide an active context (e.g., loaded from disk). If not provided, an empty context is used.
 
 **ContextResolver**
 Resolves templates and provides access to cumulative context from blocks above:
@@ -198,6 +255,69 @@ Actor-based system for thread-safe document operations:
 - `DocumentActor` - Background actor that processes commands and manages document state
 - Operations: update document, rebuild contexts, start/complete execution, update contexts
 
+### Supporting Traits
+
+The execution system defines several key traits that enable extensibility and abstraction:
+
+**ClientMessageChannel**
+Trait for sending messages to the client (frontend):
+
+```rust
+pub trait ClientMessageChannel<M: Serialize + Send + Sync>: Send + Sync {
+    async fn send(&self, message: M) -> Result<(), Box<dyn std::error::Error + Send + Sync>>;
+}
+```
+
+This trait abstracts the communication channel to the client, allowing the runtime to work in different environments (Tauri, CLI, web server, etc.). In the Tauri app, this is implemented using Tauri's IPC channel system.
+
+**BlockLocalValueProvider**
+Trait for accessing block-local values that are not persisted in the runbook:
+
+```rust
+pub trait BlockLocalValueProvider: Send + Sync {
+    async fn get_block_local_value(
+        &self,
+        block_id: Uuid,
+        property_name: &str,
+    ) -> Result<Option<String>, Box<dyn std::error::Error + Send + Sync>>;
+}
+```
+
+This trait allows blocks to access values that are stored locally (e.g., in the Tauri app's state) but not in the runbook document itself. For example, the local directory block uses this to access the set directory, which is managed by the frontend but not persisted in the runbook JSON.
+
+**ContextStorage**
+Trait for persisting block context to disk:
+
+```rust
+pub trait ContextStorage: Send + Sync {
+    async fn save(
+        &self,
+        document_id: &str,
+        block_id: &Uuid,
+        context: &BlockContext,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>>;
+
+    async fn load(
+        &self,
+        document_id: &str,
+        block_id: &Uuid,
+    ) -> Result<Option<BlockContext>, Box<dyn std::error::Error + Send + Sync>>;
+
+    async fn delete(
+        &self,
+        document_id: &str,
+        block_id: &Uuid,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>>;
+
+    async fn delete_for_document(
+        &self,
+        runbook_id: &str,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>>;
+}
+```
+
+This trait enables the runtime to persist block execution state (active context) to disk, allowing context to survive app restarts. In the Tauri app, the context is serialized to JSON and stored in the application data directory. Context items must implement the `typetag::serde` trait to be serializable.
+
 ## Execution Flow
 
 ### 1. Document Opening
@@ -218,7 +338,8 @@ This:
 1. Creates a `DocumentHandle` and spawns a `DocumentActor` for the runbook
 2. Stores the document in `state.documents`
 3. Parses and flattens the document into a list of `Block`s
-4. Builds initial passive contexts for all blocks
+4. Loads active contexts from disk (if they exist) for each block
+5. Builds initial passive contexts for all blocks
 
 ### 2. Document Updates
 
@@ -283,10 +404,9 @@ tokio::spawn(async move {
         }).await;
     }
 
-    // Update execution status
-    *handle.status.write().await = status;
+    // Update execution status and emit BlockFinished event
+    context.block_finished(exit_code, true);
 
-    // Emit BlockFinished event
 });
 ```
 
@@ -316,15 +436,21 @@ state.block_executions.write().await.insert(execution_id, handle);
 Each block has two independent contexts:
 
 1. **Passive Context** - Set automatically when document changes
-   - Evaluated by calling `block.passive_context(resolver)`
-   - Provides context for blocks below it (e.g., Directory sets cwd)
-   - Rebuilt when document structure changes
+   - Evaluated by calling `block.passive_context(resolver, block_local_value_provider)`
+   - Provides context for blocks below it (e.g., Directory sets cwd, Var sets variables)
+   - Rebuilt when document structure changes or when a block's local value changes
    - Used to build `ContextResolver` for execution
+   - **Not persisted to disk** - always computed from the document structure
 
 2. **Active Context** - Set during block execution
-   - Stores execution results (output variables, execution output)
-   - Can modify context for blocks below (but only after execution)
-   - Cleared before each execution
+   - Stores execution results (output variables, execution output via `BlockExecutionOutput`)
+   - Can modify context for blocks below (but only after execution completes)
+   - Cleared before each execution (when `execute_block` is called)
+   - **Persisted to disk** via `ContextStorage` - survives app restarts
+   - Loaded from disk when a document is opened
+   - Can be manually cleared via the "Clear all active context" button in the UI
+
+**Key Difference:** Passive context represents what the block _declares_ it will do (based on its configuration), while active context represents what the block _actually did_ (the results of execution). Both contribute to the `ContextResolver` for blocks below them, allowing both declarative context (passive) and execution results (active) to flow down the document.
 
 ### How Passive Contexts Work
 
@@ -372,21 +498,35 @@ impl BlockBehavior for Var {
 
 ### Context Building Flow
 
+**On Document Open:**
+1. **Parse blocks** from document JSON
+2. **Load active contexts** from disk for each block (if available)
+3. **Build passive contexts** for all blocks (see flow below)
+4. **Create `BlockWithContext`** instances with both passive and active contexts
+5. **Send initial context** to frontend
+
+**On Document Update:**
 1. **Document receives update** (new blocks, changed blocks, etc.)
 2. **Identifies affected range** - finds earliest block that needs context rebuild
-3. **Rebuilds contexts** starting from that index:
-   - For each block, builds `ContextResolver` from all blocks above it
-   - Calls `block.passive_context(resolver)` to get the block's context
-   - Stores the context with the block as `BlockWithContext`
-   - Adds the block's context to the resolver for the next block
+3. **Rebuilds passive contexts** starting from that index:
+   - For each block, builds `ContextResolver` from all blocks above it (including both passive and active contexts)
+   - Calls `block.passive_context(resolver, block_local_value_provider)` to get the block's new passive context
+   - Updates the block's passive context (active context remains unchanged)
+   - Adds the block's contexts to the resolver for the next block
 4. **Sends context updates** to frontend via document bridge
+
+**On Block Execution:**
+1. **Active context is cleared** for the block being executed
+2. **Block executes**, potentially calling `context.update_active_context()` to store results
+3. **Active context is persisted** to disk after execution completes
+4. **Passive contexts are rebuilt** since the changed active context may affect them
 
 ### Context Inheritance & Resolution
 
 - **Sequential processing**: Passive contexts are built in document order
 - **Cumulative effects**: Each block sees the context from all blocks above it
 - **Snapshot at execution**: Execution context is a snapshot of passive contexts + previous active contexts
-- **Template resolution**: `ContextResolver::resolve_template()` resolves minijinja template syntax (e.g., `{{ var.name }}` for variables, `{{ env.NAME }}` for environment variables)
+- **Template resolution**: `ContextResolver::resolve_template()` resolves minijinja template syntax (e.g., `{{ var.name }}` for variables)
 
 ### Variable Storage
 
@@ -394,12 +534,18 @@ Output variables are stored in the block's active context:
 
 ```rust
 // During execution, store output variable:
-document_handle.update_active_context(block_id, |ctx| {
+context.update_active_context(block_id, |ctx| {
     ctx.insert(DocumentVar(var_name.clone(), output.clone()));
 }).await;
 ```
 
-Variables from active contexts are included in the `ContextResolver` for blocks below, so they can be used in templates.
+Variables from active contexts are:
+- **Included in the `ContextResolver`** for blocks below, so they can be used in templates
+- **Persisted to disk** via `ContextStorage` when the execution completes
+- **Loaded from disk** when the document is opened, allowing variables to survive app restarts
+- **Cleared** when the block is re-executed or when the user clears all active context
+
+This enables workflows where expensive operations (like querying a database or running a long computation) only need to be run once, with the results persisting across sessions.
 
 ## Cancellation & Error Handling
 
@@ -500,29 +646,38 @@ impl BlockBehavior for MyBlock {
         Block::MyBlock(self)
     }
 
+    fn id(&self) -> Uuid {
+        self.id
+    }
+
     async fn execute(
         self,
         context: ExecutionContext,
     ) -> Result<Option<ExecutionHandle>, Box<dyn std::error::Error + Send + Sync>> {
-        // Create execution handle
-        let handle = ExecutionHandle {
-            id: Uuid::new_v4(),
-            block_id: self.id,
-            cancellation_token: CancellationToken::new(),
-            status: Arc::new(RwLock::new(ExecutionStatus::Running)),
-            output_variable: None,
-        };
-
-        let handle_clone = handle.clone();
+        let handle = context.handle();
 
         // Spawn background task
         tokio::spawn(async move {
+            // Mark block as started - sends events to Grand Central, workflow bus, and frontend
+            let _ = context.block_started().await;
+
             // Do the actual work
             // Use context.context_resolver to access cwd, env vars, variables, etc.
-            // Use context.document_handle.update_active_context() to store results
+            let cwd = context.context_resolver.cwd();
+            let vars = context.context_resolver.vars();
 
-            // Update handle status when complete
-            *handle_clone.status.write().await = ExecutionStatus::Success("done".to_string());
+            // Example: Store result in active context
+            let result = "some output";
+            let _ = context.update_active_context(context.block_id, |ctx| {
+                ctx.insert(BlockExecutionOutput {
+                    exit_code: Some(0),
+                    stdout: Some(result.to_string()),
+                    stderr: None,
+                });
+            }).await;
+
+            // Mark block as finished - sends appropriate events
+            let _ = context.block_finished(Some(0), true).await;
         });
 
         Ok(Some(handle))
@@ -584,9 +739,10 @@ Follow the pattern in `backend/src/runtime/blocks/directory.rs` or `environment.
 1. **Create module** `backend/src/runtime/blocks/my_context.rs`
 2. **Define block struct** with `TypedBuilder`, `Serialize`, `Deserialize`, implementing `FromDocument` and `BlockBehavior`
 3. **Define a context type** (e.g., `pub struct MyContextValue(pub String);`) to store in `BlockContext`
-4. **Implement `passive_context()`** to return your context value
-5. **Update `ContextResolver`** in `backend/src/runtime/blocks/document/block_context.rs` to accumulate your context type
-6. **Add comprehensive tests** covering edge cases
+4. **Implement `typetag::serde`** for your context type if it needs to be serialized (for active context persistence)
+5. **Implement `passive_context()`** to return your context value
+6. **Update `ContextResolver`** in `backend/src/runtime/blocks/document/block_context.rs` to accumulate your context type
+7. **Add comprehensive tests** covering edge cases
 
 Example:
 ```rust
