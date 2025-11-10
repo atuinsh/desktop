@@ -59,6 +59,8 @@ export interface AtuinUiState {
   sidebarClickStyle: "link" | "explorer";
   lastSidebarDragInfo: { itemIds: string[]; sourceWorkspaceId: string } | undefined;
   didSidebarSetup: boolean;
+  rightSidebarWidth: number;
+  rightSidebarOpen: boolean;
   savingBlock: Option<any>;
 
   tabs: Tab[];
@@ -91,6 +93,8 @@ export interface AtuinUiState {
   setSidebarOpen: (open: boolean) => void;
   setSidebarClickStyle: (style: "link" | "explorer") => void;
   setLastSidebarDragInfo: (info?: { itemIds: string[]; sourceWorkspaceId: string }) => void;
+  setRightSidebarWidth: (width: number) => void;
+  setRightSidebarOpen: (open: boolean) => void;
   openTab: (url: string, title?: string, icon?: TabIcon) => void;
   closeTab: (url: string) => Promise<boolean>;
   moveTab: (id: string, index: number) => void;
@@ -129,6 +133,8 @@ export const persistUiKeys: (keyof AtuinUiState)[] = [
   "sidebarWidth",
   "sidebarOpen",
   "sidebarClickStyle",
+  "rightSidebarWidth",
+  "rightSidebarOpen",
   "lightModeEditorTheme",
   "darkModeEditorTheme",
   "vimModeEnabled",
@@ -161,6 +167,8 @@ export const createUiState: StateCreator<AtuinUiState> = (set, get, _store): Atu
   sidebarClickStyle: "link",
   lastSidebarDragInfo: undefined,
   didSidebarSetup: false,
+  rightSidebarWidth: 300,
+  rightSidebarOpen: false,
   savingBlock: None,
 
   tabs: [],
@@ -196,6 +204,8 @@ export const createUiState: StateCreator<AtuinUiState> = (set, get, _store): Atu
   setSidebarClickStyle: (style: "link" | "explorer") => set(() => ({ sidebarClickStyle: style })),
   setLastSidebarDragInfo: (info?: { itemIds: string[]; sourceWorkspaceId: string }) =>
     set(() => ({ lastSidebarDragInfo: info })),
+  setRightSidebarWidth: (width: number) => set(() => ({ rightSidebarWidth: width })),
+  setRightSidebarOpen: (open: boolean) => set(() => ({ rightSidebarOpen: open })),
   openTab: (url: string, title?: string, icon?: TabIcon) => {
     const tabs = get().tabs;
     const currentTabId = get().currentTabId;

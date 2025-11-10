@@ -1,7 +1,14 @@
 import { cn } from "@/lib/utils";
 import { AtuinState, useStore } from "@/state/store";
 import { Tab as TabType, TabIcon } from "@/state/store/ui_state";
-import { BookTextIcon, ChartBarBigIcon, HistoryIcon, SettingsIcon, XIcon } from "lucide-react";
+import {
+  BookTextIcon,
+  ChartBarBigIcon,
+  HistoryIcon,
+  SettingsIcon,
+  XIcon,
+  PanelRightIcon,
+} from "lucide-react";
 import React, { useCallback, useEffect, useRef } from "react";
 import { useMemo, useState } from "react";
 import {
@@ -20,7 +27,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { createMemoryRouter, RouterProvider } from "react-router-dom";
 import { SyntheticListenerMap } from "@dnd-kit/core/dist/hooks/utilities";
 import { createTabBarMenu, createTabMenu } from "@/components/runbooks/List/menus";
-import { Badge } from "@heroui/react";
+import { Badge, Button, Tooltip } from "@heroui/react";
 
 export const TabsContext = React.createContext<{
   tab: TabType | null;
@@ -32,7 +39,12 @@ export const TabsContext = React.createContext<{
   setBadge: () => {},
 });
 
-export default function Tabs() {
+interface TabsProps {
+  onRightSidebarToggle: () => void;
+  rightSidebarOpen: boolean;
+}
+
+export default function Tabs({ onRightSidebarToggle, rightSidebarOpen }: TabsProps) {
   const {
     tabs,
     currentTabId,
@@ -126,19 +138,20 @@ export default function Tabs() {
 
   return (
     <div className="flex flex-col h-full">
-      <DndContext
-        sensors={sensors}
-        collisionDetection={closestCenter}
-        onDragStart={handleDragStart}
-        onDragEnd={handleDragEnd}
-      >
-        <ul
-          ref={listRef}
-          className="flex flex-row w-full min-h-[40px] border-b overflow-x-auto tab-scrollbar overflow-y-hidden pt-2 px-1"
-          onWheel={handleWheel}
-          onContextMenu={handleTabBarContextMenu}
-          data-tauri-drag-region
+      <div className="flex flex-row border-b">
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
         >
+          <ul
+            ref={listRef}
+            className="flex flex-row flex-1 min-h-[40px] overflow-x-auto tab-scrollbar overflow-y-hidden pt-2 px-1"
+            onWheel={handleWheel}
+            onContextMenu={handleTabBarContextMenu}
+            data-tauri-drag-region
+          >
           <SortableContext items={tabs} strategy={horizontalListSortingStrategy}>
             {tabs.map((tab, index) => (
               <Tab
@@ -183,6 +196,22 @@ export default function Tabs() {
           </DragOverlay>
         </ul>
       </DndContext>
+      {!rightSidebarOpen && (
+        <div className="flex items-center">
+          <Tooltip content="Right Sidebar" placement="bottom" delay={300} closeDelay={0}>
+            <Button
+              isIconOnly
+              onPress={onRightSidebarToggle}
+              size="sm"
+              variant="light"
+              className="min-w-[40px]"
+            >
+              <PanelRightIcon size={18} />
+            </Button>
+          </Tooltip>
+        </div>
+      )}
+    </div>
 
       {tabs.map((tab) => (
         <TabsContext.Provider

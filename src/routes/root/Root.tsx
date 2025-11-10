@@ -93,6 +93,7 @@ const DesktopConnect = React.lazy(() => import("@/components/DesktopConnect/Desk
 const DeleteRunbookModal = React.lazy(() => import("./DeleteRunbookModal"));
 const RunbookSearchIndex = React.lazy(() => import("@/components/CommandMenu/RunbookSearchIndex"));
 const List = React.lazy(() => import("@/components/runbooks/List/List"));
+const RightSidebar = React.lazy(() => import("@/components/RightSidebar/RightSidebar"));
 
 type MoveBundleDescendant =
   | {
@@ -884,8 +885,11 @@ function App() {
 
   const sidebarOpen = useStore((state) => state.sidebarOpen);
   const setSidebarOpen = useStore((state) => state.setSidebarOpen);
+  const rightSidebarOpen = useStore((state) => state.rightSidebarOpen);
+  const setRightSidebarOpen = useStore((state) => state.setRightSidebarOpen);
 
   const sidebarPanelRef = useRef<ImperativePanelHandle>(null);
+  const rightSidebarPanelRef = useRef<ImperativePanelHandle>(null);
 
   // Handle sidebar toggle with panel collapse/expand
   const handleSidebarToggle = () => {
@@ -905,23 +909,49 @@ function App() {
     }
   };
 
+  // Handle right sidebar toggle with panel collapse/expand
+  const handleRightSidebarToggle = () => {
+    const newRightSidebarOpen = !rightSidebarOpen;
+    setRightSidebarOpen(newRightSidebarOpen);
+
+    // Use imperative API to collapse/expand the panel
+    if (rightSidebarPanelRef.current) {
+      if (newRightSidebarOpen) {
+        rightSidebarPanelRef.current.expand();
+        // Trigger a resize event so that xterm will reflow contents
+        (window as any).dispatchEvent(new Event("resize"));
+      } else {
+        rightSidebarPanelRef.current.collapse();
+        (window as any).dispatchEvent(new Event("resize"));
+      }
+    }
+  };
+
   const handlePanelGroupResize = useCallback(
     debounce(() => {
       // Trigger a resize event so that xterm will reflow contents
       (window as any).dispatchEvent(new Event("resize"));
-    }, 100),
+    }, 250),
     [],
   );
 
-  // Auto-collapse sidebar on mobile/narrow screens
+  // Auto-collapse sidebars on mobile/narrow screens
   useEffect(() => {
     const handleResize = () => {
       const isMobile = window.innerWidth < 768; // md breakpoint
 
-      if (isMobile && sidebarOpen) {
-        setSidebarOpen(false);
-        if (sidebarPanelRef.current) {
-          sidebarPanelRef.current.collapse();
+      if (isMobile) {
+        if (sidebarOpen) {
+          setSidebarOpen(false);
+          if (sidebarPanelRef.current) {
+            sidebarPanelRef.current.collapse();
+          }
+        }
+        if (rightSidebarOpen) {
+          setRightSidebarOpen(false);
+          if (rightSidebarPanelRef.current) {
+            rightSidebarPanelRef.current.collapse();
+          }
         }
       }
     };
@@ -930,7 +960,7 @@ function App() {
     handleResize(); // Check on mount
 
     return () => window.removeEventListener("resize", handleResize);
-  }, [sidebarOpen, setSidebarOpen]);
+  }, [sidebarOpen, setSidebarOpen, rightSidebarOpen, setRightSidebarOpen]);
 
   return (
     <div
@@ -1155,6 +1185,7 @@ function App() {
               minSize={sidebarOpen ? 15 : 0}
               maxSize={40}
               collapsible={true}
+              collapsedSize={0}
               className={sidebarOpen ? "min-w-[200px]" : ""}
             >
               {sidebarOpen && (
@@ -1167,10 +1198,40 @@ function App() {
               )}
             </ResizablePanel>
             <ResizableHandle className={sidebarOpen ? "" : "hidden"} />
-            <ResizablePanel defaultSize={sidebarOpen ? 75 : 100} minSize={60}>
+            <ResizablePanel
+              defaultSize={
+                sidebarOpen && rightSidebarOpen
+                  ? 50
+                  : sidebarOpen
+                    ? 75
+                    : rightSidebarOpen
+                      ? 75
+                      : 100
+              }
+              minSize={40}
+            >
               <div className="flex flex-col h-full overflow-y-auto">
-                <Tabs />
+                <Tabs
+                  onRightSidebarToggle={handleRightSidebarToggle}
+                  rightSidebarOpen={rightSidebarOpen}
+                />
               </div>
+            </ResizablePanel>
+            <ResizableHandle className={rightSidebarOpen ? "" : "hidden"} />
+            <ResizablePanel
+              ref={rightSidebarPanelRef}
+              defaultSize={rightSidebarOpen ? 25 : 0}
+              minSize={rightSidebarOpen ? 15 : 0}
+              maxSize={40}
+              collapsible={true}
+              collapsedSize={0}
+              className={rightSidebarOpen ? "min-w-[200px]" : ""}
+            >
+              {rightSidebarOpen && (
+                <React.Suspense fallback={null}>
+                  <RightSidebar onCollapse={handleRightSidebarToggle} />
+                </React.Suspense>
+              )}
             </ResizablePanel>
           </ResizablePanelGroup>
 
