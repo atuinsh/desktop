@@ -59,12 +59,17 @@ impl BlockBehavior for LocalVar {
         resolver: &ContextResolver,
         block_local_value_provider: Option<&dyn LocalValueProvider>,
     ) -> Result<Option<BlockContext>, Box<dyn std::error::Error + Send + Sync>> {
+        let resolved_name = resolver.resolve_template(&self.name)?;
+
         // Validate name
-        if self.name.is_empty() {
+        if resolved_name.is_empty() {
             return Err("Local variable name cannot be empty".into());
         }
 
-        if !self.name.chars().all(|c| c.is_alphanumeric() || c == '_') {
+        if !resolved_name
+            .chars()
+            .all(|c| c.is_alphanumeric() || c == '_')
+        {
             return Err("Variable names can only contain letters, numbers, and underscores".into());
         }
 
@@ -80,7 +85,7 @@ impl BlockBehavior for LocalVar {
         // Resolve value
         let mut context = BlockContext::new();
         let resolved_value = resolver.resolve_template(&local_value)?;
-        context.insert(DocumentVar(self.name.clone(), resolved_value));
+        context.insert(DocumentVar(resolved_name, resolved_value));
         Ok(Some(context))
     }
 }

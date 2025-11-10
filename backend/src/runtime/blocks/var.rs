@@ -1,6 +1,6 @@
 use crate::runtime::blocks::{
     document::{
-        actor::BlockLocalValueProvider,
+        actor::LocalValueProvider,
         block_context::{BlockContext, ContextResolver, DocumentVar},
     },
     Block, BlockBehavior, FromDocument,
@@ -65,23 +65,27 @@ impl BlockBehavior for Var {
     async fn passive_context(
         &self,
         resolver: &ContextResolver,
-        _block_local_value_provider: Option<&dyn BlockLocalValueProvider>,
+        _block_local_value_provider: Option<&dyn LocalValueProvider>,
     ) -> Result<Option<BlockContext>, Box<dyn std::error::Error + Send + Sync>> {
         let mut context = BlockContext::new();
+        let resolved_name = resolver.resolve_template(&self.name)?;
 
         // Validate name
-        if self.name.is_empty() {
+        if resolved_name.is_empty() {
             return Err("Variable name cannot be empty".into());
         }
 
-        if !self.name.chars().all(|c| c.is_alphanumeric() || c == '_') {
+        if !resolved_name
+            .chars()
+            .all(|c| c.is_alphanumeric() || c == '_')
+        {
             return Err("Variable names can only contain letters, numbers, and underscores".into());
         }
 
         // Resolve template in value if it contains template markers
         let resolved_value = resolver.resolve_template(&self.value)?;
 
-        context.insert(DocumentVar(self.name.clone(), resolved_value));
+        context.insert(DocumentVar(resolved_name, resolved_value));
         Ok(Some(context))
     }
 }

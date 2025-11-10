@@ -5,6 +5,7 @@ import { createReactBlockSpec } from "@blocknote/react";
 import track_event from "@/tracking";
 import { exportPropMatter } from "@/lib/utils";
 import { useBlockKvValue } from "@/lib/hooks/useKvValue";
+import isValidVarName from "../../utils/varNames";
 
 interface LocalVarProps {
   blockId: string;
@@ -20,8 +21,7 @@ const LocalVar = (props: LocalVarProps) => {
 
   // Check for invalid variable name characters (only allow alphanumeric and underscore)
   useEffect(() => {
-    const validNamePattern = /^[a-zA-Z0-9_]*$/;
-    setHasNameError(!validNamePattern.test(props.name));
+    setHasNameError(!isValidVarName(props.name));
   }, [props.name]);
 
   return (
