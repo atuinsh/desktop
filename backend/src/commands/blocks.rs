@@ -4,12 +4,11 @@ use async_trait::async_trait;
 use tauri::{ipc::Channel, AppHandle, State};
 use uuid::Uuid;
 
+use crate::blocks::sqlite_context_storage::SqliteContextStorage;
 use crate::commands::events::ChannelEventBus;
 use crate::kv;
 use crate::runtime::blocks::document::actor::{DocumentHandle, LocalValueProvider};
-use crate::runtime::blocks::document::block_context::{
-    BlockContext, BlockContextStorage, ResolvedContext,
-};
+use crate::runtime::blocks::document::block_context::ResolvedContext;
 use crate::runtime::blocks::document::bridge::{ClientPromptResult, DocumentBridgeMessage};
 use crate::runtime::MessageChannel;
 use crate::state::AtuinState;
@@ -163,11 +162,21 @@ pub async fn open_document(
     log::debug!("Opening document {document_id}");
 
     let event_bus = Arc::new(ChannelEventBus::new(state.gc_event_sender()));
+    let context_storage = SqliteContextStorage::new(
+        state
+            .db_instances
+            .get_pool("context")
+            .await
+            .map_err(|e| format!("Failed to get context storage pool: {}", e))?,
+    )
+    .await
+    .map_err(|e| format!("Failed to create context storage: {}", e))?;
     let document_handle = DocumentHandle::new(
         document_id.clone(),
         event_bus,
         document_bridge,
         Some(Box::new(KvBlockLocalValueProvider::new(app.clone()))),
+        Some(Box::new(context_storage)),
     );
 
     document_handle

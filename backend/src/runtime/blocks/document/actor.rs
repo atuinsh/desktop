@@ -71,6 +71,9 @@ pub enum DocumentError {
 
     #[error("Invalid runbook ID: {0}")]
     InvalidRunbookId(String),
+
+    #[error("Failed to store active context: {0}")]
+    StoreActiveContextError(String),
 }
 
 impl<T> From<mpsc::error::SendError<T>> for DocumentError {
@@ -166,6 +169,7 @@ impl DocumentHandle {
         event_bus: Arc<dyn EventBus>,
         document_bridge: Arc<dyn MessageChannel<DocumentBridgeMessage>>,
         block_local_value_provider: Option<Box<dyn LocalValueProvider>>,
+        context_storage: Option<Box<dyn BlockContextStorage>>,
     ) -> Arc<Self> {
         let (tx, rx) = mpsc::unbounded_channel();
 
@@ -186,8 +190,10 @@ impl DocumentHandle {
                 event_bus,
                 document_bridge,
                 block_local_value_provider,
+                context_storage,
                 instance_clone,
-            );
+            )
+            .await;
             actor.run(rx).await;
         });
 
@@ -411,11 +417,12 @@ struct DocumentActor {
 }
 
 impl DocumentActor {
-    fn new(
+    async fn new(
         runbook_id: String,
         event_bus: Arc<dyn EventBus>,
         document_bridge: Arc<dyn MessageChannel<DocumentBridgeMessage>>,
         block_local_value_provider: Option<Box<dyn LocalValueProvider>>,
+        context_storage: Option<Box<dyn BlockContextStorage>>,
         handle: Arc<DocumentHandle>,
     ) -> Self {
         let document = Document::new(
@@ -423,7 +430,9 @@ impl DocumentActor {
             vec![],
             document_bridge,
             block_local_value_provider,
+            context_storage,
         )
+        .await
         .unwrap();
 
         Self {
@@ -521,6 +530,7 @@ impl DocumentActor {
         let rebuild_from = self
             .document
             .put_document(document)
+            .await
             .map_err(|e| DocumentError::InvalidStructure(e.to_string()))?;
 
         // Rebuild passive contexts only for affected blocks
@@ -621,6 +631,8 @@ impl DocumentActor {
 
         update_fn(block.active_context_mut());
 
+        self.document.store_active_context(block_id).await?;
+
         let _ = self
             .document
             .rebuild_contexts(Some(block_index), self.event_bus.clone())
@@ -661,7 +673,7 @@ impl DocumentActor {
 
     async fn handle_reset_state(&mut self) -> Result<(), DocumentError> {
         log::trace!("Resetting document state for document {}", self.document.id);
-        self.document.reset_state()?;
+        self.document.reset_state().await?;
 
         let result = self
             .document

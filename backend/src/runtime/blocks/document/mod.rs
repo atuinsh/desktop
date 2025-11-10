@@ -37,31 +37,48 @@ pub struct Document {
     document_bridge: Arc<dyn MessageChannel<DocumentBridgeMessage>>,
     known_unsupported_blocks: HashSet<String>,
     block_local_value_provider: Option<Box<dyn LocalValueProvider>>,
+    context_storage: Option<Box<dyn BlockContextStorage>>,
 }
 
 impl Document {
-    pub fn new(
+    pub async fn new(
         id: String,
         document: Vec<serde_json::Value>,
-    ) -> Result<Self, Box<dyn std::error::Error>> {
         document_bridge: Arc<dyn MessageChannel<DocumentBridgeMessage>>,
         block_local_value_provider: Option<Box<dyn LocalValueProvider>>,
+        context_storage: Option<Box<dyn BlockContextStorage>>,
+    ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         let mut doc = Self {
             id,
             blocks: vec![],
             document_bridge,
             known_unsupported_blocks: HashSet::new(),
             block_local_value_provider,
+            context_storage,
         };
-        doc.put_document(document)?;
+        doc.put_document(document).await?;
 
         Ok(doc)
     }
 
-    pub fn reset_state(&mut self) -> Result<(), DocumentError> {
+    pub async fn reset_state(&mut self) -> Result<(), DocumentError> {
         for block in &mut self.blocks {
             block.update_passive_context(BlockContext::new());
             block.update_active_context(BlockContext::new());
+            if let Some(storage) = self.context_storage.as_ref() {
+                let result = storage
+                    .delete(self.id.as_str(), &block.id())
+                    .await
+                    .map_err(|e| DocumentError::StoreActiveContextError(e.to_string()));
+
+                if let Err(e) = result {
+                    log::warn!(
+                        "Failed to delete stored active context for block {block_id} in document {document_id}: {e}",
+                        block_id = block.id(),
+                        document_id = self.id
+                    );
+                }
+            }
         }
 
         Ok(())
@@ -74,17 +91,25 @@ impl Document {
         self.document_bridge = document_bridge;
     }
 
-    pub fn put_document(
+    pub async fn put_document(
         &mut self,
         document: Vec<serde_json::Value>,
-    ) -> Result<Option<usize>, Box<dyn std::error::Error>> {
+    ) -> Result<Option<usize>, Box<dyn std::error::Error + Send + Sync>> {
         let new_blocks = self.flatten_document(&document)?;
 
         if self.blocks.is_empty() {
-            self.blocks = new_blocks
-                .into_iter()
-                .map(|b| BlockWithContext::new(b, BlockContext::new()))
-                .collect();
+            self.blocks = Vec::with_capacity(new_blocks.len());
+            for block in new_blocks {
+                let context = self
+                    .context_storage
+                    .as_ref()
+                    .unwrap()
+                    .load(self.id.as_str(), &block.id())
+                    .await
+                    .unwrap_or(None);
+                self.blocks
+                    .push(BlockWithContext::new(block, BlockContext::new(), context));
+            }
             return Ok(Some(0));
         }
 
@@ -124,7 +149,7 @@ impl Document {
             } else {
                 // New block - create it
                 let block_with_context =
-                    BlockWithContext::new(new_block.clone(), BlockContext::new());
+                    BlockWithContext::new(new_block.clone(), BlockContext::new(), None);
                 updated_blocks.push(block_with_context);
 
                 // Mark rebuild from this position
@@ -139,6 +164,21 @@ impl Document {
         if !existing_blocks_map.is_empty() {
             // Find the minimum position where a deletion occurred
             for deleted_id in existing_blocks_map.keys() {
+                if let Some(storage) = self.context_storage.as_ref() {
+                    let result = storage
+                        .delete(self.id.as_str(), deleted_id)
+                        .await
+                        .map_err(|e| DocumentError::StoreActiveContextError(e.to_string()));
+
+                    if let Err(e) = result {
+                        log::warn!(
+                            "Failed to delete stored active context for block {block_id} in document {document_id}: {e}",
+                            block_id = deleted_id,
+                            document_id = self.id
+                        );
+                    }
+                }
+
                 if let Some(old_index) = old_block_ids.iter().position(|id| id == deleted_id) {
                     rebuild_from_index = Some(match rebuild_from_index {
                         Some(existing) => std::cmp::min(existing, old_index),
@@ -157,7 +197,7 @@ impl Document {
     pub fn flatten_document(
         &mut self,
         document: &[serde_json::Value],
-    ) -> Result<Vec<Block>, Box<dyn std::error::Error>> {
+    ) -> Result<Vec<Block>, Box<dyn std::error::Error + Send + Sync>> {
         let mut doc_blocks = Vec::with_capacity(document.len());
         Self::flatten_recursive(document, &mut doc_blocks)?;
         let blocks = doc_blocks
@@ -198,7 +238,7 @@ impl Document {
     fn flatten_recursive(
         nodes: &[serde_json::Value],
         out: &mut Vec<serde_json::Value>,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         for node in nodes {
             out.push(node.clone());
 
@@ -371,5 +411,26 @@ impl Document {
         } else {
             Err(errors)
         }
+    }
+
+    pub(crate) async fn store_active_context(&self, block_id: Uuid) -> Result<(), DocumentError> {
+        let block = self
+            .get_block(&block_id)
+            .ok_or(DocumentError::BlockNotFound(block_id))?;
+        if let Some(storage) = self.context_storage.as_ref() {
+            let result = storage
+                .save(self.id.as_str(), &block_id, &block.active_context())
+                .await
+                .map_err(|e| DocumentError::InvalidStructure(e.to_string()));
+
+            if let Err(e) = result {
+                log::warn!(
+                    "Failed to store active context for block {block_id} in document {document_id}: {e}",
+                    block_id = block.id(),
+                    document_id = self.id
+                );
+            }
+        }
+        Ok(())
     }
 }

@@ -123,6 +123,9 @@ impl AtuinState {
         };
 
         self.db_instances.init().await?;
+        self.db_instances
+            .add_migrator("context", sqlx::migrate!("./migrations/context"))
+            .await?;
 
         // For some reason we cannot spawn the exec log task before the state is managed. Annoying.
         let exec_log = ExecLogHandle::new(path).expect("Failed to boot exec log");

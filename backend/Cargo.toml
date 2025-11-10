@@ -93,6 +93,7 @@ json-digest = "0.0.16"
 trash = "5.2.2"
 tempfile = "3.10"
 sqlparser = { git = "https://github.com/atuinsh/datafusion-sqlparser-rs.git", branch = "mkt/parse-sql-with-byte-offsets" }
+typetag = "0.2.21"
 
 
 [dependencies.sqlx]
