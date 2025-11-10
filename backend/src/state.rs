@@ -41,7 +41,7 @@ pub(crate) struct AtuinState {
     pty_store: Mutex<Option<PtyStoreHandle>>,
     exec_log: Mutex<Option<ExecLogHandle>>,
     ssh_pool: Mutex<Option<SshPoolHandle>>,
-    pub db_instances: DbInstances,
+    pub db_instances: Arc<DbInstances>,
 
     // Shared state
     shared_state: Mutex<Option<SharedStateHandle>>,
@@ -98,7 +98,7 @@ impl AtuinState {
             pty_store: Mutex::new(None),
             exec_log: Mutex::new(None),
             ssh_pool: Mutex::new(None),
-            db_instances: DbInstances::new(app_path.clone(), dev_prefix.clone()),
+            db_instances: Arc::new(DbInstances::new(app_path.clone(), dev_prefix.clone())),
             shared_state: Mutex::new(None),
             workspaces: Arc::new(tokio::sync::Mutex::new(None)),
             executor: Mutex::new(None),
