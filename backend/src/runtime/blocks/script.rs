@@ -271,13 +271,19 @@ impl Script {
         }
 
         // Local execution
-        let cwd = context.context_resolver.cwd();
+        let mut cwd = context.context_resolver.cwd().to_string();
+        if cwd.is_empty() {
+            cwd = std::env::current_dir()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .to_string()
+        }
         let env_vars = context.context_resolver.env_vars();
 
         let mut cmd = Command::new(&self.interpreter);
         cmd.arg("-c");
         cmd.arg(&code);
-        cmd.current_dir(cwd);
+        cmd.current_dir(&cwd);
         cmd.envs(env_vars);
         cmd.stdout(Stdio::piped());
         cmd.stderr(Stdio::piped());
