@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -83,9 +84,29 @@ pub async fn execute_block(
 
     log::debug!("Starting execution of block {block_id} in runbook {runbook_id}");
 
+    let mut workspace_context = HashMap::new();
+    let workspace_root = if let Some(workspace_manager) = state.workspaces.lock().await.as_ref() {
+        workspace_manager
+            .workspace_root(&runbook_id)
+            .map(|path| path.to_string_lossy().to_string())
+            .unwrap_or_default()
+    } else {
+        String::new()
+    };
+    workspace_context.insert("root".to_string(), workspace_root.to_string());
+
+    let mut extra_template_context = HashMap::new();
+    extra_template_context.insert("workspace".to_string(), workspace_context);
+
     // Get execution context
     let context = document
-        .start_execution(block_id, event_sender, Some(ssh_pool), Some(pty_store))
+        .start_execution(
+            block_id,
+            event_sender,
+            Some(ssh_pool),
+            Some(pty_store),
+            Some(extra_template_context),
+        )
         .await
         .map_err(|e| format!("Failed to start execution: {}", e))?;
     // Reset the active context for the block

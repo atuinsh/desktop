@@ -110,6 +110,7 @@ pub enum DocumentCommand {
             tokio::sync::broadcast::Sender<crate::runtime::workflow::event::WorkflowEvent>,
         ssh_pool: Option<crate::runtime::ssh_pool::SshPoolHandle>,
         pty_store: Option<crate::runtime::pty_store::PtyStoreHandle>,
+        extra_template_context: Option<HashMap<String, HashMap<String, String>>>,
         reply: Reply<ExecutionContext>,
     },
 
@@ -254,6 +255,7 @@ impl DocumentHandle {
         >,
         ssh_pool: Option<crate::runtime::ssh_pool::SshPoolHandle>,
         pty_store: Option<crate::runtime::pty_store::PtyStoreHandle>,
+        extra_template_context: Option<HashMap<String, HashMap<String, String>>>,
     ) -> Result<ExecutionContext, DocumentError> {
         let (tx, rx) = oneshot::channel();
         self.command_tx
@@ -262,6 +264,7 @@ impl DocumentHandle {
                 event_sender,
                 ssh_pool,
                 pty_store,
+                extra_template_context,
                 reply: tx,
             })
             .map_err(|_| DocumentError::ActorSendError)?;
@@ -466,10 +469,17 @@ impl DocumentActor {
                     event_sender,
                     ssh_pool,
                     pty_store,
+                    extra_template_context,
                     reply,
                 } => {
                     let result = self
-                        .handle_start_execution(block_id, event_sender, ssh_pool, pty_store)
+                        .handle_start_execution(
+                            block_id,
+                            event_sender,
+                            ssh_pool,
+                            pty_store,
+                            extra_template_context,
+                        )
                         .await;
                     let _ = reply.send(result);
                 }
@@ -559,6 +569,7 @@ impl DocumentActor {
         >,
         ssh_pool: Option<crate::runtime::ssh_pool::SshPoolHandle>,
         pty_store: Option<crate::runtime::pty_store::PtyStoreHandle>,
+        extra_template_context: Option<HashMap<String, HashMap<String, String>>>,
     ) -> Result<ExecutionContext, DocumentError> {
         // Build execution context from current document state
         let context = self.document.build_execution_context(
@@ -568,6 +579,7 @@ impl DocumentActor {
             event_sender,
             ssh_pool,
             pty_store,
+            extra_template_context,
         )?;
         Ok(context)
     }

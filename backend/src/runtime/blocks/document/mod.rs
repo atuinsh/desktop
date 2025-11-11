@@ -5,24 +5,27 @@ use std::{
 
 use uuid::Uuid;
 
-use crate::runtime::{
-    blocks::{
-        document::{
-            actor::{DocumentError, DocumentHandle, LocalValueProvider},
-            block_context::{
-                BlockContext, BlockContextStorage, BlockWithContext, ContextResolver,
-                ResolvedContext,
+use crate::{
+    runtime::{
+        blocks::{
+            document::{
+                actor::{DocumentError, DocumentHandle, LocalValueProvider},
+                block_context::{
+                    BlockContext, BlockContextStorage, BlockWithContext, ContextResolver,
+                    ResolvedContext,
+                },
+                bridge::DocumentBridgeMessage,
             },
-            bridge::DocumentBridgeMessage,
+            handler::{ExecutionContext, ExecutionHandle},
+            Block, KNOWN_UNSUPPORTED_BLOCKS,
         },
-        handler::{ExecutionContext, ExecutionHandle},
-        Block, KNOWN_UNSUPPORTED_BLOCKS,
+        events::{EventBus, GCEvent},
+        pty_store::PtyStoreHandle,
+        ssh_pool::SshPoolHandle,
+        workflow::event::WorkflowEvent,
+        MessageChannel,
     },
-    events::{EventBus, GCEvent},
-    pty_store::PtyStoreHandle,
-    ssh_pool::SshPoolHandle,
-    workflow::event::WorkflowEvent,
-    MessageChannel,
+    templates::DocumentTemplateState,
 };
 
 pub mod actor;
@@ -33,6 +36,7 @@ pub mod bridge;
 /// This is the internal state owned by the DocumentActor
 pub struct Document {
     id: String,
+    raw: Vec<serde_json::Value>,
     blocks: Vec<BlockWithContext>,
     document_bridge: Arc<dyn MessageChannel<DocumentBridgeMessage>>,
     known_unsupported_blocks: HashSet<String>,
@@ -51,6 +55,7 @@ impl Document {
         let mut doc = Self {
             id,
             blocks: vec![],
+            raw: vec![],
             document_bridge,
             known_unsupported_blocks: HashSet::new(),
             block_local_value_provider,
@@ -189,6 +194,7 @@ impl Document {
         }
 
         self.blocks = updated_blocks;
+        self.raw = document;
 
         Ok(rebuild_from_index)
     }
@@ -275,6 +281,14 @@ impl Document {
         self.blocks.get_mut(index)
     }
 
+    pub fn first_block(&self) -> Option<&BlockWithContext> {
+        self.blocks.first()
+    }
+
+    pub fn last_block(&self) -> Option<&BlockWithContext> {
+        self.blocks.last()
+    }
+
     /// Build an execution context for a block, capturing all context from blocks above it
     #[allow(clippy::too_many_arguments)]
     pub fn build_execution_context(
@@ -285,6 +299,7 @@ impl Document {
         event_sender: tokio::sync::broadcast::Sender<WorkflowEvent>,
         ssh_pool: Option<SshPoolHandle>,
         pty_store: Option<PtyStoreHandle>,
+        extra_template_context: Option<HashMap<String, HashMap<String, String>>>,
     ) -> Result<ExecutionContext, DocumentError> {
         // Verify block exists
         let _block = self
@@ -297,7 +312,25 @@ impl Document {
             .ok_or(DocumentError::BlockNotFound(*block_id))?;
 
         // Build context resolver from all blocks above this one
-        let context_resolver = ContextResolver::from_blocks(&self.blocks[..position]);
+        let mut context_resolver = ContextResolver::from_blocks(&self.blocks[..position]);
+        if let Some(extra_template_context) = extra_template_context {
+            for (namespace, context) in extra_template_context {
+                context_resolver.add_extra_template_context(namespace.clone(), context.clone());
+            }
+        }
+
+        let mut runbook_template_context = HashMap::new();
+        runbook_template_context.insert("id".to_string(), self.id.clone());
+        context_resolver
+            .add_extra_template_context("runbook".to_string(), runbook_template_context);
+
+        let document_template_context =
+            DocumentTemplateState::new(&self.raw, Some(&block_id.to_string()));
+
+        if let Some(document_template_context) = document_template_context {
+            context_resolver
+                .add_extra_template_context("doc".to_string(), document_template_context);
+        }
 
         // Create DocumentHandle for the block to use for context updates
         let document_handle = handle.clone();

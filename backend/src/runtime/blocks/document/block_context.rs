@@ -3,7 +3,7 @@ use std::{
     collections::HashMap,
 };
 
-use minijinja::{Environment, Value};
+use minijinja::{value::Object, Environment, Value};
 use serde::{ser::SerializeSeq, Deserializer, Serializer};
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
@@ -205,6 +205,7 @@ pub struct ContextResolver {
     cwd: String,
     env_vars: HashMap<String, String>,
     ssh_host: Option<String>,
+    extra_template_context: HashMap<String, Value>,
 }
 
 impl ContextResolver {
@@ -218,7 +219,17 @@ impl ContextResolver {
                 .to_string(),
             env_vars: HashMap::new(),
             ssh_host: None,
+            extra_template_context: HashMap::new(),
         }
+    }
+
+    pub fn add_extra_template_context(
+        &mut self,
+        namespace: String,
+        context: impl Object + 'static,
+    ) {
+        self.extra_template_context
+            .insert(namespace, Value::from_object(context));
     }
 
     /// Build a resolver from blocks (typically all blocks above the current one)
@@ -243,6 +254,7 @@ impl ContextResolver {
                 .to_string(),
             env_vars: HashMap::new(),
             ssh_host: None,
+            extra_template_context: HashMap::new(),
         }
     }
 
@@ -293,42 +305,31 @@ impl ContextResolver {
     }
 
     /// Resolve a template string using minijinja
-    /// TODO[mkt]: Support workspace data
-    pub fn resolve_template(
-        &self,
-        template: &str,
-    ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+    pub fn resolve_template(&self, template: &str) -> Result<String, minijinja::Error> {
         // If the string doesn't contain template markers, return it as-is
         if !template.contains("{{") && !template.contains("{%") {
             return Ok(template.to_string());
         }
 
         // Create a minijinja environment
-        let env = Environment::new();
+        let mut env = Environment::new();
+        env.set_trim_blocks(true);
 
         // Build the context object for template rendering
-        let mut context = HashMap::new();
+        let mut context: HashMap<&str, Value> = HashMap::new();
 
-        // // Add variables under "var" key
-        // let mut var_map = HashMap::new();
-        // for (k, v) in &self.vars {
-        //     var_map.insert(k.clone(), Value::from(v.clone()));
-        // }
+        // Add any extra template context
+        context.extend(
+            self.extra_template_context
+                .iter()
+                .map(|(k, v)| (k.as_str(), v.clone())),
+        );
+
         context.insert("var", Value::from_object(self.vars.clone()));
-
-        // // Add environment variables under "env" key if needed
-        // let mut env_map = HashMap::new();
-        // for (k, v) in &self.env_vars {
-        //     env_map.insert(k.clone(), Value::from(v.clone()));
-        // }
         context.insert("env", Value::from_object(self.env_vars.clone()));
 
-        // TODO: workspace map
-        // other special contexts?
-
         // Render the template
-        let rendered = env.render_str(template, context)?;
-        Ok(rendered)
+        env.render_str(template, context)
     }
 
     /// Get a variable value
@@ -710,6 +711,7 @@ mod tests {
             cwd: "/test".to_string(),
             env_vars: HashMap::from([("PATH".to_string(), "/usr/bin".to_string())]),
             ssh_host: None,
+            extra_template_context: HashMap::new(),
         };
 
         let result = resolver.resolve_template("PATH is {{ env.PATH }}").unwrap();
@@ -729,6 +731,7 @@ mod tests {
             cwd: "/test".to_string(),
             env_vars,
             ssh_host: None,
+            extra_template_context: HashMap::new(),
         };
 
         let result = resolver
@@ -802,6 +805,7 @@ mod tests {
             cwd: "/tmp/test".to_string(),
             env_vars: env_vars.clone(),
             ssh_host: Some("example.com".to_string()),
+            extra_template_context: HashMap::new(),
         };
 
         let resolved = ResolvedContext::from_resolver(&resolver);
@@ -957,6 +961,23 @@ mod tests {
         let resolver = ContextResolver::with_vars(vars);
         let result = resolver
             .resolve_template("https://{{ var.BASE_URL }}/{{ var.VERSION }}/{{ var.ENDPOINT }}")
+            .unwrap();
+        assert_eq!(result, "https://api.example.com/v1/users");
+    }
+
+    #[test]
+    fn test_template_with_extra_template_context() {
+        let mut extra = HashMap::new();
+        extra.insert("BASE_URL".to_string(), "api.example.com".to_string());
+        extra.insert("VERSION".to_string(), "v1".to_string());
+        extra.insert("ENDPOINT".to_string(), "users".to_string());
+
+        let mut resolver = ContextResolver::new();
+        resolver.add_extra_template_context("extra".to_string(), extra);
+        let result = resolver
+            .resolve_template(
+                "https://{{ extra.BASE_URL }}/{{ extra.VERSION }}/{{ extra.ENDPOINT }}",
+            )
             .unwrap();
         assert_eq!(result, "https://api.example.com/v1/users");
     }

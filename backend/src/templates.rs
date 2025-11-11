@@ -10,7 +10,7 @@ use crate::state::AtuinState;
 /// Flatten a document to include nested blocks (like those in ToggleHeading children)
 /// This creates a linear execution order regardless of UI nesting structure
 pub fn flatten_document(doc: &[serde_json::Value]) -> Vec<serde_json::Value> {
-    let mut flattened = Vec::new();
+    let mut flattened = Vec::with_capacity(doc.len());
     for block in doc {
         flattened.push(block.clone());
         if let Some(children) = block.get("children").and_then(|c| c.as_array()) {
@@ -72,6 +72,79 @@ pub struct DocumentTemplateState {
     pub previous: Option<BlockState>,
 }
 
+impl DocumentTemplateState {
+    pub fn new(doc: &[serde_json::Value], active_block_id: Option<&str>) -> Option<Self> {
+        if doc.is_empty() {
+            return None;
+        }
+
+        let flattened_doc = flatten_document(doc);
+
+        let named = flattened_doc
+            .iter()
+            .filter_map(|block| {
+                let name = block
+                    .get("props")
+                    .unwrap()
+                    .as_object()
+                    .unwrap()
+                    .iter()
+                    .find_map(|(k, v)| {
+                        if k == "name" {
+                            Some(v.as_str().unwrap().to_string())
+                        } else {
+                            None
+                        }
+                    });
+
+                name.map(|name| (name, serialized_block_to_state(block)))
+            })
+            .collect();
+
+        let first = serialized_block_to_state(flattened_doc.first().unwrap());
+        let last = serialized_block_to_state(flattened_doc.last().unwrap());
+        let content = flattened_doc
+            .iter()
+            .map(serialized_block_to_state)
+            .collect();
+
+        let previous = if let Some(active_block_id) = active_block_id {
+            flattened_doc
+                .iter()
+                .position(|block| block.get("id").unwrap().as_str().unwrap() == active_block_id)
+                .and_then(|active_index| flattened_doc.get(active_index - 1).clone())
+                .map(serialized_block_to_state)
+        } else {
+            None
+        };
+
+        Some(Self {
+            first,
+            last,
+            content,
+            named,
+            previous,
+        })
+    }
+}
+
+impl Object for DocumentTemplateState {
+    fn get_value(self: &Arc<Self>, key: &Value) -> Option<Value> {
+        match key.as_str()? {
+            "first" => Some(Value::from_serialize(&self.first)),
+            "last" => Some(Value::from_serialize(&self.last)),
+            "content" => Some(Value::from_serialize(&self.content)),
+            "named" => Some(Value::from_serialize(&self.named)),
+            "previous" => self.previous.clone().map(|p| Value::from_serialize(&p)),
+            _ => None,
+        }
+    }
+
+    fn enumerate(self: &Arc<Self>) -> Enumerator {
+        Enumerator::Str(&["first", "last", "content", "named", "previous"])
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TemplateState {
     // In the case where a document is empty, we have no document state.
@@ -105,7 +178,7 @@ impl Object for TemplateState {
     }
 }
 
-pub fn serialized_block_to_state(block: serde_json::Value) -> BlockState {
+pub fn serialized_block_to_state(block: &serde_json::Value) -> BlockState {
     let block = match block.as_object() {
         Some(obj) => obj,
         None => {
@@ -288,7 +361,7 @@ pub async fn template_str(
                             i -= 1;
                         }
                     } else {
-                        return Some(flattened_doc.get(i).unwrap().clone());
+                        return Some(flattened_doc.get(i).unwrap());
                     }
                 }
             }
@@ -314,7 +387,7 @@ pub async fn template_str(
                     }
                 });
 
-            name.map(|name| (name, serialized_block_to_state(block.clone())))
+            name.map(|name| (name, serialized_block_to_state(block)))
         })
         .collect();
 
@@ -331,9 +404,9 @@ pub async fn template_str(
     let doc_state = if !doc.is_empty() {
         Some(DocumentTemplateState {
             previous,
-            first: serialized_block_to_state(doc.first().unwrap().clone()),
-            last: serialized_block_to_state(doc.last().unwrap().clone()),
-            content: doc.into_iter().map(serialized_block_to_state).collect(),
+            first: serialized_block_to_state(&doc.first().unwrap()),
+            last: serialized_block_to_state(&doc.last().unwrap()),
+            content: doc.iter().map(serialized_block_to_state).collect(),
             named,
         })
     } else {
@@ -423,20 +496,20 @@ pub fn template_with_context(
                     .get("name")?
                     .as_str()?
                     .to_string();
-                Some((name, serialized_block_to_state(block.clone())))
+                Some((name, serialized_block_to_state(block)))
             })
             .collect();
 
         Some(DocumentTemplateState {
-            first: serialized_block_to_state(document.first().ok_or("Document is empty")?.clone()),
-            last: serialized_block_to_state(document.last().ok_or("Document is empty")?.clone()),
+            first: serialized_block_to_state(document.first().ok_or("Document is empty")?),
+            last: serialized_block_to_state(document.last().ok_or("Document is empty")?),
             content: flattened_doc
                 .iter()
-                .map(|b| serialized_block_to_state(b.clone()))
+                .map(|b| serialized_block_to_state(b))
                 .collect(),
             named,
             previous: Some(serialized_block_to_state(
-                previous.unwrap_or_else(|| serde_json::Value::Null),
+                &previous.unwrap_or_else(|| serde_json::Value::Null),
             )),
         })
     } else {

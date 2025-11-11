@@ -17,6 +17,8 @@ use super::FromDocument;
 pub enum HttpError {
     #[error("HTTP request failed: {0}")]
     Reqwest(#[from] reqwest::Error),
+    #[error("Template evaluation error: {0}")]
+    Template(#[from] minijinja::Error),
     #[error("HTTP request failed: {0}")]
     Other(#[from] Box<dyn std::error::Error + Send + Sync>),
 }
@@ -167,6 +169,7 @@ impl BlockBehavior for Http {
                         e.to_string()
                     }
                 }
+                HttpError::Template(ref e) => e.to_string(),
                 HttpError::Other(ref e) => e.to_string(),
             };
 
@@ -197,7 +200,7 @@ impl Http {
         self,
         context: &ExecutionContext,
     ) -> Result<HttpResponse, HttpError> {
-        let resolve = |template: &str| -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+        let resolve = |template: &str| -> Result<String, minijinja::Error> {
             context.context_resolver.resolve_template(template)
         };
 
