@@ -77,14 +77,21 @@ const middleware = (f: StateCreator<AtuinState>) =>
       name: AtuinEnv.stateStorageName,
       version: 1,
 
-      // don't serialize the terminals map
-      // it won't work as JSON. too cyclical
-      partialize: (state: AtuinState) =>
-        Object.fromEntries(
-          Object.entries(state).filter(([key]) => {
-            return persistKeys.includes(key as keyof AtuinState);
-          }),
-        ),
+      // don't serialize the terminals map or editor instances
+      // they won't work as JSON - too cyclical
+      partialize: (state: AtuinState) => {
+        const entries = Object.entries(state).filter(([key]) => {
+          return persistKeys.includes(key as keyof AtuinState);
+        });
+        
+        // Strip out editor field from tabs before serialization
+        const result = Object.fromEntries(entries);
+        if (result.tabs) {
+          result.tabs = result.tabs.map(({ editor, ...tab }: any) => tab);
+        }
+        
+        return result;
+      },
 
       /**
        * Versions:

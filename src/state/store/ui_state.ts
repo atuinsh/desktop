@@ -3,6 +3,7 @@ import { Update } from "@tauri-apps/plugin-updater";
 import { StateCreator } from "zustand";
 import { None, Option, Some } from "@binarymuse/ts-stdlib";
 import { uuidv7 } from "uuidv7";
+import { BlockNoteEditor } from "@blocknote/core";
 
 export enum TabIcon {
   HISTORY = "history",
@@ -17,6 +18,7 @@ export interface Tab {
   title: string;
   icon: TabIcon | null;
   badge: string | null;
+  editor?: BlockNoteEditor;
 }
 
 export class TabUri {
@@ -101,6 +103,7 @@ export interface AtuinUiState {
   undoCloseTab: () => void;
   setTabTitle: (id: string, title: string) => void;
   setTabBadge: (id: string, badge: string | null) => void;
+  setTabEditor: (id: string, editor: BlockNoteEditor) => void;
   advanceActiveTab: (amount: number) => void;
   closeAllTabs: () => void;
   closeOtherTabs: (id: string) => void;
@@ -318,6 +321,14 @@ export const createUiState: StateCreator<AtuinUiState> = (set, get, _store): Atu
     const tab = tabs.find((tab) => tab.id === id);
     if (tab) {
       tab.badge = badge;
+      set(() => ({ tabs: tabs }));
+    }
+  },
+  setTabEditor: (id: string, editor: BlockNoteEditor) => {
+    const tabs = get().tabs;
+    const tab = tabs.find((tab) => tab.id === id);
+    if (tab) {
+      tab.editor = editor;
       set(() => ({ tabs: tabs }));
     }
   },

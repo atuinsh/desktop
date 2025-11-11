@@ -1221,8 +1221,8 @@ function App() {
             <ResizablePanel
               ref={rightSidebarPanelRef}
               defaultSize={rightSidebarOpen ? 25 : 0}
-              minSize={rightSidebarOpen ? 15 : 0}
-              maxSize={40}
+              minSize={rightSidebarOpen ? 10 : 0}
+              maxSize={80}
               collapsible={true}
               collapsedSize={0}
               className={rightSidebarOpen ? "min-w-[200px]" : ""}

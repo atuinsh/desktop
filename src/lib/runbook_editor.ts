@@ -14,6 +14,7 @@ import { randomColor } from "./colors";
 import Logger from "./logger";
 import Snapshot from "@/state/runbooks/snapshot";
 import Operation from "@/state/runbooks/operation";
+import { useStore } from "@/state/store";
 
 const SAVE_DEBOUNCE = 1000;
 
@@ -89,6 +90,15 @@ export default class RunbookEditor {
     this.runbook = runbook;
   }
 
+  private setEditorInStore(editor: BlockNoteEditor) {
+    const state = useStore.getState();
+    const runbookUrl = `/runbook/${this.runbook.id}`;
+    const tab = state.tabs.find((tab) => tab.url === runbookUrl);
+    if (tab) {
+      state.setTabEditor(tab.id, editor);
+    }
+  }
+
   async updateUser(user: User) {
     if (this.user.is(user)) return;
     this.user = user;
@@ -153,6 +163,7 @@ export default class RunbookEditor {
           this.selectedTag = "latest";
         } else {
           const editor = createBasicEditor(JSON.parse(snapshot.content));
+          this.setEditorInStore(editor as any as BlockNoteEditor);
           resolve(editor as any as BlockNoteEditor);
           return;
         }
@@ -178,6 +189,7 @@ export default class RunbookEditor {
           this.runbook.content = JSON.stringify(content);
           this.save(this.runbook, editor as any as BlockNoteEditor);
         }
+        this.setEditorInStore(editor as any as BlockNoteEditor);
         resolve(editor as any as BlockNoteEditor);
         return;
       }
@@ -217,9 +229,11 @@ export default class RunbookEditor {
               editor.replaceBlocks(currentContent, content);
             }
           }, 100);
+          this.setEditorInStore(editor as any as BlockNoteEditor);
           resolve(editor as any as BlockNoteEditor);
         });
       } else {
+        this.setEditorInStore(editor as any as BlockNoteEditor);
         resolve(editor as any as BlockNoteEditor);
       }
     });

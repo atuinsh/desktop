@@ -1,6 +1,5 @@
-// Setup the AI Provider using OpenAI-compatible API
-// Supports OpenRouter, OpenAI, and any other OpenAI-compatible endpoint
-import { createOpenAI } from "@ai-sdk/openai";
+// Setup the AI Provider using official OpenRouter SDK
+import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 
 export interface ModelConfig {
     apiKey: string;
@@ -9,14 +8,16 @@ export interface ModelConfig {
 }
 
 export const createModel = (config: ModelConfig) => {
-    const provider = createOpenAI({
+    console.log("[Provider] Creating OpenRouter model");
+    
+    const openrouter = createOpenRouter({
         apiKey: config.apiKey,
-        baseURL: config.baseURL || "https://openrouter.ai/api/v1",
-        compatibility: "compatible",
     });
 
-    // Default to a good general model, or use user-specified model
-    const modelName = config.model || "anthropic/claude-sonnet-4";
+    // Default to a model with proven tool calling support on OpenRouter
+    // anthropic/claude-3.5-sonnet has excellent tool calling support
+    const modelName = config.model || "anthropic/claude-3.5-sonnet";
+    console.log("[Provider] Using model:", modelName);
 
-    return provider(modelName);
+    return openrouter(modelName);
 };

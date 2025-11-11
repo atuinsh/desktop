@@ -39,6 +39,7 @@
     "@iconify/icons-solar": "^1.2.3",
     "@internationalized/date": "^3.7.0",
     "@kbox-labs/react-echarts": "^1.4.2",
+    "@openrouter/ai-sdk-provider": "^1.2.1",
     "@prometheus-io/codemirror-promql": "^0.53.3",
     "@radix-ui/react-dialog": "^1.1.6",
     "@radix-ui/react-dropdown-menu": "^2.1.6",
@@ -84,7 +85,7 @@
     "@xterm/xterm": "^5.5.0",
     "ag-grid-community": "^34.0.1",
     "ag-grid-react": "^34.0.1",
-    "ai": "^4.3.16",
+    "ai": "^5.0.92",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.0.4",
@@ -138,6 +139,7 @@
     "y-protocols": "^1.0.6",
     "yaml": "^2.8.0",
     "yjs": "^13.6.27",
+    "zod": "^3.23.8",
     "zustand": "^4.5.6"
   },
   "devDependencies": {

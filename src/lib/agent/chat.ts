@@ -1,6 +1,11 @@
-import { streamText, generateText, type CoreMessage } from "ai";
-import { createModel, type ModelConfig } from "@/lib/ai/provider";
+import { streamText, generateText, type CoreMessage, tool } from "ai";
+import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { Settings } from "@/state/settings";
+import { z } from "zod";
+import { getCurrentDocument } from "./tools";
+
+// Import stepCountIs for controlling multi-step execution
+const stepCountIs = (n: number) => ({ stepCount }: { stepCount: number }) => stepCount >= n;
 
 export interface ChatMessage {
   id: string;
@@ -8,6 +13,20 @@ export interface ChatMessage {
   content: string;
   timestamp: number;
 }
+
+// Define tools with correct inputSchema property
+const tools = {
+  getCurrentDocument: tool({
+    description: "Get the current runbook document as markdown. Returns the full content of the active runbook.",
+    inputSchema: z.object({}),
+    execute: async () => {
+      console.log("[Tool] getCurrentDocument called");
+      const result = await getCurrentDocument();
+      console.log("[Tool] Document length:", result.length);
+      return result;
+    },
+  }),
+};
 
 export interface ChatStreamOptions {
   messages: ChatMessage[];
@@ -17,63 +36,76 @@ export interface ChatStreamOptions {
 }
 
 /**
- * Stream a chat response from the AI
+ * Stream a chat response from the AI using OpenRouter with tool support
  */
 export async function streamChatResponse(options: ChatStreamOptions): Promise<void> {
   const { messages, onChunk, onComplete, onError } = options;
 
   try {
-    // Check if AI is enabled
     const aiEnabled = await Settings.aiEnabled();
     if (!aiEnabled) {
       throw new Error("AI is not enabled. Please enable AI in settings.");
     }
 
-    // Get API configuration from settings
     const apiKey = await Settings.aiApiKey();
-    const apiEndpoint = await Settings.aiApiEndpoint();
-    const modelName = await Settings.aiModel();
-
     if (!apiKey || apiKey.trim() === "") {
       throw new Error("No API key configured. Please set your API key in Settings.");
     }
 
-    const modelConfig: ModelConfig = {
+    const modelName = await Settings.aiModel() || "anthropic/claude-3.5-sonnet";
+
+    const openrouter = createOpenRouter({
       apiKey,
-      baseURL: apiEndpoint || undefined,
-      model: modelName || undefined,
-    };
+    });
 
-    const model = createModel(modelConfig);
-
-    if (!model) {
-      throw new Error("AI model not configured. Please set up your API settings.");
-    }
-
-    // Convert our ChatMessage format to CoreMessage format
     const coreMessages: CoreMessage[] = messages.map((msg) => ({
       role: msg.role,
       content: msg.content,
     }));
 
-    // Stream the response
-    const result = await streamText({
-      model,
-      messages: coreMessages,
-      temperature: 0.7,
-    });
+    console.log("[Agent] Streaming with model:", modelName);
+    console.log("[Agent] Messages:", coreMessages.length);
 
     let fullText = "";
 
-    // Process the stream
-    for await (const chunk of result.textStream) {
-      fullText += chunk;
-      onChunk?.(chunk);
+    // Use streamText with tools - override default stopWhen to allow multi-step
+    const result = streamText({
+      model: openrouter(modelName),
+      messages: coreMessages,
+      tools,
+      temperature: 0.7,
+      // Override default stopWhen (which is stepCountIs(1)) to allow multiple steps
+      stopWhen: stepCountIs(5),
+      onStepFinish: (step: any) => {
+        console.log("[Agent] Step finished:", {
+          stepNumber: step.stepType,
+          finishReason: step.finishReason,
+          toolCalls: step.toolCalls?.length || 0,
+          toolResults: step.toolResults?.length || 0,
+          hasText: !!step.text,
+        });
+      },
+    } as any); // Type assertion needed due to OpenRouter v2/v1 compatibility
+
+    // Must consume fullStream to allow tool execution to complete
+    for await (const part of result.fullStream) {
+      const partType = (part as any).type;
+      
+      if (partType === 'text-delta') {
+        const delta = (part as any).textDelta || (part as any).text;
+        fullText += delta;
+        onChunk?.(delta);
+      } else if (partType === 'tool-call') {
+        console.log("[Agent] Tool called:", (part as any).toolName);
+      } else if (partType === 'tool-result') {
+        console.log("[Agent] Tool result received:", (part as any).toolName);
+      }
     }
 
+    console.log("[Agent] Stream complete, length:", fullText.length);
     onComplete?.(fullText);
   } catch (error) {
-    console.error("Chat stream failed:", error);
+    console.error("[Agent] Error:", error);
     onError?.(error as Error);
   }
 }
@@ -90,24 +122,15 @@ export async function generateChatResponse(
   }
 
   const apiKey = await Settings.aiApiKey();
-  const apiEndpoint = await Settings.aiApiEndpoint();
-  const modelName = await Settings.aiModel();
-
   if (!apiKey || apiKey.trim() === "") {
     throw new Error("No API key configured. Please set your API key in Settings.");
   }
 
-  const modelConfig: ModelConfig = {
+  const modelName = await Settings.aiModel() || "anthropic/claude-3.5-sonnet";
+
+  const openrouter = createOpenRouter({
     apiKey,
-    baseURL: apiEndpoint || undefined,
-    model: modelName || undefined,
-  };
-
-  const model = createModel(modelConfig);
-
-  if (!model) {
-    throw new Error("AI model not configured. Please set up your API settings.");
-  }
+  });
 
   const coreMessages: CoreMessage[] = messages.map((msg) => ({
     role: msg.role,
@@ -115,9 +138,10 @@ export async function generateChatResponse(
   }));
 
   const result = await generateText({
-    model,
+    model: openrouter(modelName),
     messages: coreMessages,
-    temperature: 0.7,
+    tools,
+    temperature: 0.1,
   });
 
   return result.text;
@@ -133,4 +157,3 @@ export async function isAIChatEnabled(): Promise<boolean> {
   const apiKey = await Settings.aiApiKey();
   return !!(apiKey && apiKey.trim() !== "");
 }
-
