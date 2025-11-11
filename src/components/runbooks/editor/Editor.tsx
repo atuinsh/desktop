@@ -27,7 +27,6 @@ import {
 } from "lucide-react";
 
 import { AIGeneratePopup } from "./AIGeneratePopup";
-import AIPopup from "./ui/AIPopup";
 import { RunbookLinkPopup } from "./ui/RunbookLinkPopup";
 import { isAIEnabled } from "@/lib/ai/block_generator";
 import { SparklesIcon } from "lucide-react";
@@ -252,9 +251,6 @@ export default function Editor({ runbook, editable, runbookEditor }: EditorProps
   const [aiPopupVisible, setAiPopupVisible] = useState(false);
   const [aiPopupPosition, setAiPopupPosition] = useState({ x: 0, y: 0 });
   const [aiEnabledState, setAiEnabledState] = useState(false);
-  const [isAIEditPopupOpen, setIsAIEditPopupOpen] = useState(false);
-  const [currentEditBlock, setCurrentEditBlock] = useState<any>(null);
-  const [aiEditPopupPosition, setAiEditPopupPosition] = useState({ x: 0, y: 0 });
   const [isVisible, setIsVisible] = useState(true);
   const [runbookLinkPopupVisible, setRunbookLinkPopupVisible] = useState(false);
   const [runbookLinkPopupPosition, setRunbookLinkPopupPosition] = useState({ x: 0, y: 0 });
@@ -462,24 +458,10 @@ export default function Editor({ runbook, editable, runbookEditor }: EditorProps
           const cursorPosition = editor.getTextCursorPosition();
           const currentBlock = cursorPosition.block;
 
-          // Check if we're in an empty paragraph (for generation) or specific block (for editing)
-          const isEmptyParagraph =
-            currentBlock.type === "paragraph" &&
-            (!currentBlock.content || currentBlock.content.length === 0);
-
-          if (isEmptyParagraph) {
-            // Generate new blocks mode
-            track_event("runbooks.ai.keyboard_shortcut");
-            const position = calculateAIPopupPosition(editor, currentBlock.id);
-            showAIPopup(position);
-          } else {
-            // Edit existing block mode
-            track_event("runbooks.ai.edit_block", { blockType: currentBlock.type });
-            const position = calculateAIPopupPosition(editor, currentBlock.id);
-            setAiEditPopupPosition(position);
-            setIsAIEditPopupOpen(true);
-            setCurrentEditBlock(currentBlock);
-          }
+          // Generate new blocks mode
+          track_event("runbooks.ai.keyboard_shortcut");
+          const position = calculateAIPopupPosition(editor, currentBlock.id);
+          showAIPopup(position);
         } catch (error) {
           console.warn("Could not get cursor position for Cmd+K, using fallback:", error);
           // Fallback to center if APIs fail
@@ -754,18 +736,6 @@ export default function Editor({ runbook, editable, runbookEditor }: EditorProps
           onBlockGenerated={handleBlockGenerated}
           onGenerateComplete={handleGenerateComplete}
           onClose={closeAIPopup}
-          getEditorContext={getEditorContext}
-        />
-      )}
-
-      {/* AI edit popup for modifying existing blocks */}
-      {aiEnabledState && (
-        <AIPopup
-          isOpen={isAIEditPopupOpen}
-          onClose={() => setIsAIEditPopupOpen(false)}
-          editor={editor}
-          currentBlock={currentEditBlock}
-          position={aiEditPopupPosition}
           getEditorContext={getEditorContext}
         />
       )}
