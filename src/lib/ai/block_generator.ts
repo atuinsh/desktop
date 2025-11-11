@@ -1,5 +1,5 @@
 import { generateText, streamText } from "ai";
-import { createModel, type ModelConfig } from "./provider";
+import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { Settings } from "@/state/settings";
 import { invoke } from "@tauri-apps/api/core";
 import DevConsole from "../dev/dev_console";
@@ -197,11 +197,9 @@ export async function generateBlocks(
 
   // Get API configuration from settings or use provided values
   const storedApiKey = await Settings.aiApiKey();
-  const storedEndpoint = await Settings.aiApiEndpoint();
   const storedModel = await Settings.aiModel();
   
   const apiKey = request.apiKey || storedApiKey;
-  const apiEndpoint = request.apiEndpoint || storedEndpoint;
   const modelName = request.model || storedModel;
   
   if (!apiKey) {
@@ -236,17 +234,8 @@ ${JSON.stringify(blocks, null, 2)}
 \`\`\``;
   }
 
-  const modelConfig: ModelConfig = {
-    apiKey,
-    baseURL: apiEndpoint || undefined,
-    model: modelName || undefined,
-  };
-
-  const model = createModel(modelConfig);
-
-  if (!model) {
-    throw new Error("AI model not configured. Please check your API settings.");
-  }
+  const openrouter = createOpenRouter({ apiKey });
+  const model = openrouter(modelName || "anthropic/claude-3.5-sonnet");
 
   try {
     const result = await generateText({
@@ -294,11 +283,9 @@ export async function streamGenerateBlocks(
 
   // Get API configuration from settings or use provided values
   const storedApiKey = await Settings.aiApiKey();
-  const storedEndpoint = await Settings.aiApiEndpoint();
   const storedModel = await Settings.aiModel();
   
   const apiKey = request.apiKey || storedApiKey;
-  const apiEndpoint = request.apiEndpoint || storedEndpoint;
   const modelName = request.model || storedModel;
   
   if (!apiKey) {
@@ -335,19 +322,8 @@ ${JSON.stringify(blocks, null, 2)}
 \`\`\``;
   }
 
-  const modelConfig: ModelConfig = {
-    apiKey,
-    baseURL: apiEndpoint || undefined,
-    model: modelName || undefined,
-  };
-
-  const model = createModel(modelConfig);
-
-  if (!model) {
-    const error = new Error("AI model not configured. Please check your API settings.");
-    request.onError(error);
-    throw error;
-  }
+  const openrouter = createOpenRouter({ apiKey });
+  const model = openrouter(modelName || "anthropic/claude-3.5-sonnet");
 
   try {
     const result = await streamText({

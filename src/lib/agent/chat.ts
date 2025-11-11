@@ -4,7 +4,10 @@ import { Settings } from "@/state/settings";
 import { z } from "zod";
 import { getCurrentDocument } from "./tools";
 
-// Import stepCountIs for controlling multi-step execution
+/**
+ * Helper to control multi-step execution in AI SDK.
+ * AI SDK v5 defaults to stepCountIs(1), stopping after one step.
+ */
 const stepCountIs = (n: number) => ({ stepCount }: { stepCount: number }) => stepCount >= n;
 
 export interface ChatMessage {
@@ -14,15 +17,16 @@ export interface ChatMessage {
   timestamp: number;
 }
 
-// Define tools with correct inputSchema property
+/**
+ * Available tools for the AI agent
+ */
 const tools = {
   getCurrentDocument: tool({
     description: "Get the current runbook document as markdown. Returns the full content of the active runbook.",
     inputSchema: z.object({}),
     execute: async () => {
-      console.log("[Tool] getCurrentDocument called");
       const result = await getCurrentDocument();
-      console.log("[Tool] Document length:", result.length);
+      console.log("[Tool] getCurrentDocument executed, length:", result.length);
       return result;
     },
   }),
@@ -36,7 +40,13 @@ export interface ChatStreamOptions {
 }
 
 /**
- * Stream a chat response from the AI using OpenRouter with tool support
+ * Stream a chat response from the AI using OpenRouter with tool support.
+ * 
+ * The AI can call tools during generation. By default AI SDK stops after one step,
+ * but we override this with stopWhen to allow multi-step tool execution where:
+ * 1. Model decides to call a tool
+ * 2. Tool executes and returns result
+ * 3. Model processes result and generates final response
  */
 export async function streamChatResponse(options: ChatStreamOptions): Promise<void> {
   const { messages, onChunk, onComplete, onError } = options;
@@ -54,9 +64,7 @@ export async function streamChatResponse(options: ChatStreamOptions): Promise<vo
 
     const modelName = await Settings.aiModel() || "anthropic/claude-3.5-sonnet";
 
-    const openrouter = createOpenRouter({
-      apiKey,
-    });
+    const openrouter = createOpenRouter({ apiKey });
 
     const coreMessages: CoreMessage[] = messages.map((msg) => ({
       role: msg.role,
@@ -64,30 +72,25 @@ export async function streamChatResponse(options: ChatStreamOptions): Promise<vo
     }));
 
     console.log("[Agent] Streaming with model:", modelName);
-    console.log("[Agent] Messages:", coreMessages.length);
 
     let fullText = "";
 
-    // Use streamText with tools - override default stopWhen to allow multi-step
     const result = streamText({
       model: openrouter(modelName),
       messages: coreMessages,
       tools,
       temperature: 0.7,
-      // Override default stopWhen (which is stepCountIs(1)) to allow multiple steps
-      stopWhen: stepCountIs(5),
+      stopWhen: stepCountIs(5), // Allow up to 5 steps for tool execution
       onStepFinish: (step: any) => {
         console.log("[Agent] Step finished:", {
-          stepNumber: step.stepType,
           finishReason: step.finishReason,
           toolCalls: step.toolCalls?.length || 0,
           toolResults: step.toolResults?.length || 0,
-          hasText: !!step.text,
         });
       },
-    } as any); // Type assertion needed due to OpenRouter v2/v1 compatibility
+    } as any); // Type assertion due to OpenRouter provider v2/AI SDK v1 compatibility
 
-    // Must consume fullStream to allow tool execution to complete
+    // Consume fullStream to enable multi-step tool execution
     for await (const part of result.fullStream) {
       const partType = (part as any).type;
       
@@ -95,10 +98,6 @@ export async function streamChatResponse(options: ChatStreamOptions): Promise<vo
         const delta = (part as any).textDelta || (part as any).text;
         fullText += delta;
         onChunk?.(delta);
-      } else if (partType === 'tool-call') {
-        console.log("[Agent] Tool called:", (part as any).toolName);
-      } else if (partType === 'tool-result') {
-        console.log("[Agent] Tool result received:", (part as any).toolName);
       }
     }
 
@@ -128,9 +127,7 @@ export async function generateChatResponse(
 
   const modelName = await Settings.aiModel() || "anthropic/claude-3.5-sonnet";
 
-  const openrouter = createOpenRouter({
-    apiKey,
-  });
+  const openrouter = createOpenRouter({ apiKey });
 
   const coreMessages: CoreMessage[] = messages.map((msg) => ({
     role: msg.role,
@@ -142,7 +139,8 @@ export async function generateChatResponse(
     messages: coreMessages,
     tools,
     temperature: 0.1,
-  });
+    stopWhen: stepCountIs(5), // Allow multi-step tool execution
+  } as any);
 
   return result.text;
 }
