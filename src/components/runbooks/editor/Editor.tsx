@@ -24,6 +24,7 @@ import {
   LinkIcon,
   BlocksIcon,
   MinusIcon,
+  ClipboardPasteIcon,
 } from "lucide-react";
 
 import { AIGeneratePopup } from "./AIGeneratePopup";
@@ -47,6 +48,7 @@ import Runbook from "@/state/runbooks/runbook";
 import { insertHttp } from "@/lib/blocks/http";
 import { uuidv7 } from "uuidv7";
 import { DuplicateBlockItem } from "./ui/DuplicateBlockItem";
+import { CopyBlockItem } from "./ui/CopyBlockItem";
 
 import { schema } from "./create_editor";
 import RunbookEditor from "@/lib/runbook_editor";
@@ -219,6 +221,19 @@ const insertHorizontalRule = (editor: typeof schema.BlockNoteEditor) => ({
   group: "Content",
 });
 
+const insertPastedBlock = (editor: typeof schema.BlockNoteEditor, copiedBlock: any) => ({
+  title: "Paste Block",
+  subtext: "Paste the previously copied block",
+  onItemClick: () => {
+    track_event("runbooks.block.paste", { type: copiedBlock.type });
+
+    editor.insertBlocks([copiedBlock], editor.getTextCursorPosition().block.id, "before");
+  },
+  icon: <ClipboardPasteIcon size={18} />,
+  aliases: ["paste", "insert"],
+  group: "Content",
+});
+
 // AI Generate function
 const insertAIGenerate = (
   editor: any,
@@ -247,6 +262,7 @@ export default function Editor({ runbook, editable, runbookEditor }: EditorProps
   const colorMode = useStore((state) => state.functionalColorMode);
   const fontSize = useStore((state) => state.fontSize);
   const fontFamily = useStore((state) => state.fontFamily);
+  const copiedBlock = useStore((state) => state.copiedBlock);
   const serialExecuteRef = useRef<(() => void) | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [aiPopupVisible, setAiPopupVisible] = useState(false);
@@ -702,6 +718,7 @@ export default function Editor({ runbook, editable, runbookEditor }: EditorProps
                 insertRunbookLink(editor as any, showRunbookLinkPopup),
                 insertSavedBlock(editor as any, showSavedBlockPopup),
                 insertHorizontalRule(editor as any),
+                ...(copiedBlock.isSome() ? [insertPastedBlock(editor as any, copiedBlock.unwrap())] : []),
 
                 // Monitoring group
                 insertPrometheus(schema)(editor),
@@ -738,6 +755,7 @@ export default function Editor({ runbook, editable, runbookEditor }: EditorProps
                 <DragHandleMenu {...props}>
                   <DeleteBlockItem {...props} />
                   <DuplicateBlockItem {...props} />
+                  <CopyBlockItem {...props} />
                   <SaveBlockItem {...props} />
                 </DragHandleMenu>
               )}
