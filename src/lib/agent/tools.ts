@@ -7,8 +7,8 @@ import { BlockNoteSchema, defaultBlockSpecs } from "@blocknote/core";
  */
 
 /**
- * Get the current document from the active runbook editor as markdown
- * Returns the document content as a markdown string
+ * Get the current document from the active runbook editor as markdown with block IDs
+ * Returns the document content as a markdown string with block IDs for reference
  */
 export async function getCurrentDocument(): Promise<string> {
   console.log("[Tool] getCurrentDocument called");
@@ -21,11 +21,30 @@ export async function getCurrentDocument(): Promise<string> {
   
   console.log("[Tool] Editor found, document has", editor.document.length, "blocks");
   
-  // Convert the document to markdown
-  const markdown = await editor.blocksToMarkdownLossy(editor.document);
-  console.log("[Tool] Converted to markdown, length:", markdown.length);
+  // Build markdown with block IDs and types
+  let result = `Document has ${editor.document.length} blocks:\n\n`;
   
-  return markdown;
+  for (let i = 0; i < editor.document.length; i++) {
+    const block = editor.document[i];
+    result += `[${i}] ID: ${block.id} | Type: ${block.type}\n`;
+    
+    // Add block content preview
+    if (block.props?.code) {
+      result += `Code: ${block.props.code.substring(0, 100)}${block.props.code.length > 100 ? '...' : ''}\n`;
+    }
+    if (block.props?.name) {
+      result += `Name: ${block.props.name}\n`;
+    }
+    if (block.content && Array.isArray(block.content)) {
+      const text = block.content.map((c: any) => c.text || '').join('');
+      if (text) {
+        result += `Text: ${text.substring(0, 100)}${text.length > 100 ? '...' : ''}\n`;
+      }
+    }
+    result += '\n';
+  }
+  
+  return result;
 }
 
 /**
