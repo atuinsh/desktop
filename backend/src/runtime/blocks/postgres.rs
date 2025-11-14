@@ -8,10 +8,11 @@ use std::time::Instant;
 use typed_builder::TypedBuilder;
 use uuid::Uuid;
 
-use crate::runtime::blocks::sqlx_block::{
-    SqlxBlockBehavior, SqlxBlockError, SqlxBlockExecutionResult, SqlxQueryResult,
-    SqlxStatementResult,
+use crate::runtime::blocks::sql_block::{
+    SqlBlockBehavior, SqlBlockError, SqlBlockExecutionResult, SqlQueryResult,
+    SqlStatementResult,
 };
+use crate::runtime::blocks::query_block::QueryBlockBehavior;
 use crate::runtime::blocks::{Block, BlockBehavior};
 
 use super::handler::{ExecutionContext, ExecutionHandle};
@@ -209,39 +210,39 @@ impl Postgres {
 }
 
 #[async_trait::async_trait]
-impl SqlxBlockBehavior for Postgres {
+impl SqlBlockBehavior for Postgres {
     type Pool = PgPool;
 
     fn dialect() -> Box<dyn Dialect> {
         Box::new(PostgreSqlDialect {})
     }
 
-    fn resolve_query(&self, context: &ExecutionContext) -> Result<String, SqlxBlockError> {
+    fn resolve_query(&self, context: &ExecutionContext) -> Result<String, SqlBlockError> {
         context
             .context_resolver
             .resolve_template(&self.query)
-            .map_err(|e| SqlxBlockError::InvalidTemplate(e.to_string()))
+            .map_err(|e| SqlBlockError::InvalidTemplate(e.to_string()))
     }
 
-    fn resolve_uri(&self, context: &ExecutionContext) -> Result<String, SqlxBlockError> {
+    fn resolve_uri(&self, context: &ExecutionContext) -> Result<String, SqlBlockError> {
         let uri = context
             .context_resolver
             .resolve_template(&self.uri)
-            .map_err(|e| SqlxBlockError::InvalidTemplate(e.to_string()))?;
+            .map_err(|e| SqlBlockError::InvalidTemplate(e.to_string()))?;
 
         if let Err(e) = Self::validate_postgres_uri(&uri) {
-            return Err(SqlxBlockError::InvalidUri(e.to_string()));
+            return Err(SqlBlockError::InvalidUri(e.to_string()));
         }
 
         Ok(uri)
     }
 
-    async fn connect(uri: String) -> Result<Self::Pool, SqlxBlockError> {
+    async fn connect(uri: String) -> Result<Self::Pool, SqlBlockError> {
         let opts = PgConnectOptions::from_str(&uri)?;
         Ok(PgPool::connect_with(opts).await?)
     }
 
-    async fn disconnect(pool: &Self::Pool) -> Result<(), SqlxBlockError> {
+    async fn disconnect(pool: &Self::Pool) -> Result<(), SqlBlockError> {
         pool.close().await;
         Ok(())
     }
@@ -257,10 +258,10 @@ impl SqlxBlockBehavior for Postgres {
         }
     }
 
-    async fn execute_query(
+    async fn execute_sql_query(
         pool: &Self::Pool,
         query: &str,
-    ) -> Result<SqlxBlockExecutionResult, SqlxBlockError> {
+    ) -> Result<SqlBlockExecutionResult, SqlBlockError> {
         let start_time = Instant::now();
         let rows = sqlx::query(query).fetch_all(pool).await?;
         let duration = start_time.elapsed();
@@ -279,8 +280,8 @@ impl SqlxBlockBehavior for Postgres {
             .map(Self::row_to_json)
             .collect::<Result<_, _>>()?;
 
-        Ok(SqlxBlockExecutionResult::Query(
-            SqlxQueryResult::builder()
+        Ok(SqlBlockExecutionResult::Query(
+            SqlQueryResult::builder()
                 .columns(columns)
                 .rows(results)
                 .duration(duration)
@@ -288,16 +289,16 @@ impl SqlxBlockBehavior for Postgres {
         ))
     }
 
-    async fn execute_statement(
+    async fn execute_sql_statement(
         pool: &Self::Pool,
         statement: &str,
-    ) -> Result<SqlxBlockExecutionResult, SqlxBlockError> {
+    ) -> Result<SqlBlockExecutionResult, SqlBlockError> {
         let start_time = Instant::now();
         let result = sqlx::query(statement).execute(pool).await?;
         let duration = start_time.elapsed();
 
-        Ok(SqlxBlockExecutionResult::Statement(
-            SqlxStatementResult::builder()
+        Ok(SqlBlockExecutionResult::Statement(
+            SqlStatementResult::builder()
                 .rows_affected(result.rows_affected())
                 .duration(duration)
                 .build(),
@@ -319,6 +320,6 @@ impl BlockBehavior for Postgres {
         self,
         context: ExecutionContext,
     ) -> Result<Option<ExecutionHandle>, Box<dyn std::error::Error + Send + Sync>> {
-        SqlxBlockBehavior::execute_query_block(self, context).await
+        QueryBlockBehavior::execute_query_block(self, context).await
     }
 }

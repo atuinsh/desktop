@@ -2,12 +2,12 @@ import { useEffect, useState } from "react";
 import ResultTable from "./ResultTable";
 import { Card, CardBody, CardHeader, Chip, Tooltip, Button, Divider } from "@heroui/react";
 import { CheckCircle, CircleXIcon, Clock, HardDriveIcon, Rows4Icon } from "lucide-react";
-import { SqlxBlockExecutionResult } from "@/rs-bindings/SqlxBlockExecutionResult";
+import { SqlBlockExecutionResult } from "@/rs-bindings/SqlBlockExecutionResult";
 import { formatBytes } from "@/lib/utils";
 
 interface SQLProps {
   error: any;
-  results: SqlxBlockExecutionResult | null;
+  results: SqlBlockExecutionResult | null;
   dismiss?: () => void;
   isFullscreen?: boolean;
 }

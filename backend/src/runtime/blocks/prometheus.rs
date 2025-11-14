@@ -448,13 +448,7 @@ impl BlockBehavior for Prometheus {
         self,
         context: ExecutionContext,
     ) -> Result<Option<ExecutionHandle>, Box<dyn std::error::Error + Send + Sync>> {
-        let handle = ExecutionHandle {
-            id: Uuid::new_v4(),
-            block_id: self.id,
-            cancellation_token: CancellationToken::new(),
-            status: Arc::new(RwLock::new(ExecutionStatus::Running)),
-            output_variable: None,
-        };
+        let handle = context.handle();
 
         let handle_clone = handle.clone();
         let context_clone = context.clone();

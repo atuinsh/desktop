@@ -5,8 +5,6 @@ import { createReactBlockSpec } from "@blocknote/react";
 
 import { langs } from "@uiw/codemirror-extensions-langs";
 
-import { runQuery } from "./query";
-
 import { MySqlBlock } from "@/lib/workflow/blocks/mysql";
 import { DependencySpec } from "@/lib/workflow/dependency";
 import track_event from "@/tracking";
@@ -53,7 +51,6 @@ const MySQL = ({
       setUri={setUri}
       autoRefresh={mysql.autoRefresh}
       setAutoRefresh={setAutoRefresh}
-      runQuery={runQuery}
       extensions={[langs.mysql()]}
       isEditable={isEditable}
       collapseQuery={collapseQuery}

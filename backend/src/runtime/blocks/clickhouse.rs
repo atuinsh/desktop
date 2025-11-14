@@ -9,10 +9,11 @@ use uuid::Uuid;
 
 use crate::runtime::blocks::document::block_context::BlockExecutionOutput;
 use crate::runtime::blocks::handler::{BlockOutput, ExecutionStatus};
-use crate::runtime::blocks::sqlx_block::{
-    SqlxBlockBehavior, SqlxBlockError, SqlxBlockExecutionResult, SqlxQueryResult,
-    SqlxStatementResult,
+use crate::runtime::blocks::sql_block::{
+    SqlBlockBehavior, SqlBlockError, SqlBlockExecutionResult, SqlQueryResult,
+    SqlStatementResult,
 };
+use crate::runtime::blocks::query_block::QueryBlockBehavior;
 use crate::runtime::blocks::{Block, BlockBehavior};
 use crate::runtime::events::GCEvent;
 
@@ -105,41 +106,41 @@ impl BlockBehavior for Clickhouse {
         self,
         context: ExecutionContext,
     ) -> Result<Option<ExecutionHandle>, Box<dyn std::error::Error + Send + Sync>> {
-        SqlxBlockBehavior::execute_query_block(self, context).await
+        QueryBlockBehavior::execute_query_block(self, context).await
     }
 }
 
 #[async_trait::async_trait]
-impl SqlxBlockBehavior for Clickhouse {
+impl SqlBlockBehavior for Clickhouse {
     type Pool = ClientWithUri;
 
     fn dialect() -> Box<dyn Dialect> {
         Box::new(ClickHouseDialect {})
     }
 
-    fn resolve_query(&self, context: &ExecutionContext) -> Result<String, SqlxBlockError> {
+    fn resolve_query(&self, context: &ExecutionContext) -> Result<String, SqlBlockError> {
         context
             .context_resolver
             .resolve_template(&self.query)
-            .map_err(|e| SqlxBlockError::InvalidTemplate(e.to_string()))
+            .map_err(|e| SqlBlockError::InvalidTemplate(e.to_string()))
     }
 
-    fn resolve_uri(&self, context: &ExecutionContext) -> Result<String, SqlxBlockError> {
+    fn resolve_uri(&self, context: &ExecutionContext) -> Result<String, SqlBlockError> {
         let uri = context
             .context_resolver
             .resolve_template(&self.uri)
-            .map_err(|e| SqlxBlockError::InvalidTemplate(e.to_string()))?;
+            .map_err(|e| SqlBlockError::InvalidTemplate(e.to_string()))?;
 
         Ok(uri)
     }
 
-    async fn connect(uri: String) -> Result<Self::Pool, SqlxBlockError> {
+    async fn connect(uri: String) -> Result<Self::Pool, SqlBlockError> {
         if uri.is_empty() {
-            return Err(SqlxBlockError::InvalidUri("URI is empty".to_string()));
+            return Err(SqlBlockError::InvalidUri("URI is empty".to_string()));
         }
 
         if !uri.starts_with("http://") && !uri.starts_with("https://") {
-            return Err(SqlxBlockError::InvalidUri(
+            return Err(SqlBlockError::InvalidUri(
                 "URI must start with 'http://' or 'https://'".to_string(),
             ));
         }
@@ -147,21 +148,21 @@ impl SqlxBlockBehavior for Clickhouse {
         let client = reqwest::Client::builder()
             .timeout(Duration::from_secs(60))
             .build()
-            .map_err(|e| SqlxBlockError::ConnectionError(e.to_string()))?;
+            .map_err(|e| SqlBlockError::ConnectionError(e.to_string()))?;
 
         // Test connection with simple query
         let test_request = client.post(&uri).body("SELECT 1 FORMAT JSONEachRow");
         let response = test_request
             .send()
             .await
-            .map_err(|e| SqlxBlockError::ConnectionError(e.to_string()))?;
+            .map_err(|e| SqlBlockError::ConnectionError(e.to_string()))?;
 
         if !response.status().is_success() {
             let error = response
                 .text()
                 .await
-                .map_err(|e| SqlxBlockError::ConnectionError(e.to_string()))?;
-            return Err(SqlxBlockError::ConnectionError(format!(
+                .map_err(|e| SqlBlockError::ConnectionError(e.to_string()))?;
+            return Err(SqlBlockError::ConnectionError(format!(
                 "Connection test failed: {}",
                 error
             )));
@@ -170,7 +171,7 @@ impl SqlxBlockBehavior for Clickhouse {
         Ok((client, uri))
     }
 
-    async fn disconnect(pool: &Self::Pool) -> Result<(), SqlxBlockError> {
+    async fn disconnect(_pool: &Self::Pool) -> Result<(), SqlBlockError> {
         Ok(())
     }
 
@@ -181,10 +182,10 @@ impl SqlxBlockBehavior for Clickhouse {
         }
     }
 
-    async fn execute_query(
+    async fn execute_sql_query(
         pool: &Self::Pool,
         query: &str,
-    ) -> Result<SqlxBlockExecutionResult, SqlxBlockError> {
+    ) -> Result<SqlBlockExecutionResult, SqlBlockError> {
         let (client, uri) = pool;
 
         let query_to_execute = if !query.to_uppercase().contains("FORMAT") {
@@ -199,21 +200,21 @@ impl SqlxBlockBehavior for Clickhouse {
         let response = request
             .send()
             .await
-            .map_err(|e| SqlxBlockError::ConnectionError(e.to_string()))?;
+            .map_err(|e| SqlBlockError::ConnectionError(e.to_string()))?;
 
         if !response.status().is_success() {
             let error_text = response
                 .text()
                 .await
-                .map_err(|e| SqlxBlockError::GenericError(e.to_string()))?;
-            return Err(SqlxBlockError::QueryError(error_text));
+                .map_err(|e| SqlBlockError::GenericError(e.to_string()))?;
+            return Err(SqlBlockError::QueryError(error_text));
         }
 
         let start_time = Instant::now();
         let response_text = response
             .text()
             .await
-            .map_err(|e| SqlxBlockError::GenericError(e.to_string()))?;
+            .map_err(|e| SqlBlockError::GenericError(e.to_string()))?;
         let duration = start_time.elapsed();
 
         let lines = response_text.lines();
@@ -241,7 +242,7 @@ impl SqlxBlockBehavior for Clickhouse {
                     }
                 }
                 Err(e) => {
-                    return Err(SqlxBlockError::GenericError(format!(
+                    return Err(SqlBlockError::GenericError(format!(
                         "Failed to parse JSON response: {} (line: {})",
                         e, line
                     )));
@@ -249,8 +250,8 @@ impl SqlxBlockBehavior for Clickhouse {
             }
         }
 
-        Ok(SqlxBlockExecutionResult::Query(
-            SqlxQueryResult::builder()
+        Ok(SqlBlockExecutionResult::Query(
+            SqlQueryResult::builder()
                 .columns(column_names)
                 .rows(results)
                 .duration(duration)
@@ -258,10 +259,10 @@ impl SqlxBlockBehavior for Clickhouse {
         ))
     }
 
-    async fn execute_statement(
+    async fn execute_sql_statement(
         pool: &Self::Pool,
         statement: &str,
-    ) -> Result<SqlxBlockExecutionResult, SqlxBlockError> {
+    ) -> Result<SqlBlockExecutionResult, SqlBlockError> {
         let (client, uri) = pool;
 
         log::info!("Executing statement: {}", statement);
@@ -271,7 +272,7 @@ impl SqlxBlockBehavior for Clickhouse {
         let response = request
             .send()
             .await
-            .map_err(|e| SqlxBlockError::ConnectionError(e.to_string()))?;
+            .map_err(|e| SqlBlockError::ConnectionError(e.to_string()))?;
         let duration = start_time.elapsed();
         log::info!("Duration: {:?}", duration);
 
@@ -281,14 +282,14 @@ impl SqlxBlockBehavior for Clickhouse {
             let error_text = response
                 .text()
                 .await
-                .map_err(|e| SqlxBlockError::GenericError(e.to_string()))?;
-            return Err(SqlxBlockError::QueryError(error_text));
+                .map_err(|e| SqlBlockError::GenericError(e.to_string()))?;
+            return Err(SqlBlockError::QueryError(error_text));
         }
 
         log::info!("Response: {:?}", &response.text().await.unwrap());
 
-        Ok(SqlxBlockExecutionResult::Statement(
-            SqlxStatementResult::builder().duration(duration).build(),
+        Ok(SqlBlockExecutionResult::Statement(
+            SqlStatementResult::builder().duration(duration).build(),
         ))
     }
 }

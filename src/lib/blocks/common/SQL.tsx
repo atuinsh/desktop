@@ -44,7 +44,7 @@ import useCodemirrorTheme from "@/lib/hooks/useCodemirrorTheme";
 import { useCodeMirrorValue } from "@/lib/hooks/useCodeMirrorValue";
 import EditableHeading from "@/components/EditableHeading/index";
 import { useBlockExecution, useBlockOutput } from "@/lib/hooks/useDocumentBridge";
-import { SqlxBlockExecutionResult } from "@/rs-bindings/SqlxBlockExecutionResult";
+import { SqlBlockExecutionResult } from "@/rs-bindings/SqlBlockExecutionResult";
 
 type QueryCountMessage = {
   type: "queryCount";
@@ -108,13 +108,13 @@ const SQL = ({
   onCodeMirrorFocus,
 }: SQLProps) => {
   let editor = useBlockNoteEditor();
-  const [results, setResults] = useState<SqlxBlockExecutionResult | null>(null);
+  const [results, setResults] = useState<SqlBlockExecutionResult | null>(null);
   const [queryCount, setQueryCount] = useState<Option<number>>(None);
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
   const [isFullscreenQueryCollapsed, setIsFullscreenQueryCollapsed] = useState<boolean>(false);
 
   const execution = useBlockExecution(block.id);
-  useBlockOutput<SqlxBlockExecutionResult | QueryCountMessage>(id, (output) => {
+  useBlockOutput<SqlBlockExecutionResult | QueryCountMessage>(id, (output) => {
     if (output.lifecycle && output.lifecycle.type === "started") {
       setQueryCount(None);
     }
