@@ -109,7 +109,6 @@
     "posthog-js": "^1.279.3",
     "prism-react-renderer": "^2.4.1",
     "prismjs": "^1.29.0",
-    "prometheus-query": "^3.4.1",
     "react": "^19.1.0",
     "react-activity-calendar": "^2.7.10",
     "react-arborist": "^3.4.3",

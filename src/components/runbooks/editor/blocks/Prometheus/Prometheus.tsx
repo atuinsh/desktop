@@ -1,7 +1,4 @@
-// TODO [mkt]
-// handle isEditable = false
-
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import {
   Button,
   Dropdown,
@@ -10,44 +7,49 @@ import {
   DropdownTrigger,
   ButtonGroup,
   Spinner,
-  Switch,
+  DropdownSection,
 } from "@heroui/react";
 
-import { ChevronDownIcon, ClockIcon, LineChartIcon } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronDownIcon,
+  ClockIcon,
+  CloudOffIcon,
+  DatabaseIcon,
+  FileTerminalIcon,
+  LineChartIcon,
+  LockIcon,
+  RefreshCwIcon,
+} from "lucide-react";
 import CodeMirror from "@uiw/react-codemirror";
 import { PromQLExtension } from "@prometheus-io/codemirror-promql";
-import { PrometheusDriver } from "prometheus-query";
-import { useInterval } from "usehooks-ts";
 
 // @ts-ignore
 import { createReactBlockSpec, useBlockNoteEditor } from "@blocknote/react";
 
-// @ts-ignore
-
 import { PromLineChart } from "./lineChart";
-import PromSettings, { PrometheusConfig } from "./promSettings";
 import { Settings } from "@/state/settings";
-import { templateString } from "@/state/templates";
-import { logExecution } from "@/lib/exec_log";
 import { PrometheusBlock as PrometheusBlockType } from "@/lib/workflow/blocks/prometheus";
 import { DependencySpec } from "@/lib/workflow/dependency";
 import { useBlockBusRunSubscription } from "@/lib/hooks/useBlockBus";
-import BlockBus from "@/lib/workflow/block_bus";
 import track_event from "@/tracking";
 import useCodemirrorTheme from "@/lib/hooks/useCodemirrorTheme";
 import { useCodeMirrorValue } from "@/lib/hooks/useCodeMirrorValue";
 import ErrorCard from "@/lib/blocks/common/ErrorCard";
 import PlayButton from "@/lib/blocks/common/PlayButton";
 import Block from "@/lib/blocks/common/Block";
-import { exportPropMatter } from "@/lib/utils";
-import { useCurrentRunbookId } from "@/context/runbook_id_context";
+import { exportPropMatter, toSnakeCase } from "@/lib/utils";
+import { useBlockExecution, useBlockOutput } from "@/lib/hooks/useDocumentBridge";
+import { PrometheusQueryResult } from "@/rs-bindings/PrometheusQueryResult";
+import MaskedInput from "@/components/MaskedInput/MaskedInput";
+import { useInterval } from "usehooks-ts";
 
 interface PromProps {
   setName: (name: string) => void;
   setQuery: (query: string) => void;
   setEndpoint: (endpoint: string) => void;
   setPeriod: (period: string) => void;
-  setAutoRefresh: (autoRefresh: boolean) => void;
+  setAutoRefresh: (autoRefresh: number) => void;
   setDependency: (dependency: DependencySpec) => void;
 
   isEditable: boolean;
@@ -75,29 +77,20 @@ const timeOptions: TimeFrame[] = [
   { name: "Last 180 days", seconds: 180 * 24 * 60 * 60, short: "180d" },
 ];
 
-// map prometheus query time frames (eg last 24hrs) to an ideal step value
-const calculateStepSize = (ago: any, maxDataPoints = 11000) => {
-  // Calculate the initial step size
-  let stepSize = Math.ceil(ago / maxDataPoints);
+const autoRefreshChoices = [
+  { label: "Off", value: 0 },
+  { label: "1s", value: 1000 },
+  { label: "5s", value: 5000 },
+  { label: "10s", value: 10000 },
+  { label: "30s", value: 30000 },
+  { label: "1m", value: 60000 },
+  { label: "2m", value: 120000 },
+  { label: "5m", value: 300000 },
+  { label: "10m", value: 600000 },
+  { label: "30m", value: 1800000 },
+];
 
-  // Round up to a "nice" number
-  // Don't go below 10s
-  const niceNumbers = [10, 15, 30, 60, 300, 600, 900, 1800, 3600];
-  for (let i = 0; i < niceNumbers.length; i++) {
-    if (stepSize <= niceNumbers[i]) {
-      stepSize = niceNumbers[i];
-      break;
-    }
-  }
-
-  // If we've gone through all nice numbers and step is still larger,
-  // round up to the nearest hour in seconds
-  if (stepSize > 3600) {
-    stepSize = Math.ceil(stepSize / 3600) * 3600;
-  }
-
-  return stepSize;
-};
+// Note: calculateStepSize is now handled by the backend
 
 const Prometheus = ({
   prometheus,
@@ -110,68 +103,49 @@ const Prometheus = ({
   setDependency,
 }: PromProps) => {
   let editor = useBlockNoteEditor();
-  const currentRunbookId = useCurrentRunbookId();
-
   const [value, setValue] = useState<string>(prometheus.query);
   const [data, setData] = useState<any[]>([]);
   const [config, _setConfig] = useState<{}>({});
   const [timeFrame, setTimeFrame] = useState<TimeFrame>(
     timeOptions.find((t) => t.short === prometheus.period) || timeOptions[3],
   );
-  const [isRunning, setIsRunning] = useState<boolean>(false);
 
   const [prometheusUrl, setPrometheusUrl] = useState<string | null>(null);
-  const [promClient, setPromClient] = useState<PrometheusDriver | null>(null);
   const [promExtension, setPromExtension] = useState<PromQLExtension | null>(null);
-  const [error, setError] = useState<string | null>(null);
 
-  const runQuery = useCallback(
-    async (val: any) => {
-      if (!promClient) return;
+  const execution = useBlockExecution(prometheus.id);
+  const isRunning = execution.isRunning;
 
-      const start = new Date().getTime() - timeFrame.seconds * 1000;
-      const end = new Date();
-      const step = calculateStepSize(timeFrame.seconds);
+  useBlockOutput<PrometheusQueryResult>(prometheus.id, (output) => {
+    console.log("output", output);
 
-      let templated = await templateString(prometheus.id, val, editor.document, currentRunbookId);
-      let begin = new Date().getTime() * 1000000;
-      const res = await promClient.rangeQuery(templated, start, end, step);
-      let finish = new Date().getTime() * 1000000;
+    if (output.object) {
+      // Backend returns PrometheusQueryResult in the object field
+      const result = output.object as PrometheusQueryResult;
+      setData(result.series as any[]);
+    }
+  });
 
-      let logResponse = {};
-      await logExecution(
-        prometheus,
-        prometheus.typeName,
-        begin,
-        finish,
-        JSON.stringify(logResponse),
-      );
-      BlockBus.get().blockFinished(prometheus);
+  // Handle block bus run events
+  useBlockBusRunSubscription(prometheus.id, () => {
+    // Backend handles execution, just clear any previous errors
+    // TODO
+    // setError(null);
+  });
 
-      const series = res.result;
+  useInterval(
+    () => {
+      // let's not stack queries
+      if (execution.isRunning) return;
 
-      // convert promql response to echarts
-      let data = series.map((s) => {
-        const metric = s.metric;
-        const values = s.values;
-
-        return {
-          type: "line",
-          showSymbol: false,
-          name: metric.toString(),
-          data: values.map((v: any) => {
-            return [v.time, v.value];
-          }),
-        };
-      });
-
-      setData(data);
+      (async () => {
+        await execution.execute();
+      })();
     },
-    [promClient, prometheus.id, editor.document],
+    prometheus.autoRefresh > 0 ? prometheus.autoRefresh : null,
   );
 
-  useBlockBusRunSubscription(prometheus.id, () => runQuery(prometheus.query));
-
+  // Set up Prometheus URL and extension for autocomplete
   useEffect(() => {
     (async () => {
       // if have passed in an endpoint via props directly, use it
@@ -182,59 +156,71 @@ const Prometheus = ({
 
       // otherwise fetch the default endpoint from settings
       let url = await Settings.runbookPrometheusUrl();
-
       setPrometheusUrl(url);
     })();
-  }, []);
+  }, [prometheus.endpoint]);
 
   useEffect(() => {
     if (!prometheusUrl) return;
 
-    let prom = new PrometheusDriver({
-      endpoint: prometheusUrl,
-      baseURL: "/api/v1", // default value
-    });
-
+    // Set up PromQL extension for autocomplete
     let promExt = new PromQLExtension().setComplete({
       remote: { url: prometheusUrl },
     });
 
-    setPromClient(prom);
     setPromExtension(promExt);
   }, [prometheusUrl]);
-
-  useEffect(() => {
-    if (!prometheus.query) return;
-
-    (async () => {
-      try {
-        setIsRunning(true);
-
-        await runQuery(prometheus.query);
-
-        setIsRunning(false);
-        setError(null);
-      } catch (e: any) {
-        setError(JSON.stringify(e));
-        setIsRunning(false);
-      }
-    })();
-  }, [timeFrame, promClient]);
-
-  useInterval(
-    () => {
-      (async () => {
-        await runQuery(value);
-      })();
-    },
-    prometheus.autoRefresh ? 5000 : null,
-  );
 
   const themeObj = useCodemirrorTheme();
   const codeMirrorValue = useCodeMirrorValue(value, (val) => {
     setValue(val);
     setQuery(val);
   });
+
+  const addLocalVar = () => {
+    let blockName = toSnakeCase(prometheus.name);
+
+    editor.insertBlocks(
+      [
+        {
+          // @ts-ignore
+          type: "local-var",
+          props: {
+            name: `${blockName}`,
+          },
+        },
+      ],
+      prometheus.id,
+      "before",
+    );
+
+    setEndpoint(`{{ var.${blockName} }}`);
+  };
+
+  const addScriptForUri = () => {
+    let blockName = toSnakeCase(prometheus.name);
+
+    // TODO: register custom schema type for typescript blocknote
+    editor.insertBlocks(
+      [
+        {
+          // @ts-ignore
+          type: "script",
+          props: {
+            name: `uri for ${prometheus.name}`,
+            // @ts-ignore
+            outputVariable: blockName,
+            outputVisible: false,
+            code: `# Output the uri for ${prometheus.name}`,
+          },
+        },
+      ],
+      prometheus.id,
+      "before",
+    );
+
+    setEndpoint(`{{ var.${blockName} }}`);
+  };
 
   return (
     <Block
@@ -246,23 +232,65 @@ const Prometheus = ({
       setName={setName}
       header={
         <>
+          <div className="flex flex-row gap-2 w-full items-center">
+            <MaskedInput
+              size="sm"
+              maskRegex={/(?<=:\/\/).*(?=@[^@]*$)/}
+              placeholder={"protocol://user:password@host:port/db"}
+              label="Endpoint"
+              isRequired
+              startContent={<DatabaseIcon size={18} />}
+              value={prometheus.endpoint}
+              onChange={(val: string) => {
+                setEndpoint(val);
+              }}
+              disabled={!isEditable}
+            />
+
+            <Dropdown>
+              <DropdownTrigger>
+                <Button isIconOnly variant="flat">
+                  <LockIcon size={16} />
+                </Button>
+              </DropdownTrigger>
+              <DropdownMenu disabledKeys={["secret"]}>
+                <DropdownSection title="Use a local variable or script">
+                  <DropdownItem
+                    key="local-var"
+                    description="Local variable - not synced"
+                    startContent={<CloudOffIcon size={16} />}
+                    onPress={addLocalVar}
+                  >
+                    Variable
+                  </DropdownItem>
+                  <DropdownItem
+                    key="template"
+                    description="Shell command output"
+                    startContent={<FileTerminalIcon size={16} />}
+                    onPress={addScriptForUri}
+                  >
+                    Script
+                  </DropdownItem>
+                  <DropdownItem
+                    key="secret"
+                    description="Synchronized + encrypted secret"
+                    startContent={<LockIcon size={16} />}
+                  >
+                    Secret
+                  </DropdownItem>
+                </DropdownSection>
+              </DropdownMenu>
+            </Dropdown>
+          </div>
           <div className="w-full !max-w-full !outline-none overflow-none flex flex-row gap-2">
             <PlayButton
               eventName="runbooks.block.execute"
               eventProps={{ type: "prometheus" }}
               onPlay={async () => {
-                try {
-                  setIsRunning(true);
-                  await runQuery(prometheus.query);
-                  setIsRunning(false);
-                  setError(null);
-                } catch (e: any) {
-                  setError(JSON.stringify(e));
-                  setIsRunning(false);
-                }
+                execution.execute();
               }}
               isRunning={isRunning}
-              cancellable={false}
+              cancellable={true}
             />
             <CodeMirror
               placeholder={"Write your query here..."}
@@ -277,74 +305,88 @@ const Prometheus = ({
           </div>
         </>
       }
-    >
-      <div className="min-h-64 overflow-x-scroll">
-        {!prometheusUrl ? (
-          <ErrorCard error="No Prometheus endpoint set" />
-        ) : !promClient ? (
-          <Spinner />
-        ) : error ? (
-          <ErrorCard error={error} />
-        ) : (
-          <PromLineChart data={data} config={config} />
-        )}
-      </div>
+      footer={
+        <div className="flex justify-between p-3 border-t w-full">
+          <div className="flex-row content-center items-center justify-center">
+            <ButtonGroup className="mr-2">
+              <Dropdown showArrow>
+                <DropdownTrigger>
+                  <Button
+                    variant="flat"
+                    size="sm"
+                    startContent={<ClockIcon />}
+                    endContent={<ChevronDownIcon />}
+                  >
+                    {timeFrame.short}
+                  </Button>
+                </DropdownTrigger>
+                <DropdownMenu variant="faded" aria-label="Select time frame for chart">
+                  {timeOptions.map((timeOption) => {
+                    return (
+                      <DropdownItem
+                        key={timeOption.name}
+                        onPress={() => {
+                          setTimeFrame(timeOption);
+                          setPeriod(timeOption.short);
+                        }}
+                      >
+                        {timeOption.name}
+                      </DropdownItem>
+                    );
+                  })}
+                </DropdownMenu>
+              </Dropdown>
+            </ButtonGroup>
+          </div>
 
-      <div className="flex justify-between p-3 border-t">
-        <div className="flex-row content-center items-center justify-center">
-          <ButtonGroup className="mr-2">
+          <ButtonGroup>
             <Dropdown showArrow>
               <DropdownTrigger>
                 <Button
-                  variant="flat"
                   size="sm"
-                  startContent={<ClockIcon />}
-                  endContent={<ChevronDownIcon />}
+                  variant="flat"
+                  startContent={<RefreshCwIcon size={16} />}
+                  endContent={<ChevronDown size={16} />}
                 >
-                  {timeFrame.short}
+                  Auto refresh:{" "}
+                  {prometheus.autoRefresh == 0
+                    ? "Off"
+                    : (
+                        autoRefreshChoices.find((a) => a.value == prometheus.autoRefresh) || {
+                          label: "Off",
+                        }
+                      ).label}
                 </Button>
               </DropdownTrigger>
               <DropdownMenu variant="faded" aria-label="Select time frame for chart">
-                {timeOptions.map((timeOption) => {
+                {autoRefreshChoices.map((setting) => {
                   return (
                     <DropdownItem
-                      key={timeOption.name}
+                      key={setting.label}
                       onPress={() => {
-                        setTimeFrame(timeOption);
-                        setPeriod(timeOption.short);
+                        setAutoRefresh(setting.value);
                       }}
                     >
-                      {timeOption.name}
+                      {setting.label}
                     </DropdownItem>
                   );
                 })}
               </DropdownMenu>
             </Dropdown>
-
-            <PromSettings
-              config={{
-                endpoint: prometheusUrl,
-              }}
-              onSave={(config: PrometheusConfig) => {
-                if (config.endpoint) setPrometheusUrl(config.endpoint);
-
-                if (config.endpoint != prometheus.endpoint) {
-                  setEndpoint(config.endpoint);
-                }
-              }}
-            />
           </ButtonGroup>
         </div>
-
-        <Switch
-          isSelected={prometheus.autoRefresh}
-          size="sm"
-          onValueChange={(value) => {
-            setAutoRefresh(value);
-          }}
-        >
-          <h3 className="text-sm">Auto refresh</h3>
-        </Switch>
+      }
+    >
+      <div className="min-h-64 overflow-x-scroll">
+        {!prometheusUrl ? (
+          <ErrorCard error="No Prometheus endpoint set" />
+        ) : execution.isError ? (
+          <ErrorCard error={execution.error} />
+        ) : isRunning && data.length === 0 ? (
+          <Spinner />
+        ) : (
+          <PromLineChart data={data} config={config} />
+        )}
       </div>
     </Block>
   );
@@ -358,7 +400,7 @@ export default createReactBlockSpec(
       query: { default: "" },
       endpoint: { default: "" },
       period: { default: "" },
-      autoRefresh: { default: false },
+      autoRefresh: { default: 0 },
       dependency: { default: "{}" },
     },
     content: "none",
@@ -401,7 +443,7 @@ export default createReactBlockSpec(
         });
       };
 
-      const setAutoRefresh = (autoRefresh: boolean) => {
+      const setAutoRefresh = (autoRefresh: number) => {
         editor.updateBlock(block, {
           props: { ...block.props, autoRefresh: autoRefresh },
         });
@@ -448,19 +490,23 @@ export const insertPrometheus = (schema: any) => (editor: typeof schema.BlockNot
     let prometheusBlocks = editor.document.filter((block: any) => block.type === "prometheus");
     let name = `Prometheus ${prometheusBlocks.length + 1}`;
 
-    editor.insertBlocks(
-      [
-        {
-          type: "prometheus",
-          // @ts-ignore
-          props: {
-            name: name,
+    // fetch the default endpoint from the old settings
+    Settings.runbookPrometheusUrl().then((url) => {
+      editor.insertBlocks(
+        [
+          {
+            type: "prometheus",
+            // @ts-ignore
+            props: {
+              name: name,
+              endpoint: url,
+            },
           },
-        },
-      ],
-      editor.getTextCursorPosition().block.id,
-      "before",
-    );
+        ],
+        editor.getTextCursorPosition().block.id,
+        "before",
+      );
+    });
   },
   icon: <LineChartIcon size={18} />,
   aliases: ["prom", "promql", "grafana"],
