@@ -62,13 +62,14 @@ pub(crate) trait QueryBlockBehavior: BlockBehavior + 'static {
     fn resolve_connection_string(&self, context: &ExecutionContext) -> Result<String, Self::Error>;
 
     /// Connect to the remote service
-    async fn connect(connection_string: String) -> Result<Self::Connection, Self::Error>;
+    async fn connect(&self, context: &ExecutionContext) -> Result<Self::Connection, Self::Error>;
 
     /// Disconnect from the remote service
-    async fn disconnect(connection: &Self::Connection) -> Result<(), Self::Error>;
+    async fn disconnect(&self, connection: &Self::Connection) -> Result<(), Self::Error>;
 
     /// Execute a query against the connection and return results
     async fn execute_query(
+        &self,
         connection: &Self::Connection,
         query: &str,
         context: &ExecutionContext,
@@ -104,122 +105,111 @@ pub(crate) trait QueryBlockBehavior: BlockBehavior + 'static {
     }
 
     /// Internal method that performs the actual execution with all lifecycle management
-    async fn do_execute(&self, context: ExecutionContext) -> Result<(), Self::Error> {
+    async fn do_execute(&self, context: ExecutionContext) -> Result<(), Self::Error>
+    where
+        Self: Sized + Sync,
+    {
         let cancellation_receiver = context.handle().cancellation_token.take_receiver();
         let block_id = self.id();
-        let connection_string = self.resolve_connection_string(&context)?;
         let query = self.resolve_query(&context)?;
 
-        let context_clone = context.clone();
-        let connection_future = Self::connect(connection_string.clone());
+        // Send block started event
+        let _ = context.block_started().await;
 
-        tokio::spawn(async move {
-            // Send block started event
-            let _ = context_clone.block_started().await;
+        let _ = context
+            .send_output(
+                BlockOutput::builder()
+                    .block_id(block_id)
+                    .stdout("Connecting...".to_string())
+                    .build(),
+            )
+            .await;
 
-            let _ = context_clone
-                .send_output(
-                    BlockOutput::builder()
-                        .block_id(block_id)
-                        .stdout("Connecting...".to_string())
-                        .build(),
-                )
-                .await;
+        // Connect with timeout
+        let connection = {
+            let timeout = tokio::time::sleep(Duration::from_secs(10));
+            let connection_future = self.connect(&context);
 
-            // Connect with timeout
-            let connection = {
-                let timeout = tokio::time::sleep(Duration::from_secs(10));
-
-                tokio::select! {
-                    result = connection_future => {
-                        match result {
-                            Ok(conn) => {
-                                let _ = context_clone.send_output(
-                                    BlockOutput::builder()
-                                        .block_id(block_id)
-                                        .stdout("Connected successfully".to_string())
-                                        .build(),
-                                ).await;
-                                conn
-                            },
-                            Err(e) => {
-                                return Err(e);
-                            }
+            tokio::select! {
+                result = connection_future => {
+                    match result {
+                        Ok(conn) => {
+                            let _ = context.send_output(
+                                BlockOutput::builder()
+                                    .block_id(block_id)
+                                    .stdout("Connected successfully".to_string())
+                                    .build(),
+                            ).await;
+                            conn
+                        },
+                        Err(e) => {
+                            return Err(e);
                         }
                     }
-                    _ = timeout => {
-                        let message = "Connection timed out after 10 seconds.".to_string();
-                        let error_msg = QueryBlockError::ConnectionError(message).to_string();
-                        return Err(Self::Error::from(error_msg));
-                    }
                 }
-            };
-
-            let _ = context_clone
-                .send_output(
-                    BlockOutput::builder()
-                        .block_id(block_id)
-                        .stdout("Executing query...".to_string())
-                        .build(),
-                )
-                .await;
-
-            let context_clone_inner = context_clone.clone();
-            let connection_clone = connection.clone();
-            let execution_task = async move {
-                let results = Self::execute_query(&connection_clone, &query, &context_clone_inner)
-                    .await?;
-
-                // Send all results as output
-                for result in results {
-                    let _ = context_clone_inner
-                        .send_output(
-                            BlockOutput::builder()
-                                .block_id(block_id)
-                                .object(
-                                    serde_json::to_value(result).map_err(|e| {
-                                        let error_msg = QueryBlockError::GenericError(format!(
-                                            "Unable to serialize query result: {}",
-                                            e
-                                        ))
-                                        .to_string();
-                                        Self::Error::from(error_msg)
-                                    })?,
-                                )
-                                .build(),
-                        )
-                        .await;
+                _ = timeout => {
+                    let message = "Connection timed out after 10 seconds.".to_string();
+                    let error_msg = QueryBlockError::ConnectionError(message).to_string();
+                    return Err(Self::Error::from(error_msg));
                 }
+            }
+        };
 
-                Ok::<(), Self::Error>(())
-            };
+        let _ = context
+            .send_output(
+                BlockOutput::builder()
+                    .block_id(block_id)
+                    .stdout("Executing query...".to_string())
+                    .build(),
+            )
+            .await;
 
-            // Execute with cancellation support
-            let result = if let Some(cancel_rx) = cancellation_receiver {
-                tokio::select! {
-                    _ = cancel_rx => {
-                        let _ = Self::disconnect(&connection).await;
-                        let error_msg = QueryBlockError::Cancelled.to_string();
-                        return Err(Self::Error::from(error_msg));
-                    }
-                    result = execution_task => {
-                        let _ = Self::disconnect(&connection).await;
-                        result
-                    }
-                }
-            } else {
-                let result = execution_task.await;
-                let _ = Self::disconnect(&connection).await;
-                result
-            };
+        let execution_task = async {
+            let results = self.execute_query(&connection, &query, &context).await?;
 
-            if let Err(e) = result {
-                return Err(e);
+            // Send all results as output
+            for result in results {
+                let _ = context
+                    .send_output(
+                        BlockOutput::builder()
+                            .block_id(block_id)
+                            .object(
+                                serde_json::to_value(result).map_err(|e| {
+                                    let error_msg = QueryBlockError::GenericError(format!(
+                                        "Unable to serialize query result: {}",
+                                        e
+                                    ))
+                                    .to_string();
+                                    Self::Error::from(error_msg)
+                                })?,
+                            )
+                            .build(),
+                    )
+                    .await;
             }
 
+            Ok::<(), Self::Error>(())
+        };
+
+        // Execute with cancellation support
+        let result = if let Some(cancel_rx) = cancellation_receiver {
+            tokio::select! {
+                _ = cancel_rx => {
+                    let _ = self.disconnect(&connection).await;
+                    let error_msg = QueryBlockError::Cancelled.to_string();
+                    return Err(Self::Error::from(error_msg));
+                }
+                result = execution_task => {
+                    let _ = self.disconnect(&connection).await;
+                    result
+                }
+            }
+        } else {
+            let result = execution_task.await;
+            let _ = self.disconnect(&connection).await;
             result
-        })
-        .await
-        .map_err(|e| Self::Error::from(e.to_string()))?
+        };
+
+        result
     }
 }

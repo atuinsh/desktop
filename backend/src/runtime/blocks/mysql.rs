@@ -13,11 +13,10 @@ use typed_builder::TypedBuilder;
 use uuid::Uuid;
 
 use crate::runtime::blocks::handler::ExecutionStatus;
-use crate::runtime::blocks::sql_block::{
-    SqlBlockBehavior, SqlBlockError, SqlBlockExecutionResult, SqlQueryResult,
-    SqlStatementResult,
-};
 use crate::runtime::blocks::query_block::QueryBlockBehavior;
+use crate::runtime::blocks::sql_block::{
+    SqlBlockBehavior, SqlBlockError, SqlBlockExecutionResult, SqlQueryResult, SqlStatementResult,
+};
 use crate::runtime::blocks::{Block, BlockBehavior};
 
 use super::handler::{CancellationToken, ExecutionContext, ExecutionHandle};
@@ -176,12 +175,12 @@ impl SqlBlockBehavior for Mysql {
         Ok(uri)
     }
 
-    async fn connect(uri: String) -> Result<Self::Pool, SqlBlockError> {
+    async fn create_pool(&self, uri: String) -> Result<Self::Pool, SqlBlockError> {
         let opts = MySqlConnectOptions::from_str(&uri)?;
         Ok(MySqlPool::connect_with(opts).await?)
     }
 
-    async fn disconnect(pool: &Self::Pool) -> Result<(), SqlBlockError> {
+    async fn close_pool(&self, pool: &Self::Pool) -> Result<(), SqlBlockError> {
         pool.close().await;
         Ok(())
     }
@@ -203,6 +202,7 @@ impl SqlBlockBehavior for Mysql {
     }
 
     async fn execute_sql_query(
+        &self,
         pool: &Self::Pool,
         query: &str,
     ) -> Result<SqlBlockExecutionResult, SqlBlockError> {
@@ -234,6 +234,7 @@ impl SqlBlockBehavior for Mysql {
     }
 
     async fn execute_sql_statement(
+        &self,
         pool: &Self::Pool,
         statement: &str,
     ) -> Result<SqlBlockExecutionResult, SqlBlockError> {

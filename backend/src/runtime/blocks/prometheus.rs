@@ -558,15 +558,12 @@ impl QueryBlockBehavior for Prometheus {
             ));
         }
 
-        // Encode the period into the connection string (format: endpoint|period)
-        Ok(format!("{}|{}", endpoint, self.period))
+        // No need to encode period anymore - we have access to self in connect()
+        Ok(endpoint)
     }
 
-    async fn connect(connection_string: String) -> Result<Self::Connection, Self::Error> {
-        // Parse the connection string (format: endpoint|period)
-        let parts: Vec<&str> = connection_string.split('|').collect();
-        let endpoint = parts[0].to_string();
-        let period = parts.get(1).unwrap_or(&"1h");
+    async fn connect(&self, context: &ExecutionContext) -> Result<Self::Connection, Self::Error> {
+        let endpoint = self.resolve_connection_string(context)?;
 
         let client = ClientBuilder::new()
             .timeout(Duration::from_secs(30))
@@ -578,14 +575,14 @@ impl QueryBlockBehavior for Prometheus {
                 ))
             })?;
 
-        // Calculate time range based on the period
+        // Calculate time range based on the period (now available from self)
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_secs();
 
-        let period_seconds = Self::parse_period_to_seconds(period);
-        let step = Self::calculate_step_size(period);
+        let period_seconds = Self::parse_period_to_seconds(&self.period);
+        let step = Self::calculate_step_size(&self.period);
 
         let time_range = PrometheusTimeRange {
             start: now - period_seconds as u64,
@@ -596,7 +593,7 @@ impl QueryBlockBehavior for Prometheus {
         Ok((client, endpoint, time_range))
     }
 
-    async fn disconnect(_connection: &Self::Connection) -> Result<(), Self::Error> {
+    async fn disconnect(&self, _connection: &Self::Connection) -> Result<(), Self::Error> {
         Ok(()) // HTTP client cleanup is automatic
     }
 
@@ -605,6 +602,7 @@ impl QueryBlockBehavior for Prometheus {
     }
 
     async fn execute_query(
+        &self,
         connection: &Self::Connection,
         query: &str,
         _context: &ExecutionContext,

@@ -9,11 +9,10 @@ use uuid::Uuid;
 
 use crate::runtime::blocks::document::block_context::BlockExecutionOutput;
 use crate::runtime::blocks::handler::{BlockOutput, ExecutionStatus};
-use crate::runtime::blocks::sql_block::{
-    SqlBlockBehavior, SqlBlockError, SqlBlockExecutionResult, SqlQueryResult,
-    SqlStatementResult,
-};
 use crate::runtime::blocks::query_block::QueryBlockBehavior;
+use crate::runtime::blocks::sql_block::{
+    SqlBlockBehavior, SqlBlockError, SqlBlockExecutionResult, SqlQueryResult, SqlStatementResult,
+};
 use crate::runtime::blocks::{Block, BlockBehavior};
 use crate::runtime::events::GCEvent;
 
@@ -134,7 +133,7 @@ impl SqlBlockBehavior for Clickhouse {
         Ok(uri)
     }
 
-    async fn connect(uri: String) -> Result<Self::Pool, SqlBlockError> {
+    async fn create_pool(&self, uri: String) -> Result<Self::Pool, SqlBlockError> {
         if uri.is_empty() {
             return Err(SqlBlockError::InvalidUri("URI is empty".to_string()));
         }
@@ -171,7 +170,7 @@ impl SqlBlockBehavior for Clickhouse {
         Ok((client, uri))
     }
 
-    async fn disconnect(_pool: &Self::Pool) -> Result<(), SqlBlockError> {
+    async fn close_pool(&self, _pool: &Self::Pool) -> Result<(), SqlBlockError> {
         Ok(())
     }
 
@@ -183,6 +182,7 @@ impl SqlBlockBehavior for Clickhouse {
     }
 
     async fn execute_sql_query(
+        &self,
         pool: &Self::Pool,
         query: &str,
     ) -> Result<SqlBlockExecutionResult, SqlBlockError> {
@@ -260,6 +260,7 @@ impl SqlBlockBehavior for Clickhouse {
     }
 
     async fn execute_sql_statement(
+        &self,
         pool: &Self::Pool,
         statement: &str,
     ) -> Result<SqlBlockExecutionResult, SqlBlockError> {

@@ -123,23 +123,25 @@ pub(crate) trait SqlBlockBehavior: BlockBehavior + 'static {
     /// Resolve the URI from the context
     fn resolve_uri(&self, context: &ExecutionContext) -> Result<String, SqlBlockError>;
 
-    /// Connect to the SQL database (required by QueryBlockBehavior)
-    async fn connect(uri: String) -> Result<Self::Pool, SqlBlockError>;
+    /// Connect to the SQL database (static method for actual connection logic)
+    async fn create_pool(&self, uri: String) -> Result<Self::Pool, SqlBlockError>;
 
-    /// Disconnect from the SQL database (required by QueryBlockBehavior)
-    async fn disconnect(pool: &Self::Pool) -> Result<(), SqlBlockError>;
+    /// Close the SQL database connection (static method for actual disconnection logic)
+    async fn close_pool(&self, pool: &Self::Pool) -> Result<(), SqlBlockError>;
 
     /// Check if the statement is a query (vs a statement)
     fn is_query(statement: &Statement) -> bool;
 
     /// Execute a SQL query (SELECT, etc.)
     async fn execute_sql_query(
+        &self,
         pool: &Self::Pool,
         query: &str,
     ) -> Result<SqlBlockExecutionResult, SqlBlockError>;
 
     /// Execute a SQL statement (INSERT, UPDATE, DELETE, etc.)
     async fn execute_sql_statement(
+        &self,
         pool: &Self::Pool,
         statement: &str,
     ) -> Result<SqlBlockExecutionResult, SqlBlockError>;
@@ -160,19 +162,24 @@ where
         <Self as SqlBlockBehavior>::resolve_query(self, context)
     }
 
-    fn resolve_connection_string(&self, context: &ExecutionContext) -> Result<String, SqlBlockError> {
+    fn resolve_connection_string(
+        &self,
+        context: &ExecutionContext,
+    ) -> Result<String, SqlBlockError> {
         <Self as SqlBlockBehavior>::resolve_uri(self, context)
     }
 
-    async fn connect(connection_string: String) -> Result<Self::Connection, SqlBlockError> {
-        <Self as SqlBlockBehavior>::connect(connection_string).await
+    async fn connect(&self, context: &ExecutionContext) -> Result<Self::Connection, SqlBlockError> {
+        let uri = self.resolve_uri(context)?;
+        <Self as SqlBlockBehavior>::create_pool(self, uri).await
     }
 
-    async fn disconnect(connection: &Self::Connection) -> Result<(), SqlBlockError> {
-        <Self as SqlBlockBehavior>::disconnect(connection).await
+    async fn disconnect(&self, connection: &Self::Connection) -> Result<(), SqlBlockError> {
+        <Self as SqlBlockBehavior>::close_pool(self, connection).await
     }
 
     async fn execute_query(
+        &self,
         connection: &Self::Connection,
         query: &str,
         context: &ExecutionContext,
@@ -221,9 +228,10 @@ where
         let mut results = Vec::new();
         for (sql_text, is_query) in queries.iter() {
             let result = if *is_query {
-                <Self as SqlBlockBehavior>::execute_sql_query(connection, sql_text).await?
+                <Self as SqlBlockBehavior>::execute_sql_query(self, connection, sql_text).await?
             } else {
-                <Self as SqlBlockBehavior>::execute_sql_statement(connection, sql_text).await?
+                <Self as SqlBlockBehavior>::execute_sql_statement(self, connection, sql_text)
+                    .await?
             };
             results.push(result);
         }
