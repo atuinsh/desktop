@@ -6,6 +6,7 @@ pub(crate) mod environment;
 pub(crate) mod handler;
 pub(crate) mod host;
 pub(crate) mod http;
+pub(crate) mod kubernetes;
 pub(crate) mod local_directory;
 pub(crate) mod local_var;
 pub(crate) mod mysql;
@@ -85,6 +86,7 @@ pub enum Block {
     Prometheus(prometheus::Prometheus),
     Clickhouse(clickhouse::Clickhouse),
     Mysql(mysql::Mysql),
+    Kubernetes(kubernetes::Kubernetes),
 
     #[serde(rename = "sqlite")]
     SQLite(sqlite::SQLite),
@@ -111,6 +113,7 @@ impl Block {
             Block::Prometheus(prometheus) => prometheus.id,
             Block::Clickhouse(clickhouse) => clickhouse.id,
             Block::Mysql(mysql) => mysql.id,
+            Block::Kubernetes(kubernetes) => kubernetes.id,
 
             Block::LocalVar(local_var) => local_var.id,
             Block::Var(var) => var.id,
@@ -135,6 +138,7 @@ impl Block {
             Block::Prometheus(prometheus) => prometheus.name.clone(),
             Block::Clickhouse(clickhouse) => clickhouse.name.clone(),
             Block::Mysql(mysql) => mysql.name.clone(),
+            Block::Kubernetes(kubernetes) => kubernetes.name.clone(),
             Block::Editor(_) => "".to_string(),
 
             Block::LocalVar(_) => "".to_string(),
@@ -170,6 +174,9 @@ impl Block {
                 block_data,
             )?)),
             "mysql" => Ok(Block::Mysql(mysql::Mysql::from_document(block_data)?)),
+            "kubernetes-get" => Ok(Block::Kubernetes(kubernetes::Kubernetes::from_document(
+                block_data,
+            )?)),
             "sqlite" => Ok(Block::SQLite(sqlite::SQLite::from_document(block_data)?)),
             "local-var" => Ok(Block::LocalVar(local_var::LocalVar::from_document(
                 block_data,
@@ -284,6 +291,11 @@ impl Block {
                     .passive_context(resolver, block_local_value_provider)
                     .await
             }
+            Block::Kubernetes(kubernetes) => {
+                kubernetes
+                    .passive_context(resolver, block_local_value_provider)
+                    .await
+            }
         }
     }
 
@@ -299,6 +311,7 @@ impl Block {
             Block::Prometheus(prometheus) => prometheus.execute(context).await,
             Block::Clickhouse(clickhouse) => clickhouse.execute(context).await,
             Block::Mysql(mysql) => mysql.execute(context).await,
+            Block::Kubernetes(kubernetes) => kubernetes.execute(context).await,
             Block::SQLite(sqlite) => sqlite.execute(context).await,
             Block::LocalVar(local_var) => local_var.execute(context).await,
             Block::Var(var) => var.execute(context).await,

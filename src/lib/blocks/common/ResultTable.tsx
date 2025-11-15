@@ -18,9 +18,13 @@ import { createPortal } from "react-dom";
 // Register AG Grid modules
 ModuleRegistry.registerModules([AllCommunityModule]);
 
+type ColumnIndexedRow = Record<string, any>;
+type NumberIndexedRow = any[];
+type ResultsTableResults = ColumnIndexedRow[] | NumberIndexedRow[];
+
 interface ResultTableProps {
   columns: { id: string; title: string; grow?: number; width?: number }[];
-  results: any[];
+  results: ResultsTableResults;
   setColumns?: (columns: { id: string; title: string; grow?: number; width?: number }[]) => void;
   width: string;
 }
@@ -61,8 +65,12 @@ export default function ResultTable({ columns, results, setColumns, width }: Res
   const rowData = useMemo(() => {
     return results.map((row) => {
       const rowObj: any = {};
-      columns.forEach((col) => {
-        rowObj[col.id] = row[col.id];
+      columns.forEach((col, idx) => {
+        if (typeof row === "object" && !Array.isArray(row)) {
+          rowObj[col.id] = row[col.id];
+        } else {
+          rowObj[col.id] = row[idx];
+        }
       });
       return rowObj;
     });

@@ -4,7 +4,6 @@ pub(crate) mod dependency;
 pub(crate) mod events;
 pub(crate) mod exec_log;
 pub(crate) mod feedback;
-pub(crate) mod kubernetes;
 pub(crate) mod mysql;
 pub(crate) mod pty_store;
 pub(crate) mod stats;
