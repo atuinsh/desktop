@@ -2,7 +2,7 @@ use std::{collections::HashMap, path::PathBuf, str::FromStr, time::Duration};
 
 use eyre::Result;
 use sqlx::{migrate::Migrator, sqlite, SqlitePool};
-use tokio::{fs::create_dir_all, sync::Mutex};
+use tokio::{fs::create_dir_all, runtime::Handle, sync::Mutex};
 
 pub struct DbInstances {
     app_path: PathBuf,
@@ -101,6 +101,6 @@ impl DbInstances {
 
 impl Drop for DbInstances {
     fn drop(&mut self) {
-        let _ = tokio::task::block_in_place(|| self.shutdown());
+        let _ = Handle::current().block_on(self.shutdown());
     }
 }

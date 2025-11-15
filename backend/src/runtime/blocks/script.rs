@@ -446,7 +446,7 @@ impl Script {
             None => {
                 let error_msg = "SSH pool not available in execution context";
                 let _ = context.block_failed(error_msg.to_string()).await;
-                return (Err(error_msg.into()), String::new().into());
+                return (Err(error_msg.into()), String::new());
             }
         };
 

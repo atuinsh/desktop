@@ -203,13 +203,13 @@ impl SqlBlockBehavior for SQLite {
     }
 
     fn is_query(statement: &Statement) -> bool {
-        match statement {
-            Statement::Explain { .. } => true,
-            Statement::Fetch { .. } => true,
-            Statement::Query { .. } => true,
-            Statement::Pragma { .. } => true,
-            _ => false,
-        }
+        matches!(
+            statement,
+            Statement::Explain { .. }
+                | Statement::Fetch { .. }
+                | Statement::Query { .. }
+                | Statement::Pragma { .. }
+        )
     }
 
     async fn execute_sql_query(

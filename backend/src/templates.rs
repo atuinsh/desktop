@@ -112,7 +112,7 @@ impl DocumentTemplateState {
             flattened_doc
                 .iter()
                 .position(|block| block.get("id").unwrap().as_str().unwrap() == active_block_id)
-                .and_then(|active_index| flattened_doc.get(active_index - 1).clone())
+                .and_then(|active_index| flattened_doc.get(active_index - 1))
                 .map(serialized_block_to_state)
         } else {
             None
@@ -404,8 +404,8 @@ pub async fn template_str(
     let doc_state = if !doc.is_empty() {
         Some(DocumentTemplateState {
             previous,
-            first: serialized_block_to_state(&doc.first().unwrap()),
-            last: serialized_block_to_state(&doc.last().unwrap()),
+            first: serialized_block_to_state(doc.first().unwrap()),
+            last: serialized_block_to_state(doc.last().unwrap()),
             content: doc.iter().map(serialized_block_to_state).collect(),
             named,
         })
@@ -505,7 +505,7 @@ pub fn template_with_context(
             last: serialized_block_to_state(document.last().ok_or("Document is empty")?),
             content: flattened_doc
                 .iter()
-                .map(|b| serialized_block_to_state(b))
+                .map(serialized_block_to_state)
                 .collect(),
             named,
             previous: Some(serialized_block_to_state(

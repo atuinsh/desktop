@@ -157,7 +157,6 @@ impl ClientPrompt {
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export)]
-
 pub struct ClientPromptResult {
     pub button: String,
     pub value: Option<String>,

@@ -444,7 +444,7 @@ impl Document {
             .ok_or(DocumentError::BlockNotFound(block_id))?;
         if let Some(storage) = self.context_storage.as_ref() {
             let result = storage
-                .save(self.id.as_str(), &block_id, &block.active_context())
+                .save(self.id.as_str(), &block_id, block.active_context())
                 .await
                 .map_err(|e| DocumentError::InvalidStructure(e.to_string()));
 

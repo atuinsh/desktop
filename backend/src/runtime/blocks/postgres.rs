@@ -247,14 +247,14 @@ impl SqlBlockBehavior for Postgres {
     }
 
     fn is_query(statement: &Statement) -> bool {
-        match statement {
-            Statement::Query { .. } => true,
-            Statement::Explain { .. } => true,
-            Statement::Fetch { .. } => true,
-            Statement::Pragma { .. } => true,
-            Statement::ShowVariable { .. } => true,
-            _ => false,
-        }
+        matches!(
+            statement,
+            Statement::Query { .. }
+                | Statement::Explain { .. }
+                | Statement::Fetch { .. }
+                | Statement::Pragma { .. }
+                | Statement::ShowVariable { .. }
+        )
     }
 
     async fn execute_sql_query(

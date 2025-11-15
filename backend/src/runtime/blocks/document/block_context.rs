@@ -53,7 +53,7 @@ impl Serialize for BlockContext {
         S: Serializer,
     {
         let mut seq = serializer.serialize_seq(Some(self.entries.len()))?;
-        for (_, value) in &self.entries {
+        for value in self.entries.values() {
             seq.serialize_element(value.as_ref())?;
         }
         seq.end()
@@ -156,7 +156,7 @@ impl BlockWithContext {
         Self {
             block,
             passive_context,
-            active_context: active_context.unwrap_or(BlockContext::new()),
+            active_context: active_context.unwrap_or_default(),
         }
     }
 

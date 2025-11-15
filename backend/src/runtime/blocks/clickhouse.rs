@@ -171,10 +171,7 @@ impl SqlBlockBehavior for Clickhouse {
     }
 
     fn is_query(statement: &Statement) -> bool {
-        match statement {
-            Statement::Query { .. } => true,
-            _ => false,
-        }
+        matches!(statement, Statement::Query { .. })
     }
 
     async fn execute_sql_query(

@@ -183,19 +183,19 @@ impl SqlBlockBehavior for Mysql {
     }
 
     fn is_query(statement: &Statement) -> bool {
-        match statement {
-            Statement::Query { .. } => true,
-            Statement::Explain { .. } => true,
-            Statement::ExplainTable { .. } => true,
-            Statement::Fetch { .. } => true,
-            Statement::Pragma { .. } => true,
-            Statement::ShowVariables { .. } => true,
-            Statement::ShowCreate { .. } => true,
-            Statement::ShowColumns { .. } => true,
-            Statement::ShowTables { .. } => true,
-            Statement::ShowCollation { .. } => true,
-            _ => false,
-        }
+        matches!(
+            statement,
+            Statement::Query { .. }
+                | Statement::Explain { .. }
+                | Statement::ExplainTable { .. }
+                | Statement::Fetch { .. }
+                | Statement::Pragma { .. }
+                | Statement::ShowVariables { .. }
+                | Statement::ShowCreate { .. }
+                | Statement::ShowColumns { .. }
+                | Statement::ShowTables { .. }
+                | Statement::ShowCollation { .. }
+        )
     }
 
     async fn execute_sql_query(
