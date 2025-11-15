@@ -5,8 +5,6 @@ import { createReactBlockSpec } from "@blocknote/react";
 
 import { langs } from "@uiw/codemirror-extensions-langs";
 
-import { runQuery } from "./query";
-
 import { PostgresBlock } from "@/lib/workflow/blocks/postgres";
 import { DependencySpec } from "@/lib/workflow/dependency";
 import track_event from "@/tracking";
@@ -53,7 +51,6 @@ const Postgres = ({
       setUri={setUri}
       autoRefresh={postgres.autoRefresh}
       setAutoRefresh={setAutoRefresh}
-      runQuery={runQuery}
       extensions={[langs.pgsql()]}
       isEditable={isEditable}
       collapseQuery={collapseQuery}

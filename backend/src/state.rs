@@ -1,5 +1,4 @@
 use eyre::Result;
-use minijinja::Environment;
 use std::{
     collections::HashMap,
     path::PathBuf,
@@ -15,6 +14,7 @@ use uuid::Uuid;
 
 use crate::{
     runtime::{
+        blocks::document::actor::DocumentHandle,
         events::GCEvent,
         exec_log::ExecLogHandle,
         pty_store::PtyStoreHandle,
@@ -41,7 +41,7 @@ pub(crate) struct AtuinState {
     pty_store: Mutex<Option<PtyStoreHandle>>,
     exec_log: Mutex<Option<ExecLogHandle>>,
     ssh_pool: Mutex<Option<SshPoolHandle>>,
-    pub db_instances: DbInstances,
+    pub db_instances: Arc<DbInstances>,
 
     // Shared state
     shared_state: Mutex<Option<SharedStateHandle>>,
@@ -59,11 +59,6 @@ pub(crate) struct AtuinState {
     // the second rwlock could probs be a mutex
     // i cba it works fine
     pub child_processes: Arc<RwLock<HashMap<uuid::Uuid, Arc<RwLock<Child>>>>>,
-
-    /// Map a runbook id, to a Jinja environment
-    /// In the future it may make sense to map to our own abstracted
-    /// environment state, but atm this is fine.
-    pub template_state: RwLock<HashMap<Uuid, Arc<Environment<'static>>>>,
 
     // Persisted to the keychain, but cached here so that
     // we don't keep asking the user for keychain access.
@@ -88,6 +83,9 @@ pub(crate) struct AtuinState {
     // Map of block execution id -> execution handle for cancellation
     pub block_executions:
         Arc<RwLock<HashMap<Uuid, crate::runtime::blocks::handler::ExecutionHandle>>>,
+
+    // Map of document handles per runbook
+    pub documents: Arc<RwLock<HashMap<String, Arc<DocumentHandle>>>>,
 }
 
 impl AtuinState {
@@ -100,7 +98,7 @@ impl AtuinState {
             pty_store: Mutex::new(None),
             exec_log: Mutex::new(None),
             ssh_pool: Mutex::new(None),
-            db_instances: DbInstances::new(app_path.clone(), dev_prefix.clone()),
+            db_instances: Arc::new(DbInstances::new(app_path.clone(), dev_prefix.clone())),
             shared_state: Mutex::new(None),
             workspaces: Arc::new(tokio::sync::Mutex::new(None)),
             executor: Mutex::new(None),
@@ -108,10 +106,10 @@ impl AtuinState {
             gc_event_sender: Mutex::new(None),
             event_receiver: Arc::new(tokio::sync::Mutex::new(None)),
             child_processes: Default::default(),
-            template_state: Default::default(),
             runbooks_api_token: Default::default(),
             runbook_output_variables: Default::default(),
             block_executions: Default::default(),
+            documents: Default::default(),
             dev_prefix,
             app_path,
             use_hub_updater_service,
@@ -125,12 +123,15 @@ impl AtuinState {
         };
 
         self.db_instances.init().await?;
+        self.db_instances
+            .add_migrator("context", sqlx::migrate!("./migrations/context"))
+            .await?;
 
         // For some reason we cannot spawn the exec log task before the state is managed. Annoying.
         let exec_log = ExecLogHandle::new(path).expect("Failed to boot exec log");
         self.exec_log.lock().unwrap().replace(exec_log);
 
-        let pty_store = PtyStoreHandle::new_with_app(app.clone());
+        let pty_store = PtyStoreHandle::new();
         self.pty_store.lock().unwrap().replace(pty_store);
 
         let ssh_pool = SshPoolHandle::new();
@@ -154,7 +155,7 @@ impl AtuinState {
 
         let app_clone = app.clone();
         tauri::async_runtime::spawn(async move {
-            println!("starting executor command loop");
+            log::info!("starting executor command loop");
 
             while let Some(event) = cmd_receiver.recv().await {
                 match event {

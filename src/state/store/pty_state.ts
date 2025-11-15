@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { platform } from "@tauri-apps/plugin-os";
 import { FitAddon } from "@xterm/addon-fit";
-import { WebLinksAddon } from '@xterm/addon-web-links';
+import { WebLinksAddon } from "@xterm/addon-web-links";
 import { open } from "@tauri-apps/plugin-shell";
 import { IDisposable, Terminal } from "@xterm/xterm";
 import { Settings } from "../settings";
@@ -49,6 +49,8 @@ export class TerminalData extends Emittery {
 
   async listen() {
     this.unlisten = await listen(`pty-${this.pty}`, (event: any) => {
+      logger.debug("pty event received", event);
+
       if (event.payload.indexOf("ATUIN_COMMAND_START") >= 0) {
         this.emit("command_start");
         this.startTime = performance.now();
@@ -71,7 +73,6 @@ export class TerminalData extends Emittery {
   }
 
   async onData(event: any) {
-    logger.debug("onData", event);
     await invoke("pty_write", { pid: this.pty, data: event });
   }
 

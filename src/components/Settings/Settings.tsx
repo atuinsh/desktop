@@ -296,12 +296,8 @@ const GeneralSettings = () => {
     promptToRestart();
   }
 
-  if (
-    isLoading ||
-    vimModeLoading ||
-    shellCheckEnabledLoading ||
-    shellCheckPathLoading
-  ) return <Spinner />;
+  if (isLoading || vimModeLoading || shellCheckEnabledLoading || shellCheckPathLoading)
+    return <Spinner />;
 
   return (
     <>
@@ -684,11 +680,11 @@ const RunbookSettings = () => {
           <h2 className="text-xl font-semibold">Prometheus</h2>
           <SettingInput
             type="url"
-            label="Prometheus server URL"
+            label="Default Prometheus server URL"
             value={prometheusUrl}
             onChange={setPrometheusUrl}
             placeholder="http://localhost:9090"
-            description="URL for querying metrics (can be overridden per-block)"
+            description="Default URL for Prometheus blocks"
           />
         </CardBody>
       </Card>

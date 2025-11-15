@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useRef } from "react";
+import { useState, useCallback, useRef } from "react";
 import {
   Button,
   Dropdown,
@@ -16,12 +16,12 @@ import {
   SelectItem,
   Input,
 } from "@heroui/react";
-import { 
-  RefreshCw, 
-  Container, 
-  CheckCircle, 
-  CircleXIcon, 
-  Clock, 
+import {
+  RefreshCw,
+  Container,
+  CheckCircle,
+  CircleXIcon,
+  Clock,
   ChevronDown,
   ArrowDownToLineIcon,
   ArrowUpToLineIcon,
@@ -31,24 +31,16 @@ import {
 } from "lucide-react";
 import CodeMirror from "@uiw/react-codemirror";
 import ResultTable from "@/lib/blocks/common/ResultTable";
-import { 
-  executeKubernetesCommand, 
-  parseKubernetesOutput, 
-  PRESET_COMMANDS, 
-  PresetCommand,
-  KubernetesExecutionContext 
-} from "./execution";
+import { PRESET_COMMANDS, PresetCommand } from "./execution";
 import { useInterval } from "usehooks-ts";
-import { useBlockNoteEditor } from "@blocknote/react";
-import { templateString } from "@/state/templates";
 import useCodemirrorTheme from "@/lib/hooks/useCodemirrorTheme";
 import { useCodeMirrorValue } from "@/lib/hooks/useCodeMirrorValue";
 import PlayButton from "@/lib/blocks/common/PlayButton";
 import Block from "@/lib/blocks/common/Block";
 import { cn } from "@/lib/utils";
 import { KubernetesBlock } from "./schema";
-import { useCurrentRunbookId } from "@/context/runbook_id_context";
 import InterpreterSelector from "../common/InterpreterSelector";
+import { useBlockExecution, useBlockOutput } from "@/lib/hooks/useDocumentBridge";
 
 type KubernetesMode = "preset" | "custom";
 
@@ -98,13 +90,9 @@ export function KubernetesComponent({
   isEditable,
   onCodeMirrorFocus,
 }: KubernetesComponentProps) {
-  const editor = useBlockNoteEditor();
-  const [isRunning, setIsRunning] = useState<boolean>(false);
   const [results, setResults] = useState<KubernetesResult | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [collapseQuery, setCollapseQuery] = useState<boolean>(false);
   const [expandedFooter, setExpandedFooter] = useState<boolean>(false);
-  const currentRunbookId = useCurrentRunbookId();
 
   const elementRef = useRef<HTMLDivElement>(null);
 
@@ -112,66 +100,40 @@ export function KubernetesComponent({
   const codeMirrorValue = useCodeMirrorValue(kubernetes.command, setCommand);
 
   // Get the refresh interval in milliseconds
-  const refreshLabel = autoRefreshChoices.find(c => c.value === kubernetes.refreshInterval)?.label || "Off";
+  const refreshLabel =
+    autoRefreshChoices.find((c) => c.value === kubernetes.refreshInterval)?.label || "Off";
 
-  const context: KubernetesExecutionContext = useMemo(() => ({
-    blockId: kubernetes.id,
-    editor,
-    currentRunbookId: currentRunbookId || "",
-  }), [kubernetes.id, editor, currentRunbookId]);
+  // Use the new hooks for execution and output
+  const execution = useBlockExecution(kubernetes.id);
+  useBlockOutput<any>(kubernetes.id, (output) => {
+    console.log("kubernetes output", output);
 
-  const handlePlay = useCallback(async (isAutoRefresh = false) => {
-    setIsRunning(true);
-    setError(null);
+    if (output.object && output.object.type === "kubernetes") {
+      const result: KubernetesResult = {
+        data: output.object.data || [],
+        columns: output.object.columns || [],
+        rowCount: (output.object.data || []).length,
+        duration: 0, // Duration is managed by backend now
+        time: new Date(),
+      };
+      setResults(result);
+    }
+  });
 
-    let startTime = new Date().getTime() * 1000000;
-    try {
-      // Template the command (command is always the actual kubectl command now)
-      let templatedCommand = await templateString(kubernetes.id, kubernetes.command, editor.document, currentRunbookId);
+  const isRunning = execution.isRunning;
 
+  const handlePlay = useCallback(
+    async (isAutoRefresh = false) => {
       // Only scroll into view if this is not an auto-refresh
       if (!isAutoRefresh && elementRef.current) {
         elementRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
       }
 
-      const response = await executeKubernetesCommand(
-        templatedCommand,
-        kubernetes.interpreter,
-        context,
-        kubernetes.namespace,
-        kubernetes.context
-      );
-
-      let endTime = new Date().getTime() * 1000000;
-
-      if (!response.success) {
-        setError(response.error || "Command failed");
-        setIsRunning(false);
-        return;
-      }
-
-      const { data, columns } = parseKubernetesOutput(response.output);
-
-      const result: KubernetesResult = {
-        data,
-        columns,
-        rowCount: data.length,
-        duration: (endTime - startTime) / 1000000, // Convert to milliseconds
-        time: new Date(),
-      };
-
-      setResults(result);
-      setError(null);
-      setIsRunning(false);
-    } catch (e: any) {
-      if (e.message) {
-        e = e.message;
-      }
-
-      setError(e);
-      setIsRunning(false);
-    }
-  }, [kubernetes, editor.document, currentRunbookId, context]);
+      // Execute using the backend execution system
+      execution.execute();
+    },
+    [execution],
+  );
 
   useInterval(
     () => {
@@ -244,7 +206,10 @@ export function KubernetesComponent({
                 disabled={!isEditable}
               >
                 {presetOptions.map((option) => (
-                  <SelectItem key={option.key} description={PRESET_COMMANDS[option.key as PresetCommand]}>
+                  <SelectItem
+                    key={option.key}
+                    description={PRESET_COMMANDS[option.key as PresetCommand]}
+                  >
                     {option.label}
                   </SelectItem>
                 ))}
@@ -307,7 +272,11 @@ export function KubernetesComponent({
                   onPress={() => setCollapseQuery(!collapseQuery)}
                 >
                   <Tooltip content={collapseQuery ? "Expand query" : "Collapse query"}>
-                    {collapseQuery ? <ArrowDownToLineIcon size={16} /> : <ArrowUpToLineIcon size={16} />}
+                    {collapseQuery ? (
+                      <ArrowDownToLineIcon size={16} />
+                    ) : (
+                      <ArrowUpToLineIcon size={16} />
+                    )}
                   </Tooltip>
                 </Button>
               )}
@@ -323,7 +292,7 @@ export function KubernetesComponent({
               </Tooltip>
             </Button>
           </div>
-          
+
           {/* Expanded footer row */}
           {expandedFooter && (
             <div className="flex flex-row gap-4 items-center justify-between w-full pt-2 border-t border-default-200">
@@ -364,7 +333,11 @@ export function KubernetesComponent({
                     Auto refresh: {refreshLabel}
                   </Button>
                 </DropdownTrigger>
-                <DropdownMenu variant="faded" aria-label="Select auto refresh interval" selectedKeys={refreshLabel ? [refreshLabel] : undefined}>
+                <DropdownMenu
+                  variant="faded"
+                  aria-label="Select auto refresh interval"
+                  selectedKeys={refreshLabel ? [refreshLabel] : undefined}
+                >
                   {autoRefreshChoices.map((setting) => (
                     <DropdownItem
                       key={setting.label}
@@ -388,13 +361,12 @@ export function KubernetesComponent({
         </div>
       }
     >
-      {(results || error) && (
+      {(results || execution.error) && (
         <KubernetesResults
           results={results}
-          error={error}
+          error={execution.error}
           dismiss={() => {
             setResults(null);
-            setError(null);
           }}
         />
       )}
@@ -461,7 +433,8 @@ function KubernetesResults({ results, error, dismiss }: KubernetesResultsProps) 
           </Chip>
           {results.rowCount > 0 ? (
             <span className="text-success-700 font-semibold">
-              {results.rowCount.toLocaleString()} {results.rowCount === 1 ? "resource" : "resources"} returned
+              {results.rowCount.toLocaleString()}{" "}
+              {results.rowCount === 1 ? "resource" : "resources"} returned
             </span>
           ) : (
             <span className="text-default-700 font-semibold">Command successful</span>
@@ -491,7 +464,6 @@ function KubernetesResults({ results, error, dismiss }: KubernetesResultsProps) 
               columns={results.columns}
               results={results.data || []}
               setColumns={() => {}} // Read-only
-
             />
           </div>
         )}

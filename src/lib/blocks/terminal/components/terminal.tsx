@@ -1,8 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import "@xterm/xterm/css/xterm.css";
 import { useStore } from "@/state/store";
-import { platform } from "@tauri-apps/plugin-os";
-import { useCurrentRunbookId } from "@/context/runbook_id_context";
 
 const usePersistentTerminal = (pty: string) => {
   const newPtyTerm = useStore((store) => store.newPtyTerm);
@@ -29,19 +27,15 @@ const usePersistentTerminal = (pty: string) => {
 };
 
 const TerminalComponent = ({
-  block_id,
   pty,
-  script,
   setCommandRunning,
   setExitCode,
   setCommandDuration,
-  editor,
   isFullscreen = false,
 }: any) => {
   const terminalRef = useRef(null);
   const { terminalData, isReady } = usePersistentTerminal(pty);
   const [isAttached, setIsAttached] = useState(false);
-  const currentRunbookId = useCurrentRunbookId();
 
   useEffect(() => {
     // no pty? no terminal
@@ -90,16 +84,6 @@ const TerminalComponent = ({
       setIsAttached(true);
 
       window.addEventListener("resize", windowResize);
-
-      // Run script only if it hasn't been run before for this PTY
-      if (!terminalData.hasRunInitialScript && script && terminalData.terminal.element) {
-        let isWindows = platform() == "windows";
-        let cmdEnd = isWindows ? "\r\n" : "\n";
-        let val = !script.endsWith("\n") ? script + cmdEnd : script;
-
-        terminalData.write(block_id, val, editor.document, currentRunbookId);
-        terminalData.hasRunInitialScript = true;
-      }
     }
 
     // Customize further as needed
@@ -115,7 +99,6 @@ const TerminalComponent = ({
       window.removeEventListener("resize", windowResize);
     };
   }, [terminalData, isReady]);
-
 
   if (!isReady) return null;
 

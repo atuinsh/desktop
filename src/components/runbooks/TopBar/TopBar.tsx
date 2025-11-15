@@ -5,7 +5,14 @@ import ColorAvatar from "@/components/ColorAvatar";
 import { DateTime } from "luxon";
 import { addToast, Avatar, AvatarGroup, Button, Tooltip } from "@heroui/react";
 import { RemoteRunbook } from "@/state/models";
-import { BookTextIcon, CopyIcon, PencilOffIcon, SettingsIcon, TrashIcon } from "lucide-react";
+import {
+  BookTextIcon,
+  CopyIcon,
+  PencilOffIcon,
+  RefreshCcwIcon,
+  SettingsIcon,
+  TrashIcon,
+} from "lucide-react";
 import { PresenceUserInfo } from "@/lib/phoenix_provider";
 import { useQuery } from "@tanstack/react-query";
 import { workspaceById } from "@/lib/queries/workspaces";
@@ -17,6 +24,7 @@ import PlayButton from "@/lib/blocks/common/PlayButton";
 import AtuinEnv from "@/atuin_env";
 import { open } from "@tauri-apps/plugin-shell";
 import { cn } from "@/lib/utils";
+import { resetRunbookState } from "@/lib/runtime";
 
 type TopbarProps = {
   runbook: Runbook;
@@ -199,7 +207,18 @@ export default function Topbar(props: TopbarProps) {
             ))}
           </AvatarGroup>
         </div>
-        <Tooltip content="Toggle runbook settings" placement="left" showArrow>
+        <Tooltip content="Reset any runbook state changes from block executions" placement="bottom">
+          <Button
+            isIconOnly
+            variant="flat"
+            size="sm"
+            className="mt-1 ml-2"
+            onPress={() => resetRunbookState(props.runbook.id)}
+          >
+            <RefreshCcwIcon className="h-4 w-4" />
+          </Button>
+        </Tooltip>
+        <Tooltip content="Toggle runbook settings" placement="bottom">
           <Button
             isIconOnly
             variant="flat"
@@ -217,6 +236,8 @@ export default function Topbar(props: TopbarProps) {
           isRunning={serialExecution.includes(runbook.id)}
           disabled={serialExecution.length > 0 && !serialExecution.includes(runbook.id)}
           cancellable={true}
+          tooltip="Run this runbook in serial mode (top-to-bottom)"
+          tooltipPlacement="bottom"
           onPlay={() => {
             track_event("runbooks.serial.execute");
             BlockBus.get().startWorkflow(runbook.id);

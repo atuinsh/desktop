@@ -3,8 +3,6 @@ import { DatabaseIcon } from "lucide-react";
 // @ts-ignore
 import { createReactBlockSpec } from "@blocknote/react";
 
-
-import { runQuery } from "./query";
 import { ClickhouseBlock } from "@/lib/workflow/blocks/clickhouse";
 import { DependencySpec } from "@/lib/workflow/dependency";
 import track_event from "@/tracking";
@@ -51,7 +49,6 @@ const Clickhouse = ({
       setUri={setUri}
       autoRefresh={clickhouse.autoRefresh}
       setAutoRefresh={setAutoRefresh}
-      runQuery={runQuery}
       isEditable={isEditable}
       collapseQuery={collapseQuery}
       setCollapseQuery={setCollapseQuery}
@@ -69,7 +66,7 @@ export default createReactBlockSpec(
       query: { default: "" },
       uri: { default: "" },
       autoRefresh: { default: 0 },
-      dependency: { default: "{}"},
+      dependency: { default: "{}" },
     },
     content: "none",
   },
@@ -92,7 +89,7 @@ export default createReactBlockSpec(
       const [collapseQuery, setCollapseQuery] = useBlockLocalState<boolean>(
         block.id,
         "collapsed",
-        false
+        false,
       );
 
       const handleCodeMirrorFocus = () => {
@@ -135,12 +132,12 @@ export default createReactBlockSpec(
 
       let dependency = DependencySpec.deserialize(block.props.dependency);
       let clickhouse = new ClickhouseBlock(
-        block.id, 
-        block.props.name, 
+        block.id,
+        block.props.name,
         dependency,
-        block.props.query, 
-        block.props.uri, 
-        block.props.autoRefresh
+        block.props.query,
+        block.props.uri,
+        block.props.autoRefresh,
       );
 
       return (
@@ -165,7 +162,7 @@ export const insertClickhouse = (schema: any) => (editor: typeof schema.BlockNot
   title: "Clickhouse",
   onItemClick: () => {
     track_event("runbooks.block.create", { type: "clickhouse" });
-    
+
     let clickhouseBlocks = editor.document.filter((block: any) => block.type === "clickhouse");
     let name = `Clickhouse ${clickhouseBlocks.length + 1}`;
 
