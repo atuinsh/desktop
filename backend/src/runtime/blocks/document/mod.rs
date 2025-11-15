@@ -281,14 +281,6 @@ impl Document {
         self.blocks.get_mut(index)
     }
 
-    pub fn first_block(&self) -> Option<&BlockWithContext> {
-        self.blocks.first()
-    }
-
-    pub fn last_block(&self) -> Option<&BlockWithContext> {
-        self.blocks.last()
-    }
-
     /// Build an execution context for a block, capturing all context from blocks above it
     #[allow(clippy::too_many_arguments)]
     pub fn build_execution_context(
