@@ -255,6 +255,245 @@ Actor-based system for thread-safe document operations:
 - `DocumentActor` - Background actor that processes commands and manages document state
 - Operations: update document, rebuild contexts, start/complete execution, update contexts
 
+### Query Block Architecture
+
+The execution system provides a specialized architecture for blocks that execute queries against remote services (databases, monitoring systems, etc.). This architecture promotes code reuse and consistent behavior across different query-executing blocks.
+
+**QueryBlockBehavior Trait**
+
+The `QueryBlockBehavior` trait provides a common pattern for blocks that:
+- Connect to remote services (databases, APIs, monitoring systems)
+- Execute queries/requests
+- Return structured results
+- Support cancellation and timeout handling
+
+```rust
+#[async_trait]
+pub(crate) trait QueryBlockBehavior: BlockBehavior + 'static {
+    /// The type of the connection (e.g., database pool, HTTP client)
+    type Connection: Clone + Send + Sync + 'static;
+
+    /// The type of query results returned by execute_query
+    type QueryResult: Serialize + Send + Sync;
+
+    /// The error type for the block
+    type Error: std::error::Error + Send + Sync + BlockExecutionError;
+
+    /// Resolve the query template using the execution context
+    fn resolve_query(&self, context: &ExecutionContext) -> Result<String, Self::Error>;
+
+    /// Resolve the connection string/endpoint template using the execution context
+    fn resolve_connection_string(&self, context: &ExecutionContext) -> Result<String, Self::Error>;
+
+    /// Connect to the remote service
+    async fn connect(&self, connection_string: String) -> Result<Self::Connection, Self::Error>;
+
+    /// Disconnect from the remote service
+    async fn disconnect(&self, connection: &Self::Connection) -> Result<(), Self::Error>;
+
+    /// Execute a query against the connection and return results
+    async fn execute_query(
+        &self,
+        connection: &Self::Connection,
+        query: &str,
+        context: &ExecutionContext,
+    ) -> Result<Vec<Self::QueryResult>, Self::Error>;
+
+    /// Execute the block with full lifecycle management (provided by default)
+    async fn execute_query_block(
+        self,
+        context: ExecutionContext,
+    ) -> Result<Option<ExecutionHandle>, Box<dyn std::error::Error + Send + Sync>> {
+        // Default implementation handles:
+        // - Creating execution handle
+        // - Spawning background task
+        // - Connection with timeout
+        // - Query execution
+        // - Result serialization and output
+        // - Cancellation support
+        // - Lifecycle events (started, finished, failed, cancelled)
+    }
+}
+```
+
+**Key Features:**
+- **Instance methods**: All methods take `&self`, allowing access to block-specific data (e.g., `self.period` for Prometheus)
+- **Type safety**: Associated types for Connection, QueryResult, and Error preserve type information
+- **Default implementation**: `execute_query_block()` provides common execution logic (connection, timeout, cancellation, lifecycle events)
+- **Extensible**: Blocks only need to implement the core methods specific to their service
+
+**Example - Prometheus Block:**
+```rust
+impl QueryBlockBehavior for Prometheus {
+    type Connection = (Client, String, PrometheusTimeRange);
+    type QueryResult = PrometheusQueryResult;
+    type Error = PrometheusBlockError;
+
+    async fn connect(&self, context: &ExecutionContext) -> Result<Self::Connection, Self::Error> {
+        let endpoint = self.resolve_connection_string(context)?;
+        let client = ClientBuilder::new().timeout(Duration::from_secs(30)).build()?;
+
+        // Can access self.period directly - instance method!
+        let time_range = PrometheusTimeRange::from_period(&self.period);
+
+        Ok((client, endpoint, time_range))
+    }
+
+    async fn execute_query(
+        &self,
+        connection: &Self::Connection,
+        query: &str,
+        _context: &ExecutionContext,
+    ) -> Result<Vec<Self::QueryResult>, Self::Error> {
+        let (client, endpoint, time_range) = connection;
+        // Execute Prometheus range query
+        // Parse response
+        // Return structured results
+    }
+}
+```
+
+**SqlBlockBehavior Trait**
+
+SQL blocks extend `QueryBlockBehavior` with SQL-specific functionality through a blanket implementation:
+
+```rust
+pub(crate) trait SqlBlockBehavior: BlockBehavior + 'static {
+    type Pool: Clone + Send + Sync + 'static;
+
+    /// SQL-specific methods
+    fn dialect() -> Box<dyn Dialect>;
+    fn is_query(statement: &Statement) -> bool;
+
+    async fn execute_sql_query(
+        &self,
+        pool: &Self::Pool,
+        query: &str,
+    ) -> Result<SqlBlockExecutionResult, SqlBlockError>;
+
+    async fn execute_sql_statement(
+        &self,
+        pool: &Self::Pool,
+        statement: &str,
+    ) -> Result<SqlBlockExecutionResult, SqlBlockError>;
+}
+
+// Blanket implementation automatically implements QueryBlockBehavior for all SqlBlockBehavior types
+#[async_trait]
+impl<T> QueryBlockBehavior for T
+where
+    T: SqlBlockBehavior,
+{
+    type Connection = T::Pool;
+    type QueryResult = SqlBlockExecutionResult;
+    type Error = SqlBlockError;
+
+    async fn execute_query(
+        &self,
+        connection: &Self::Connection,
+        query: &str,
+        context: &ExecutionContext,
+    ) -> Result<Vec<SqlBlockExecutionResult>, SqlBlockError> {
+        // SQL-specific logic:
+        // - Parse SQL (handles multiple semicolon-separated statements)
+        // - Distinguish queries (SELECT) from statements (INSERT/UPDATE/DELETE)
+        // - Execute each query/statement appropriately
+        // - Return results for all queries
+    }
+}
+```
+
+**Benefits:**
+- SQL blocks (Postgres, MySQL, ClickHouse, SQLite) automatically get:
+  - Connection management
+  - Timeout handling
+  - Cancellation support
+  - Lifecycle event handling
+  - SQL parsing and multiple query support
+- Only need to implement database-specific connection and execution logic
+
+**BlockExecutionError Trait**
+
+To preserve error type information while providing infrastructure error handling, all query block errors must implement `BlockExecutionError`:
+
+```rust
+pub trait BlockExecutionError: std::error::Error + Send + Sync {
+    /// Check if this error represents a cancellation
+    fn is_cancelled(&self) -> bool;
+
+    /// Factory methods for common infrastructure errors
+    fn timeout() -> Self;
+    fn cancelled() -> Self;
+    fn serialization_error(msg: String) -> Self;
+}
+```
+
+**Example Implementations:**
+
+```rust
+// SQL blocks
+impl BlockExecutionError for SqlBlockError {
+    fn is_cancelled(&self) -> bool {
+        matches!(self, SqlBlockError::Cancelled)
+    }
+
+    fn timeout() -> Self {
+        SqlBlockError::ConnectionError("Connection timed out".to_string())
+    }
+
+    fn cancelled() -> Self {
+        SqlBlockError::Cancelled
+    }
+
+    fn serialization_error(msg: String) -> Self {
+        SqlBlockError::GenericError(msg)
+    }
+}
+
+// Prometheus block
+impl BlockExecutionError for PrometheusBlockError {
+    fn is_cancelled(&self) -> bool {
+        matches!(self, PrometheusBlockError::Cancelled)
+    }
+
+    fn timeout() -> Self {
+        PrometheusBlockError::ConnectionError("Connection timed out".to_string())
+    }
+
+    fn cancelled() -> Self {
+        PrometheusBlockError::Cancelled
+    }
+
+    fn serialization_error(msg: String) -> Self {
+        PrometheusBlockError::SerializationError(msg)
+    }
+}
+```
+
+**Trait Hierarchy:**
+
+```
+BlockBehavior (base trait for all blocks)
+    ↓
+QueryBlockBehavior (query-executing blocks)
+    ↓
+    ├─ Prometheus (implements QueryBlockBehavior directly)
+    │
+    └─ SqlBlockBehavior (SQL-specific extension)
+           ↓
+           ├─ Postgres
+           ├─ MySQL
+           ├─ ClickHouse
+           └─ SQLite
+```
+
+**Architecture Benefits:**
+- **Code reuse**: Common execution logic implemented once in `QueryBlockBehavior::execute_query_block()`
+- **Type safety**: Errors preserve semantic meaning (not converted to strings)
+- **Consistency**: All query blocks behave uniformly (timeouts, cancellation, lifecycle)
+- **Extensibility**: Easy to add new query-executing blocks
+- **Maintainability**: SQL-specific logic isolated in `SqlBlockBehavior`
+
 ### Supporting Traits
 
 The execution system defines several key traits that enable extensibility and abstraction:
