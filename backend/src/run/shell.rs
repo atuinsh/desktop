@@ -10,9 +10,8 @@ use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
 use tokio::sync::RwLock;
 
-use crate::runtime::blocks::script::ScriptOutput;
-use crate::runtime::blocks::Block;
 use crate::state::AtuinState;
+use atuin_desktop_runtime::{Block, ScriptOutput};
 
 /// Execute a shell command and stream the output over a channel
 /// Unlike a pty, this is not interactive

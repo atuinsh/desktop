@@ -10,8 +10,8 @@
     "tauri": "tauri",
     "test": "vitest",
     "test-once": "vitest run",
-    "test-rs": "cd backend && cargo test",
-    "generate-bindings": "cd backend && cargo test export_bindings",
+    "test-rs": "cargo test",
+    "generate-bindings": "cargo test export_bindings",
     "docs": "cd docs && uv run mkdocs serve"
   },
   "dependencies": {

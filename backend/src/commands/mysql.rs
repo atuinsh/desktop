@@ -64,7 +64,7 @@ pub async fn mysql_query(
 
         for (i, _) in row.columns().iter().enumerate() {
             let v = row.try_get_raw(i).map_err(|e| e.to_string())?;
-            let v = crate::runtime::blocks::mysql::decode::to_json(v).map_err(|e| e.to_string())?;
+            let v = atuin_desktop_runtime::mysql_decode::to_json(v).map_err(|e| e.to_string())?;
 
             value.push(v);
         }

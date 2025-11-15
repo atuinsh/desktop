@@ -1,7 +1,9 @@
 use sqlx::{sqlite::SqliteRow, FromRow, Row, SqlitePool};
 use uuid::Uuid;
 
-use crate::runtime::document::block_context::{BlockContext, BlockContextStorage};
+use atuin_desktop_runtime::{BlockContext, BlockContextStorage};
+
+struct BlockContextWrapper(BlockContext);
 
 pub struct SqliteContextStorage {
     pool: SqlitePool,
@@ -39,13 +41,14 @@ impl BlockContextStorage for SqliteContextStorage {
         document_id: &str,
         block_id: &Uuid,
     ) -> Result<Option<BlockContext>, Box<dyn std::error::Error + Send + Sync>> {
-        let context =
+        let context: Option<BlockContextWrapper> =
             sqlx::query_as("SELECT context FROM context WHERE document_id = ? AND block_id = ?")
                 .bind(document_id)
                 .bind(block_id.to_string())
                 .fetch_optional(&self.pool)
                 .await?;
-        Ok(context)
+
+        Ok(context.map(|c| c.0))
     }
 
     async fn delete(
@@ -73,7 +76,7 @@ impl BlockContextStorage for SqliteContextStorage {
     }
 }
 
-impl<'a> FromRow<'a, SqliteRow> for BlockContext {
+impl<'a> FromRow<'a, SqliteRow> for BlockContextWrapper {
     fn from_row(row: &SqliteRow) -> Result<Self, sqlx::Error> {
         let json_context = row.get::<String, _>("context");
         let context: BlockContext =
@@ -81,6 +84,6 @@ impl<'a> FromRow<'a, SqliteRow> for BlockContext {
                 index: "context".to_string(),
                 source: Box::new(e),
             })?;
-        Ok(context)
+        Ok(BlockContextWrapper(context))
     }
 }

@@ -11,6 +11,7 @@ on:
   pull_request:
     paths:
       - "backend/**"
+      - "crates/**"
       - ".github/**"
 
 env:
@@ -62,7 +63,6 @@ jobs:
         uses: mozilla-actions/sccache-action@v0.0.7
 
       - name: Run ${{ matrix.name }}
-        working-directory: backend
         env:
           RUSTC_WRAPPER: sccache
         run: |

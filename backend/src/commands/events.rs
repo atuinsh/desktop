@@ -2,8 +2,8 @@ use async_trait::async_trait;
 use tauri::{ipc::Channel, AppHandle, Manager};
 use tokio::sync::mpsc;
 
-use crate::runtime::events::{EventBus, GCEvent};
 use crate::state::AtuinState;
+use atuin_desktop_runtime::{EventBus, GCEvent};
 
 /// Channel-based event bus implementation that forwards events to Tauri channels
 pub struct ChannelEventBus {

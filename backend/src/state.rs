@@ -13,20 +13,11 @@ use tokio::{
 use uuid::Uuid;
 
 use crate::{
-    runtime::{
-        document::actor::DocumentHandle,
-        events::GCEvent,
-        exec_log::ExecLogHandle,
-        pty_store::PtyStoreHandle,
-        ssh_pool::SshPoolHandle,
-        workflow::{
-            event::{WorkflowCommand, WorkflowEvent},
-            executor::ExecutorHandle,
-        },
-    },
-    shared_state::SharedStateHandle,
-    sqlite::DbInstances,
-    workspaces::manager::WorkspaceManager,
+    shared_state::SharedStateHandle, sqlite::DbInstances, workspaces::manager::WorkspaceManager,
+};
+use atuin_desktop_runtime::{
+    DocumentHandle, ExecLogHandle, ExecutionHandle, ExecutorHandle, GCEvent, PtyStoreHandle,
+    SshPoolHandle, WorkflowCommand, WorkflowEvent,
 };
 
 pub(crate) struct AtuinState {
@@ -81,8 +72,7 @@ pub(crate) struct AtuinState {
     pub runbook_output_variables: Arc<RwLock<HashMap<String, HashMap<String, String>>>>,
 
     // Map of block execution id -> execution handle for cancellation
-    pub block_executions:
-        Arc<RwLock<HashMap<Uuid, crate::runtime::blocks::handler::ExecutionHandle>>>,
+    pub block_executions: Arc<RwLock<HashMap<Uuid, ExecutionHandle>>>,
 
     // Map of document handles per runbook
     pub documents: Arc<RwLock<HashMap<String, Arc<DocumentHandle>>>>,

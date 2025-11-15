@@ -8,11 +8,11 @@ use uuid::Uuid;
 use crate::blocks::sqlite_context_storage::SqliteContextStorage;
 use crate::commands::events::ChannelEventBus;
 use crate::kv;
-use crate::runtime::document::actor::{DocumentHandle, LocalValueProvider};
-use crate::runtime::document::block_context::ResolvedContext;
-use crate::runtime::document::bridge::{ClientPromptResult, DocumentBridgeMessage};
-use crate::runtime::MessageChannel;
 use crate::state::AtuinState;
+use atuin_desktop_runtime::MessageChannel;
+use atuin_desktop_runtime::ResolvedContext;
+use atuin_desktop_runtime::{ClientPromptResult, DocumentBridgeMessage};
+use atuin_desktop_runtime::{DocumentHandle, LocalValueProvider};
 
 #[derive(Clone)]
 struct DocumentBridgeChannel {
