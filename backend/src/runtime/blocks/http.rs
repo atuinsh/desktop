@@ -271,10 +271,10 @@ impl From<HttpVerb> for Method {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::runtime::blocks::document::actor::{DocumentCommand, DocumentHandle};
-    use crate::runtime::blocks::document::block_context::ContextResolver;
-    use crate::runtime::blocks::document::bridge::DocumentBridgeMessage;
     use crate::runtime::blocks::handler::BlockLifecycleEvent;
+    use crate::runtime::document::actor::{DocumentCommand, DocumentHandle};
+    use crate::runtime::document::block_context::ContextResolver;
+    use crate::runtime::document::bridge::DocumentBridgeMessage;
     use crate::runtime::events::MemoryEventBus;
     use crate::runtime::MessageChannel;
     use async_trait::async_trait;

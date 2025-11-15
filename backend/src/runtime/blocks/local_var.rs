@@ -1,9 +1,7 @@
-use crate::runtime::blocks::{
-    document::{
-        actor::LocalValueProvider,
-        block_context::{BlockContext, ContextResolver, DocumentVar},
-    },
-    Block, BlockBehavior, FromDocument,
+use crate::runtime::blocks::{Block, BlockBehavior, FromDocument};
+use crate::runtime::document::{
+    actor::LocalValueProvider,
+    block_context::{BlockContext, ContextResolver, DocumentVar},
 };
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
@@ -92,7 +90,7 @@ impl BlockBehavior for LocalVar {
 
 #[cfg(test)]
 mod tests {
-    use crate::runtime::blocks::document::{
+    use crate::runtime::document::{
         actor::MemoryBlockLocalValueProvider, block_context::ResolvedContext,
     };
 

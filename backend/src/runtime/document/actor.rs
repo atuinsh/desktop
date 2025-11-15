@@ -4,13 +4,11 @@ use std::sync::Arc;
 use tokio::sync::{mpsc, oneshot};
 use uuid::Uuid;
 
-use crate::runtime::blocks::document::block_context::{
-    BlockContext, BlockContextStorage, ResolvedContext,
-};
-use crate::runtime::blocks::document::bridge::DocumentBridgeMessage;
-use crate::runtime::blocks::document::Document;
 use crate::runtime::blocks::handler::ExecutionContext;
 use crate::runtime::blocks::Block;
+use crate::runtime::document::block_context::{BlockContext, BlockContextStorage, ResolvedContext};
+use crate::runtime::document::bridge::DocumentBridgeMessage;
+use crate::runtime::document::Document;
 use crate::runtime::events::EventBus;
 use crate::runtime::MessageChannel;
 

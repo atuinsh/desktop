@@ -2,7 +2,8 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 use uuid::Uuid;
 
-use crate::runtime::blocks::{document::block_context::ResolvedContext, handler};
+use crate::runtime::blocks::handler;
+use crate::runtime::document::block_context::ResolvedContext;
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export)]

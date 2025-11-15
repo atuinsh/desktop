@@ -1,7 +1,7 @@
-use crate::runtime::blocks::document::actor::DocumentError;
-use crate::runtime::blocks::document::block_context::{BlockContext, ContextResolver};
-use crate::runtime::blocks::document::bridge::{ClientPrompt, ClientPromptResult};
-use crate::runtime::blocks::document::{actor::DocumentHandle, bridge::DocumentBridgeMessage};
+use crate::runtime::document::actor::DocumentError;
+use crate::runtime::document::block_context::{BlockContext, ContextResolver};
+use crate::runtime::document::bridge::{ClientPrompt, ClientPromptResult};
+use crate::runtime::document::{actor::DocumentHandle, bridge::DocumentBridgeMessage};
 use crate::runtime::events::{EventBus, GCEvent};
 use crate::runtime::pty_store::PtyStoreHandle;
 use crate::runtime::ssh_pool::SshPoolHandle;

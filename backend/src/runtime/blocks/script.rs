@@ -1,6 +1,6 @@
-use crate::runtime::blocks::document::block_context::{BlockExecutionOutput, DocumentVar};
 use crate::runtime::blocks::handler::BlockOutput;
 use crate::runtime::blocks::handler::{CancellationToken, ExecutionStatus};
+use crate::runtime::document::block_context::{BlockExecutionOutput, DocumentVar};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::process::Stdio;
@@ -526,9 +526,9 @@ impl Script {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::runtime::blocks::document::actor::{DocumentCommand, DocumentHandle};
-    use crate::runtime::blocks::document::block_context::ContextResolver;
     use crate::runtime::blocks::handler::ExecutionStatus;
+    use crate::runtime::document::actor::{DocumentCommand, DocumentHandle};
+    use crate::runtime::document::block_context::ContextResolver;
     use crate::runtime::events::MemoryEventBus;
     use std::collections::HashMap;
     use std::sync::Arc;

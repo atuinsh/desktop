@@ -9,7 +9,8 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 use uuid::Uuid;
 
-use crate::runtime::blocks::{document::actor::LocalValueProvider, Block, BlockBehavior};
+use crate::runtime::blocks::{Block, BlockBehavior};
+use crate::runtime::document::actor::LocalValueProvider;
 
 /// A single block's context - can store multiple typed values
 #[derive(Default, Debug)]

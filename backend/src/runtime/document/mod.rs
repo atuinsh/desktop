@@ -8,16 +8,16 @@ use uuid::Uuid;
 use crate::{
     runtime::{
         blocks::{
-            document::{
-                actor::{DocumentError, DocumentHandle, LocalValueProvider},
-                block_context::{
-                    BlockContext, BlockContextStorage, BlockWithContext, ContextResolver,
-                    ResolvedContext,
-                },
-                bridge::DocumentBridgeMessage,
-            },
             handler::{ExecutionContext, ExecutionHandle},
             Block, KNOWN_UNSUPPORTED_BLOCKS,
+        },
+        document::{
+            actor::{DocumentError, DocumentHandle, LocalValueProvider},
+            block_context::{
+                BlockContext, BlockContextStorage, BlockWithContext, ContextResolver,
+                ResolvedContext,
+            },
+            bridge::DocumentBridgeMessage,
         },
         events::{EventBus, GCEvent},
         pty_store::PtyStoreHandle,

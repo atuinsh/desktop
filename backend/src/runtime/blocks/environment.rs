@@ -1,9 +1,7 @@
-use crate::runtime::blocks::{
-    document::{
-        actor::LocalValueProvider,
-        block_context::{BlockContext, ContextResolver, DocumentEnvVar},
-    },
-    Block, BlockBehavior,
+use crate::runtime::blocks::{Block, BlockBehavior, FromDocument};
+use crate::runtime::document::{
+    actor::LocalValueProvider,
+    block_context::{BlockContext, ContextResolver, DocumentEnvVar},
 };
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
@@ -54,9 +52,8 @@ impl BlockBehavior for Environment {
     }
 }
 
-impl Environment {
-    #[allow(dead_code)] // Used for JSON parsing but not currently called
-    pub fn from_document(block_data: &serde_json::Value) -> Result<Self, String> {
+impl FromDocument for Environment {
+    fn from_document(block_data: &serde_json::Value) -> Result<Self, String> {
         let id = block_data
             .get("id")
             .and_then(|v| v.as_str())
@@ -90,7 +87,7 @@ impl Environment {
 
 #[cfg(test)]
 mod tests {
-    use crate::runtime::blocks::document::block_context::ResolvedContext;
+    use crate::runtime::document::block_context::ResolvedContext;
 
     use super::*;
 

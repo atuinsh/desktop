@@ -1,7 +1,7 @@
 use sqlx::{sqlite::SqliteRow, FromRow, Row, SqlitePool};
 use uuid::Uuid;
 
-use crate::runtime::blocks::document::block_context::{BlockContext, BlockContextStorage};
+use crate::runtime::document::block_context::{BlockContext, BlockContextStorage};
 
 pub struct SqliteContextStorage {
     pool: SqlitePool,

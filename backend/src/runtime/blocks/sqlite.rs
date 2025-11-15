@@ -266,9 +266,9 @@ impl SqlBlockBehavior for SQLite {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::runtime::blocks::document::actor::{DocumentCommand, DocumentHandle};
-    use crate::runtime::blocks::document::block_context::ContextResolver;
     use crate::runtime::blocks::handler::ExecutionStatus;
+    use crate::runtime::document::actor::{DocumentCommand, DocumentHandle};
+    use crate::runtime::document::block_context::ContextResolver;
     use crate::runtime::events::{GCEvent, MemoryEventBus};
     use std::sync::Arc;
     use tokio::sync::mpsc;

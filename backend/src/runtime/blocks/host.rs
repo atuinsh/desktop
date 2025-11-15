@@ -37,12 +37,10 @@ use serde::{Deserialize, Serialize};
 use typed_builder::TypedBuilder;
 use uuid::Uuid;
 
-use crate::runtime::blocks::{
-    document::{
-        actor::LocalValueProvider,
-        block_context::{BlockContext, ContextResolver, DocumentSshHost},
-    },
-    Block, BlockBehavior,
+use crate::runtime::blocks::{Block, BlockBehavior};
+use crate::runtime::document::{
+    actor::LocalValueProvider,
+    block_context::{BlockContext, ContextResolver, DocumentSshHost},
 };
 use async_trait::async_trait;
 
@@ -120,7 +118,7 @@ impl BlockBehavior for Host {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::runtime::blocks::document::block_context::ResolvedContext;
+    use crate::runtime::document::block_context::ResolvedContext;
     use serde_json::json;
 
     #[tokio::test]

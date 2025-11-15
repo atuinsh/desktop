@@ -1,6 +1,5 @@
 pub(crate) mod clickhouse;
 pub(crate) mod directory;
-pub(crate) mod document;
 pub(crate) mod editor;
 pub(crate) mod environment;
 pub(crate) mod handler;
@@ -41,12 +40,12 @@ pub const KNOWN_UNSUPPORTED_BLOCKS: &[&str] = &[
     "video",
 ];
 
-use crate::runtime::blocks::{
+use crate::runtime::{
+    blocks::handler::{ExecutionContext, ExecutionHandle},
     document::{
         actor::LocalValueProvider,
         block_context::{BlockContext, ContextResolver},
     },
-    handler::{ExecutionContext, ExecutionHandle},
 };
 
 pub trait FromDocument: Sized {

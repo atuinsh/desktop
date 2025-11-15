@@ -8,9 +8,9 @@ use uuid::Uuid;
 use crate::blocks::sqlite_context_storage::SqliteContextStorage;
 use crate::commands::events::ChannelEventBus;
 use crate::kv;
-use crate::runtime::blocks::document::actor::{DocumentHandle, LocalValueProvider};
-use crate::runtime::blocks::document::block_context::ResolvedContext;
-use crate::runtime::blocks::document::bridge::{ClientPromptResult, DocumentBridgeMessage};
+use crate::runtime::document::actor::{DocumentHandle, LocalValueProvider};
+use crate::runtime::document::block_context::ResolvedContext;
+use crate::runtime::document::bridge::{ClientPromptResult, DocumentBridgeMessage};
 use crate::runtime::MessageChannel;
 use crate::state::AtuinState;
 
