@@ -407,7 +407,7 @@ impl SshPool {
                 reply_to,
                 result_tx,
             } => {
-                let username = username.unwrap_or("root".to_string());
+                let username = username.unwrap_or_else(whoami::username);
                 let session = self
                     .pool
                     .connect(&host, Some(username.as_str()), None)
@@ -499,7 +499,7 @@ impl SshPool {
                 width,
                 height,
             } => {
-                let username = username.unwrap_or("root".to_string());
+                let username = username.unwrap_or_else(whoami::username);
                 let session = self
                     .pool
                     .connect(&host, Some(username.as_str()), None)

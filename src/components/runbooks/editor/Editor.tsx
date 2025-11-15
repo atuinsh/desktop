@@ -24,6 +24,7 @@ import {
   LinkIcon,
   BlocksIcon,
   MinusIcon,
+  ClipboardPasteIcon,
 } from "lucide-react";
 
 import { AIGeneratePopup } from "./AIGeneratePopup";
@@ -47,6 +48,7 @@ import Runbook from "@/state/runbooks/runbook";
 import { insertHttp } from "@/lib/blocks/http";
 import { uuidv7 } from "uuidv7";
 import { DuplicateBlockItem } from "./ui/DuplicateBlockItem";
+import { CopyBlockItem } from "./ui/CopyBlockItem";
 
 import { schema } from "./create_editor";
 import RunbookEditor from "@/lib/runbook_editor";
@@ -219,6 +221,19 @@ const insertHorizontalRule = (editor: typeof schema.BlockNoteEditor) => ({
   group: "Content",
 });
 
+const insertPastedBlock = (editor: typeof schema.BlockNoteEditor, copiedBlock: any) => ({
+  title: "Paste Block",
+  subtext: "Paste the previously copied block",
+  onItemClick: () => {
+    track_event("runbooks.block.paste", { type: copiedBlock.type });
+
+    editor.insertBlocks([copiedBlock], editor.getTextCursorPosition().block.id, "before");
+  },
+  icon: <ClipboardPasteIcon size={18} />,
+  aliases: ["paste", "insert"],
+  group: "Content",
+});
+
 // AI Generate function
 const insertAIGenerate = (
   editor: any,
@@ -247,6 +262,7 @@ export default function Editor({ runbook, editable, runbookEditor }: EditorProps
   const colorMode = useStore((state) => state.functionalColorMode);
   const fontSize = useStore((state) => state.fontSize);
   const fontFamily = useStore((state) => state.fontFamily);
+  const copiedBlock = useStore((state) => state.copiedBlock);
   const serialExecuteRef = useRef<(() => void) | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [aiPopupVisible, setAiPopupVisible] = useState(false);
@@ -387,17 +403,36 @@ export default function Editor({ runbook, editable, runbookEditor }: EditorProps
     }
   }, [editor]);
 
-  const handleAIGenerate = useCallback(
-    (blocks: any[]) => {
+  const insertionAnchorRef = useRef<string | null>(null);
+  const lastInsertedBlockRef = useRef<string | null>(null);
+
+  const handleBlockGenerated = useCallback(
+    (block: any) => {
       if (!editor) return;
 
-      const currentPosition = editor.getTextCursorPosition();
-
-      editor.insertBlocks(blocks, currentPosition.block.id, "after");
-      closeAIPopup();
+      // On first block, store the anchor (cursor position) and insert after it
+      if (!insertionAnchorRef.current) {
+        insertionAnchorRef.current = editor.getTextCursorPosition().block.id;
+      }
+      
+      // Insert after the last inserted block, or after anchor if this is the first
+      const insertAfterId = lastInsertedBlockRef.current || insertionAnchorRef.current;
+      
+      const insertedBlocks = editor.insertBlocks([block], insertAfterId, "after");
+      
+      // Track the last inserted block for the next one
+      if (insertedBlocks && insertedBlocks.length > 0) {
+        lastInsertedBlockRef.current = insertedBlocks[0].id;
+      }
     },
-    [editor, closeAIPopup],
+    [editor],
   );
+
+  const handleGenerateComplete = useCallback(() => {
+    insertionAnchorRef.current = null;
+    lastInsertedBlockRef.current = null;
+    closeAIPopup();
+  }, [closeAIPopup]);
 
   const serialExecuteCallback = useCallback(async () => {
     if (!editor || !runbook) {
@@ -683,6 +718,7 @@ export default function Editor({ runbook, editable, runbookEditor }: EditorProps
                 insertRunbookLink(editor as any, showRunbookLinkPopup),
                 insertSavedBlock(editor as any, showSavedBlockPopup),
                 insertHorizontalRule(editor as any),
+                ...(copiedBlock.isSome() ? [insertPastedBlock(editor as any, copiedBlock.unwrap())] : []),
 
                 // Monitoring group
                 insertPrometheus(schema)(editor),
@@ -719,6 +755,7 @@ export default function Editor({ runbook, editable, runbookEditor }: EditorProps
                 <DragHandleMenu {...props}>
                   <DeleteBlockItem {...props} />
                   <DuplicateBlockItem {...props} />
+                  <CopyBlockItem {...props} />
                   <SaveBlockItem {...props} />
                 </DragHandleMenu>
               )}
@@ -732,7 +769,8 @@ export default function Editor({ runbook, editable, runbookEditor }: EditorProps
         <AIGeneratePopup
           isVisible={aiPopupVisible}
           position={aiPopupPosition}
-          onGenerate={handleAIGenerate}
+          onBlockGenerated={handleBlockGenerated}
+          onGenerateComplete={handleGenerateComplete}
           onClose={closeAIPopup}
           getEditorContext={getEditorContext}
         />

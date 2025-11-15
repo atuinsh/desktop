@@ -520,7 +520,7 @@ dependencies = [
 
 [[package]]
 name = "atuin-desktop"
-version = "0.1.10"
+version = "0.1.11"
 dependencies = [
  "async-trait",
  "atuin-client",
@@ -591,6 +591,7 @@ dependencies = [
  "uuid",
  "vt100",
  "walkdir",
+ "whoami",
 ]
 
 [[package]]

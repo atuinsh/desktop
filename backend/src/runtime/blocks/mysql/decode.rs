@@ -26,7 +26,7 @@ pub(crate) fn to_json(v: MySqlValueRef) -> Result<JsonValue> {
     }
 
     let res = match v.type_info().name() {
-        "VARCHAR" | "CHAR" | "TEXT" | "TINYTEXT" | "MEDIUMTEXT" | "LONGTEXT" => {
+        "VARCHAR" | "CHAR" | "TEXT" | "TINYTEXT" | "MEDIUMTEXT" | "LONGTEXT" | "ENUM" => {
             match ValueRef::to_owned(&v).try_decode::<String>() {
                 Ok(v) => JsonValue::String(v),
                 _ => JsonValue::Null,

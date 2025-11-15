@@ -1,5 +1,5 @@
-import { generateText } from "ai";
-import { createModel } from "./provider";
+import { generateText, streamText } from "ai";
+import { createModel, type ModelConfig } from "./provider";
 import { Settings } from "@/state/settings";
 import { invoke } from "@tauri-apps/api/core";
 import DevConsole from "../dev/dev_console";
@@ -13,6 +13,8 @@ export interface BlockSpec {
 export interface GenerateBlocksRequest {
   prompt: string;
   apiKey?: string;
+  apiEndpoint?: string;
+  model?: string;
   editorContext?: {
     blocks: any[];
     currentBlockId: string;
@@ -25,6 +27,13 @@ export interface GenerateBlocksResponse {
   explanation?: string;
 }
 
+export interface StreamGenerateBlocksRequest extends GenerateBlocksRequest {
+  onBlock: (block: BlockSpec) => void;
+  onComplete: () => void;
+  onError: (error: Error) => void;
+  abortSignal?: AbortSignal;
+}
+
 const SYSTEM_PROMPT = `You are an expert at generating runbooks for operational tasks. You will be fed a prompt, and need to generate blocks. 
 
 Blocks are the building blocks of a runbook, and can be anything from a terminal to a postgresql client.
@@ -32,11 +41,16 @@ Blocks are the building blocks of a runbook, and can be anything from a terminal
 You have spent your career as a devops engineer, and you are now an expert at creating practical, executable runbooks.
 
 DEPENDENCY MANAGEMENT:
-- ALWAYS check if required commands/tools exist before using them
-- Create ONE SINGLE 'run' block for all dependency checks (name: "Check Dependencies")
-- Use single-line checks with || to chain commands: command -v jq || brew install jq
-- Use a single line per dep, do not chain with &&
-- Common tools: docker, node, python3, aws, kubectl, git, curl, jq
+- Only include dependency checks when the user explicitly asks for installation steps
+- Prefer suggesting commands that use common tools already installed on most systems (curl, grep, awk, etc.)
+- If suggesting specialized tools, mention them but don't auto-install
+
+STREAMING OUTPUT FORMAT:
+- Output each block as a separate JSON object on its own line (JSON Lines format)
+- Each line must be a complete, valid JSON object representing a single block
+- Do NOT wrap blocks in an array or outer object
+- Output blocks one at a time, one per line
+- After all blocks, output a final line with just "DONE"
 
 Available block types:
 - run: Terminal command execution (props: code, name) - PREFERRED for single commands or anything that is long running/interactive
@@ -88,27 +102,23 @@ EDITOR BLOCKS: Use 'editor' blocks instead of heredocs for multi-line content. S
 
 TEMPLATE VARIABLES WITH EDITOR: When you need large inputs that will be used later in the runbook, create an editor block with a variableName, then reference it using {{ var.variableName }} in subsequent blocks.
 
-Respond ONLY with valid JSON in this format:
-{
-  "blocks": [
-    {"type": "paragraph", "content": [{"type": "text", "text": "Description text"}]},
-    {"type": "run", "props": {"code": "command", "name": "Step name"}},
-    {"type": "editor", "props": {"code": "content", "name": "Config File", "language": "yaml", "variableName": "config"}},
-    {"type": "env", "props": {"name": "VAR_NAME", "value": "value"}}
-  ],
-  "explanation": "Brief explanation of the runbook"
-}
+Output each block on a separate line as valid JSON, for example:
+{"type": "paragraph", "content": [{"type": "text", "text": "Description text"}]}
+{"type": "run", "props": {"code": "command", "name": "Step name"}}
+{"type": "env", "props": {"name": "VAR_NAME", "value": "value"}}
+DONE
 
-Do NOT include a code fence in your response. Just the object.
+Do NOT include a code fence. Do NOT wrap blocks in an outer object or array.
 
 IMPORTANT GUIDELINES:
-- Prefer the MINIMUM number of blocks needed. Aim for 1-3 blocks total when possible.
+- Balance blocks with explanation: Start with a paragraph explaining the task, then provide blocks
+- Use 'paragraph' blocks to explain what you're about to do or provide context between steps
+- Prefer the MINIMUM number of blocks needed for execution - quality over quantity
 - Use 'run' blocks for single commands, NOT 'script' blocks unless you need multi-line shell scripts
 - NEVER include shebangs (#!/bin/bash) - these are handled automatically
-- Focus on the core task, avoid unnecessary explanatory text
 - Use descriptive, action-oriented names for blocks
-- ALWAYS include dependency checks when using tools that might not be installed
-- Include dependency checks as the FIRST block when tools are required
+- Use common system tools when possible, avoid adding new dependencies unless explicitly requested
+- Make runbooks readable and understandable, not just executable
 
 TERMINAL BLOCK ISOLATION:
 - Each 'run' and 'script' block spawns its own independent PTY process
@@ -185,12 +195,17 @@ export async function generateBlocks(
     throw new Error("AI features are disabled. Enable them in Settings to use AI-powered runbook generation.");
   }
 
-  // Get API key from settings or use provided key
+  // Get API configuration from settings or use provided values
   const storedApiKey = await Settings.aiApiKey();
+  const storedEndpoint = await Settings.aiApiEndpoint();
+  const storedModel = await Settings.aiModel();
+  
   const apiKey = request.apiKey || storedApiKey;
+  const apiEndpoint = request.apiEndpoint || storedEndpoint;
+  const modelName = request.model || storedModel;
   
   if (!apiKey) {
-    throw new Error("No API key configured. Please set your Anthropic API key in Settings.");
+    throw new Error("No API key configured. Please set your API key in Settings.");
   }
 
   // Get platform information for dependency management
@@ -221,10 +236,16 @@ ${JSON.stringify(blocks, null, 2)}
 \`\`\``;
   }
 
-  const model = createModel(apiKey);
+  const modelConfig: ModelConfig = {
+    apiKey,
+    baseURL: apiEndpoint || undefined,
+    model: modelName || undefined,
+  };
+
+  const model = createModel(modelConfig);
 
   if (!model) {
-    throw new Error("AI model not configured. Please check your API key in settings.");
+    throw new Error("AI model not configured. Please check your API settings.");
   }
 
   try {
@@ -256,6 +277,142 @@ ${JSON.stringify(blocks, null, 2)}
     throw new Error(
       `Block generation failed: ${error instanceof Error ? error.message : "Unknown error"}`,
     );
+  }
+}
+
+// Streaming version that calls callbacks as blocks are generated
+export async function streamGenerateBlocks(
+  request: StreamGenerateBlocksRequest,
+): Promise<void> {
+  // Check if AI is enabled first
+  const aiEnabled = await Settings.aiEnabled();
+  if (!aiEnabled) {
+    const error = new Error("AI features are disabled. Enable them in Settings to use AI-powered runbook generation.");
+    request.onError(error);
+    throw error;
+  }
+
+  // Get API configuration from settings or use provided values
+  const storedApiKey = await Settings.aiApiKey();
+  const storedEndpoint = await Settings.aiApiEndpoint();
+  const storedModel = await Settings.aiModel();
+  
+  const apiKey = request.apiKey || storedApiKey;
+  const apiEndpoint = request.apiEndpoint || storedEndpoint;
+  const modelName = request.model || storedModel;
+  
+  if (!apiKey) {
+    const error = new Error("No API key configured. Please set your API key in Settings.");
+    request.onError(error);
+    throw error;
+  }
+
+  // Get platform information for dependency management
+  const platform = await getPlatformInfo();
+  
+  // Build enhanced prompt with context
+  let enhancedPrompt = `${request.prompt}
+
+PLATFORM CONTEXT:
+- OS: ${platform.os}
+- Architecture: ${platform.arch}
+- Package Manager: ${platform.packageManager}`;
+
+  // Add editor context if provided
+  if (request.editorContext) {
+    const { blocks, currentBlockId, currentBlockIndex } = request.editorContext;
+    const totalBlocks = blocks.length;
+    
+    enhancedPrompt += `
+
+EDITOR CONTEXT:
+- Current document has ${totalBlocks} blocks
+- Cursor is at block ${currentBlockIndex + 1} (ID: ${currentBlockId})
+- When user says "above" or "below", they mean relative to block ${currentBlockIndex + 1}
+- Current document blocks:
+\`\`\`json
+${JSON.stringify(blocks, null, 2)}
+\`\`\``;
+  }
+
+  const modelConfig: ModelConfig = {
+    apiKey,
+    baseURL: apiEndpoint || undefined,
+    model: modelName || undefined,
+  };
+
+  const model = createModel(modelConfig);
+
+  if (!model) {
+    const error = new Error("AI model not configured. Please check your API settings.");
+    request.onError(error);
+    throw error;
+  }
+
+  try {
+    const result = await streamText({
+      model,
+      system: SYSTEM_PROMPT,
+      prompt: enhancedPrompt,
+      abortSignal: request.abortSignal,
+    });
+
+    let buffer = "";
+    
+    // Process the stream
+    for await (const chunk of result.textStream) {
+      // Check if aborted
+      if (request.abortSignal?.aborted) {
+        const abortError = new Error('Generation cancelled');
+        abortError.name = 'AbortError';
+        throw abortError;
+      }
+      
+      buffer += chunk;
+      
+      // Process complete lines
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || ""; // Keep the incomplete line in buffer
+      
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
+        
+        // Check for completion marker
+        if (trimmed === "DONE") {
+          request.onComplete();
+          return;
+        }
+        
+        // Try to parse as JSON block
+        try {
+          const block = JSON.parse(trimmed) as BlockSpec;
+          request.onBlock(block);
+        } catch (parseError) {
+          console.warn("Failed to parse line as JSON:", trimmed, parseError);
+          // Continue processing, some lines might be partial
+        }
+      }
+    }
+    
+    // Process any remaining buffer
+    if (buffer.trim() && buffer.trim() !== "DONE") {
+      try {
+        const block = JSON.parse(buffer.trim()) as BlockSpec;
+        request.onBlock(block);
+      } catch (parseError) {
+        console.warn("Failed to parse final buffer as JSON:", buffer, parseError);
+      }
+    }
+    
+    request.onComplete();
+  } catch (error) {
+    console.error("Failed to stream generate blocks:", error);
+    const err = new Error(
+      `Block generation failed: ${error instanceof Error ? error.message : "Unknown error"}`,
+    );
+    request.onError(err);
+    throw err;
   }
 }
 

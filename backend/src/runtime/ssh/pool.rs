@@ -36,7 +36,8 @@ impl Pool {
         username: Option<&str>,
         auth: Option<Authentication>,
     ) -> Result<Arc<Session>> {
-        let username = username.unwrap_or("root");
+        let current_user = whoami::username();
+        let username = username.unwrap_or(&current_user);
         let key = format!("{username}@{host}");
 
         log::debug!("connecting to {key}");

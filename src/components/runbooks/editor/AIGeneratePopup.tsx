@@ -1,12 +1,13 @@
-import { useCallback } from "react";
-import { generateBlocks, GenerateBlocksRequest } from "@/lib/ai/block_generator";
+import { useCallback, useRef, useEffect } from "react";
+import { streamGenerateBlocks, StreamGenerateBlocksRequest, BlockSpec } from "@/lib/ai/block_generator";
 import { AIPopupBase } from "./ui/AIPopupBase";
 import track_event from "@/tracking";
 
 interface AIGeneratePopupProps {
   isVisible: boolean;
   position: { x: number; y: number };
-  onGenerate: (blocks: any[]) => void;
+  onBlockGenerated: (block: BlockSpec) => void;
+  onGenerateComplete: () => void;
   onClose: () => void;
   getEditorContext?: () => Promise<{
     blocks: any[];
@@ -15,26 +16,77 @@ interface AIGeneratePopupProps {
   } | undefined>;
 }
 
-export function AIGeneratePopup({ isVisible, position, onGenerate, onClose, getEditorContext }: AIGeneratePopupProps) {
+export function AIGeneratePopup({ 
+  isVisible, 
+  position, 
+  onBlockGenerated, 
+  onGenerateComplete, 
+  onClose, 
+  getEditorContext 
+}: AIGeneratePopupProps) {
+  const abortControllerRef = useRef<AbortController | null>(null);
+
   const handleGenerate = useCallback(async (prompt: string) => {
     track_event("runbooks.ai.generate_popup", { prompt_length: prompt.length });
+    
+    // Create abort controller for this generation
+    abortControllerRef.current = new AbortController();
     
     // Get editor context if available
     const editorContext = getEditorContext ? await getEditorContext() : undefined;
     
-    const request: GenerateBlocksRequest = { 
-      prompt,
-      editorContext 
-    };
-    const response = await generateBlocks(request);
+    let blockCount = 0;
     
-    track_event("runbooks.ai.generate_success", { 
-      blocks_generated: response.blocks.length,
-      prompt_length: prompt.length 
-    });
+    const request: StreamGenerateBlocksRequest = { 
+      prompt,
+      editorContext,
+      abortSignal: abortControllerRef.current.signal,
+      onBlock: (block: BlockSpec) => {
+        blockCount++;
+        onBlockGenerated(block);
+      },
+      onComplete: () => {
+        track_event("runbooks.ai.generate_success", { 
+          blocks_generated: blockCount,
+          prompt_length: prompt.length 
+        });
+        abortControllerRef.current = null;
+        onGenerateComplete();
+      },
+      onError: (error: Error) => {
+        if (error.name === 'AbortError') {
+          track_event("runbooks.ai.generate_cancelled", { 
+            blocks_generated: blockCount,
+            prompt_length: prompt.length 
+          });
+        } else {
+          track_event("runbooks.ai.generate_error", { 
+            error: error.message,
+            prompt_length: prompt.length 
+          });
+        }
+        abortControllerRef.current = null;
+        throw error;
+      }
+    };
+    
+    try {
+      await streamGenerateBlocks(request);
+    } catch (error) {
+      // Silently handle abort errors (user cancelled)
+      if (error instanceof Error && error.name !== 'AbortError') {
+        throw error;
+      }
+    }
+  }, [onBlockGenerated, onGenerateComplete, getEditorContext]);
 
-    onGenerate(response.blocks);
-  }, [onGenerate, getEditorContext]);
+  // Cancel ongoing generation when popup closes
+  useEffect(() => {
+    if (!isVisible && abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+  }, [isVisible]);
 
   return (
     <AIPopupBase
