@@ -8,7 +8,22 @@ use crate::runtime::blocks::{
     BlockBehavior,
 };
 
+pub trait BlockExecutionError {
+    /// Create a cancellation error; this is used to indicate that the operation was cancelled by the user.
+    fn cancelled() -> Self;
+
+    /// Create a timeout error; this is used to indicate that an operation timed out.
+    fn timeout(message: String) -> Self;
+
+    /// Create a serialization error; this is used to indicate that an error occurred while serializing data.
+    fn serialization_error(message: String) -> Self;
+
+    /// Whether or not this error is due to cancellation
+    fn is_cancelled(&self) -> bool;
+}
+
 #[derive(Debug, thiserror::Error)]
+#[allow(dead_code)]
 pub enum QueryBlockError {
     #[error("Query error: {0}")]
     QueryError(String),
@@ -22,6 +37,12 @@ pub enum QueryBlockError {
     #[error("Connection error: {0}")]
     ConnectionError(String),
 
+    #[error("Error serializing data: {0}")]
+    SerializationError(String),
+
+    #[error("Operation timed out")]
+    Timeout,
+
     #[error("Cancelled")]
     Cancelled,
 
@@ -29,15 +50,21 @@ pub enum QueryBlockError {
     GenericError(String),
 }
 
-impl QueryBlockError {
-    pub fn is_cancelled(&self) -> bool {
-        matches!(self, QueryBlockError::Cancelled)
+impl BlockExecutionError for QueryBlockError {
+    fn timeout(_message: String) -> Self {
+        QueryBlockError::Timeout
     }
-}
 
-impl From<&str> for QueryBlockError {
-    fn from(value: &str) -> Self {
-        QueryBlockError::GenericError(value.to_string())
+    fn cancelled() -> Self {
+        QueryBlockError::Cancelled
+    }
+
+    fn serialization_error(message: String) -> Self {
+        QueryBlockError::SerializationError(message)
+    }
+
+    fn is_cancelled(&self) -> bool {
+        matches!(self, QueryBlockError::Cancelled)
     }
 }
 
@@ -52,8 +79,8 @@ pub(crate) trait QueryBlockBehavior: BlockBehavior + 'static {
     /// The type of query results returned by execute_query
     type QueryResult: Serialize + Send + Sync;
 
-    /// The error type for this query block
-    type Error: std::error::Error + Send + Sync + From<String> + 'static;
+    /// The error type for the block; must implement [`BlockExecutionError`]
+    type Error: std::error::Error + Send + Sync + BlockExecutionError;
 
     /// Resolve the query template using the execution context
     fn resolve_query(&self, context: &ExecutionContext) -> Result<String, Self::Error>;
@@ -62,7 +89,7 @@ pub(crate) trait QueryBlockBehavior: BlockBehavior + 'static {
     fn resolve_connection_string(&self, context: &ExecutionContext) -> Result<String, Self::Error>;
 
     /// Connect to the remote service
-    async fn connect(&self, context: &ExecutionContext) -> Result<Self::Connection, Self::Error>;
+    async fn connect(&self, connection_string: String) -> Result<Self::Connection, Self::Error>;
 
     /// Disconnect from the remote service
     async fn disconnect(&self, connection: &Self::Connection) -> Result<(), Self::Error>;
@@ -74,9 +101,6 @@ pub(crate) trait QueryBlockBehavior: BlockBehavior + 'static {
         query: &str,
         context: &ExecutionContext,
     ) -> Result<Vec<Self::QueryResult>, Self::Error>;
-
-    /// Check if an error is a cancellation error
-    fn is_cancelled_error(error: &Self::Error) -> bool;
 
     /// Execute the block. Creates an execution handle and manages all lifecycle events.
     /// This is the main entry point that handles the full execution lifecycle.
@@ -92,7 +116,7 @@ pub(crate) trait QueryBlockBehavior: BlockBehavior + 'static {
                     let _ = context.block_finished(None, true).await;
                 }
                 Err(e) => {
-                    if Self::is_cancelled_error(&e) {
+                    if e.is_cancelled() {
                         let _ = context.block_cancelled().await;
                     } else {
                         let _ = context.block_failed(e.to_string()).await;
@@ -112,6 +136,7 @@ pub(crate) trait QueryBlockBehavior: BlockBehavior + 'static {
         let cancellation_receiver = context.handle().cancellation_token.take_receiver();
         let block_id = self.id();
         let query = self.resolve_query(&context)?;
+        let connection_string = self.resolve_connection_string(&context)?;
 
         // Send block started event
         let _ = context.block_started().await;
@@ -128,7 +153,7 @@ pub(crate) trait QueryBlockBehavior: BlockBehavior + 'static {
         // Connect with timeout
         let connection = {
             let timeout = tokio::time::sleep(Duration::from_secs(10));
-            let connection_future = self.connect(&context);
+            let connection_future = self.connect(connection_string);
 
             tokio::select! {
                 result = connection_future => {
@@ -149,8 +174,7 @@ pub(crate) trait QueryBlockBehavior: BlockBehavior + 'static {
                 }
                 _ = timeout => {
                     let message = "Connection timed out after 10 seconds.".to_string();
-                    let error_msg = QueryBlockError::ConnectionError(message).to_string();
-                    return Err(Self::Error::from(error_msg));
+                    return Err(Self::Error::timeout(message));
                 }
             }
         };
@@ -173,16 +197,12 @@ pub(crate) trait QueryBlockBehavior: BlockBehavior + 'static {
                     .send_output(
                         BlockOutput::builder()
                             .block_id(block_id)
-                            .object(
-                                serde_json::to_value(result).map_err(|e| {
-                                    let error_msg = QueryBlockError::GenericError(format!(
-                                        "Unable to serialize query result: {}",
-                                        e
-                                    ))
-                                    .to_string();
-                                    Self::Error::from(error_msg)
-                                })?,
-                            )
+                            .object(serde_json::to_value(result).map_err(|e| {
+                                Self::Error::serialization_error(format!(
+                                    "Unable to serialize query result: {}",
+                                    e
+                                ))
+                            })?)
                             .build(),
                     )
                     .await;
@@ -196,8 +216,7 @@ pub(crate) trait QueryBlockBehavior: BlockBehavior + 'static {
             tokio::select! {
                 _ = cancel_rx => {
                     let _ = self.disconnect(&connection).await;
-                    let error_msg = QueryBlockError::Cancelled.to_string();
-                    return Err(Self::Error::from(error_msg));
+                    return Err(Self::Error::cancelled());
                 }
                 result = execution_task => {
                     let _ = self.disconnect(&connection).await;

@@ -6,20 +6,17 @@ use sqlparser::ast::Statement;
 use sqlparser::dialect::{Dialect, MySqlDialect};
 use sqlx::{mysql::MySqlConnectOptions, Column, MySqlPool, Row};
 use std::str::FromStr;
-use std::sync::Arc;
 use std::time::Instant;
-use tokio::sync::RwLock;
 use typed_builder::TypedBuilder;
 use uuid::Uuid;
 
-use crate::runtime::blocks::handler::ExecutionStatus;
 use crate::runtime::blocks::query_block::QueryBlockBehavior;
 use crate::runtime::blocks::sql_block::{
     SqlBlockBehavior, SqlBlockError, SqlBlockExecutionResult, SqlQueryResult, SqlStatementResult,
 };
 use crate::runtime::blocks::{Block, BlockBehavior};
 
-use super::handler::{CancellationToken, ExecutionContext, ExecutionHandle};
+use super::handler::{ExecutionContext, ExecutionHandle};
 use super::FromDocument;
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, TypedBuilder)]

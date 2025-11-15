@@ -1,22 +1,18 @@
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::Value;
 use sqlparser::ast::Statement;
 use sqlparser::dialect::{ClickHouseDialect, Dialect};
 use std::time::{Duration, Instant};
 use typed_builder::TypedBuilder;
-use url::Url;
 use uuid::Uuid;
 
-use crate::runtime::blocks::document::block_context::BlockExecutionOutput;
-use crate::runtime::blocks::handler::{BlockOutput, ExecutionStatus};
 use crate::runtime::blocks::query_block::QueryBlockBehavior;
 use crate::runtime::blocks::sql_block::{
     SqlBlockBehavior, SqlBlockError, SqlBlockExecutionResult, SqlQueryResult, SqlStatementResult,
 };
 use crate::runtime::blocks::{Block, BlockBehavior};
-use crate::runtime::events::GCEvent;
 
-use super::handler::{CancellationToken, ExecutionContext, ExecutionHandle};
+use super::handler::{ExecutionContext, ExecutionHandle};
 use super::FromDocument;
 
 type ClientWithUri = (reqwest::Client, String);

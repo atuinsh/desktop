@@ -9,8 +9,8 @@ use ts_rs::TS;
 use typed_builder::TypedBuilder;
 
 use crate::runtime::blocks::{
-    handler::{BlockOutput, ExecutionContext, ExecutionHandle},
-    query_block::QueryBlockBehavior,
+    handler::{BlockOutput, ExecutionContext},
+    query_block::{BlockExecutionError, QueryBlockBehavior, QueryBlockError},
     BlockBehavior,
 };
 
@@ -18,6 +18,15 @@ use crate::runtime::blocks::{
 pub enum SqlBlockError {
     #[error("Database driver error: {0}")]
     SqlxError(#[from] sqlx::Error),
+
+    #[error("Operation timed out")]
+    Timeout,
+
+    #[error("Serialization error: {0}")]
+    SerializationError(String),
+
+    #[error("Query block behavior error: {0}")]
+    QueryBlockBehaviorError(#[from] QueryBlockError),
 
     #[error("Query error: {0}")]
     QueryError(String),
@@ -50,6 +59,24 @@ impl From<&str> for SqlBlockError {
 impl From<String> for SqlBlockError {
     fn from(value: String) -> Self {
         SqlBlockError::GenericError(value)
+    }
+}
+
+impl BlockExecutionError for SqlBlockError {
+    fn cancelled() -> Self {
+        SqlBlockError::Cancelled
+    }
+
+    fn timeout(_message: String) -> Self {
+        SqlBlockError::Timeout
+    }
+
+    fn serialization_error(message: String) -> Self {
+        SqlBlockError::SerializationError(message)
+    }
+
+    fn is_cancelled(&self) -> bool {
+        matches!(self, SqlBlockError::Cancelled)
     }
 }
 
@@ -157,7 +184,7 @@ where
     type QueryResult = SqlBlockExecutionResult;
     type Error = SqlBlockError;
 
-    fn resolve_query(&self, context: &ExecutionContext) -> Result<String, SqlBlockError> {
+    fn resolve_query(&self, context: &ExecutionContext) -> Result<String, Self::Error> {
         // Delegate to the SQL-specific resolve_query implementation
         <Self as SqlBlockBehavior>::resolve_query(self, context)
     }
@@ -169,8 +196,7 @@ where
         <Self as SqlBlockBehavior>::resolve_uri(self, context)
     }
 
-    async fn connect(&self, context: &ExecutionContext) -> Result<Self::Connection, SqlBlockError> {
-        let uri = self.resolve_uri(context)?;
+    async fn connect(&self, uri: String) -> Result<Self::Connection, SqlBlockError> {
         <Self as SqlBlockBehavior>::create_pool(self, uri).await
     }
 
@@ -238,24 +264,4 @@ where
 
         Ok(results)
     }
-
-    fn is_cancelled_error(error: &SqlBlockError) -> bool {
-        matches!(error, SqlBlockError::Cancelled)
-    }
-}
-
-fn line_col_to_offset(text: &str, line: u64, col: u64) -> usize {
-    let mut offset = 0;
-    let mut cur_line = 1;
-
-    for ch in text.chars() {
-        if cur_line == line {
-            return offset + (col - 1) as usize;
-        }
-        if ch == '\n' {
-            cur_line += 1;
-        }
-        offset += ch.len_utf8();
-    }
-    offset
 }
