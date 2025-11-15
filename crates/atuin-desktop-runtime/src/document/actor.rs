@@ -102,7 +102,7 @@ pub enum DocumentCommand {
     },
 
     /// Start execution of a block, returning a snapshot of its context
-    StartExecution {
+    CreateExecutionContext {
         block_id: Uuid,
         event_sender: tokio::sync::broadcast::Sender<crate::workflow::event::WorkflowEvent>,
         ssh_pool: Option<crate::ssh_pool::SshPoolHandle>,
@@ -244,7 +244,7 @@ impl DocumentHandle {
     }
 
     /// Start execution of a block, returning a snapshot of its context
-    pub async fn start_execution(
+    pub async fn create_execution_context(
         &self,
         block_id: Uuid,
         event_sender: tokio::sync::broadcast::Sender<crate::workflow::event::WorkflowEvent>,
@@ -254,7 +254,7 @@ impl DocumentHandle {
     ) -> Result<ExecutionContext, DocumentError> {
         let (tx, rx) = oneshot::channel();
         self.command_tx
-            .send(DocumentCommand::StartExecution {
+            .send(DocumentCommand::CreateExecutionContext {
                 block_id,
                 event_sender,
                 ssh_pool,
@@ -459,7 +459,7 @@ impl DocumentActor {
                     self.document.update_document_bridge(document_bridge);
                     let _ = reply.send(Ok(()));
                 }
-                DocumentCommand::StartExecution {
+                DocumentCommand::CreateExecutionContext {
                     block_id,
                     event_sender,
                     ssh_pool,
@@ -468,7 +468,7 @@ impl DocumentActor {
                     reply,
                 } => {
                     let result = self
-                        .handle_start_execution(
+                        .handle_create_execution_context(
                             block_id,
                             event_sender,
                             ssh_pool,
@@ -556,7 +556,7 @@ impl DocumentActor {
         Ok(())
     }
 
-    async fn handle_start_execution(
+    async fn handle_create_execution_context(
         &mut self,
         block_id: Uuid,
         event_sender: tokio::sync::broadcast::Sender<crate::workflow::event::WorkflowEvent>,

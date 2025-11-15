@@ -100,7 +100,7 @@ pub async fn execute_block(
 
     // Get execution context
     let context = document
-        .start_execution(
+        .create_execution_context(
             block_id,
             event_sender,
             Some(ssh_pool),
