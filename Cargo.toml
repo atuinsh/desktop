@@ -20,6 +20,7 @@ sqlx = { version = "0.8", features = [
   "sqlite",
   "uuid",
   "bigdecimal",
+  "regexp",
 ] }
 tokio = "1.39.3"
 uuid = "1.7.0"
