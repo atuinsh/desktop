@@ -1,3 +1,12 @@
+//! Block types and execution behaviors
+//!
+//! This module defines all block types that can be executed in a runbook document.
+//! Blocks represent individual operations like running scripts, querying databases,
+//! making HTTP requests, or setting variables.
+//!
+//! Each block type implements the [`BlockBehavior`] trait which defines how blocks
+//! provide context and execute their operations.
+
 pub(crate) mod clickhouse;
 pub(crate) mod directory;
 pub(crate) mod editor;
@@ -35,6 +44,10 @@ use crate::{
     execution::{ExecutionContext, ExecutionHandle},
 };
 
+/// Block types that are known to exist but are not supported for execution
+///
+/// These blocks are typically display-only blocks like paragraphs, images, etc.
+/// that don't have executable behavior.
 pub const KNOWN_UNSUPPORTED_BLOCKS: &[&str] = &[
     "audio",
     "bulletedListItem",
@@ -51,16 +64,37 @@ pub const KNOWN_UNSUPPORTED_BLOCKS: &[&str] = &[
     "video",
 ];
 
+/// Trait for parsing block data from a document JSON representation
 pub trait FromDocument: Sized {
+    /// Parse block data from a JSON value
+    ///
+    /// # Errors
+    /// Returns an error string if the JSON data cannot be parsed into this block type
     fn from_document(block_data: &serde_json::Value) -> Result<Self, String>;
 }
 
+/// Core trait defining block execution behavior
+///
+/// All block types must implement this trait to provide context and execute operations.
+/// Blocks can provide passive context (values available before execution) and
+/// active context (values produced during execution).
 #[async_trait]
 pub trait BlockBehavior: Sized + Send + Sync {
+    /// Convert this block into the generic Block enum
     fn into_block(self) -> Block;
 
+    /// Get the unique identifier for this block
     fn id(&self) -> Uuid;
 
+    /// Provide passive context before execution
+    ///
+    /// Passive context is evaluated based on the block's configuration and
+    /// doesn't require execution. For example, a variable block provides its
+    /// value as passive context.
+    ///
+    /// # Arguments
+    /// * `resolver` - Context resolver for template interpolation
+    /// * `block_local_value_provider` - Optional provider for local values
     async fn passive_context(
         &self,
         _resolver: &ContextResolver,
@@ -69,6 +103,13 @@ pub trait BlockBehavior: Sized + Send + Sync {
         Ok(None)
     }
 
+    /// Execute this block
+    ///
+    /// Executes the block's operation and returns an execution handle for tracking
+    /// the block's lifecycle and cancellation.
+    ///
+    /// # Arguments
+    /// * `context` - Execution context providing access to document state and resources
     async fn execute(
         self,
         _context: ExecutionContext,
@@ -77,6 +118,10 @@ pub trait BlockBehavior: Sized + Send + Sync {
     }
 }
 
+/// Enum representing all supported block types
+///
+/// Each variant corresponds to a specific block implementation with its own
+/// behavior and configuration.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(tag = "type")]
 #[serde(rename_all = "camelCase")]
@@ -105,6 +150,7 @@ pub enum Block {
 }
 
 impl Block {
+    /// Get the unique identifier of this block
     pub fn id(&self) -> Uuid {
         match self {
             Block::Terminal(terminal) => terminal.id,
@@ -129,6 +175,7 @@ impl Block {
         }
     }
 
+    /// Get the display name of this block
     #[allow(dead_code)]
     pub fn name(&self) -> String {
         match self {
@@ -154,6 +201,13 @@ impl Block {
         }
     }
 
+    /// Parse a block from document JSON data
+    ///
+    /// # Arguments
+    /// * `block_data` - JSON representation of the block
+    ///
+    /// # Errors
+    /// Returns an error if the block type is unknown or parsing fails
     pub fn from_document(block_data: &serde_json::Value) -> Result<Self, String> {
         let block_type = block_data
             .get("type")
@@ -205,6 +259,14 @@ impl Block {
         }
     }
 
+    /// Get the passive context for this block
+    ///
+    /// Passive context includes values that are available before execution,
+    /// such as variable definitions or environment settings.
+    ///
+    /// # Arguments
+    /// * `resolver` - Context resolver for template interpolation
+    /// * `block_local_value_provider` - Optional provider for local values
     pub async fn passive_context(
         &self,
         resolver: &ContextResolver,
@@ -301,6 +363,13 @@ impl Block {
         }
     }
 
+    /// Execute this block
+    ///
+    /// Performs the block's operation and returns an execution handle for
+    /// tracking lifecycle and cancellation.
+    ///
+    /// # Arguments
+    /// * `context` - Execution context with document state and resources
     pub async fn execute(
         self,
         context: ExecutionContext,

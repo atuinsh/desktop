@@ -1,3 +1,12 @@
+//! Document management and lifecycle
+//!
+//! This module provides the core document abstraction for runbook execution.
+//! Documents contain a collection of blocks and manage their execution state,
+//! context propagation, and lifecycle events.
+//!
+//! The primary interface is the [`DocumentHandle`], which provides async methods
+//! for interacting with a running document.
+
 pub(crate) mod actor;
 
 pub use actor::{DocumentError, DocumentHandle};

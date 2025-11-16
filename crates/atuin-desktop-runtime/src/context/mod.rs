@@ -1,3 +1,17 @@
+//! Context management for runbook blocks
+//!
+//! This module provides context management for sharing state between blocks
+//! in a runbook. Context includes:
+//!
+//! - Variables set by blocks
+//! - Environment variables
+//! - Working directory
+//! - SSH connection information
+//! - Block execution outputs
+//!
+//! Blocks can provide both passive context (available before execution) and
+//! active context (produced during execution).
+
 mod block_context;
 mod resolution;
 mod storage;

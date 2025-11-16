@@ -1,3 +1,11 @@
+//! Workflow execution and coordination
+//!
+//! This module provides workflow execution capabilities including:
+//! - Serial execution of blocks in order
+//! - Dependency-based execution ordering
+//! - Workflow event broadcasting
+//! - Execution orchestration
+
 mod dependency;
 mod event;
 mod executor;

@@ -1,3 +1,9 @@
+//! Event system for runtime monitoring
+//!
+//! This module provides an event bus abstraction for monitoring runtime execution.
+//! Events include block lifecycle, SSH connections, PTY operations, and runbook
+//! execution state changes.
+
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
@@ -5,7 +11,10 @@ use uuid::Uuid;
 
 use crate::pty::PtyMetadata;
 
-/// Grand Central Event - all events that can be emitted by the runtime
+/// Events emitted by the runtime for monitoring and telemetry
+///
+/// These events provide visibility into runtime operations including block execution,
+/// SSH connections, PTY lifecycle, and runbook state changes.
 #[derive(TS, Debug, Clone, Serialize, Deserialize)]
 #[ts(tag = "type", content = "data", export)]
 #[serde(tag = "type", content = "data", rename_all = "camelCase")]
@@ -58,11 +67,19 @@ pub enum GCEvent {
     RunbookFailed { runbook_id: Uuid, error: String },
 }
 
-/// Trait for emitting events from the runtime layer
-/// This abstracts away the actual event delivery mechanism
+/// Trait for emitting events from the runtime
+///
+/// Implementations of this trait handle the delivery of runtime events
+/// to monitoring systems, logs, or other consumers.
 #[async_trait]
 pub trait EventBus: Send + Sync {
     /// Emit an event to the event bus
+    ///
+    /// # Arguments
+    /// * `event` - The event to emit
+    ///
+    /// # Errors
+    /// Returns an error if the event cannot be emitted
     async fn emit(&self, event: GCEvent) -> Result<(), Box<dyn std::error::Error + Send + Sync>>;
 }
 
@@ -78,7 +95,10 @@ impl EventBus for NoOpEventBus {
     }
 }
 
-/// Event bus that collects events in memory (useful for testing)
+/// Event bus that collects events in memory
+///
+/// Useful for testing or scenarios where events need to be collected
+/// and inspected programmatically.
 #[allow(dead_code)]
 #[derive(Default)]
 pub struct MemoryEventBus {

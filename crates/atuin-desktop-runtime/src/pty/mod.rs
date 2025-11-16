@@ -1,3 +1,9 @@
+//! Pseudo-terminal (PTY) management
+//!
+//! This module provides PTY creation and management for terminal blocks.
+//! PTYs allow blocks to spawn interactive shell sessions with full terminal
+//! emulation support.
+
 mod pty_store;
 
 pub use pty_store::{PtyLike, PtyStoreHandle};
@@ -16,21 +22,33 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 use uuid::Uuid;
 
+/// Metadata about a PTY instance
 #[derive(Clone, Deserialize, Serialize, Debug, TS)]
 #[ts(export)]
 pub struct PtyMetadata {
+    /// Unique PTY identifier
     pub pid: Uuid,
+    /// Runbook ID this PTY belongs to
     pub runbook: Uuid,
+    /// Block ID that created this PTY
     pub block: String,
+    /// Unix timestamp when PTY was created
     pub created_at: u64,
 }
 
+/// A pseudo-terminal instance
+///
+/// Wraps a portable-pty PTY and provides async methods for interaction.
 pub struct Pty {
     tx: tokio::sync::mpsc::Sender<Bytes>,
 
+    /// Metadata about this PTY
     pub metadata: PtyMetadata,
+    /// PTY master handle
     pub master: Arc<Mutex<Box<dyn MasterPty + Send>>>,
+    /// PTY reader for output
     pub reader: Arc<Mutex<Box<dyn std::io::Read + Send>>>,
+    /// Child process handle
     pub child: Arc<Mutex<Box<dyn portable_pty::Child + Send>>>,
 }
 
@@ -54,6 +72,15 @@ impl PtyLike for Pty {
 }
 
 impl Pty {
+    /// Open a new PTY with specified dimensions and environment
+    ///
+    /// # Arguments
+    /// * `rows` - Terminal height in rows
+    /// * `cols` - Terminal width in columns
+    /// * `cwd` - Optional working directory
+    /// * `env` - Environment variables
+    /// * `metadata` - PTY metadata
+    /// * `shell` - Optional shell path (uses default shell if None)
     pub async fn open(
         rows: u16,
         cols: u16,

@@ -1,4 +1,7 @@
-// Store a log of all block executions in a SQLite database
+//! Execution logging for block executions
+//!
+//! This module provides a SQLite-based logging system for tracking block execution
+//! history, including timestamps and outputs.
 
 use log::debug;
 use serde::{Deserialize, Serialize};
@@ -14,21 +17,30 @@ use eyre::Result;
 
 use super::blocks::Block;
 
+/// Database record for a block tracked in the execution log
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ExecLogBlock {
+    /// Database-assigned ID
     pub id: u64,
+    /// Block UUID
     pub uuid: Uuid,
 }
 
+/// Database record for a single block execution
 #[allow(dead_code)]
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ExecLogEntry {
+    /// Database-assigned ID
     pub id: u64,
+    /// Foreign key to ExecLogBlock
     pub block_id: u64,
+    /// Execution timestamp
     pub timestamp: u64,
+    /// Execution output
     pub output: String,
 }
 
+/// Messages for interacting with the execution log actor
 #[allow(dead_code)]
 pub enum ExecLogMessage {
     GetBlock {
@@ -56,6 +68,9 @@ pub enum ExecLogMessage {
     },
 }
 
+/// Handle for interacting with the execution log
+///
+/// Provides async methods for logging block executions and querying execution history.
 #[derive(Clone)]
 pub struct ExecLogHandle {
     sender: mpsc::Sender<ExecLogMessage>,
@@ -63,6 +78,10 @@ pub struct ExecLogHandle {
 
 #[allow(dead_code)]
 impl ExecLogHandle {
+    /// Create a new execution log handle
+    ///
+    /// # Arguments
+    /// * `path` - Path to the SQLite database file
     pub fn new(path: PathBuf) -> Result<Self> {
         let (sender, receiver) = mpsc::channel(8);
 

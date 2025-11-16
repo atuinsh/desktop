@@ -1,3 +1,13 @@
+//! Block execution context and lifecycle management
+//!
+//! This module provides the execution context that blocks use to interact with
+//! the runtime environment, emit events, update context, and control their lifecycle.
+//!
+//! Key types:
+//! - [`ExecutionContext`]: Provides access to runtime resources and utilities
+//! - [`ExecutionHandle`]: Tracks execution state and provides cancellation
+//! - [`BlockOutput`]: Represents output from block execution
+
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -15,6 +25,14 @@ use crate::pty::PtyStoreHandle;
 use crate::ssh::SshPoolHandle;
 use crate::workflow::WorkflowEvent;
 
+/// Context provided to blocks during execution
+///
+/// This context gives blocks access to:
+/// - Document state and context resolution
+/// - Output channels for sending messages to the client
+/// - Resource pools (SSH connections, PTYs)
+/// - Event buses for monitoring
+/// - Lifecycle management methods
 #[derive(TypedBuilder, Clone)]
 pub struct ExecutionContext {
     pub(crate) block_id: Uuid,
@@ -256,7 +274,10 @@ impl ExecutionContext {
     }
 }
 
-// Channel-based cancellation token
+/// Token for cancelling block execution
+///
+/// Provides a one-time channel-based cancellation mechanism.
+/// When cancelled, the receiver end will be notified.
 #[derive(Clone)]
 pub struct CancellationToken {
     sender: Arc<std::sync::Mutex<Option<oneshot::Sender<()>>>>,
@@ -274,10 +295,14 @@ impl Default for CancellationToken {
 }
 
 impl CancellationToken {
+    /// Create a new cancellation token
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Cancel the execution
+    ///
+    /// Sends a signal to the receiver end. This can only be called once.
     pub fn cancel(&self) {
         if let Ok(mut sender_guard) = self.sender.lock() {
             if let Some(sender) = sender_guard.take() {
@@ -286,6 +311,9 @@ impl CancellationToken {
         }
     }
 
+    /// Take the receiver end of the cancellation token
+    ///
+    /// This can only be called once. Returns None if already taken.
     pub fn take_receiver(&self) -> Option<oneshot::Receiver<()>> {
         if let Ok(mut receiver_guard) = self.receiver.lock() {
             receiver_guard.take()
@@ -295,18 +323,29 @@ impl CancellationToken {
     }
 }
 
+/// Handle for managing block execution lifecycle
+///
+/// Provides methods for tracking execution state, cancellation,
+/// and prompt interactions.
 #[derive(Clone)]
 pub struct ExecutionHandle {
+    /// Unique execution ID
     pub id: Uuid,
+    /// ID of the block being executed
     #[allow(dead_code)] // Used for tracking but not currently accessed
     pub block_id: Uuid,
+    /// Token for cancelling this execution
     pub cancellation_token: CancellationToken,
+    /// Current execution status
     pub status: Arc<RwLock<ExecutionStatus>>,
+    /// Optional output variable name
     pub output_variable: Option<String>,
+    /// Callbacks for client prompt responses
     pub prompt_callbacks: Arc<Mutex<HashMap<Uuid, oneshot::Sender<ClientPromptResult>>>>,
 }
 
 impl ExecutionHandle {
+    /// Create a new execution handle for a block
     pub fn new(block_id: Uuid) -> Self {
         Self {
             id: Uuid::new_v4(),
@@ -335,6 +374,7 @@ impl ExecutionHandle {
     }
 }
 
+/// Current status of block execution
 #[derive(TS, Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[ts(tag = "type", content = "data", export)]
 pub enum ExecutionStatus {
@@ -346,6 +386,10 @@ pub enum ExecutionStatus {
     Cancelled,
 }
 
+/// Output from block execution
+///
+/// Can contain text output (stdout/stderr), binary data (for terminals),
+/// or structured JSON objects.
 #[derive(TS, Debug, Clone, Serialize, Deserialize, TypedBuilder)]
 #[ts(export)]
 pub struct BlockOutput {
@@ -362,6 +406,7 @@ pub struct BlockOutput {
     pub object: Option<serde_json::Value>, // For structured JSON data
 }
 
+/// Data for block finished lifecycle event
 #[derive(TS, Debug, Clone, Serialize, Deserialize)]
 #[ts(export)]
 pub struct BlockFinishedData {
@@ -369,12 +414,16 @@ pub struct BlockFinishedData {
     pub success: bool,
 }
 
+/// Data for block error lifecycle event
 #[derive(TS, Debug, Clone, Serialize, Deserialize)]
 #[ts(export)]
 pub struct BlockErrorData {
     pub message: String,
 }
 
+/// Block lifecycle events
+///
+/// Indicates state transitions during block execution.
 #[derive(TS, Debug, Clone, Serialize, Deserialize)]
 #[ts(tag = "type", content = "data", export)]
 #[serde(rename_all = "camelCase", tag = "type", content = "data")]

@@ -8,15 +8,20 @@ use uuid::Uuid;
 
 use crate::blocks::Block;
 
-/// The context for a single block. Block context items implement the [`BlockContextItem`]
-/// trait and are stored in a hash map keyed by the item's concrete type ID. For this reason,
-/// only one item of each type can be stored.
+/// Container for block context items
+///
+/// Block context items implement the [`BlockContextItem`] trait and are stored
+/// in a type-safe map. Only one item of each type can be stored, as items are
+/// keyed by their concrete type ID.
+///
+/// Context can include variables, environment settings, execution outputs, etc.
 #[derive(Default, Debug)]
 pub struct BlockContext {
     entries: HashMap<TypeId, Box<dyn BlockContextItem>>,
 }
 
 impl BlockContext {
+    /// Create a new empty block context
     pub fn new() -> Self {
         Self {
             entries: HashMap::new(),
@@ -24,11 +29,15 @@ impl BlockContext {
     }
 
     /// Insert a typed value into this block's context
+    ///
+    /// If a value of this type already exists, it will be replaced.
     pub fn insert<T: BlockContextItem + 'static>(&mut self, value: T) {
         self.entries.insert(TypeId::of::<T>(), Box::new(value));
     }
 
     /// Get a typed value from this block's context
+    ///
+    /// Returns None if no value of this type exists in the context.
     pub fn get<T: BlockContextItem + 'static>(&self) -> Option<&T> {
         self.entries
             .get(&TypeId::of::<T>())
@@ -74,7 +83,10 @@ impl<'de> Deserialize<'de> for BlockContext {
     }
 }
 
-/// A wrapper that pairs a block with its active and passive contexts.
+/// A block paired with its passive and active context
+///
+/// - **Passive context**: Values available before execution (e.g., variable definitions)
+/// - **Active context**: Values produced during execution (e.g., command output)
 #[derive(Debug)]
 pub struct BlockWithContext {
     block: Block,
