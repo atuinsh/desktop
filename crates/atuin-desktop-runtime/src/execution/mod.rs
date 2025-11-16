@@ -1,40 +1,39 @@
-use crate::document::actor::DocumentError;
-use crate::document::block_context::{BlockContext, ContextResolver};
-use crate::document::bridge::{ClientPrompt, ClientPromptResult};
-use crate::document::{actor::DocumentHandle, bridge::DocumentBridgeMessage};
-use crate::events::{EventBus, GCEvent};
-use crate::pty_store::PtyStoreHandle;
-use crate::ssh_pool::SshPoolHandle;
-use crate::workflow::event::WorkflowEvent;
-use crate::MessageChannel;
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::fmt::Debug;
 use std::sync::Arc;
+
+use serde::{Deserialize, Serialize};
 use tokio::sync::{broadcast, oneshot, Mutex, RwLock};
 use ts_rs::TS;
 use typed_builder::TypedBuilder;
 use uuid::Uuid;
 
+use crate::client::{ClientPrompt, ClientPromptResult, DocumentBridgeMessage, MessageChannel};
+use crate::context::{BlockContext, ContextResolver};
+use crate::document::{DocumentError, DocumentHandle};
+use crate::events::{EventBus, GCEvent};
+use crate::pty::PtyStoreHandle;
+use crate::ssh::SshPoolHandle;
+use crate::workflow::WorkflowEvent;
+
 #[derive(TypedBuilder, Clone)]
 pub struct ExecutionContext {
-    pub block_id: Uuid,
-    pub runbook_id: Uuid,
-    pub document_handle: Arc<DocumentHandle>,
-    pub context_resolver: Arc<ContextResolver>,
+    pub(crate) block_id: Uuid,
+    pub(crate) runbook_id: Uuid,
+    pub(crate) document_handle: Arc<DocumentHandle>,
+    pub(crate) context_resolver: Arc<ContextResolver>,
     #[builder(default, setter(strip_option(fallback = output_channel_opt)))]
     output_channel: Option<Arc<dyn MessageChannel<DocumentBridgeMessage>>>,
     workflow_event_sender: broadcast::Sender<WorkflowEvent>,
     #[builder(default, setter(strip_option(fallback = ssh_pool_opt)))]
-    pub ssh_pool: Option<SshPoolHandle>,
+    pub(crate) ssh_pool: Option<SshPoolHandle>,
     #[builder(default, setter(strip_option(fallback = pty_store_opt)))]
-    pub pty_store: Option<PtyStoreHandle>,
+    pub(crate) pty_store: Option<PtyStoreHandle>,
     #[builder(default, setter(strip_option(fallback = event_bus_opt)))]
-    pub gc_event_bus: Option<Arc<dyn EventBus>>,
+    pub(crate) gc_event_bus: Option<Arc<dyn EventBus>>,
     handle: ExecutionHandle,
 }
 
-impl Debug for ExecutionContext {
+impl std::fmt::Debug for ExecutionContext {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ExecutionContext")
             .field("runbook_id", &self.runbook_id)
@@ -385,5 +384,3 @@ pub enum BlockLifecycleEvent {
     Cancelled,
     Error(BlockErrorData),
 }
-
-// BlockHandler and ContextProvider traits removed - using BlockBehavior::execute() instead

@@ -524,8 +524,6 @@ fn main() {
             commands::block_state::delete_block_local_state,
             commands::block_state::delete_block_local_state_all,
             commands::feedback::send_feedback,
-            commands::mysql::mysql_query,
-            commands::mysql::mysql_execute,
             commands::blocks::execute_block,
             commands::blocks::cancel_block_execution,
             commands::blocks::open_document,

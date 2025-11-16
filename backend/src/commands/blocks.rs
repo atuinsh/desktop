@@ -9,10 +9,11 @@ use crate::blocks::sqlite_context_storage::SqliteContextStorage;
 use crate::commands::events::ChannelEventBus;
 use crate::kv;
 use crate::state::AtuinState;
-use atuin_desktop_runtime::MessageChannel;
-use atuin_desktop_runtime::ResolvedContext;
-use atuin_desktop_runtime::{ClientPromptResult, DocumentBridgeMessage};
-use atuin_desktop_runtime::{DocumentHandle, LocalValueProvider};
+use atuin_desktop_runtime::client::LocalValueProvider;
+use atuin_desktop_runtime::client::MessageChannel;
+use atuin_desktop_runtime::client::{ClientPromptResult, DocumentBridgeMessage};
+use atuin_desktop_runtime::context::ResolvedContext;
+use atuin_desktop_runtime::document::DocumentHandle;
 
 #[derive(Clone)]
 struct DocumentBridgeChannel {

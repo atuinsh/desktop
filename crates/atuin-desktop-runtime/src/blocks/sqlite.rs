@@ -9,15 +9,12 @@ use std::time::Instant;
 use typed_builder::TypedBuilder;
 use uuid::Uuid;
 
-use crate::blocks::handler::ExecutionHandle;
 use crate::blocks::query_block::QueryBlockBehavior;
 use crate::blocks::sql_block::{
     SqlBlockBehavior, SqlBlockError, SqlBlockExecutionResult, SqlQueryResult, SqlStatementResult,
 };
-use crate::blocks::{Block, BlockBehavior};
-
-use super::handler::ExecutionContext;
-use super::FromDocument;
+use crate::blocks::{Block, BlockBehavior, FromDocument};
+use crate::execution::{ExecutionContext, ExecutionHandle};
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, TypedBuilder)]
 #[serde(rename_all = "camelCase")]
@@ -267,10 +264,11 @@ impl SqlBlockBehavior for SQLite {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::blocks::handler::ExecutionStatus;
-    use crate::document::actor::{DocumentCommand, DocumentHandle};
-    use crate::document::block_context::ContextResolver;
+    use crate::context::ContextResolver;
+    use crate::document::actor::DocumentCommand;
+    use crate::document::DocumentHandle;
     use crate::events::{GCEvent, MemoryEventBus};
+    use crate::execution::ExecutionStatus;
     use std::sync::Arc;
     use tokio::sync::mpsc;
 

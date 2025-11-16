@@ -2,8 +2,8 @@ use tauri::State;
 use uuid::Uuid;
 
 use crate::state::AtuinState;
-use atuin_desktop_runtime::Block;
-use atuin_desktop_runtime::WorkflowEvent;
+use atuin_desktop_runtime::blocks::Block;
+use atuin_desktop_runtime::workflow::WorkflowEvent;
 
 #[tauri::command]
 pub async fn workflow_block_start_event(

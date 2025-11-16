@@ -6,14 +6,11 @@ use std::time::{Duration, Instant};
 use typed_builder::TypedBuilder;
 use uuid::Uuid;
 
-use crate::blocks::query_block::QueryBlockBehavior;
-use crate::blocks::sql_block::{
-    SqlBlockBehavior, SqlBlockError, SqlBlockExecutionResult, SqlQueryResult, SqlStatementResult,
+use crate::blocks::{
+    Block, BlockBehavior, FromDocument, QueryBlockBehavior, SqlBlockBehavior, SqlBlockError,
+    SqlBlockExecutionResult, SqlQueryResult, SqlStatementResult,
 };
-use crate::blocks::{Block, BlockBehavior};
-
-use super::handler::{ExecutionContext, ExecutionHandle};
-use super::FromDocument;
+use crate::execution::{ExecutionContext, ExecutionHandle};
 
 type ClientWithUri = (reqwest::Client, String);
 

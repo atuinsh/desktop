@@ -3,10 +3,8 @@ use std::time::Duration;
 use async_trait::async_trait;
 use serde::Serialize;
 
-use crate::blocks::{
-    handler::{BlockOutput, ExecutionContext, ExecutionHandle},
-    BlockBehavior,
-};
+use crate::blocks::BlockBehavior;
+use crate::execution::{BlockOutput, ExecutionContext, ExecutionHandle};
 
 pub trait BlockExecutionError {
     /// Create a cancellation error; this is used to indicate that the operation was cancelled by the user.
@@ -72,7 +70,7 @@ impl BlockExecutionError for QueryBlockError {
 /// A trait that defines the behavior of a block that executes queries against a remote service
 /// (database, monitoring system, etc.). Provides common infrastructure for connection management,
 /// query execution, lifecycle events, and cancellation support.
-pub(crate) trait QueryBlockBehavior: BlockBehavior + 'static {
+pub trait QueryBlockBehavior: BlockBehavior + 'static {
     /// The type of the connection (e.g., database pool, HTTP client)
     type Connection: Clone + Send + Sync + 'static;
 

@@ -6,10 +6,8 @@ use ts_rs::TS;
 use typed_builder::TypedBuilder;
 use uuid::Uuid;
 
-use crate::blocks::{
-    handler::{BlockOutput, ExecutionContext, ExecutionHandle},
-    Block, BlockBehavior,
-};
+use crate::blocks::{Block, BlockBehavior};
+use crate::execution::{BlockOutput, ExecutionContext, ExecutionHandle};
 
 use super::FromDocument;
 

@@ -1,7 +1,7 @@
-use crate::blocks::{Block, BlockBehavior, FromDocument};
-use crate::document::{
-    actor::LocalValueProvider,
-    block_context::{BlockContext, ContextResolver, DocumentVar},
+use crate::{
+    blocks::{Block, BlockBehavior, FromDocument},
+    client::LocalValueProvider,
+    context::{BlockContext, ContextResolver, DocumentVar},
 };
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
@@ -90,7 +90,7 @@ impl BlockBehavior for LocalVar {
 
 #[cfg(test)]
 mod tests {
-    use crate::document::{actor::MemoryBlockLocalValueProvider, block_context::ResolvedContext};
+    use crate::{client::local::MemoryBlockLocalValueProvider, context::ResolvedContext};
 
     use super::*;
     use uuid::Uuid;

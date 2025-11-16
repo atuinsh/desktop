@@ -1,8 +1,6 @@
 use crate::blocks::{Block, BlockBehavior, FromDocument};
-use crate::document::{
-    actor::LocalValueProvider,
-    block_context::{BlockContext, ContextResolver, DocumentCwd},
-};
+use crate::client::LocalValueProvider;
+use crate::context::{BlockContext, ContextResolver, DocumentCwd};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use typed_builder::TypedBuilder;
@@ -65,7 +63,7 @@ impl FromDocument for Directory {
 
 #[cfg(test)]
 mod tests {
-    use crate::document::block_context::ResolvedContext;
+    use crate::context::ResolvedContext;
 
     use super::*;
 

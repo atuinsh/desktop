@@ -16,8 +16,13 @@ use crate::{
     shared_state::SharedStateHandle, sqlite::DbInstances, workspaces::manager::WorkspaceManager,
 };
 use atuin_desktop_runtime::{
-    DocumentHandle, ExecLogHandle, ExecutionHandle, ExecutorHandle, GCEvent, PtyStoreHandle,
-    SshPoolHandle, WorkflowCommand, WorkflowEvent,
+    document::DocumentHandle,
+    events::GCEvent,
+    exec_log::ExecLogHandle,
+    execution::ExecutionHandle,
+    pty::PtyStoreHandle,
+    ssh::SshPoolHandle,
+    workflow::{ExecutorHandle, WorkflowCommand, WorkflowEvent},
 };
 
 pub(crate) struct AtuinState {

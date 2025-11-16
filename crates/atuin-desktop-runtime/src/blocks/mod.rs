@@ -2,7 +2,6 @@ pub(crate) mod clickhouse;
 pub(crate) mod directory;
 pub(crate) mod editor;
 pub(crate) mod environment;
-pub(crate) mod handler;
 pub(crate) mod host;
 pub(crate) mod http;
 pub(crate) mod kubernetes;
@@ -24,6 +23,18 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+pub use query_block::{BlockExecutionError, QueryBlockBehavior, QueryBlockError};
+pub use script::ScriptOutput;
+pub use sql_block::{
+    SqlBlockBehavior, SqlBlockError, SqlBlockExecutionResult, SqlQueryResult, SqlStatementResult,
+};
+
+use crate::{
+    client::LocalValueProvider,
+    context::{BlockContext, ContextResolver},
+    execution::{ExecutionContext, ExecutionHandle},
+};
+
 pub const KNOWN_UNSUPPORTED_BLOCKS: &[&str] = &[
     "audio",
     "bulletedListItem",
@@ -39,14 +50,6 @@ pub const KNOWN_UNSUPPORTED_BLOCKS: &[&str] = &[
     "table",
     "video",
 ];
-
-use crate::{
-    blocks::handler::{ExecutionContext, ExecutionHandle},
-    document::{
-        actor::LocalValueProvider,
-        block_context::{BlockContext, ContextResolver},
-    },
-};
 
 pub trait FromDocument: Sized {
     fn from_document(block_data: &serde_json::Value) -> Result<Self, String>;

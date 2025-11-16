@@ -6,12 +6,8 @@ use ts_rs::TS;
 use typed_builder::TypedBuilder;
 use uuid::Uuid;
 
-use crate::blocks::{
-    handler::{BlockOutput, ExecutionContext, ExecutionHandle},
-    Block, BlockBehavior,
-};
-
-use super::FromDocument;
+use crate::blocks::{Block, BlockBehavior, FromDocument};
+use crate::execution::{BlockOutput, ExecutionContext, ExecutionHandle};
 
 #[derive(Debug, thiserror::Error)]
 pub enum HttpError {
@@ -270,22 +266,20 @@ impl From<HttpVerb> for Method {
 
 #[cfg(test)]
 mod tests {
+    use std::{sync::Arc, time::Duration};
+
     use super::*;
-    use crate::blocks::handler::BlockLifecycleEvent;
-    use crate::document::actor::{DocumentCommand, DocumentHandle};
-    use crate::document::block_context::ContextResolver;
-    use crate::document::bridge::DocumentBridgeMessage;
-    use crate::events::MemoryEventBus;
-    use crate::MessageChannel;
+    use crate::{
+        client::{DocumentBridgeMessage, MessageChannel},
+        context::ContextResolver,
+        document::{actor::DocumentCommand, DocumentHandle},
+        events::MemoryEventBus,
+        execution::BlockLifecycleEvent,
+    };
     use async_trait::async_trait;
     use httpmock::prelude::*;
     use httpmock::Method::HEAD;
-    use std::collections::HashMap;
-    use std::sync::Arc;
-    use std::time::Duration;
-    use tokio::sync::mpsc;
-    use tokio::sync::Mutex as TokioMutex;
-    use uuid::Uuid;
+    use tokio::sync::{mpsc, Mutex as TokioMutex};
 
     #[derive(Clone)]
     struct TestMessageChannel {

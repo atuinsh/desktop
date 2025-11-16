@@ -11,7 +11,7 @@ use tokio::process::Command;
 use tokio::sync::RwLock;
 
 use crate::state::AtuinState;
-use atuin_desktop_runtime::{Block, ScriptOutput};
+use atuin_desktop_runtime::blocks::{Block, ScriptOutput};
 
 /// Execute a shell command and stream the output over a channel
 /// Unlike a pty, this is not interactive

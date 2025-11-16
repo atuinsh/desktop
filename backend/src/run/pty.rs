@@ -1,5 +1,5 @@
 use crate::state::AtuinState;
-use atuin_desktop_runtime::PtyStoreHandle;
+use atuin_desktop_runtime::pty::PtyStoreHandle;
 use eyre::Result;
 use tauri::Manager;
 

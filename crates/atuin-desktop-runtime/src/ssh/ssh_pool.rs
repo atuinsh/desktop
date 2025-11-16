@@ -14,7 +14,7 @@ use crate::ssh::session::{Authentication, Session};
 use eyre::Result;
 use std::sync::Arc;
 
-use super::pty_store::PtyLike;
+use crate::pty::PtyLike;
 
 pub struct SshPty {
     pub tx: mpsc::Sender<Bytes>,

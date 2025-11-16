@@ -14,7 +14,7 @@ use russh::client::Handle;
 use russh::*;
 use russh_config::*;
 
-use crate::ssh_pool::SshPoolHandle;
+use crate::ssh::SshPoolHandle;
 
 /// An ssh session, wrapping the underlying russh with async-safe primitives
 pub struct Session {

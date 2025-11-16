@@ -1,3 +1,7 @@
+pub(crate) mod actor;
+
+pub use actor::{DocumentError, DocumentHandle};
+
 use std::{
     collections::{HashMap, HashSet},
     sync::Arc,
@@ -5,40 +9,31 @@ use std::{
 
 use uuid::Uuid;
 
-use crate::{
-    blocks::{
-        handler::{ExecutionContext, ExecutionHandle},
-        Block, KNOWN_UNSUPPORTED_BLOCKS,
-    },
-    document::{
-        actor::{DocumentError, DocumentHandle, LocalValueProvider},
-        block_context::{
-            BlockContext, BlockContextStorage, BlockWithContext, ContextResolver, ResolvedContext,
-        },
-        bridge::DocumentBridgeMessage,
-    },
-    events::{EventBus, GCEvent},
-    pty_store::PtyStoreHandle,
-    ssh_pool::SshPoolHandle,
-    workflow::event::WorkflowEvent,
-    MessageChannel,
-};
 use atuin_desktop_templates::DocumentTemplateState;
 
-pub mod actor;
-pub mod block_context;
-pub mod bridge;
+use crate::{
+    blocks::{Block, KNOWN_UNSUPPORTED_BLOCKS},
+    client::{DocumentBridgeMessage, LocalValueProvider, MessageChannel},
+    context::{
+        BlockContext, BlockContextStorage, BlockWithContext, ContextResolver, ResolvedContext,
+    },
+    events::{EventBus, GCEvent},
+    execution::{ExecutionContext, ExecutionHandle},
+    pty::PtyStoreHandle,
+    ssh::SshPoolHandle,
+    workflow::WorkflowEvent,
+};
 
 /// Document-level context containing all block contexts
 /// This is the internal state owned by the DocumentActor
-pub struct Document {
-    id: String,
-    raw: Vec<serde_json::Value>,
-    blocks: Vec<BlockWithContext>,
-    document_bridge: Arc<dyn MessageChannel<DocumentBridgeMessage>>,
-    known_unsupported_blocks: HashSet<String>,
-    block_local_value_provider: Option<Box<dyn LocalValueProvider>>,
-    context_storage: Option<Box<dyn BlockContextStorage>>,
+pub(crate) struct Document {
+    pub(crate) id: String,
+    pub(crate) raw: Vec<serde_json::Value>,
+    pub(crate) blocks: Vec<BlockWithContext>,
+    pub(crate) document_bridge: Arc<dyn MessageChannel<DocumentBridgeMessage>>,
+    pub(crate) known_unsupported_blocks: HashSet<String>,
+    pub(crate) block_local_value_provider: Option<Box<dyn LocalValueProvider>>,
+    pub(crate) context_storage: Option<Box<dyn BlockContextStorage>>,
 }
 
 impl Document {
@@ -65,8 +60,8 @@ impl Document {
 
     pub async fn reset_state(&mut self) -> Result<(), DocumentError> {
         for block in &mut self.blocks {
-            block.update_passive_context(BlockContext::new());
-            block.update_active_context(BlockContext::new());
+            block.replace_passive_context(BlockContext::new());
+            block.replace_active_context(BlockContext::new());
             if let Some(storage) = self.context_storage.as_ref() {
                 let result = storage
                     .delete(self.id.as_str(), &block.id())
@@ -386,13 +381,13 @@ impl Document {
                 .await
             {
                 Ok(Some(new_context)) => {
-                    self.blocks[i].update_passive_context(new_context);
+                    self.blocks[i].replace_passive_context(new_context);
                 }
                 Ok(None) => {
-                    self.blocks[i].update_passive_context(BlockContext::new());
+                    self.blocks[i].replace_passive_context(BlockContext::new());
                 }
                 Err(e) => {
-                    self.blocks[i].update_passive_context(BlockContext::new());
+                    self.blocks[i].replace_passive_context(BlockContext::new());
 
                     let error_msg = format!(
                         "Failed to evaluate passive context for block {block_id}: {}",

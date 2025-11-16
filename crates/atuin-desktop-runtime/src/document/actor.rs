@@ -1,50 +1,17 @@
-use async_trait::async_trait;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::{mpsc, oneshot};
 use uuid::Uuid;
 
-use crate::blocks::handler::ExecutionContext;
 use crate::blocks::Block;
-use crate::document::block_context::{BlockContext, BlockContextStorage, ResolvedContext};
-use crate::document::bridge::DocumentBridgeMessage;
+use crate::client::{DocumentBridgeMessage, LocalValueProvider, MessageChannel};
+use crate::context::{BlockContext, BlockContextStorage, ResolvedContext};
 use crate::document::Document;
 use crate::events::EventBus;
-use crate::MessageChannel;
-
-#[async_trait]
-pub trait LocalValueProvider: Send + Sync {
-    async fn get_block_local_value(
-        &self,
-        block_id: Uuid,
-        property_name: &str,
-    ) -> Result<Option<String>, Box<dyn std::error::Error + Send + Sync>>;
-}
-
-#[allow(unused)]
-pub(crate) struct MemoryBlockLocalValueProvider {
-    values: HashMap<String, String>,
-}
-
-#[allow(unused)]
-impl MemoryBlockLocalValueProvider {
-    pub fn new(values: Vec<(String, String)>) -> Self {
-        Self {
-            values: values.into_iter().collect(),
-        }
-    }
-}
-
-#[async_trait]
-impl LocalValueProvider for MemoryBlockLocalValueProvider {
-    async fn get_block_local_value(
-        &self,
-        _block_id: Uuid,
-        property_name: &str,
-    ) -> Result<Option<String>, Box<dyn std::error::Error + Send + Sync>> {
-        Ok(self.values.get(property_name).cloned())
-    }
-}
+use crate::execution::ExecutionContext;
+use crate::pty::PtyStoreHandle;
+use crate::ssh::SshPoolHandle;
+use crate::workflow::WorkflowEvent;
 
 /// Errors that can occur during document operations
 #[derive(thiserror::Error, Debug, Clone)]
@@ -83,7 +50,7 @@ impl<T> From<mpsc::error::SendError<T>> for DocumentError {
 pub type Reply<T> = oneshot::Sender<Result<T, DocumentError>>;
 
 /// Commands that can be sent to the document actor
-pub enum DocumentCommand {
+pub(crate) enum DocumentCommand {
     UpdateDocument {
         document: Vec<serde_json::Value>,
         reply: Reply<()>,
@@ -104,9 +71,9 @@ pub enum DocumentCommand {
     /// Start execution of a block, returning a snapshot of its context
     CreateExecutionContext {
         block_id: Uuid,
-        event_sender: tokio::sync::broadcast::Sender<crate::workflow::event::WorkflowEvent>,
-        ssh_pool: Option<crate::ssh_pool::SshPoolHandle>,
-        pty_store: Option<crate::pty_store::PtyStoreHandle>,
+        event_sender: tokio::sync::broadcast::Sender<WorkflowEvent>,
+        ssh_pool: Option<SshPoolHandle>,
+        pty_store: Option<PtyStoreHandle>,
         extra_template_context: Option<HashMap<String, HashMap<String, String>>>,
         reply: Reply<ExecutionContext>,
     },
@@ -198,7 +165,8 @@ impl DocumentHandle {
         instance
     }
 
-    pub fn from_raw(
+    #[cfg(test)]
+    pub(crate) fn from_raw(
         runbook_id: String,
         command_tx: mpsc::UnboundedSender<DocumentCommand>,
     ) -> Arc<Self> {
@@ -247,9 +215,9 @@ impl DocumentHandle {
     pub async fn create_execution_context(
         &self,
         block_id: Uuid,
-        event_sender: tokio::sync::broadcast::Sender<crate::workflow::event::WorkflowEvent>,
-        ssh_pool: Option<crate::ssh_pool::SshPoolHandle>,
-        pty_store: Option<crate::pty_store::PtyStoreHandle>,
+        event_sender: tokio::sync::broadcast::Sender<WorkflowEvent>,
+        ssh_pool: Option<SshPoolHandle>,
+        pty_store: Option<PtyStoreHandle>,
         extra_template_context: Option<HashMap<String, HashMap<String, String>>>,
     ) -> Result<ExecutionContext, DocumentError> {
         let (tx, rx) = oneshot::channel();
@@ -559,9 +527,9 @@ impl DocumentActor {
     async fn handle_create_execution_context(
         &mut self,
         block_id: Uuid,
-        event_sender: tokio::sync::broadcast::Sender<crate::workflow::event::WorkflowEvent>,
-        ssh_pool: Option<crate::ssh_pool::SshPoolHandle>,
-        pty_store: Option<crate::pty_store::PtyStoreHandle>,
+        event_sender: tokio::sync::broadcast::Sender<WorkflowEvent>,
+        ssh_pool: Option<SshPoolHandle>,
+        pty_store: Option<PtyStoreHandle>,
         extra_template_context: Option<HashMap<String, HashMap<String, String>>>,
     ) -> Result<ExecutionContext, DocumentError> {
         // Build execution context from current document state
@@ -588,7 +556,7 @@ impl DocumentActor {
             .get_block_mut(&block_id)
             .ok_or(DocumentError::BlockNotFound(block_id))?;
 
-        block.update_passive_context(context);
+        block.replace_passive_context(context);
         Ok(())
     }
 

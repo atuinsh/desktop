@@ -2,10 +2,15 @@ use serde::{Deserialize, Serialize};
 use typed_builder::TypedBuilder;
 use uuid::Uuid;
 
-use crate::blocks::handler::BlockOutput;
-use crate::blocks::{handler::ExecutionStatus, Block, BlockBehavior};
+use std::io::Read;
 
-use super::FromDocument;
+use crate::blocks::{Block, BlockBehavior, FromDocument};
+use crate::events::GCEvent;
+use crate::execution::{
+    BlockOutput, CancellationToken, ExecutionContext, ExecutionHandle, ExecutionStatus,
+};
+use crate::pty::{Pty, PtyLike};
+use crate::ssh::SshPty;
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, TypedBuilder)]
 #[serde(rename_all = "camelCase")]
@@ -77,9 +82,8 @@ impl BlockBehavior for Terminal {
 
     async fn execute(
         self,
-        context: super::handler::ExecutionContext,
-    ) -> Result<Option<super::handler::ExecutionHandle>, Box<dyn std::error::Error + Send + Sync>>
-    {
+        context: ExecutionContext,
+    ) -> Result<Option<ExecutionHandle>, Box<dyn std::error::Error + Send + Sync>> {
         let _ = context.block_started().await;
 
         let pty_id = self.id;
@@ -142,17 +146,10 @@ impl Terminal {
 
     async fn run_terminal(
         &self,
-        context: super::handler::ExecutionContext,
+        context: ExecutionContext,
         metadata: crate::pty::PtyMetadata,
-        cancellation_token: super::handler::CancellationToken,
+        cancellation_token: CancellationToken,
     ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
-        use crate::blocks::handler::BlockOutput;
-        use crate::events::GCEvent;
-        use crate::pty::Pty;
-        use crate::pty_store::PtyLike;
-        use crate::ssh_pool::SshPty;
-        use std::io::Read;
-
         // Get PTY store from context
         let pty_store = context
             .pty_store

@@ -1,481 +1,26 @@
-use std::{
-    any::{Any, TypeId},
-    collections::HashMap,
+mod block_context;
+mod resolution;
+mod storage;
+
+pub use block_context::{
+    BlockContext, BlockContextItem, BlockExecutionOutput, BlockWithContext, DocumentCwd,
+    DocumentEnvVar, DocumentSshHost, DocumentVar,
 };
-
-use minijinja::{value::Object, Environment, Value};
-use serde::{ser::SerializeSeq, Deserializer, Serializer};
-use serde::{Deserialize, Serialize};
-use ts_rs::TS;
-use uuid::Uuid;
-
-use crate::blocks::{Block, BlockBehavior};
-use crate::document::actor::LocalValueProvider;
-
-/// A single block's context - can store multiple typed values
-#[derive(Default, Debug)]
-pub struct BlockContext {
-    entries: HashMap<TypeId, Box<dyn BlockContextItem>>,
-}
-
-impl BlockContext {
-    pub fn new() -> Self {
-        Self {
-            entries: HashMap::new(),
-        }
-    }
-
-    /// Insert a typed value into this block's context
-    pub fn insert<T: BlockContextItem + 'static>(&mut self, value: T) {
-        self.entries.insert(TypeId::of::<T>(), Box::new(value));
-    }
-
-    /// Get a typed value from this block's context
-    pub fn get<T: BlockContextItem + 'static>(&self) -> Option<&T> {
-        self.entries
-            .get(&TypeId::of::<T>())
-            .and_then(|boxed| boxed.as_any().downcast_ref::<T>())
-    }
-}
-
-impl Clone for BlockContext {
-    fn clone(&self) -> Self {
-        let mut entries = HashMap::new();
-        for (type_id, item) in &self.entries {
-            entries.insert(*type_id, item.clone_box());
-        }
-        Self { entries }
-    }
-}
-
-impl Serialize for BlockContext {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let mut seq = serializer.serialize_seq(Some(self.entries.len()))?;
-        for value in self.entries.values() {
-            seq.serialize_element(value.as_ref())?;
-        }
-        seq.end()
-    }
-}
-
-impl<'de> Deserialize<'de> for BlockContext {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let items: Vec<Box<dyn BlockContextItem>> = Vec::deserialize(deserializer)?;
-        let mut context = Self::new();
-        for item in items {
-            let type_id = item.concrete_type_id();
-            context.entries.insert(type_id, item);
-        }
-        Ok(context)
-    }
-}
-
-#[async_trait::async_trait]
-pub trait BlockContextStorage: Send + Sync {
-    async fn save(
-        &self,
-        document_id: &str,
-        block_id: &Uuid,
-        context: &BlockContext,
-    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>>;
-    async fn load(
-        &self,
-        document_id: &str,
-        block_id: &Uuid,
-    ) -> Result<Option<BlockContext>, Box<dyn std::error::Error + Send + Sync>>;
-    async fn delete(
-        &self,
-        document_id: &str,
-        block_id: &Uuid,
-    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>>;
-    async fn delete_for_document(
-        &self,
-        runbook_id: &str,
-    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>>;
-}
-
-/// A struct representing the resolved context of a block.
-/// Since it's built from a `ContextResolver`, it's a snapshot
-/// of the final context based on the blocks above it.
-#[derive(Debug, Clone, Serialize, Deserialize, TS, Default)]
-#[ts(export)]
-#[serde(rename_all = "camelCase")]
-pub struct ResolvedContext {
-    pub variables: HashMap<String, String>,
-    pub cwd: String,
-    pub env_vars: HashMap<String, String>,
-    pub ssh_host: Option<String>,
-}
-
-impl ResolvedContext {
-    pub fn from_resolver(resolver: &ContextResolver) -> Self {
-        Self {
-            variables: resolver.vars().clone(),
-            cwd: resolver.cwd().to_string(),
-            env_vars: resolver.env_vars().clone(),
-            ssh_host: resolver.ssh_host().cloned(),
-        }
-    }
-
-    pub async fn from_block(
-        block: &(impl BlockBehavior + Clone),
-        block_local_value_provider: Option<&dyn LocalValueProvider>,
-    ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
-        if let Some(context) = block
-            .passive_context(&ContextResolver::new(), block_local_value_provider)
-            .await?
-        {
-            let block_with_context =
-                BlockWithContext::new(block.clone().into_block(), context, None);
-            let resolver = ContextResolver::from_blocks(&[block_with_context]);
-            Ok(Self::from_resolver(&resolver))
-        } else {
-            Ok(Self::default())
-        }
-    }
-}
-
-#[derive(Debug)]
-pub struct BlockWithContext {
-    block: Block,
-    passive_context: BlockContext,
-    active_context: BlockContext,
-}
-
-impl BlockWithContext {
-    pub fn new(
-        block: Block,
-        passive_context: BlockContext,
-        active_context: Option<BlockContext>,
-    ) -> Self {
-        Self {
-            block,
-            passive_context,
-            active_context: active_context.unwrap_or_default(),
-        }
-    }
-
-    pub fn id(&self) -> Uuid {
-        self.block.id()
-    }
-
-    pub fn passive_context(&self) -> &BlockContext {
-        &self.passive_context
-    }
-
-    pub fn passive_context_mut(&mut self) -> &mut BlockContext {
-        &mut self.passive_context
-    }
-
-    pub fn active_context(&self) -> &BlockContext {
-        &self.active_context
-    }
-
-    pub fn active_context_mut(&mut self) -> &mut BlockContext {
-        &mut self.active_context
-    }
-
-    pub fn block(&self) -> &Block {
-        &self.block
-    }
-
-    pub fn block_mut(&mut self) -> &mut Block {
-        &mut self.block
-    }
-
-    /// Replaces the context with a new one
-    pub fn update_passive_context(&mut self, context: BlockContext) {
-        *self.passive_context_mut() = context;
-    }
-
-    pub fn update_active_context(&mut self, context: BlockContext) {
-        *self.active_context_mut() = context;
-    }
-}
-
-/// A context resolver is used to resolve templates and build a [`ResolvedContext`] from blocks.
-#[derive(Clone, Debug)]
-pub struct ContextResolver {
-    vars: HashMap<String, String>,
-    cwd: String,
-    env_vars: HashMap<String, String>,
-    ssh_host: Option<String>,
-    extra_template_context: HashMap<String, Value>,
-}
-
-impl ContextResolver {
-    /// Create an empty context resolver
-    pub fn new() -> Self {
-        Self {
-            vars: HashMap::new(),
-            cwd: std::env::current_dir()
-                .unwrap_or_default()
-                .to_string_lossy()
-                .to_string(),
-            env_vars: HashMap::new(),
-            ssh_host: None,
-            extra_template_context: HashMap::new(),
-        }
-    }
-
-    pub fn add_extra_template_context(
-        &mut self,
-        namespace: String,
-        context: impl Object + 'static,
-    ) {
-        self.extra_template_context
-            .insert(namespace, Value::from_object(context));
-    }
-
-    /// Build a resolver from blocks (typically all blocks above the current one)
-    pub fn from_blocks(blocks: &[BlockWithContext]) -> Self {
-        // Process blocks in order (earlier blocks can be overridden by later ones)
-        let mut resolver = Self::new();
-        for block in blocks {
-            resolver.push_block(block);
-        }
-
-        resolver
-    }
-
-    /// Test-only constructor to create a resolver with specific vars
-    #[cfg(test)]
-    pub fn with_vars(vars: HashMap<String, String>) -> Self {
-        Self {
-            vars,
-            cwd: std::env::current_dir()
-                .unwrap_or_default()
-                .to_string_lossy()
-                .to_string(),
-            env_vars: HashMap::new(),
-            ssh_host: None,
-            extra_template_context: HashMap::new(),
-        }
-    }
-
-    /// Update the resolver with the context of a block.
-    /// Values are overwritten or merged as appropriate.
-    pub fn push_block(&mut self, block: &BlockWithContext) {
-        let passive_context = block.passive_context();
-        let active_context = block.active_context();
-
-        for ctx in [passive_context, active_context] {
-            if let Some(var) = ctx.get::<DocumentVar>() {
-                if let Ok(resolved_value) = self.resolve_template(&var.1) {
-                    self.vars.insert(var.0.clone(), resolved_value);
-                } else {
-                    log::warn!("Failed to resolve template for variable {}", var.0);
-                }
-            }
-
-            if let Some(dir) = ctx.get::<DocumentCwd>() {
-                if let Ok(resolved_value) = self.resolve_template(&dir.0) {
-                    self.cwd = resolved_value;
-                } else {
-                    log::warn!("Failed to resolve template for directory {}", dir.0);
-                }
-            }
-
-            if let Some(env) = ctx.get::<DocumentEnvVar>() {
-                if let Ok(resolved_value) = self.resolve_template(&env.1) {
-                    self.env_vars.insert(env.0.clone(), resolved_value);
-                } else {
-                    log::warn!(
-                        "Failed to resolve template for environment variable {}",
-                        env.0
-                    );
-                }
-            }
-
-            if let Some(host) = ctx.get::<DocumentSshHost>() {
-                if let Some(host) = host.0.as_ref() {
-                    if let Ok(resolved_value) = self.resolve_template(host) {
-                        self.ssh_host = Some(resolved_value);
-                    } else {
-                        log::warn!("Failed to resolve template for SSH host {}", host);
-                    }
-                }
-            }
-        }
-    }
-
-    /// Resolve a template string using minijinja
-    pub fn resolve_template(&self, template: &str) -> Result<String, minijinja::Error> {
-        // If the string doesn't contain template markers, return it as-is
-        if !template.contains("{{") && !template.contains("{%") {
-            return Ok(template.to_string());
-        }
-
-        // Create a minijinja environment
-        let mut env = Environment::new();
-        env.set_trim_blocks(true);
-
-        // Build the context object for template rendering
-        let mut context: HashMap<&str, Value> = HashMap::new();
-
-        // Add any extra template context
-        context.extend(
-            self.extra_template_context
-                .iter()
-                .map(|(k, v)| (k.as_str(), v.clone())),
-        );
-
-        context.insert("var", Value::from_object(self.vars.clone()));
-        context.insert("env", Value::from_object(self.env_vars.clone()));
-
-        // Render the template
-        env.render_str(template, context)
-    }
-
-    /// Get a variable value
-    pub fn get_var(&self, name: &str) -> Option<&String> {
-        self.vars.get(name)
-    }
-
-    /// Get all variables
-    pub fn vars(&self) -> &HashMap<String, String> {
-        &self.vars
-    }
-
-    /// Get current working directory
-    pub fn cwd(&self) -> &str {
-        &self.cwd
-    }
-
-    /// Get environment variables
-    pub fn env_vars(&self) -> &HashMap<String, String> {
-        &self.env_vars
-    }
-
-    /// Get SSH host
-    pub fn ssh_host(&self) -> Option<&String> {
-        self.ssh_host.as_ref()
-    }
-}
-
-impl Default for ContextResolver {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-#[typetag::serde(tag = "type")]
-pub trait BlockContextItem: Any + std::fmt::Debug + Send + Sync {
-    fn as_any(&self) -> &dyn Any;
-    fn concrete_type_id(&self) -> TypeId;
-    fn clone_box(&self) -> Box<dyn BlockContextItem>;
-}
-
-/// Variables defined by Var blocks
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct DocumentVar(pub String, pub String);
-
-#[typetag::serde]
-impl BlockContextItem for DocumentVar {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
-    fn concrete_type_id(&self) -> TypeId {
-        TypeId::of::<Self>()
-    }
-
-    fn clone_box(&self) -> Box<dyn BlockContextItem> {
-        Box::new(self.clone())
-    }
-}
-
-/// Current working directory set by Directory blocks
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct DocumentCwd(pub String);
-
-#[typetag::serde]
-impl BlockContextItem for DocumentCwd {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
-    fn concrete_type_id(&self) -> TypeId {
-        TypeId::of::<Self>()
-    }
-
-    fn clone_box(&self) -> Box<dyn BlockContextItem> {
-        Box::new(self.clone())
-    }
-}
-
-/// Environment variables set by Environment blocks
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct DocumentEnvVar(pub String, pub String);
-
-#[typetag::serde]
-impl BlockContextItem for DocumentEnvVar {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
-    fn concrete_type_id(&self) -> TypeId {
-        TypeId::of::<Self>()
-    }
-
-    fn clone_box(&self) -> Box<dyn BlockContextItem> {
-        Box::new(self.clone())
-    }
-}
-
-/// SSH connection information from SshConnect blocks
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct DocumentSshHost(pub Option<String>);
-
-#[typetag::serde]
-impl BlockContextItem for DocumentSshHost {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
-    fn concrete_type_id(&self) -> TypeId {
-        TypeId::of::<Self>()
-    }
-
-    fn clone_box(&self) -> Box<dyn BlockContextItem> {
-        Box::new(self.clone())
-    }
-}
-
-/// Execution output from blocks that produce results
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct BlockExecutionOutput {
-    pub exit_code: Option<i32>,
-    pub stdout: Option<String>,
-    pub stderr: Option<String>,
-    // Future: dataframes, complex data structures, etc.
-}
-
-#[typetag::serde]
-impl BlockContextItem for BlockExecutionOutput {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
-    fn concrete_type_id(&self) -> TypeId {
-        TypeId::of::<Self>()
-    }
-
-    fn clone_box(&self) -> Box<dyn BlockContextItem> {
-        Box::new(self.clone())
-    }
-}
+pub use resolution::{ContextResolver, ResolvedContext};
+pub use storage::BlockContextStorage;
+pub use typetag::serde as typetag_serde;
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+
+    use uuid::Uuid;
+
     use super::*;
-    use crate::blocks::{directory::Directory, environment::Environment, var::Var, Block};
+    use crate::{
+        blocks::{directory::Directory, environment::Environment, var::Var, Block},
+        context::resolution::ContextResolverBuilder,
+    };
 
     #[test]
     fn test_block_context_insert_and_get() {
@@ -707,13 +252,15 @@ mod tests {
 
     #[test]
     fn test_context_resolver_template_resolution_with_env() {
-        let resolver = ContextResolver {
-            vars: HashMap::new(),
-            cwd: "/test".to_string(),
-            env_vars: HashMap::from([("PATH".to_string(), "/usr/bin".to_string())]),
-            ssh_host: None,
-            extra_template_context: HashMap::new(),
-        };
+        let resolver = ContextResolverBuilder::new()
+            .vars(HashMap::new())
+            .cwd("/test".to_string())
+            .env_vars(HashMap::from([(
+                "PATH".to_string(),
+                "/usr/bin".to_string(),
+            )]))
+            .extra_template_context(HashMap::new())
+            .build();
 
         let result = resolver.resolve_template("PATH is {{ env.PATH }}").unwrap();
         assert_eq!(result, "PATH is /usr/bin");
@@ -727,13 +274,12 @@ mod tests {
         let mut env_vars = HashMap::new();
         env_vars.insert("HOME".to_string(), "/home/bob".to_string());
 
-        let resolver = ContextResolver {
-            vars,
-            cwd: "/test".to_string(),
-            env_vars,
-            ssh_host: None,
-            extra_template_context: HashMap::new(),
-        };
+        let resolver = ContextResolverBuilder::new()
+            .vars(vars)
+            .cwd("/test".to_string())
+            .env_vars(env_vars)
+            .extra_template_context(HashMap::new())
+            .build();
 
         let result = resolver
             .resolve_template("User {{ var.USER }} has home {{ env.HOME }}")
@@ -782,7 +328,7 @@ mod tests {
 
         let mut active_context = BlockContext::new();
         active_context.insert(DocumentVar("ACTIVE_VAR".to_string(), "active".to_string()));
-        block_with_context.update_active_context(active_context);
+        block_with_context.replace_active_context(active_context);
 
         resolver.push_block(&block_with_context);
 
@@ -801,13 +347,13 @@ mod tests {
         let mut env_vars = HashMap::new();
         env_vars.insert("PATH".to_string(), "/usr/bin".to_string());
 
-        let resolver = ContextResolver {
-            vars: vars.clone(),
-            cwd: "/tmp/test".to_string(),
-            env_vars: env_vars.clone(),
-            ssh_host: Some("example.com".to_string()),
-            extra_template_context: HashMap::new(),
-        };
+        let resolver = ContextResolverBuilder::new()
+            .vars(vars.clone())
+            .cwd("/tmp/test".to_string())
+            .env_vars(env_vars.clone())
+            .ssh_host("example.com".to_string())
+            .extra_template_context(HashMap::new())
+            .build();
 
         let resolved = ResolvedContext::from_resolver(&resolver);
 
@@ -888,11 +434,11 @@ mod tests {
 
         let mut new_passive = BlockContext::new();
         new_passive.insert(DocumentVar("NEW_VAR".to_string(), "new_value".to_string()));
-        block_with_context.update_passive_context(new_passive);
+        block_with_context.replace_passive_context(new_passive);
 
         let mut new_active = BlockContext::new();
         new_active.insert(DocumentCwd("/new/path".to_string()));
-        block_with_context.update_active_context(new_active);
+        block_with_context.replace_active_context(new_active);
 
         assert!(block_with_context
             .passive_context()

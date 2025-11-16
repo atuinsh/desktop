@@ -8,10 +8,9 @@ use sqlparser::{ast::Statement, dialect::Dialect};
 use ts_rs::TS;
 use typed_builder::TypedBuilder;
 
-use crate::blocks::{
-    handler::{BlockOutput, ExecutionContext},
-    query_block::{BlockExecutionError, QueryBlockBehavior, QueryBlockError},
-    BlockBehavior,
+use crate::{
+    blocks::{BlockBehavior, BlockExecutionError, QueryBlockBehavior, QueryBlockError},
+    execution::{BlockOutput, ExecutionContext},
 };
 
 #[derive(Debug, thiserror::Error)]
@@ -83,7 +82,7 @@ impl BlockExecutionError for SqlBlockError {
 #[derive(Debug, Clone, Serialize, TypedBuilder, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
-pub(crate) struct SqlQueryResult {
+pub struct SqlQueryResult {
     columns: Vec<String>,
     rows: Vec<Map<String, Value>>,
     #[builder(default = None)]
@@ -103,7 +102,7 @@ pub(crate) struct SqlQueryResult {
 #[derive(Debug, Clone, Serialize, TypedBuilder, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
-pub(crate) struct SqlStatementResult {
+pub struct SqlStatementResult {
     #[ts(type = "number | null")]
     #[builder(default = None, setter(strip_option))]
     rows_affected: Option<u64>,
@@ -121,7 +120,7 @@ pub(crate) struct SqlStatementResult {
 #[derive(Debug, Clone, Serialize, TS)]
 #[serde(tag = "type", content = "data")]
 #[ts(export)]
-pub(crate) enum SqlBlockExecutionResult {
+pub enum SqlBlockExecutionResult {
     Query(SqlQueryResult),
     Statement(SqlStatementResult),
 }
@@ -137,7 +136,7 @@ where
 /// A trait that defines the behavior of a block that executes SQL queries and statements via sqlx.
 /// Provides SQL-specific functionality like parsing, query vs statement distinction, and handling
 /// multiple semicolon-separated queries. Automatically implements QueryBlockBehavior.
-pub(crate) trait SqlBlockBehavior: BlockBehavior + 'static {
+pub trait SqlBlockBehavior: BlockBehavior + 'static {
     /// The type of the SQLx connection pool
     type Pool: Clone + Send + Sync + 'static;
 

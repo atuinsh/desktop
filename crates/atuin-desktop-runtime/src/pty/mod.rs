@@ -1,3 +1,7 @@
+mod pty_store;
+
+pub use pty_store::{PtyLike, PtyStoreHandle};
+
 use std::{
     collections::HashMap,
     io::Write,
@@ -11,8 +15,6 @@ use portable_pty::{CommandBuilder, MasterPty, PtySize};
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 use uuid::Uuid;
-
-use crate::pty_store::PtyLike;
 
 #[derive(Clone, Deserialize, Serialize, Debug, TS)]
 #[ts(export)]

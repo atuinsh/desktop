@@ -2,8 +2,8 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 use uuid::Uuid;
 
-use crate::blocks::handler;
-use crate::document::block_context::ResolvedContext;
+use crate::context::ResolvedContext;
+use crate::execution::BlockOutput;
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export)]
@@ -18,7 +18,7 @@ pub enum DocumentBridgeMessage {
     BlockOutput {
         #[serde(rename = "blockId")]
         block_id: Uuid,
-        output: handler::BlockOutput,
+        output: BlockOutput,
     },
 
     ClientPrompt {
@@ -30,8 +30,8 @@ pub enum DocumentBridgeMessage {
     },
 }
 
-impl From<handler::BlockOutput> for DocumentBridgeMessage {
-    fn from(output: handler::BlockOutput) -> Self {
+impl From<BlockOutput> for DocumentBridgeMessage {
+    fn from(output: BlockOutput) -> Self {
         DocumentBridgeMessage::BlockOutput {
             block_id: output.block_id,
             output,

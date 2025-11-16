@@ -4,10 +4,8 @@ use typed_builder::TypedBuilder;
 use uuid::Uuid;
 
 use crate::blocks::{Block, BlockBehavior, FromDocument};
-use crate::document::{
-    actor::LocalValueProvider,
-    block_context::{BlockContext, ContextResolver, DocumentVar},
-};
+use crate::client::LocalValueProvider;
+use crate::context::{BlockContext, ContextResolver, DocumentVar};
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, TypedBuilder)]
 #[serde(rename_all = "camelCase")]

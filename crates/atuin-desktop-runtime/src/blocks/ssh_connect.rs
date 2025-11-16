@@ -1,7 +1,7 @@
-use crate::blocks::{Block, BlockBehavior, FromDocument};
-use crate::document::{
-    actor::LocalValueProvider,
-    block_context::{BlockContext, ContextResolver, DocumentSshHost},
+use crate::{
+    blocks::{Block, BlockBehavior, FromDocument},
+    client::LocalValueProvider,
+    context::{BlockContext, ContextResolver, DocumentSshHost},
 };
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
@@ -109,7 +109,7 @@ impl BlockBehavior for SshConnect {
 
 #[cfg(test)]
 mod tests {
-    use crate::document::block_context::ResolvedContext;
+    use crate::context::ResolvedContext;
 
     use super::*;
 

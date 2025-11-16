@@ -1,47 +1,10 @@
-//! Host context block for switching between localhost and SSH connections
-//!
-//! The host block allows switching the execution context between:
-//! - localhost (local execution)
-//! - SSH connections (remote execution)
-//!
-//! ## Usage
-//!
-//! ```json
-//! {
-//!   "type": "host",
-//!   "props": {
-//!     "host": "localhost"  // or "user@remote.host" or ""
-//!   }
-//! }
-//! ```
-//!
-//! ## Behavior
-//!
-//! - `"localhost"`, `"local"`, or `""` -> Sets context to local execution
-//! - Any other value -> Sets context to SSH execution with that host
-//!
-//! ## Examples
-//!
-//! ```json
-//! // Switch to localhost
-//! {"type": "host", "props": {"host": "localhost"}}
-//!
-//! // Switch to SSH
-//! {"type": "host", "props": {"host": "user@server.com"}}
-//!
-//! // Switch back to localhost (empty string)
-//! {"type": "host", "props": {"host": ""}}
-//! ```
-
 use serde::{Deserialize, Serialize};
 use typed_builder::TypedBuilder;
 use uuid::Uuid;
 
 use crate::blocks::{Block, BlockBehavior};
-use crate::document::{
-    actor::LocalValueProvider,
-    block_context::{BlockContext, ContextResolver, DocumentSshHost},
-};
+use crate::client::LocalValueProvider;
+use crate::context::{BlockContext, ContextResolver, DocumentSshHost};
 use async_trait::async_trait;
 
 /// Host context block for switching between localhost and SSH connections
@@ -118,7 +81,7 @@ impl BlockBehavior for Host {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::document::block_context::ResolvedContext;
+    use crate::context::ResolvedContext;
     use serde_json::json;
 
     #[tokio::test]

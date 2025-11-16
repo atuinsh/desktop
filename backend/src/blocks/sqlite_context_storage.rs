@@ -1,7 +1,7 @@
 use sqlx::{sqlite::SqliteRow, FromRow, Row, SqlitePool};
 use uuid::Uuid;
 
-use atuin_desktop_runtime::{BlockContext, BlockContextStorage};
+use atuin_desktop_runtime::context::{BlockContext, BlockContextStorage};
 
 struct BlockContextWrapper(BlockContext);
 

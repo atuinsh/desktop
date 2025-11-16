@@ -1,19 +1,17 @@
-use crate::blocks::handler::BlockOutput;
-use crate::blocks::handler::{CancellationToken, ExecutionStatus};
-use crate::document::block_context::{BlockExecutionOutput, DocumentVar};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::process::Stdio;
 use std::sync::Arc;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
-use tokio::sync::RwLock;
+use tokio::sync::{mpsc, oneshot, RwLock};
 use typed_builder::TypedBuilder;
 use uuid::Uuid;
 
-use crate::blocks::{
-    handler::{ExecutionContext, ExecutionHandle},
-    Block, BlockBehavior,
+use crate::blocks::{Block, BlockBehavior};
+use crate::context::{BlockExecutionOutput, DocumentVar};
+use crate::execution::{
+    BlockOutput, CancellationToken, ExecutionContext, ExecutionHandle, ExecutionStatus,
 };
 
 use super::FromDocument;
@@ -429,16 +427,11 @@ impl Script {
         code: &str,
         ssh_host: &str,
         context: ExecutionContext,
-        cancellation_token: crate::blocks::handler::CancellationToken,
+        cancellation_token: CancellationToken,
     ) -> (
         Result<i32, Box<dyn std::error::Error + Send + Sync>>,
         String,
     ) {
-        use crate::blocks::handler::BlockOutput;
-        use std::sync::Arc;
-        use tokio::sync::RwLock;
-        use tokio::sync::{mpsc, oneshot};
-
         let (username, hostname) = Self::parse_ssh_host(ssh_host);
 
         let ssh_pool = match &context.ssh_pool {
@@ -526,10 +519,11 @@ impl Script {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::blocks::handler::ExecutionStatus;
-    use crate::document::actor::{DocumentCommand, DocumentHandle};
-    use crate::document::block_context::ContextResolver;
+    use crate::context::ContextResolver;
+    use crate::document::actor::DocumentCommand;
+    use crate::document::DocumentHandle;
     use crate::events::MemoryEventBus;
+    use crate::execution::ExecutionStatus;
     use std::collections::HashMap;
     use std::sync::Arc;
     use std::time::Duration;

@@ -6,19 +6,16 @@ use ts_rs::TS;
 use typed_builder::TypedBuilder;
 use uuid::Uuid;
 
-use crate::blocks::query_block::{BlockExecutionError, QueryBlockBehavior};
-use crate::blocks::{Block, BlockBehavior};
-
-use super::handler::{ExecutionContext, ExecutionHandle};
-use super::FromDocument;
+use crate::blocks::{Block, BlockBehavior, BlockExecutionError, FromDocument, QueryBlockBehavior};
+use crate::execution::{ExecutionContext, ExecutionHandle};
 
 // Prometheus-specific types for QueryBlockBehavior
-type PrometheusConnection = (Client, String, PrometheusTimeRange);
+pub type PrometheusConnection = (Client, String, PrometheusTimeRange);
 
 #[derive(Debug, Clone, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
-pub(crate) struct PrometheusQueryResult {
+pub struct PrometheusQueryResult {
     series: Vec<PrometheusSeries>,
     query_executed: String,
     time_range: PrometheusTimeRange,
@@ -27,7 +24,7 @@ pub(crate) struct PrometheusQueryResult {
 #[derive(Debug, Clone, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
-pub(crate) struct PrometheusSeries {
+pub struct PrometheusSeries {
     #[serde(rename = "type")]
     series_type: String,
     show_symbol: bool,
@@ -38,7 +35,7 @@ pub(crate) struct PrometheusSeries {
 #[derive(Debug, Clone, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
-pub(crate) struct PrometheusTimeRange {
+pub struct PrometheusTimeRange {
     start: u64,
     end: u64,
     step: u32,

@@ -1,7 +1,7 @@
-use crate::blocks::{Block, BlockBehavior, FromDocument};
-use crate::document::{
-    actor::LocalValueProvider,
-    block_context::{BlockContext, ContextResolver, DocumentCwd},
+use crate::{
+    blocks::{Block, BlockBehavior, FromDocument},
+    client::LocalValueProvider,
+    context::{BlockContext, ContextResolver, DocumentCwd},
 };
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
@@ -60,9 +60,8 @@ impl FromDocument for LocalDirectory {
 
 #[cfg(test)]
 mod tests {
-    use crate::document::{actor::MemoryBlockLocalValueProvider, block_context::ResolvedContext};
-
     use super::*;
+    use crate::{client::local::MemoryBlockLocalValueProvider, context::ResolvedContext};
 
     fn local_value_provider(path: String) -> impl LocalValueProvider {
         MemoryBlockLocalValueProvider::new(vec![("path".to_string(), path)])
