@@ -40,7 +40,11 @@ mod tests {
     fn test_block_context_insert_and_get() {
         let mut context = BlockContext::new();
 
-        let var = DocumentVar("TEST_VAR".to_string(), "test_value".to_string());
+        let var = DocumentVar::new(
+            "TEST_VAR".to_string(),
+            "test_value".to_string(),
+            "test".to_string(),
+        );
         context.insert(var.clone());
 
         let retrieved = context.get::<DocumentVar>();
@@ -52,7 +56,11 @@ mod tests {
     fn test_block_context_multiple_types() {
         let mut context = BlockContext::new();
 
-        let var = DocumentVar("TEST_VAR".to_string(), "test_value".to_string());
+        let var = DocumentVar::new(
+            "TEST_VAR".to_string(),
+            "test_value".to_string(),
+            "test".to_string(),
+        );
         let cwd = DocumentCwd("/tmp/test".to_string());
         let env = DocumentEnvVar("PATH".to_string(), "/usr/bin".to_string());
 
@@ -76,8 +84,8 @@ mod tests {
     fn test_block_context_overwrite_same_type() {
         let mut context = BlockContext::new();
 
-        let var1 = DocumentVar("VAR1".to_string(), "value1".to_string());
-        let var2 = DocumentVar("VAR2".to_string(), "value2".to_string());
+        let var1 = DocumentVar::new("VAR1".to_string(), "value1".to_string(), "test".to_string());
+        let var2 = DocumentVar::new("VAR2".to_string(), "value2".to_string(), "test".to_string());
 
         context.insert(var1);
         context.insert(var2.clone());
@@ -90,9 +98,10 @@ mod tests {
     fn test_block_context_serialization_roundtrip() {
         let mut context = BlockContext::new();
 
-        context.insert(DocumentVar(
+        context.insert(DocumentVar::new(
             "TEST_VAR".to_string(),
             "test_value".to_string(),
+            "test".to_string(),
         ));
         context.insert(DocumentCwd("/tmp/test".to_string()));
         context.insert(DocumentEnvVar("PATH".to_string(), "/usr/bin".to_string()));
@@ -102,9 +111,10 @@ mod tests {
 
         assert_eq!(
             deserialized.get::<DocumentVar>(),
-            Some(&DocumentVar(
+            Some(&DocumentVar::new(
                 "TEST_VAR".to_string(),
-                "test_value".to_string()
+                "test_value".to_string(),
+                "test".to_string()
             ))
         );
         assert_eq!(
@@ -134,9 +144,10 @@ mod tests {
             .build();
 
         let mut context = BlockContext::new();
-        context.insert(DocumentVar(
+        context.insert(DocumentVar::new(
             "TEST_VAR".to_string(),
             "test_value".to_string(),
+            "test".to_string(),
         ));
 
         let block_with_context = BlockWithContext::new(Block::Var(var_block), context, None);
@@ -169,7 +180,11 @@ mod tests {
             .build();
 
         let mut var_context = BlockContext::new();
-        var_context.insert(DocumentVar("VAR1".to_string(), "value1".to_string()));
+        var_context.insert(DocumentVar::new(
+            "VAR1".to_string(),
+            "value1".to_string(),
+            "test".to_string(),
+        ));
 
         let mut env_context = BlockContext::new();
         env_context.insert(DocumentEnvVar("PATH".to_string(), "/usr/bin".to_string()));
@@ -208,15 +223,17 @@ mod tests {
             .build();
 
         let mut context1 = BlockContext::new();
-        context1.insert(DocumentVar(
+        context1.insert(DocumentVar::new(
             "SHARED_VAR".to_string(),
             "first_value".to_string(),
+            "test".to_string(),
         ));
 
         let mut context2 = BlockContext::new();
-        context2.insert(DocumentVar(
+        context2.insert(DocumentVar::new(
             "SHARED_VAR".to_string(),
             "second_value".to_string(),
+            "test".to_string(),
         ));
 
         let blocks = vec![
@@ -312,7 +329,11 @@ mod tests {
             .build();
 
         let mut context = BlockContext::new();
-        context.insert(DocumentVar("NEW_VAR".to_string(), "new_value".to_string()));
+        context.insert(DocumentVar::new(
+            "NEW_VAR".to_string(),
+            "new_value".to_string(),
+            "test".to_string(),
+        ));
 
         let block_with_context = BlockWithContext::new(Block::Var(var_block), context, None);
 
@@ -332,16 +353,21 @@ mod tests {
             .build();
 
         let mut passive_context = BlockContext::new();
-        passive_context.insert(DocumentVar(
+        passive_context.insert(DocumentVar::new(
             "PASSIVE_VAR".to_string(),
             "passive".to_string(),
+            "test".to_string(),
         ));
 
         let mut block_with_context =
             BlockWithContext::new(Block::Var(var_block), passive_context, None);
 
         let mut active_context = BlockContext::new();
-        active_context.insert(DocumentVar("ACTIVE_VAR".to_string(), "active".to_string()));
+        active_context.insert(DocumentVar::new(
+            "ACTIVE_VAR".to_string(),
+            "active".to_string(),
+            "test".to_string(),
+        ));
         block_with_context.replace_active_context(active_context);
 
         resolver.push_block(&block_with_context);
@@ -387,6 +413,7 @@ mod tests {
 
         let original = ResolvedContext {
             variables: vars,
+            variables_sources: HashMap::new(),
             cwd: "/test/path".to_string(),
             env_vars,
             ssh_host: Some("test.example.com".to_string()),
@@ -420,7 +447,11 @@ mod tests {
         let block_id = var_block.id;
 
         let mut context = BlockContext::new();
-        context.insert(DocumentVar("TEST".to_string(), "value".to_string()));
+        context.insert(DocumentVar::new(
+            "TEST".to_string(),
+            "value".to_string(),
+            "test".to_string(),
+        ));
 
         let block_with_context = BlockWithContext::new(Block::Var(var_block), context, None);
 
@@ -447,7 +478,11 @@ mod tests {
             BlockWithContext::new(Block::Var(var_block), BlockContext::new(), None);
 
         let mut new_passive = BlockContext::new();
-        new_passive.insert(DocumentVar("NEW_VAR".to_string(), "new_value".to_string()));
+        new_passive.insert(DocumentVar::new(
+            "NEW_VAR".to_string(),
+            "new_value".to_string(),
+            "test".to_string(),
+        ));
         block_with_context.replace_passive_context(new_passive);
 
         let mut new_active = BlockContext::new();
@@ -466,9 +501,13 @@ mod tests {
 
     #[tokio::test]
     async fn test_document_context_items_equality() {
-        let var1 = DocumentVar("name".to_string(), "value".to_string());
-        let var2 = DocumentVar("name".to_string(), "value".to_string());
-        let var3 = DocumentVar("name".to_string(), "different".to_string());
+        let var1 = DocumentVar::new("name".to_string(), "value".to_string(), "test".to_string());
+        let var2 = DocumentVar::new("name".to_string(), "value".to_string(), "test".to_string());
+        let var3 = DocumentVar::new(
+            "name".to_string(),
+            "different".to_string(),
+            "test".to_string(),
+        );
 
         assert_eq!(var1, var2);
         assert_ne!(var1, var3);
@@ -569,7 +608,11 @@ mod tests {
             .build();
 
         let mut context1 = BlockContext::new();
-        context1.insert(DocumentVar("USERNAME".to_string(), "alice".to_string()));
+        context1.insert(DocumentVar::new(
+            "USERNAME".to_string(),
+            "alice".to_string(),
+            "test".to_string(),
+        ));
 
         let mut context2 = BlockContext::new();
         context2.insert(DocumentEnvVar(
@@ -581,7 +624,11 @@ mod tests {
         context3.insert(DocumentCwd("/home/alice/projects".to_string()));
 
         let mut context4 = BlockContext::new();
-        context4.insert(DocumentVar("PROJECT".to_string(), "myapp".to_string()));
+        context4.insert(DocumentVar::new(
+            "PROJECT".to_string(),
+            "myapp".to_string(),
+            "test".to_string(),
+        ));
 
         let blocks = vec![
             BlockWithContext::new(Block::Var(var1), context1, None),

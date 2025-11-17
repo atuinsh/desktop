@@ -1,7 +1,8 @@
 import CodeMirror, { KeyBinding, keymap, Prec } from "@uiw/react-codemirror";
 import * as themes from "@uiw/codemirror-themes-all";
 import { langs } from "@uiw/codemirror-extensions-langs";
-import { extensions } from "./extensions";
+import { jinja } from "@codemirror/lang-jinja";
+import { extensions, atuinHistoryCompletions, buildJinjaAutocomplete } from "./extensions";
 import { useMemo, useState } from "react";
 import { acceptCompletion, completionStatus } from "@codemirror/autocomplete";
 import { useCodeMirrorValue } from "@/lib/hooks/useCodeMirrorValue";
@@ -11,10 +12,11 @@ import { useStore } from "@/state/store";
 import { makeShellCheckLinter, supportedShells } from "./shellcheck";
 import { Button, Tooltip, addToast } from "@heroui/react";
 import { ClipboardIcon } from "lucide-react";
-
+import { useBlockContext } from "@/lib/hooks/useDocumentBridge";
 
 interface CodeEditorProps {
   id: string;
+  blockId?: string;
   code: string;
   isEditable: boolean;
   language: string;
@@ -41,6 +43,7 @@ export const TabAutoComplete: KeyBinding = {
 
 export default function CodeEditor({
   id,
+  blockId,
   code,
   isEditable,
   onChange,
@@ -55,7 +58,9 @@ export default function CodeEditor({
   const shellCheckPath = useStore((state) => state.shellCheckPath || "shellcheck");
 
   const [isFocused, setIsFocused] = useState(false);
-  
+
+  let blockContext = useBlockContext(blockId || id);
+
   let editorLanguage = useMemo(() => {
     // Do the best we can with the interpreter name - get the language
     // TODO: consider dropdown to override this
@@ -105,19 +110,32 @@ export default function CodeEditor({
     return null;
   }, [language]);
 
-  const shellCheckOn = (shellCheckShell !== null) && shellCheckEnabled;
+  const shellCheckOn = shellCheckShell !== null && shellCheckEnabled;
 
   let editorExtensions: any[] = useMemo(() => {
     const ext = [...extensions(), customKeymap];
     if (vimModeEnabled) {
       ext.unshift(vim());
     }
+
+    ext.push(jinja(buildJinjaAutocomplete(blockContext)));
+
     if (editorLanguage) {
       ext.push(editorLanguage);
+
+      if (typeof editorLanguage === "object" && "data" in editorLanguage) {
+        ext.push(
+          editorLanguage.data.of({
+            autocomplete: atuinHistoryCompletions,
+          }),
+        );
+      }
     }
+
     if (shellCheckOn) {
       ext.push(makeShellCheckLinter(shellCheckPath, shellCheckShell));
     }
+
     return ext;
   }, [
     editorLanguage,
@@ -126,6 +144,7 @@ export default function CodeEditor({
     shellCheckOn,
     shellCheckShell,
     shellCheckPath,
+    blockContext,
   ]);
 
   const handleCopyCode = async () => {
@@ -172,7 +191,11 @@ export default function CodeEditor({
         theme={themeObj}
       />
       {code.trim() && (
-        <div className={`absolute top-[4px] right-[4px] transition-opacity duration-200 ${isFocused ? 'opacity-100' : 'opacity-50'}`}>
+        <div
+          className={`absolute top-[4px] right-[4px] transition-opacity duration-200 ${
+            isFocused ? "opacity-100" : "opacity-50"
+          }`}
+        >
           <Tooltip content="Copy code">
             <Button
               onPress={handleCopyCode}

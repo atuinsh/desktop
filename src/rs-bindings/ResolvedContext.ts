@@ -5,4 +5,4 @@
  * Since it's built from a `ContextResolver`, it's a snapshot
  * of the final context based on the blocks above it.
  */
-export type ResolvedContext = { variables: { [key in string]?: string }, cwd: string, envVars: { [key in string]?: string }, sshHost: string | null, };
+export type ResolvedContext = { variables: { [key in string]?: string }, variablesSources: { [key in string]?: string }, cwd: string, envVars: { [key in string]?: string }, sshHost: string | null, };

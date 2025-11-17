@@ -28,6 +28,8 @@ import InterpreterSelector, {
 } from "@/lib/blocks/common/InterpreterSelector.tsx";
 import RunbookBus from "@/lib/app/runbook_bus";
 import { useCurrentRunbookId } from "@/context/runbook_id_context";
+import { useBlockContext } from "@/lib/hooks/useDocumentBridge";
+import { JinjaVariables } from "@/lib/blocks/common/CodeEditor/CodeEditor";
 
 // Helper to parse and display option nicely
 const parseOption = (option: string) => {
@@ -202,6 +204,7 @@ interface CommandTabProps {
   interpreter: string;
   onInterpreterChange: (interpreter: string) => void;
   onCodeMirrorFocus?: () => void;
+  jinjaVariables?: JinjaVariables;
 }
 
 const CommandTab = ({
@@ -210,6 +213,7 @@ const CommandTab = ({
   interpreter,
   onInterpreterChange,
   onCodeMirrorFocus,
+  jinjaVariables,
 }: CommandTabProps) => {
   const colorMode = useStore((state) => state.functionalColorMode);
   const lightModeEditorTheme = useStore((state) => state.lightModeEditorTheme);
@@ -240,6 +244,7 @@ const CommandTab = ({
           theme={theme}
           onChange={onOptionsUpdate}
           onFocus={onCodeMirrorFocus}
+          jinjaVariables={jinjaVariables}
           keyMap={[TabAutoComplete]}
         />
       </div>
@@ -264,6 +269,21 @@ const Dropdown = ({
   onCodeMirrorFocus,
 }: DropdownProps) => {
   const currentRunbookId = useCurrentRunbookId();
+  const context = useBlockContext(id);
+
+  // Extract available variables for Jinja autocomplete
+  const jinjaVariables = useMemo(() => {
+    return {
+      var: context.variables,
+      doc: {
+        first: "first",
+        last: "last",
+        previous: "previous",
+      },
+      env: context.envVars,
+    };
+  }, [context.variables, context.envVars]);
+
   const [selected, setSelected] = useState(value);
   const { isOpen, onOpen, onOpenChange } = useDisclosure();
   const [comboboxOpen, setComboboxOpen] = useState(false);
@@ -591,6 +611,7 @@ const Dropdown = ({
                         interpreter={interpreter}
                         onInterpreterChange={onInterpreterChange}
                         onCodeMirrorFocus={onCodeMirrorFocus}
+                        jinjaVariables={jinjaVariables as JinjaVariables}
                       />
                     </TabsContent>
                   </Tabs>

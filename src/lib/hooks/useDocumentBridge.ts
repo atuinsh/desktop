@@ -84,6 +84,7 @@ export class DocumentBridge {
 
 const DEFAULT_CONTEXT: ResolvedContext = {
   variables: {},
+  variablesSources: {},
   cwd: "",
   envVars: {},
   sshHost: null,

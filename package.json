@@ -23,6 +23,7 @@
     "@clickhouse/client-web": "^1.10.1",
     "@codemirror/autocomplete": "^6.18.6",
     "@codemirror/commands": "^6.8.0",
+    "@codemirror/lang-jinja": "^6.0.0",
     "@codemirror/language": "^6.10.8",
     "@codemirror/language-data": "^6.5.1",
     "@codemirror/lint": "^6.8.4",

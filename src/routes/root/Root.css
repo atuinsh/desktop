@@ -48,3 +48,9 @@ html.dark .tab-scrollbar::-webkit-scrollbar-thumb {
 html.dark .tab-scrollbar::-webkit-scrollbar-track {
     background: rgba(255, 255, 255, 0.1);
 }
+
+.atuin-cm-completion .cm-completionDetail {
+    display: inline-block;
+    margin-left: 1em;
+    opacity: 0.7;
+}

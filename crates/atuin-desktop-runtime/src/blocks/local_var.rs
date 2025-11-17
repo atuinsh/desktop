@@ -83,7 +83,7 @@ impl BlockBehavior for LocalVar {
         // Resolve value
         let mut context = BlockContext::new();
         let resolved_value = resolver.resolve_template(&local_value)?;
-        context.insert(DocumentVar(resolved_name, resolved_value));
+        context.insert(DocumentVar::new(resolved_name, resolved_value, local_value));
         Ok(Some(context))
     }
 }

@@ -170,7 +170,21 @@ pub trait BlockContextItem: Any + std::fmt::Debug + Send + Sync {
 
 /// Variables defined by template variable blocks
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct DocumentVar(pub String, pub String);
+pub struct DocumentVar {
+    pub name: String,
+    pub value: String,
+    pub source: String,
+}
+
+impl DocumentVar {
+    pub fn new(name: String, value: String, source: String) -> Self {
+        Self {
+            name,
+            value,
+            source,
+        }
+    }
+}
 
 #[typetag::serde]
 impl BlockContextItem for DocumentVar {

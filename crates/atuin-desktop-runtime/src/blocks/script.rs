@@ -155,7 +155,7 @@ impl BlockBehavior for Script {
                                     var_name_clone = var_name_clone,
                                     block_id = block_id
                                 );
-                                ctx.insert(DocumentVar(var_name_clone, output_clone));
+                                ctx.insert(DocumentVar::new(var_name_clone, output_clone, "(script output)".to_string()));
                             })
                             .await;
                     }

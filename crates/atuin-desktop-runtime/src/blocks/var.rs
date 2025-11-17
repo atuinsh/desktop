@@ -81,7 +81,11 @@ impl BlockBehavior for Var {
         // Resolve template in value if it contains template markers
         let resolved_value = resolver.resolve_template(&self.value)?;
 
-        context.insert(DocumentVar(resolved_name, resolved_value));
+        context.insert(DocumentVar::new(
+            resolved_name,
+            resolved_value,
+            self.value.clone(),
+        ));
         Ok(Some(context))
     }
 }

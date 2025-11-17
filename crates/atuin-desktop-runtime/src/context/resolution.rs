@@ -18,6 +18,7 @@ use crate::{
 #[serde(rename_all = "camelCase")]
 pub struct ResolvedContext {
     pub variables: HashMap<String, String>,
+    pub variables_sources: HashMap<String, String>,
     pub cwd: String,
     pub env_vars: HashMap<String, String>,
     pub ssh_host: Option<String>,
@@ -27,6 +28,7 @@ impl ResolvedContext {
     pub fn from_resolver(resolver: &ContextResolver) -> Self {
         Self {
             variables: resolver.vars().clone(),
+            variables_sources: resolver.vars_sources().clone(),
             cwd: resolver.cwd().to_string(),
             env_vars: resolver.env_vars().clone(),
             ssh_host: resolver.ssh_host().cloned(),
@@ -54,7 +56,7 @@ impl ResolvedContext {
 /// A context resolver is used to resolve templates and build a [`ResolvedContext`] from blocks.
 #[derive(Clone, Debug)]
 pub struct ContextResolver {
-    vars: HashMap<String, String>,
+    vars: HashMap<String, DocumentVar>,
     cwd: String,
     env_vars: HashMap<String, String>,
     ssh_host: Option<String>,
@@ -100,7 +102,10 @@ impl ContextResolver {
     #[cfg(test)]
     pub fn with_vars(vars: HashMap<String, String>) -> Self {
         Self {
-            vars,
+            vars: vars
+                .into_iter()
+                .map(|(k, v)| (k.clone(), DocumentVar::new(k, v.clone(), v)))
+                .collect(),
             cwd: std::env::current_dir()
                 .unwrap_or_default()
                 .to_string_lossy()
@@ -119,10 +124,13 @@ impl ContextResolver {
 
         for ctx in [passive_context, active_context] {
             if let Some(var) = ctx.get::<DocumentVar>() {
-                if let Ok(resolved_value) = self.resolve_template(&var.1) {
-                    self.vars.insert(var.0.clone(), resolved_value);
+                if let Ok(resolved_value) = self.resolve_template(&var.value) {
+                    self.vars.insert(
+                        var.name.clone(),
+                        DocumentVar::new(var.name.clone(), resolved_value, var.source.clone()),
+                    );
                 } else {
-                    log::warn!("Failed to resolve template for variable {}", var.0);
+                    log::warn!("Failed to resolve template for variable {}", var.name);
                 }
             }
 
@@ -178,7 +186,15 @@ impl ContextResolver {
                 .map(|(k, v)| (k.as_str(), v.clone())),
         );
 
-        context.insert("var", Value::from_object(self.vars.clone()));
+        context.insert(
+            "var",
+            Value::from_object(
+                self.vars
+                    .iter()
+                    .map(|(k, v)| (k.clone(), Value::from(v.value.clone())))
+                    .collect::<HashMap<String, Value>>(),
+            ),
+        );
         context.insert("env", Value::from_object(self.env_vars.clone()));
 
         // Render the template
@@ -187,12 +203,23 @@ impl ContextResolver {
 
     /// Get a variable value
     pub fn get_var(&self, name: &str) -> Option<&String> {
-        self.vars.get(name)
+        self.vars.get(name).map(|v| &v.value)
     }
 
     /// Get all variables
-    pub fn vars(&self) -> &HashMap<String, String> {
-        &self.vars
+    pub fn vars(&self) -> HashMap<String, String> {
+        self.vars
+            .iter()
+            .map(|(k, v)| (k.clone(), v.value.clone()))
+            .collect()
+    }
+
+    /// Get all variables with sources
+    pub fn vars_sources(&self) -> HashMap<String, String> {
+        self.vars
+            .iter()
+            .map(|(k, v)| (k.clone(), v.source.clone()))
+            .collect()
     }
 
     /// Get current working directory
@@ -219,7 +246,7 @@ impl Default for ContextResolver {
 
 #[cfg(test)]
 pub struct ContextResolverBuilder {
-    vars: Option<HashMap<String, String>>,
+    vars: Option<HashMap<String, DocumentVar>>,
     cwd: Option<String>,
     env_vars: Option<HashMap<String, String>>,
     ssh_host: Option<String>,
@@ -239,7 +266,20 @@ impl ContextResolverBuilder {
     }
 
     pub fn vars(mut self, vars: HashMap<String, String>) -> Self {
-        self.vars = Some(vars);
+        self.vars = Some(
+            vars.into_iter()
+                .map(|(k, v)| (k.clone(), DocumentVar::new(k, v.clone(), v)))
+                .collect(),
+        );
+        self
+    }
+
+    pub fn vars_with_source(mut self, vars: HashMap<String, (String, String)>) -> Self {
+        self.vars = Some(
+            vars.into_iter()
+                .map(|(k, v)| (k.clone(), DocumentVar::new(k, v.0, v.1)))
+                .collect(),
+        );
         self
     }
 
@@ -268,7 +308,12 @@ impl ContextResolverBuilder {
 
     pub fn build(self) -> ContextResolver {
         ContextResolver {
-            vars: self.vars.unwrap_or_default(),
+            vars: self
+                .vars
+                .unwrap_or_default()
+                .into_iter()
+                .map(|(k, v)| (k.clone(), DocumentVar::new(k, v.value, v.source)))
+                .collect(),
             cwd: self.cwd.unwrap_or_default(),
             env_vars: self.env_vars.unwrap_or_default(),
             ssh_host: self.ssh_host,
