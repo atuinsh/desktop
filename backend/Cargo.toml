@@ -34,7 +34,7 @@ comrak = "0.39.0"
 portable-pty = "0.8.1"
 vt100 = "0.15.2"
 bytes = "1.7.1"
-nix = { version = "0.29.0", features = ["signal"] }
+nix = { version = "0.30.1", features = ["signal"] }
 lazy_static = "1.5.0"
 shellexpand = "3.1.0"
 open = "5"
