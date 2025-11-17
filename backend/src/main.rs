@@ -426,6 +426,14 @@ fn main() {
                     .and_then(|level| level.parse().ok())
                     .unwrap_or(log::LevelFilter::Info),
             )
+            .level_for(
+                "atuin_desktop_runtime",
+                std::env::var("ATUIN_LOG")
+                    .or_else(|_| std::env::var("RUST_LOG"))
+                    .ok()
+                    .and_then(|level| level.parse().ok())
+                    .unwrap_or(log::LevelFilter::Info),
+            )
             .max_file_size(20_000_000)
             .rotation_strategy(tauri_plugin_log::RotationStrategy::KeepSome(4))
             .with_colors(tauri_plugin_log::fern::colors::ColoredLevelConfig::default())
