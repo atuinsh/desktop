@@ -2,5 +2,12 @@
 import type { BlockOutput } from "./BlockOutput";
 import type { ClientPrompt } from "./ClientPrompt";
 import type { ResolvedContext } from "./ResolvedContext";
+import type { JsonValue } from "./serde_json/JsonValue";
 
-export type DocumentBridgeMessage = { "type": "blockContextUpdate", "data": { blockId: string, context: ResolvedContext, } } | { "type": "blockOutput", "data": { blockId: string, output: BlockOutput, } } | { "type": "clientPrompt", "data": { executionId: string, promptId: string, prompt: ClientPrompt, } };
+/**
+ * Messages sent from the runtime to the client application
+ *
+ * These messages communicate execution state, output, and context updates
+ * to the desktop application frontend.
+ */
+export type DocumentBridgeMessage = { "type": "blockContextUpdate", "data": { blockId: string, context: ResolvedContext, } } | { "type": "blockStateChanged", "data": { blockId: string, state: JsonValue, } } | { "type": "blockOutput", "data": { blockId: string, output: BlockOutput, } } | { "type": "clientPrompt", "data": { executionId: string, promptId: string, prompt: ClientPrompt, } };

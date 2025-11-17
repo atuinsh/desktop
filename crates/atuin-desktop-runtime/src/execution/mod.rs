@@ -18,7 +18,7 @@ use typed_builder::TypedBuilder;
 use uuid::Uuid;
 
 use crate::client::{ClientPrompt, ClientPromptResult, DocumentBridgeMessage, MessageChannel};
-use crate::context::{BlockContext, ContextResolver};
+use crate::context::{BlockContext, BlockState, ContextResolver};
 use crate::document::{DocumentError, DocumentHandle};
 use crate::events::{EventBus, GCEvent};
 use crate::pty::PtyStoreHandle;
@@ -113,6 +113,17 @@ impl ExecutionContext {
     ) -> Result<(), DocumentError> {
         self.document_handle
             .update_active_context(block_id, update_fn)
+            .await
+    }
+
+    /// Update the private block state
+    pub async fn update_block_state(
+        &self,
+        block_id: Uuid,
+        update_fn: Box<dyn FnOnce(&mut Box<dyn BlockState>) + Send>,
+    ) -> Result<(), DocumentError> {
+        self.document_handle
+            .update_block_state(block_id, update_fn)
             .await
     }
 

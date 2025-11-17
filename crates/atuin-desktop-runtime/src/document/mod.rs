@@ -10,6 +10,7 @@
 pub(crate) mod actor;
 
 pub use actor::{DocumentError, DocumentHandle};
+use serde_json::Value;
 
 use std::{
     collections::{HashMap, HashSet},
@@ -24,7 +25,8 @@ use crate::{
     blocks::{Block, KNOWN_UNSUPPORTED_BLOCKS},
     client::{DocumentBridgeMessage, LocalValueProvider, MessageChannel},
     context::{
-        BlockContext, BlockContextStorage, BlockWithContext, ContextResolver, ResolvedContext,
+        BlockContext, BlockContextStorage, BlockState, BlockWithContext, ContextResolver,
+        ResolvedContext,
     },
     events::{EventBus, GCEvent},
     execution::{ExecutionContext, ExecutionHandle},
@@ -113,8 +115,13 @@ impl Document {
                     .load(self.id.as_str(), &block.id())
                     .await
                     .unwrap_or(None);
-                self.blocks
-                    .push(BlockWithContext::new(block, BlockContext::new(), context));
+                let block_state = block.create_state();
+                self.blocks.push(BlockWithContext::new(
+                    block,
+                    BlockContext::new(),
+                    context,
+                    block_state,
+                ));
             }
             return Ok(Some(0));
         }
@@ -155,7 +162,7 @@ impl Document {
             } else {
                 // New block - create it
                 let block_with_context =
-                    BlockWithContext::new(new_block.clone(), BlockContext::new(), None);
+                    BlockWithContext::new(new_block.clone(), BlockContext::new(), None, None);
                 updated_blocks.push(block_with_context);
 
                 // Mark rebuild from this position
@@ -357,6 +364,20 @@ impl Document {
         Ok(ResolvedContext::from_resolver(&resolver))
     }
 
+    pub fn get_block_state(&self, block_id: &Uuid) -> Result<Value, DocumentError> {
+        let position = self
+            .get_block_index(block_id)
+            .ok_or(DocumentError::BlockNotFound(*block_id))?;
+
+        if let Some(block) = self.blocks.get(position) {
+            if let Some(state) = block.state() {
+                return self.serialize_block_state(state);
+            }
+        }
+
+        Err(DocumentError::BlockNotFound(*block_id))
+    }
+
     /// Rebuild passive contexts for all blocks or blocks starting from a given index
     /// This should be called after document structure changes or block context change
     pub async fn rebuild_contexts(
@@ -437,6 +458,34 @@ impl Document {
         } else {
             Err(errors)
         }
+    }
+
+    pub(crate) async fn emit_state_changed(
+        &self,
+        block_id: Uuid,
+        state: &Box<dyn BlockState>,
+    ) -> Result<(), DocumentError> {
+        let state_value = self.serialize_block_state(state)?;
+
+        let _ = self
+            .document_bridge
+            .send(DocumentBridgeMessage::BlockStateChanged {
+                block_id,
+                state: state_value,
+            })
+            .await;
+        Ok(())
+    }
+
+    fn serialize_block_state(&self, state: &Box<dyn BlockState>) -> Result<Value, DocumentError> {
+        let mut buf = Vec::new();
+        let mut serializer = serde_json::Serializer::new(&mut buf);
+        let mut erased = <dyn erased_serde::Serializer>::erase(&mut serializer);
+        state
+            .erased_serialize(&mut erased)
+            .map_err(|e| DocumentError::StateSerializationError(e.to_string()))?;
+        Ok(serde_json::from_slice(&buf)
+            .map_err(|e| DocumentError::StateSerializationError(e.to_string()))?)
     }
 
     pub(crate) async fn store_active_context(&self, block_id: Uuid) -> Result<(), DocumentError> {

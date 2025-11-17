@@ -1,3 +1,4 @@
+use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::{mpsc, oneshot};
@@ -5,7 +6,9 @@ use uuid::Uuid;
 
 use crate::blocks::Block;
 use crate::client::{DocumentBridgeMessage, LocalValueProvider, MessageChannel};
-use crate::context::{BlockContext, BlockContextStorage, ResolvedContext};
+use crate::context::{
+    BlockContext, BlockContextStorage, BlockState, ContextResolver, ResolvedContext,
+};
 use crate::document::Document;
 use crate::events::EventBus;
 use crate::execution::ExecutionContext;
@@ -39,6 +42,9 @@ pub enum DocumentError {
 
     #[error("Failed to store active context: {0}")]
     StoreActiveContextError(String),
+
+    #[error("Failed to serialize block state: {0}")]
+    StateSerializationError(String),
 }
 
 impl<T> From<mpsc::error::SendError<T>> for DocumentError {
@@ -78,6 +84,13 @@ pub(crate) enum DocumentCommand {
         reply: Reply<ExecutionContext>,
     },
 
+    /// Build a context resolver for a block
+    BuildContextResolver {
+        block_id: Uuid,
+        extra_template_context: Option<HashMap<String, HashMap<String, String>>>,
+        reply: Reply<ContextResolver>,
+    },
+
     /// Complete execution of a block, updating its context
     CompleteExecution {
         block_id: Uuid,
@@ -99,6 +112,13 @@ pub(crate) enum DocumentCommand {
         reply: Reply<()>,
     },
 
+    /// Update a block's state during execution
+    UpdateBlockState {
+        block_id: Uuid,
+        update_fn: Box<dyn FnOnce(&mut Box<dyn BlockState>) + Send>,
+        reply: Reply<()>,
+    },
+
     /// Get a block by ID (for inspection/debugging)
     GetBlock {
         block_id: Uuid,
@@ -109,6 +129,12 @@ pub(crate) enum DocumentCommand {
     GetResolvedContext {
         block_id: Uuid,
         reply: oneshot::Sender<Result<ResolvedContext, DocumentError>>,
+    },
+
+    /// Get a block's state
+    GetBlockState {
+        block_id: Uuid,
+        reply: oneshot::Sender<Result<Value, DocumentError>>,
     },
 
     ResetState {
@@ -234,6 +260,23 @@ impl DocumentHandle {
         rx.await.map_err(|_| DocumentError::ActorSendError)?
     }
 
+    /// Build a context resolver for a block
+    pub async fn build_context_resolver(
+        &self,
+        block_id: Uuid,
+        extra_template_context: Option<HashMap<String, HashMap<String, String>>>,
+    ) -> Result<ContextResolver, DocumentError> {
+        let (tx, rx) = oneshot::channel();
+        self.command_tx
+            .send(DocumentCommand::BuildContextResolver {
+                block_id,
+                extra_template_context,
+                reply: tx,
+            })
+            .map_err(|_| DocumentError::ActorSendError)?;
+        rx.await.map_err(|_| DocumentError::ActorSendError)?
+    }
+
     /// Complete execution of a block, updating its final context
     pub async fn complete_execution(
         &self,
@@ -291,6 +334,26 @@ impl DocumentHandle {
         rx.await.map_err(|_| DocumentError::ActorSendError)?
     }
 
+    /// Update a block's state during execution
+    pub async fn update_block_state<F>(
+        &self,
+        block_id: Uuid,
+        update_fn: F,
+    ) -> Result<(), DocumentError>
+    where
+        F: FnOnce(&mut Box<dyn BlockState>) + Send + 'static,
+    {
+        let (tx, rx) = oneshot::channel();
+        self.command_tx
+            .send(DocumentCommand::UpdateBlockState {
+                block_id,
+                update_fn: Box::new(update_fn),
+                reply: tx,
+            })
+            .map_err(|_| DocumentError::ActorSendError)?;
+        rx.await.map_err(|_| DocumentError::ActorSendError)?
+    }
+
     /// Get a flattened block context
     pub async fn get_resolved_context(
         &self,
@@ -299,6 +362,18 @@ impl DocumentHandle {
         let (tx, rx) = oneshot::channel();
         self.command_tx
             .send(DocumentCommand::GetResolvedContext {
+                block_id,
+                reply: tx,
+            })
+            .map_err(|_| DocumentError::ActorSendError)?;
+        rx.await.map_err(|_| DocumentError::ActorSendError)?
+    }
+
+    /// Get a block's state
+    pub async fn get_block_state(&self, block_id: Uuid) -> Result<Value, DocumentError> {
+        let (tx, rx) = oneshot::channel();
+        self.command_tx
+            .send(DocumentCommand::GetBlockState {
                 block_id,
                 reply: tx,
             })
@@ -446,6 +521,16 @@ impl DocumentActor {
                         .await;
                     let _ = reply.send(result);
                 }
+                DocumentCommand::BuildContextResolver {
+                    block_id,
+                    extra_template_context,
+                    reply,
+                } => {
+                    let result = self
+                        .handle_build_context_resolver(block_id, extra_template_context)
+                        .await;
+                    let _ = reply.send(result);
+                }
                 DocumentCommand::CompleteExecution {
                     block_id,
                     context,
@@ -472,9 +557,21 @@ impl DocumentActor {
                     let result = self.handle_update_active_context(block_id, update_fn).await;
                     let _ = reply.send(result);
                 }
+                DocumentCommand::UpdateBlockState {
+                    block_id,
+                    update_fn,
+                    reply,
+                } => {
+                    let result = self.handle_update_block_state(block_id, update_fn).await;
+                    let _ = reply.send(result);
+                }
                 DocumentCommand::GetResolvedContext { block_id, reply } => {
                     let context = self.document.get_resolved_context(&block_id);
                     let _ = reply.send(context);
+                }
+                DocumentCommand::GetBlockState { block_id, reply } => {
+                    let state = self.document.get_block_state(&block_id);
+                    let _ = reply.send(state);
                 }
                 DocumentCommand::GetBlock { block_id, reply } => {
                     let block = self
@@ -545,6 +642,15 @@ impl DocumentActor {
         Ok(context)
     }
 
+    async fn handle_build_context_resolver(
+        &mut self,
+        block_id: Uuid,
+        extra_template_context: Option<HashMap<String, HashMap<String, String>>>,
+    ) -> Result<ContextResolver, DocumentError> {
+        self.document
+            .build_context_resolver(&block_id, extra_template_context)
+    }
+
     async fn handle_complete_execution(
         &mut self,
         block_id: Uuid,
@@ -610,6 +716,56 @@ impl DocumentActor {
             .document
             .rebuild_contexts(Some(block_index), self.event_bus.clone())
             .await;
+
+        Ok(())
+    }
+
+    async fn handle_update_block_state(
+        &mut self,
+        block_id: Uuid,
+        update_fn: Box<dyn FnOnce(&mut Box<dyn BlockState>) + Send>,
+    ) -> Result<(), DocumentError> {
+        log::trace!(
+            "Updating block state for block {block_id} in document {}",
+            self.document.id
+        );
+
+        let state = {
+            let block_index = self
+                .document
+                .get_block_index(&block_id)
+                .ok_or(DocumentError::BlockNotFound(block_id))?;
+
+            let block = self
+                .document
+                .get_block_mut_by_index(block_index)
+                .ok_or(DocumentError::BlockNotFound(block_id))?;
+
+            let changed = if let Some(state) = block.state_mut() {
+                log::trace!("Found state, updating it");
+                update_fn(state);
+                true
+            } else {
+                log::trace!("No state found :(");
+                false
+            };
+
+            if changed {
+                let block = self
+                    .document
+                    .get_block(&block_id)
+                    .ok_or(DocumentError::BlockNotFound(block_id))?;
+
+                block.state()
+            } else {
+                None
+            }
+        };
+
+        if let Some(state) = state {
+            log::trace!("Emitting state changed for block {block_id}");
+            let _ = self.document.emit_state_changed(block_id, state).await;
+        }
 
         Ok(())
     }

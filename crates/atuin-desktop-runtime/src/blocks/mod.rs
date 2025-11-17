@@ -40,7 +40,7 @@ pub use sql_block::{
 
 use crate::{
     client::LocalValueProvider,
-    context::{BlockContext, ContextResolver},
+    context::{BlockContext, BlockState, ContextResolver},
     execution::{ExecutionContext, ExecutionHandle},
 };
 
@@ -85,6 +85,11 @@ pub trait BlockBehavior: Sized + Send + Sync {
 
     /// Get the unique identifier for this block
     fn id(&self) -> Uuid;
+
+    /// Create the initial state for the block
+    fn create_state(&self) -> Option<Box<dyn BlockState>> {
+        None
+    }
 
     /// Provide passive context before execution
     ///
@@ -360,6 +365,30 @@ impl Block {
                     .passive_context(resolver, block_local_value_provider)
                     .await
             }
+        }
+    }
+
+    /// Create the initial state for the block
+    pub fn create_state(&self) -> Option<Box<dyn BlockState>> {
+        match self {
+            Block::Terminal(terminal) => terminal.create_state(),
+            Block::Script(script) => script.create_state(),
+            Block::SQLite(sqlite) => sqlite.create_state(),
+            Block::Postgres(postgres) => postgres.create_state(),
+            Block::Http(http) => http.create_state(),
+            Block::Prometheus(prometheus) => prometheus.create_state(),
+            Block::Clickhouse(clickhouse) => clickhouse.create_state(),
+            Block::Mysql(mysql) => mysql.create_state(),
+            Block::Kubernetes(kubernetes) => kubernetes.create_state(),
+            Block::LocalVar(local_var) => local_var.create_state(),
+            Block::Var(var) => var.create_state(),
+            Block::Environment(environment) => environment.create_state(),
+            Block::Directory(directory) => directory.create_state(),
+            Block::LocalDirectory(local_directory) => local_directory.create_state(),
+            Block::SshConnect(ssh_connect) => ssh_connect.create_state(),
+            Block::Host(host) => host.create_state(),
+            Block::VarDisplay(var_display) => var_display.create_state(),
+            Block::Editor(editor) => editor.create_state(),
         }
     }
 

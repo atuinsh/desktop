@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use serde_json::Value;
 use tauri::{ipc::Channel, AppHandle, State};
 use uuid::Uuid;
 
@@ -260,6 +261,21 @@ pub async fn get_flattened_block_context(
         .await
         .map_err(|e| format!("Failed to get flattened block context: {}", e))?;
     Ok(context)
+}
+
+#[tauri::command]
+pub async fn get_block_state(
+    state: State<'_, AtuinState>,
+    document_id: String,
+    block_id: String,
+) -> Result<Value, String> {
+    let documents = state.documents.read().await;
+    let document = documents.get(&document_id).ok_or("Document not found")?;
+    let state = document
+        .get_block_state(Uuid::parse_str(&block_id).map_err(|e| e.to_string())?)
+        .await
+        .map_err(|e| format!("Failed to get block state: {}", e))?;
+    Ok(state)
 }
 
 #[tauri::command]

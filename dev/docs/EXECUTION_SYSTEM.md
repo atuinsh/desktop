@@ -46,6 +46,16 @@ Blocks that modify the execution environment for subsequent blocks (via `passive
 - `Var` - Set document-level variables
 - `LocalVar` - Set variable (not persisted in Runbook)
 
+### Block State
+
+Some blocks can maintain their own internal state that exists independently from context. Block state is:
+- **Defined per block type**: Each block can optionally define a state struct implementing the `BlockState` trait
+- **Serializable**: State is sent to the frontend via `BlockStateChanged` messages
+- **Persistent during runtime**: State survives document updates and context rebuilds
+- **Accessible on frontend**: Blocks can use `useBlockState(block_id)` to access and react to state changes
+
+**Example use case**: A dropdown block could use state to track the currently selected option in the UI, which doesn't need to be persisted or affect other blocks.
+
 ## Core Components
 
 ### BlockBehavior Trait
@@ -73,6 +83,10 @@ pub trait BlockBehavior: Sized + Send + Sync {
     ) -> Result<Option<ExecutionHandle>, Box<dyn std::error::Error + Send + Sync>> {
         Ok(None)
     }
+
+    fn create_state(&self) -> Option<Box<dyn BlockState>> {
+        None
+    }
 }
 ```
 
@@ -81,6 +95,82 @@ pub trait BlockBehavior: Sized + Send + Sync {
 - `id()` - Returns the unique identifier (UUID) for this block instance
 - `passive_context()` - For context blocks, returns the context this block provides (evaluated on document changes)
 - `execute()` - For execution blocks, performs the actual block execution (returns immediately with a handle)
+- `create_state()` - Optionally returns initial state for the block (called when block is created)
+
+### BlockState Trait
+
+The `BlockState` trait allows blocks to maintain internal state that can be updated and communicated to the frontend:
+
+```rust
+pub trait BlockState: erased_serde::Serialize + Send + Sync + std::fmt::Debug + Any {
+    /// Returns a reference to the state as `Any` for downcasting
+    fn as_any(&self) -> &dyn Any;
+
+    /// Returns a mutable reference to the state as `Any` for downcasting
+    fn as_any_mut(&mut self) -> &mut dyn Any;
+}
+```
+
+**Purpose:**
+- **Runtime state management**: Store block-specific state that doesn't belong in context (e.g., UI state, editor content)
+- **Frontend communication**: State changes are automatically serialized and sent to frontend via `BlockStateChanged` messages
+- **Type-safe access**: Use the `BlockStateExt` trait to downcast to concrete state types
+
+**Helper Trait:**
+```rust
+pub trait BlockStateExt {
+    fn downcast_ref<T: BlockState>(&self) -> Option<&T>;
+    fn downcast_mut<T: BlockState>(&mut self) -> Option<&mut T>;
+}
+```
+
+**Example - Dropdown Block State:**
+```rust
+#[derive(Debug, Serialize, Deserialize)]
+pub struct DropdownBlockState {
+    pub selected_option: Option<String>,
+}
+
+impl BlockState for DropdownBlockState {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+}
+
+// In the Dropdown block implementation:
+impl BlockBehavior for Dropdown {
+    fn create_state(&self) -> Option<Box<dyn BlockState>> {
+        Some(Box::new(DropdownBlockState {
+            selected_option: None,
+        }))
+    }
+}
+```
+
+**Accessing and Updating State:**
+
+Blocks can access and modify their state through `BlockWithContext`:
+
+```rust
+// Get immutable reference to state
+if let Some(state) = block_with_context.state() {
+    if let Some(dropdown_state) = state.downcast_ref::<DropdownBlockState>() {
+        // Use dropdown_state
+    }
+}
+
+// Get mutable reference to state
+if let Some(state) = block_with_context.state_mut() {
+    if let Some(dropdown_state) = state.downcast_mut::<DropdownBlockState>() {
+        dropdown_state.selected_option = Some("option1".to_string());
+        // State change will be sent to frontend automatically
+    }
+}
+```
 
 ### ExecutionContext
 
@@ -199,17 +289,22 @@ Each block has two independent contexts:
 - **Active context** - Set during execution, stores output variables and execution results. Persisted to disk via `ContextStorage`, allowing state to survive app restarts.
 
 **BlockWithContext**
-Wrapper that pairs a block with its contexts:
+Wrapper that pairs a block with its contexts and state:
 
 ```rust
 pub struct BlockWithContext {
     block: Block,
     passive_context: BlockContext,
     active_context: BlockContext,
+    state: Option<Box<dyn BlockState>>,
 }
 ```
 
-When constructing a `BlockWithContext`, you can optionally provide an active context (e.g., loaded from disk). If not provided, an empty context is used.
+When constructing a `BlockWithContext`, you can optionally provide an active context (e.g., loaded from disk) and state. If not provided, empty context and no state are used.
+
+**Key differences between context and state:**
+- **Context** (passive/active): Affects execution environment for blocks below it; can be persisted to disk
+- **State**: Block-specific runtime data that doesn't affect other blocks; communicated to frontend for UI updates
 
 **ContextResolver**
 Resolves templates and provides access to cumulative context from blocks above:
@@ -578,7 +673,8 @@ This:
 2. Stores the document in `state.documents`
 3. Parses and flattens the document into a list of `Block`s
 4. Loads active contexts from disk (if they exist) for each block
-5. Builds initial passive contexts for all blocks
+5. Creates initial state for blocks that define `create_state()`
+6. Builds initial passive contexts for all blocks
 
 ### 2. Document Updates
 
@@ -740,9 +836,11 @@ impl BlockBehavior for Var {
 **On Document Open:**
 1. **Parse blocks** from document JSON
 2. **Load active contexts** from disk for each block (if available)
-3. **Build passive contexts** for all blocks (see flow below)
-4. **Create `BlockWithContext`** instances with both passive and active contexts
-5. **Send initial context** to frontend
+3. **Create initial state** for blocks via `block.create_state()` (if defined)
+4. **Build passive contexts** for all blocks (see flow below)
+5. **Create `BlockWithContext`** instances with both passive and active contexts, and state
+6. **Send initial context** to frontend
+7. **Send initial state** to frontend via `BlockStateChanged` messages (for blocks with state)
 
 **On Document Update:**
 1. **Document receives update** (new blocks, changed blocks, etc.)
@@ -785,6 +883,36 @@ Variables from active contexts are:
 - **Cleared** when the block is re-executed or when the user clears all active context
 
 This enables workflows where expensive operations (like querying a database or running a long computation) only need to be run once, with the results persisting across sessions.
+
+### Block State Updates
+
+Block state is separate from context and is used for runtime data that needs to be communicated to the frontend but doesn't affect other blocks:
+
+**State Update Flow:**
+1. **Block modifies its state** by accessing `block_with_context.state_mut()`
+2. **Document emits state change** via `document.emit_state_changed(block_id, state)`
+3. **State is serialized** to JSON using `erased_serde::Serialize`
+4. **Frontend receives** `BlockStateChanged` message via document bridge
+5. **Frontend components** using `useBlockState(block_id)` react to the change
+
+**Example - Updating Dropdown Selection:**
+```rust
+// In the document actor, when handling a state update command:
+if let Some(block) = self.document.get_block_mut(&block_id) {
+    if let Some(state) = block.state_mut() {
+        if let Some(dropdown_state) = state.downcast_mut::<DropdownBlockState>() {
+            dropdown_state.selected_option = Some("option1".to_string());
+            // Emit state changed event to frontend
+            self.document.emit_state_changed(block_id, state).await?;
+        }
+    }
+}
+```
+
+**State vs Context:**
+- **State**: UI-specific data, editor content, temporary runtime values; sent to frontend on changes
+- **Context**: Execution environment (variables, cwd, env vars); affects blocks below; can be persisted
+- State is NOT persisted to disk and is NOT included in context resolution for other blocks
 
 ## Cancellation & Error Handling
 
@@ -1022,6 +1150,72 @@ impl BlockBehavior for MyContext {
 
 Then update `ContextResolver::push_block()` to accumulate values of type `MyContextValue`.
 
+### Adding Blocks with State
+
+If your block needs to maintain state that should be communicated to the frontend (but doesn't affect other blocks):
+
+1. **Define a state struct** that implements `BlockState`:
+```rust
+use serde::{Deserialize, Serialize};
+use crate::context::BlockState;
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct MyBlockState {
+    pub some_field: String,
+    pub another_field: Option<i32>,
+}
+
+impl BlockState for MyBlockState {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+}
+```
+
+2. **Implement `create_state()` in your BlockBehavior**:
+```rust
+impl BlockBehavior for MyBlock {
+    fn create_state(&self) -> Option<Box<dyn BlockState>> {
+        Some(Box::new(MyBlockState {
+            some_field: "initial value".to_string(),
+            another_field: None,
+        }))
+    }
+
+    // ... other methods
+}
+```
+
+3. **Update state during execution or in response to commands**:
+```rust
+// In a document command handler:
+if let Some(block) = self.document.get_block_mut(&block_id) {
+    if let Some(state) = block.state_mut() {
+        if let Some(my_state) = state.downcast_mut::<MyBlockState>() {
+            my_state.some_field = "updated value".to_string();
+            // This will send BlockStateChanged to frontend
+            self.document.emit_state_changed(block_id, state).await?;
+        }
+    }
+}
+```
+
+4. **Access state on the frontend** using `useBlockState`:
+```typescript
+const state = useBlockState<MyBlockState>(blockId);
+// state will update whenever the backend sends BlockStateChanged
+```
+
+**Important notes:**
+- State is NOT persisted to disk (unlike active context)
+- State does NOT affect other blocks (unlike passive/active context)
+- State updates must explicitly call `emit_state_changed()` to notify the frontend
+- Use state for UI-specific data like editor content, temporary selections, etc.
+
 ### Testing Patterns
 
 **Context Block Tests:**
@@ -1116,8 +1310,10 @@ handle.cancellation_token.cancel();
 ### Type Safety
 - **Compile-time guarantees** for block structure
 - **Type-safe context storage** using `TypeId` (no stringly-typed context)
+- **Type-safe state access** via downcasting with `BlockStateExt`
 - **Clear interfaces** between components via `BlockBehavior` trait
 - **Strongly-typed context values** (DocumentCwd, DocumentVar, etc.)
+- **Serializable state** using `erased_serde` for frontend communication
 
 ### Performance
 - **Direct method dispatch** via enum matching (no trait objects for hot path)
@@ -1132,13 +1328,15 @@ handle.cancellation_token.cancel();
 - **Comprehensive testing** ensures reliability
 - **Self-documenting** code with clear patterns
 - **Passive/Active context separation** makes it clear when contexts are updated
+- **State vs Context separation** - clear distinction between execution environment and UI state
 
 ### Extensibility
 - **Easy to add new block types** - just implement BlockBehavior
 - **Flexible context system** - add new context types by defining new structs
+- **Optional block state** - blocks can opt-in to state management as needed
 - **Event system** for monitoring and debugging (Grand Central)
 - **Variable system** enables block chaining and workflows
-- **Document bridge** allows real-time updates to frontend
+- **Document bridge** allows real-time updates to frontend (context and state changes)
 - **Actor pattern** allows for future improvements (e.g., persistent documents, undo/redo)
 
 This execution system provides a robust foundation for running complex, multi-step runbooks with proper error handling, cancellation, and state management.

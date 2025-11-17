@@ -44,7 +44,7 @@ pub struct AtuinTemplateState {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct BlockState {
+pub struct BlockTemplateState {
     /// Name it something that's not just type lol
     pub block_type: String,
     pub content: String,
@@ -53,17 +53,17 @@ pub struct BlockState {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DocumentTemplateState {
-    pub first: BlockState,
-    pub last: BlockState,
-    pub content: Vec<BlockState>,
-    pub named: HashMap<String, BlockState>,
+    pub first: BlockTemplateState,
+    pub last: BlockTemplateState,
+    pub content: Vec<BlockTemplateState>,
+    pub named: HashMap<String, BlockTemplateState>,
 
     /// The block previous to the current block
     /// This is, of course, contextual to what is presently executing - and
     /// only really makes sense if we're running a template from a Pty.
     /// We can use the pty map to lookup the metadata for the pty, and from there figure
     /// out the block ID
-    pub previous: Option<BlockState>,
+    pub previous: Option<BlockTemplateState>,
 }
 
 impl DocumentTemplateState {
@@ -172,12 +172,12 @@ impl Object for TemplateState {
     }
 }
 
-pub fn serialized_block_to_state(block: &serde_json::Value) -> BlockState {
+pub fn serialized_block_to_state(block: &serde_json::Value) -> BlockTemplateState {
     let block = match block.as_object() {
         Some(obj) => obj,
         None => {
             // Return a default block state for non-object values
-            return BlockState {
+            return BlockTemplateState {
                 block_type: "unknown".to_string(),
                 content: String::new(),
                 props: HashMap::new(),
@@ -252,7 +252,7 @@ pub fn serialized_block_to_state(block: &serde_json::Value) -> BlockState {
         _ => content,
     };
 
-    BlockState {
+    BlockTemplateState {
         block_type: block_type.to_string(),
         props,
         content: content.to_string(),

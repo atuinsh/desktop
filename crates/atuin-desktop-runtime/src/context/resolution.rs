@@ -44,7 +44,7 @@ impl ResolvedContext {
             .await?
         {
             let block_with_context =
-                BlockWithContext::new(block.clone().into_block(), context, None);
+                BlockWithContext::new(block.clone().into_block(), context, None, None);
             let resolver = ContextResolver::from_blocks(&[block_with_context]);
             Ok(Self::from_resolver(&resolver))
         } else {

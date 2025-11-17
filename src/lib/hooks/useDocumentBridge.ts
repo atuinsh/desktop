@@ -50,6 +50,9 @@ export class DocumentBridge {
       case "blockOutput":
         this.emitter.emit(`block_output:${message.data.blockId}`, message.data.output);
         break;
+      case "blockStateChanged":
+        this.emitter.emit(`block_state:changed:${message.data.blockId}`, message.data.state);
+        break;
       case "clientPrompt":
         const result = await handleClientPrompt(message.data.prompt);
         await invoke("respond_to_block_prompt", {
@@ -70,6 +73,13 @@ export class DocumentBridge {
     });
   }
 
+  public getBlockState<T = JsonValue>(blockId: string): Promise<T> {
+    return invoke("get_block_state", {
+      documentId: this.runbookId,
+      blockId,
+    });
+  }
+
   public onBlockContextUpdate(blockId: string, callback: (context: ResolvedContext) => void) {
     return this.emitter.on(`block_context:update:${blockId}`, callback);
   }
@@ -79,6 +89,10 @@ export class DocumentBridge {
     callback: (output: GenericBlockOutput<T>) => void,
   ) {
     return this.emitter.on(`block_output:${blockId}`, callback);
+  }
+
+  public onBlockStateChanged<T>(blockId: string, callback: (state: T) => void) {
+    return this.emitter.on(`block_state:changed:${blockId}`, callback);
   }
 }
 
@@ -125,6 +139,27 @@ export function useBlockOutput<T = JsonValue>(
       callback(output as GenericBlockOutput<T>);
     });
   }, [documentBridge, blockId, callback]);
+}
+
+export function useBlockState<T = JsonValue>(blockId: string): T | null {
+  const [state, setState] = useState<T | null>(null);
+
+  const documentBridge = useDocumentBridge();
+  useEffect(() => {
+    if (!documentBridge) {
+      return;
+    }
+
+    documentBridge.getBlockState(blockId).then((state) => {
+      setState(state as T);
+    });
+
+    return documentBridge.onBlockStateChanged(blockId, (state) => {
+      setState(state as T);
+    });
+  }, [documentBridge, blockId]);
+
+  return state;
 }
 
 export type ExecutionLifecycle = "idle" | "running" | "success" | "error" | "cancelled";

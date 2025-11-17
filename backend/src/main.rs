@@ -529,6 +529,7 @@ fn main() {
             commands::blocks::open_document,
             commands::blocks::update_document,
             commands::blocks::get_flattened_block_context,
+            commands::blocks::get_block_state,
             commands::blocks::notify_block_kv_value_changed,
             commands::blocks::reset_runbook_state,
             commands::blocks::respond_to_block_prompt,

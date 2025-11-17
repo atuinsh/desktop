@@ -8,6 +8,37 @@ use uuid::Uuid;
 
 use crate::blocks::Block;
 
+/// Trait for block-specific state that can be stored and updated during execution
+///
+/// Each block type can define its own state struct and implement this trait.
+/// The state can be accessed via downcasting from `Box<dyn BlockState>`.
+pub trait BlockState: erased_serde::Serialize + Send + Sync + std::fmt::Debug + Any {
+    /// Returns a reference to the state as `Any` for downcasting
+    fn as_any(&self) -> &dyn Any;
+
+    /// Returns a mutable reference to the state as `Any` for downcasting
+    fn as_any_mut(&mut self) -> &mut dyn Any;
+}
+
+/// Extension trait for easier downcasting of `Box<dyn BlockState>`
+pub trait BlockStateExt {
+    /// Attempt to downcast to a concrete state type
+    fn downcast_ref<T: BlockState>(&self) -> Option<&T>;
+
+    /// Attempt to mutably downcast to a concrete state type
+    fn downcast_mut<T: BlockState>(&mut self) -> Option<&mut T>;
+}
+
+impl BlockStateExt for Box<dyn BlockState> {
+    fn downcast_ref<T: BlockState>(&self) -> Option<&T> {
+        self.as_any().downcast_ref::<T>()
+    }
+
+    fn downcast_mut<T: BlockState>(&mut self) -> Option<&mut T> {
+        self.as_any_mut().downcast_mut::<T>()
+    }
+}
+
 /// Container for block context items
 ///
 /// Block context items implement the [`BlockContextItem`] trait and are stored
@@ -92,6 +123,7 @@ pub struct BlockWithContext {
     block: Block,
     passive_context: BlockContext,
     active_context: BlockContext,
+    state: Option<Box<dyn BlockState>>,
 }
 
 impl BlockWithContext {
@@ -99,11 +131,13 @@ impl BlockWithContext {
         block: Block,
         passive_context: BlockContext,
         active_context: Option<BlockContext>,
+        state: Option<Box<dyn BlockState>>,
     ) -> Self {
         Self {
             block,
             passive_context,
             active_context: active_context.unwrap_or_default(),
+            state,
         }
     }
 
@@ -125,6 +159,14 @@ impl BlockWithContext {
 
     pub fn active_context_mut(&mut self) -> &mut BlockContext {
         &mut self.active_context
+    }
+
+    pub fn state(&self) -> Option<&Box<dyn BlockState>> {
+        self.state.as_ref()
+    }
+
+    pub fn state_mut(&mut self) -> Option<&mut Box<dyn BlockState>> {
+        self.state.as_mut()
     }
 
     pub fn block(&self) -> &Block {

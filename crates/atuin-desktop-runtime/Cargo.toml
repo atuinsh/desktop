@@ -48,6 +48,7 @@ bigdecimal = { workspace = true }
 dirs = { workspace = true }
 tempfile = { workspace = true }
 portable-pty = "0.8.1"
+erased-serde = "0.4.9"
 
 [dev-dependencies]
 httpmock = "0.8"

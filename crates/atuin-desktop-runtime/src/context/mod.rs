@@ -20,6 +20,7 @@ pub use block_context::{
     BlockContext, BlockContextItem, BlockExecutionOutput, BlockWithContext, DocumentCwd,
     DocumentEnvVar, DocumentSshHost, DocumentVar,
 };
+pub use block_context::{BlockState, BlockStateExt};
 pub use resolution::{ContextResolver, ResolvedContext};
 pub use storage::BlockContextStorage;
 pub use typetag::serde as typetag_serde;
@@ -150,7 +151,7 @@ mod tests {
             "test".to_string(),
         ));
 
-        let block_with_context = BlockWithContext::new(Block::Var(var_block), context, None);
+        let block_with_context = BlockWithContext::new(Block::Var(var_block), context, None, None);
 
         let resolver = ContextResolver::from_blocks(&[block_with_context]);
 
@@ -193,9 +194,9 @@ mod tests {
         dir_context.insert(DocumentCwd("/tmp/test".to_string()));
 
         let blocks = vec![
-            BlockWithContext::new(Block::Var(var_block), var_context, None),
-            BlockWithContext::new(Block::Environment(env_block), env_context, None),
-            BlockWithContext::new(Block::Directory(dir_block), dir_context, None),
+            BlockWithContext::new(Block::Var(var_block), var_context, None, None),
+            BlockWithContext::new(Block::Environment(env_block), env_context, None, None),
+            BlockWithContext::new(Block::Directory(dir_block), dir_context, None, None),
         ];
 
         let resolver = ContextResolver::from_blocks(&blocks);
@@ -237,8 +238,8 @@ mod tests {
         ));
 
         let blocks = vec![
-            BlockWithContext::new(Block::Var(var1), context1, None),
-            BlockWithContext::new(Block::Var(var2), context2, None),
+            BlockWithContext::new(Block::Var(var1), context1, None, None),
+            BlockWithContext::new(Block::Var(var2), context2, None, None),
         ];
 
         let resolver = ContextResolver::from_blocks(&blocks);
@@ -335,7 +336,7 @@ mod tests {
             "test".to_string(),
         ));
 
-        let block_with_context = BlockWithContext::new(Block::Var(var_block), context, None);
+        let block_with_context = BlockWithContext::new(Block::Var(var_block), context, None, None);
 
         resolver.push_block(&block_with_context);
 
@@ -360,7 +361,7 @@ mod tests {
         ));
 
         let mut block_with_context =
-            BlockWithContext::new(Block::Var(var_block), passive_context, None);
+            BlockWithContext::new(Block::Var(var_block), passive_context, None, None);
 
         let mut active_context = BlockContext::new();
         active_context.insert(DocumentVar::new(
@@ -453,7 +454,7 @@ mod tests {
             "test".to_string(),
         ));
 
-        let block_with_context = BlockWithContext::new(Block::Var(var_block), context, None);
+        let block_with_context = BlockWithContext::new(Block::Var(var_block), context, None, None);
 
         assert_eq!(block_with_context.id(), block_id);
         assert!(block_with_context
@@ -475,7 +476,7 @@ mod tests {
             .build();
 
         let mut block_with_context =
-            BlockWithContext::new(Block::Var(var_block), BlockContext::new(), None);
+            BlockWithContext::new(Block::Var(var_block), BlockContext::new(), None, None);
 
         let mut new_passive = BlockContext::new();
         new_passive.insert(DocumentVar::new(
@@ -631,10 +632,10 @@ mod tests {
         ));
 
         let blocks = vec![
-            BlockWithContext::new(Block::Var(var1), context1, None),
-            BlockWithContext::new(Block::Environment(env1), context2, None),
-            BlockWithContext::new(Block::Directory(dir1), context3, None),
-            BlockWithContext::new(Block::Var(var2), context4, None),
+            BlockWithContext::new(Block::Var(var1), context1, None, None),
+            BlockWithContext::new(Block::Environment(env1), context2, None, None),
+            BlockWithContext::new(Block::Directory(dir1), context3, None, None),
+            BlockWithContext::new(Block::Var(var2), context4, None, None),
         ];
 
         let resolver = ContextResolver::from_blocks(&blocks);
