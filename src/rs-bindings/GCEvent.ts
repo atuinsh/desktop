@@ -2,6 +2,9 @@
 import type { PtyMetadata } from "./PtyMetadata";
 
 /**
- * Grand Central Event - all events that can be emitted by the runtime
+ * Events emitted by the runtime for monitoring and telemetry
+ *
+ * These events provide visibility into runtime operations including block execution,
+ * SSH connections, PTY lifecycle, and runbook state changes.
  */
 export type GCEvent = { "type": "ptyOpened", "data": PtyMetadata } | { "type": "ptyClosed", "data": { pty_id: string, } } | { "type": "blockStarted", "data": { block_id: string, runbook_id: string, } } | { "type": "blockFinished", "data": { block_id: string, runbook_id: string, success: boolean, } } | { "type": "blockFailed", "data": { block_id: string, runbook_id: string, error: string, } } | { "type": "blockCancelled", "data": { block_id: string, runbook_id: string, } } | { "type": "sshConnected", "data": { host: string, username: string | null, } } | { "type": "sshConnectionFailed", "data": { host: string, error: string, } } | { "type": "sshDisconnected", "data": { host: string, } } | { "type": "runbookStarted", "data": { runbook_id: string, } } | { "type": "runbookCompleted", "data": { runbook_id: string, } } | { "type": "runbookFailed", "data": { runbook_id: string, error: string, } };

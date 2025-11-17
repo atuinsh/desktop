@@ -2,4 +2,10 @@
 import type { BlockLifecycleEvent } from "./BlockLifecycleEvent";
 import type { JsonValue } from "./serde_json/JsonValue";
 
+/**
+ * Output from block execution
+ *
+ * Can contain text output (stdout/stderr), binary data (for terminals),
+ * or structured JSON objects.
+ */
 export type BlockOutput = { block_id: string, stdout: string | null, stderr: string | null, lifecycle: BlockLifecycleEvent | null, binary: Array<number> | null, object: JsonValue | null, };
