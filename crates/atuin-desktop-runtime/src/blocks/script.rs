@@ -146,9 +146,8 @@ impl BlockBehavior for Script {
                         let block_id = self.id;
                         let var_name_clone = var_name.clone();
                         let output_clone = output.clone();
-                        let document_handle = context.document_handle.clone();
 
-                        let _ = document_handle
+                        let _ = context
                             .update_active_context(block_id, move |ctx| {
                                 log::trace!(
                                     "Storing output variable {var_name_clone} for script block {block_id}",
@@ -162,8 +161,7 @@ impl BlockBehavior for Script {
 
                     // Store execution output in context
                     let block_id = self.id;
-                    let document_handle = context.document_handle.clone();
-                    let _ = document_handle
+                    let _ = context
                         .update_active_context(block_id, move |ctx| {
                             ctx.insert(BlockExecutionOutput {
                                 exit_code: Some(0),
@@ -178,9 +176,8 @@ impl BlockBehavior for Script {
                 Ok(code) => {
                     // Store execution output in context (failed)
                     let block_id = self.id;
-                    let document_handle = context.document_handle.clone();
                     let captured_clone = captured_output.clone();
-                    let _ = document_handle
+                    let _ = context
                         .update_active_context(block_id, move |ctx| {
                             ctx.insert(BlockExecutionOutput {
                                 exit_code: Some(code),

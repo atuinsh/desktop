@@ -37,7 +37,7 @@ use crate::workflow::WorkflowEvent;
 pub struct ExecutionContext {
     pub(crate) block_id: Uuid,
     pub(crate) runbook_id: Uuid,
-    pub(crate) document_handle: Arc<DocumentHandle>,
+    document_handle: Arc<DocumentHandle>,
     pub(crate) context_resolver: Arc<ContextResolver>,
     #[builder(default, setter(strip_option(fallback = output_channel_opt)))]
     output_channel: Option<Arc<dyn MessageChannel<DocumentBridgeMessage>>>,
@@ -95,35 +95,44 @@ impl ExecutionContext {
     }
 
     /// Update the passive context for a block
-    pub async fn update_passive_context(
+    pub async fn update_passive_context<F>(
         &self,
         block_id: Uuid,
-        update_fn: Box<dyn FnOnce(&mut BlockContext) + Send>,
-    ) -> Result<(), DocumentError> {
+        update_fn: F,
+    ) -> Result<(), DocumentError>
+    where
+        F: FnOnce(&mut BlockContext) + Send + 'static,
+    {
         self.document_handle
             .update_passive_context(block_id, update_fn)
             .await
     }
 
     /// Update the active context for a block
-    pub async fn update_active_context(
+    pub async fn update_active_context<F>(
         &self,
         block_id: Uuid,
-        update_fn: Box<dyn FnOnce(&mut BlockContext) + Send>,
-    ) -> Result<(), DocumentError> {
+        update_fn: F,
+    ) -> Result<(), DocumentError>
+    where
+        F: FnOnce(&mut BlockContext) + Send + 'static,
+    {
         self.document_handle
             .update_active_context(block_id, update_fn)
             .await
     }
 
     /// Update the private block state
-    pub async fn update_block_state(
+    pub async fn update_block_state<T: BlockState, F>(
         &self,
         block_id: Uuid,
-        update_fn: Box<dyn FnOnce(&mut Box<dyn BlockState>) + Send>,
-    ) -> Result<(), DocumentError> {
+        update_fn: F,
+    ) -> Result<(), DocumentError>
+    where
+        F: FnOnce(&mut T) + Send + 'static,
+    {
         self.document_handle
-            .update_block_state(block_id, update_fn)
+            .update_block_state::<T, _>(block_id, update_fn)
             .await
     }
 

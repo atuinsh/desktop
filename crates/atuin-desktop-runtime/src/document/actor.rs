@@ -7,7 +7,7 @@ use uuid::Uuid;
 use crate::blocks::Block;
 use crate::client::{DocumentBridgeMessage, LocalValueProvider, MessageChannel};
 use crate::context::{
-    BlockContext, BlockContextStorage, BlockState, ContextResolver, ResolvedContext,
+    BlockContext, BlockContextStorage, BlockState, BlockStateExt, ContextResolver, ResolvedContext,
 };
 use crate::document::Document;
 use crate::events::EventBus;
@@ -335,19 +335,25 @@ impl DocumentHandle {
     }
 
     /// Update a block's state during execution
-    pub async fn update_block_state<F>(
+    pub async fn update_block_state<T: BlockState, F>(
         &self,
         block_id: Uuid,
         update_fn: F,
     ) -> Result<(), DocumentError>
     where
-        F: FnOnce(&mut Box<dyn BlockState>) + Send + 'static,
+        F: FnOnce(&mut T) + Send + 'static,
     {
+        let wrapped_fn: Box<dyn FnOnce(&mut Box<dyn BlockState>) + Send> = Box::new(move |state| {
+            if let Some(state) = state.downcast_mut::<T>() {
+                update_fn(state);
+            }
+        });
+
         let (tx, rx) = oneshot::channel();
         self.command_tx
             .send(DocumentCommand::UpdateBlockState {
                 block_id,
-                update_fn: Box::new(update_fn),
+                update_fn: wrapped_fn,
                 reply: tx,
             })
             .map_err(|_| DocumentError::ActorSendError)?;
