@@ -39,6 +39,8 @@ impl BlockStateExt for Box<dyn BlockState> {
     }
 }
 
+pub type BlockStateUpdater = Box<dyn FnOnce(&mut Box<dyn BlockState>) + Send>;
+
 /// Container for block context items
 ///
 /// Block context items implement the [`BlockContextItem`] trait and are stored
@@ -161,8 +163,8 @@ impl BlockWithContext {
         &mut self.active_context
     }
 
-    pub fn state(&self) -> Option<&Box<dyn BlockState>> {
-        self.state.as_ref()
+    pub fn state(&self) -> Option<&dyn BlockState> {
+        self.state.as_ref().map(|s| s.as_ref())
     }
 
     pub fn state_mut(&mut self) -> Option<&mut Box<dyn BlockState>> {

@@ -7,7 +7,8 @@ use uuid::Uuid;
 use crate::blocks::Block;
 use crate::client::{DocumentBridgeMessage, LocalValueProvider, MessageChannel};
 use crate::context::{
-    BlockContext, BlockContextStorage, BlockState, BlockStateExt, ContextResolver, ResolvedContext,
+    BlockContext, BlockContextStorage, BlockState, BlockStateExt, BlockStateUpdater,
+    ResolvedContext,
 };
 use crate::document::Document;
 use crate::events::EventBus;
@@ -84,13 +85,6 @@ pub(crate) enum DocumentCommand {
         reply: Reply<ExecutionContext>,
     },
 
-    /// Build a context resolver for a block
-    BuildContextResolver {
-        block_id: Uuid,
-        extra_template_context: Option<HashMap<String, HashMap<String, String>>>,
-        reply: Reply<ContextResolver>,
-    },
-
     /// Complete execution of a block, updating its context
     CompleteExecution {
         block_id: Uuid,
@@ -115,7 +109,7 @@ pub(crate) enum DocumentCommand {
     /// Update a block's state during execution
     UpdateBlockState {
         block_id: Uuid,
-        update_fn: Box<dyn FnOnce(&mut Box<dyn BlockState>) + Send>,
+        update_fn: BlockStateUpdater,
         reply: Reply<()>,
     },
 
@@ -260,23 +254,6 @@ impl DocumentHandle {
         rx.await.map_err(|_| DocumentError::ActorSendError)?
     }
 
-    /// Build a context resolver for a block
-    pub async fn build_context_resolver(
-        &self,
-        block_id: Uuid,
-        extra_template_context: Option<HashMap<String, HashMap<String, String>>>,
-    ) -> Result<ContextResolver, DocumentError> {
-        let (tx, rx) = oneshot::channel();
-        self.command_tx
-            .send(DocumentCommand::BuildContextResolver {
-                block_id,
-                extra_template_context,
-                reply: tx,
-            })
-            .map_err(|_| DocumentError::ActorSendError)?;
-        rx.await.map_err(|_| DocumentError::ActorSendError)?
-    }
-
     /// Complete execution of a block, updating its final context
     pub async fn complete_execution(
         &self,
@@ -343,7 +320,7 @@ impl DocumentHandle {
     where
         F: FnOnce(&mut T) + Send + 'static,
     {
-        let wrapped_fn: Box<dyn FnOnce(&mut Box<dyn BlockState>) + Send> = Box::new(move |state| {
+        let wrapped_fn: BlockStateUpdater = Box::new(move |state| {
             if let Some(state) = state.downcast_mut::<T>() {
                 update_fn(state);
             }
@@ -527,16 +504,6 @@ impl DocumentActor {
                         .await;
                     let _ = reply.send(result);
                 }
-                DocumentCommand::BuildContextResolver {
-                    block_id,
-                    extra_template_context,
-                    reply,
-                } => {
-                    let result = self
-                        .handle_build_context_resolver(block_id, extra_template_context)
-                        .await;
-                    let _ = reply.send(result);
-                }
                 DocumentCommand::CompleteExecution {
                     block_id,
                     context,
@@ -648,15 +615,6 @@ impl DocumentActor {
         Ok(context)
     }
 
-    async fn handle_build_context_resolver(
-        &mut self,
-        block_id: Uuid,
-        extra_template_context: Option<HashMap<String, HashMap<String, String>>>,
-    ) -> Result<ContextResolver, DocumentError> {
-        self.document
-            .build_context_resolver(&block_id, extra_template_context)
-    }
-
     async fn handle_complete_execution(
         &mut self,
         block_id: Uuid,
@@ -729,7 +687,7 @@ impl DocumentActor {
     async fn handle_update_block_state(
         &mut self,
         block_id: Uuid,
-        update_fn: Box<dyn FnOnce(&mut Box<dyn BlockState>) + Send>,
+        update_fn: BlockStateUpdater,
     ) -> Result<(), DocumentError> {
         log::trace!(
             "Updating block state for block {block_id} in document {}",

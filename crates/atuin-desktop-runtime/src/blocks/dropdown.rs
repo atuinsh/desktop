@@ -43,7 +43,7 @@ impl DropdownOption {
     pub fn vec_from_str(value: &str) -> Result<Vec<Self>, String> {
         value
             // Split on ",", ", ", or newlines using regex
-            .split(|c: char| c == ',' || c == '\n')
+            .split([',', '\n'])
             .flat_map(|part| part.split(", ")) // extra split for ", " if not caught by the char ','
             .map(|part| part.trim())
             .filter(|part| !part.is_empty())
@@ -121,7 +121,7 @@ impl Dropdown {
                     .context_resolver
                     .get_var(&self.variable_options)
                     .ok_or("Variable not found")?;
-                let options = DropdownOption::vec_from_str(&value)?;
+                let options = DropdownOption::vec_from_str(value)?;
                 Ok(options)
             }
             DropdownOptionType::Command => {

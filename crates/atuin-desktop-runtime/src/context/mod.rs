@@ -17,8 +17,8 @@ mod resolution;
 mod storage;
 
 pub use block_context::{
-    BlockContext, BlockContextItem, BlockExecutionOutput, BlockWithContext, DocumentCwd,
-    DocumentEnvVar, DocumentSshHost, DocumentVar,
+    BlockContext, BlockContextItem, BlockExecutionOutput, BlockStateUpdater, BlockWithContext,
+    DocumentCwd, DocumentEnvVar, DocumentSshHost, DocumentVar,
 };
 pub use block_context::{BlockState, BlockStateExt};
 pub use resolution::{ContextResolver, ResolvedContext};

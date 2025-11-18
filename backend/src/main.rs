@@ -490,8 +490,6 @@ fn main() {
             get_platform_info,
             run::pty::pty_write,
             run::pty::pty_resize,
-            run::shell::shell_exec_sync,
-            run::shell::term_process,
             run::shell::check_binary_exists,
             install::install_cli,
             install::is_cli_installed,

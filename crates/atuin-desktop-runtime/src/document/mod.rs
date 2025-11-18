@@ -463,7 +463,7 @@ impl Document {
     pub(crate) async fn emit_state_changed(
         &self,
         block_id: Uuid,
-        state: &Box<dyn BlockState>,
+        state: &dyn BlockState,
     ) -> Result<(), DocumentError> {
         let state_value = self.serialize_block_state(state)?;
 
@@ -477,15 +477,15 @@ impl Document {
         Ok(())
     }
 
-    fn serialize_block_state(&self, state: &Box<dyn BlockState>) -> Result<Value, DocumentError> {
+    fn serialize_block_state(&self, state: &dyn BlockState) -> Result<Value, DocumentError> {
         let mut buf = Vec::new();
         let mut serializer = serde_json::Serializer::new(&mut buf);
         let mut erased = <dyn erased_serde::Serializer>::erase(&mut serializer);
         state
             .erased_serialize(&mut erased)
             .map_err(|e| DocumentError::StateSerializationError(e.to_string()))?;
-        Ok(serde_json::from_slice(&buf)
-            .map_err(|e| DocumentError::StateSerializationError(e.to_string()))?)
+        serde_json::from_slice(&buf)
+            .map_err(|e| DocumentError::StateSerializationError(e.to_string()))
     }
 
     pub(crate) async fn store_active_context(&self, block_id: Uuid) -> Result<(), DocumentError> {
