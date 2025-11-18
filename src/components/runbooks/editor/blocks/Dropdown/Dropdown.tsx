@@ -269,9 +269,6 @@ const Dropdown = ({
   const dropdownState = useBlockState<DropdownState>(id);
   const execution = useBlockExecution(id);
 
-  console.log(">> dropdown context", context);
-  console.log(">> dropdownState", dropdownState);
-
   const [hasNameError, setHasNameError] = useState(false);
 
   // Check for invalid variable name characters (only allow alphanumeric and underscore)
