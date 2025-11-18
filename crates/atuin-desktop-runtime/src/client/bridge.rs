@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 use uuid::Uuid;
 
-use crate::context::{BlockState, ResolvedContext};
+use crate::context::ResolvedContext;
 use crate::execution::BlockOutput;
 
 /// Messages sent from the runtime to the client application

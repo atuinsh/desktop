@@ -6,10 +6,7 @@ use std::{
 };
 use tauri::Emitter;
 use tauri::{async_runtime::RwLock, AppHandle};
-use tokio::{
-    process::Child,
-    sync::{broadcast, mpsc},
-};
+use tokio::sync::{broadcast, mpsc};
 use uuid::Uuid;
 
 use crate::{
@@ -51,10 +48,6 @@ pub(crate) struct AtuinState {
     // Grand Central event system
     pub gc_event_sender: Mutex<Option<mpsc::UnboundedSender<GCEvent>>>,
     pub event_receiver: Arc<tokio::sync::Mutex<Option<mpsc::UnboundedReceiver<GCEvent>>>>,
-
-    // the second rwlock could probs be a mutex
-    // i cba it works fine
-    pub child_processes: Arc<RwLock<HashMap<uuid::Uuid, Arc<RwLock<Child>>>>>,
 
     // Persisted to the keychain, but cached here so that
     // we don't keep asking the user for keychain access.
@@ -100,7 +93,6 @@ impl AtuinState {
             event_sender: Mutex::new(None),
             gc_event_sender: Mutex::new(None),
             event_receiver: Arc::new(tokio::sync::Mutex::new(None)),
-            child_processes: Default::default(),
             runbooks_api_token: Default::default(),
             runbook_output_variables: Default::default(),
             block_executions: Default::default(),
