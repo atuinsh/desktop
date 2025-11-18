@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { ListFilterIcon, CheckIcon, ChevronsUpDownIcon, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -293,16 +293,19 @@ const Dropdown = ({
     [onOptionsTypeChange],
   );
 
+  const [executionReady, setExecutionReady] = useState(false);
   useEffect(() => {
-    if (!execution) return;
-    if (execution.isRunning) return;
-
-    execution.execute();
-  }, [execution]);
+    setTimeout(() => {
+      execution.execute();
+    }, 1);
+  }, [executionReady]);
 
   return (
     <>
-      <div className="flex flex-row items-center space-x-3 w-full bg-gradient-to-r from-blue-50 to-cyan-50 dark:from-slate-800 dark:to-cyan-950 rounded-lg p-3 border border-blue-200 dark:border-blue-900 shadow-sm hover:shadow-md transition-all duration-200">
+      <div
+        ref={() => setExecutionReady(true)}
+        className="flex flex-row items-center space-x-3 w-full bg-gradient-to-r from-blue-50 to-cyan-50 dark:from-slate-800 dark:to-cyan-950 rounded-lg p-3 border border-blue-200 dark:border-blue-900 shadow-sm hover:shadow-md transition-all duration-200"
+      >
         <div className="flex items-center">
           <Button
             size="sm"
