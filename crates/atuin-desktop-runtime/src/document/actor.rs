@@ -748,11 +748,9 @@ impl DocumentActor {
                 .ok_or(DocumentError::BlockNotFound(block_id))?;
 
             let changed = if let Some(state) = block.state_mut() {
-                log::trace!("Found state, updating it");
                 update_fn(state);
                 true
             } else {
-                log::trace!("No state found :(");
                 false
             };
 
