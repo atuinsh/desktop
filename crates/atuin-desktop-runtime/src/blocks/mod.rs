@@ -9,6 +9,7 @@
 
 pub(crate) mod clickhouse;
 pub(crate) mod directory;
+pub(crate) mod dropdown;
 pub(crate) mod editor;
 pub(crate) mod environment;
 pub(crate) mod host;
@@ -152,6 +153,7 @@ pub enum Block {
     Host(host::Host),
     VarDisplay(var_display::VarDisplay),
     Editor(editor::Editor),
+    Dropdown(dropdown::Dropdown),
 }
 
 impl Block {
@@ -177,6 +179,7 @@ impl Block {
             Block::Host(host) => host.id,
             Block::VarDisplay(var_display) => var_display.id,
             Block::Editor(editor) => editor.id,
+            Block::Dropdown(dropdown) => dropdown.id,
         }
     }
 
@@ -193,8 +196,9 @@ impl Block {
             Block::Clickhouse(clickhouse) => clickhouse.name.clone(),
             Block::Mysql(mysql) => mysql.name.clone(),
             Block::Kubernetes(kubernetes) => kubernetes.name.clone(),
-            Block::Editor(_) => "".to_string(),
+            Block::Dropdown(dropdown) => dropdown.name.clone(),
 
+            Block::Editor(_) => "".to_string(),
             Block::LocalVar(_) => "".to_string(),
             Block::Var(_) => "".to_string(),
             Block::Environment(_) => "".to_string(),
@@ -260,6 +264,9 @@ impl Block {
                 block_data,
             )?)),
             "editor" => Ok(Block::Editor(editor::Editor::from_document(block_data)?)),
+            "dropdown" => Ok(Block::Dropdown(dropdown::Dropdown::from_document(
+                block_data,
+            )?)),
             _ => Err(format!("Unknown block type: {}", block_type)),
         }
     }
@@ -318,6 +325,11 @@ impl Block {
             }
             Block::Editor(editor) => {
                 editor
+                    .passive_context(resolver, block_local_value_provider)
+                    .await
+            }
+            Block::Dropdown(dropdown) => {
+                dropdown
                     .passive_context(resolver, block_local_value_provider)
                     .await
             }
@@ -389,6 +401,7 @@ impl Block {
             Block::Host(host) => host.create_state(),
             Block::VarDisplay(var_display) => var_display.create_state(),
             Block::Editor(editor) => editor.create_state(),
+            Block::Dropdown(dropdown) => dropdown.create_state(),
         }
     }
 
@@ -422,6 +435,7 @@ impl Block {
             Block::Host(host) => host.execute(context).await,
             Block::VarDisplay(var_display) => var_display.execute(context).await,
             Block::Editor(editor) => editor.execute(context).await,
+            Block::Dropdown(dropdown) => dropdown.execute(context).await,
         }
     }
 }

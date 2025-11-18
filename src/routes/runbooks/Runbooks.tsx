@@ -65,6 +65,7 @@ export default function Runbooks() {
   const ptys = usePtyStore((state) => state.ptys);
   const activePtyCount = Object.values(ptys).filter((pty) => pty.runbook === runbookId).length;
 
+  const [documentOpened, setDocumentOpened] = useState(false);
   const [syncingRunbook, setSyncingRunbook] = useState(false);
   const [failedToSyncRunbook, setFailedToSyncRunbook] = useState(false);
   // Key used to re-render editor when making major changes to runbook
@@ -216,6 +217,8 @@ export default function Runbooks() {
         documentId: currentRunbook.id,
         document: currentRunbook.content ? JSON.parse(currentRunbook.content) : "[]",
         documentBridge: documentBridge.channel,
+      }).then(() => {
+        setDocumentOpened(true);
       });
     }
   }, [currentRunbook?.id, documentBridge?.channel]);
@@ -479,6 +482,8 @@ export default function Runbooks() {
   const hasNoTags = tags.length == 0;
 
   const readyToRender =
+    documentBridge &&
+    documentOpened &&
     runbookEditor &&
     (selectedTag == "latest" ||
       (currentSnapshot && selectedTag == currentSnapshot.tag) ||
