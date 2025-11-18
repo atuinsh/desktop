@@ -254,6 +254,8 @@ impl BlockBehavior for Dropdown {
             })
             .await?;
 
+        let _ = context.block_finished(None, true).await;
+
         Ok(Some(context.handle()))
     }
 }
