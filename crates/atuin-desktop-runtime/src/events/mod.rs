@@ -19,6 +19,18 @@ use crate::pty::PtyMetadata;
 #[ts(tag = "type", content = "data", export)]
 #[serde(tag = "type", content = "data", rename_all = "camelCase")]
 pub enum GCEvent {
+    /// Serial execution started
+    SerialExecutionStarted { runbook_id: Uuid },
+
+    /// Serial execution completed
+    SerialExecutionCompleted { runbook_id: Uuid },
+
+    /// Serial execution cancelled
+    SerialExecutionCancelled { runbook_id: Uuid },
+
+    /// Serial execution failed
+    SerialExecutionFailed { runbook_id: Uuid, error: String },
+
     /// PTY was opened and is ready for use
     PtyOpened(PtyMetadata),
 

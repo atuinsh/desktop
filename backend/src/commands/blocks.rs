@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use atuin_desktop_runtime::events::GCEvent;
 use atuin_desktop_runtime::execution::ExecutionHandle;
 use atuin_desktop_runtime::execution::ExecutionResult;
 use atuin_desktop_runtime::pty::PtyStoreHandle;
@@ -346,8 +347,18 @@ pub async fn start_serial_execution(
     let (tx, mut rx) = oneshot::channel();
     serial_executions.insert(document_id.clone(), tx);
 
+    let document_uuid = Uuid::parse_str(&document_id).map_err(|e| e.to_string())?;
     let document = document.clone();
+    document
+        .event_bus()
+        .emit(GCEvent::SerialExecutionStarted {
+            runbook_id: document_uuid,
+        })
+        .await
+        .map_err(|e| format!("Failed to emit serial execution started event: {}", e))?;
     tokio::spawn(async move {
+        let mut exit_type: ExecutionResult = ExecutionResult::Success;
+
         let mut extra_template_context = HashMap::new();
         extra_template_context.insert("workspace".to_string(), workspace_context);
 
@@ -392,10 +403,12 @@ pub async fn start_serial_execution(
                                 }
                                 Some(ExecutionResult::Failure) => {
                                     log::debug!("Block {block_id} in document {document_id} failed");
+                                    exit_type = ExecutionResult::Failure;
                                     stop_serial_exec = true;
                                 }
                                 Some(ExecutionResult::Cancelled) => {
                                     log::debug!("Block {block_id} in document {document_id} cancelled");
+                                    exit_type = ExecutionResult::Cancelled;
                                     stop_serial_exec = true;
                                 }
                             }
@@ -403,14 +416,15 @@ pub async fn start_serial_execution(
                             log::trace!("Cleaning up execution handle for block {block_id} in document {document_id}");
                             cleanup(handle.id).await;
                             if stop_serial_exec {
-                                log::trace!("Stopping serial execution for document {document_id} because block {block_id} failed");
+                                log::trace!("Stopping serial execution for document {document_id} because block {block_id} failed or was cancelled");
                                 break 'outer;
                             }
                         }
                         _ = &mut rx => {
                             handle.cancellation_token.cancel();
-                            log::debug!("Serial execution cancelled");
+                            log::debug!("Serial execution cancelled for document {document_id}");
                             cleanup(handle.id).await;
+                            exit_type = ExecutionResult::Cancelled;
                             break 'outer;
                         }
                     }
@@ -419,6 +433,7 @@ pub async fn start_serial_execution(
                     log::error!(
                         "Failed to execute block {block_id} in document {document_id}: {e}"
                     );
+                    exit_type = ExecutionResult::Failure;
                     break 'outer;
                 }
                 Ok(None) => {
@@ -426,6 +441,37 @@ pub async fn start_serial_execution(
                 }
             }
         }
+
+        match exit_type {
+            ExecutionResult::Success => {
+                let _ = document
+                    .event_bus()
+                    .emit(GCEvent::SerialExecutionCompleted {
+                        runbook_id: document_uuid,
+                    })
+                    .await
+                    .map_err(|e| format!("Failed to emit serial execution completed event: {}", e));
+            }
+            ExecutionResult::Failure => {
+                let _ = document
+                    .event_bus()
+                    .emit(GCEvent::SerialExecutionFailed {
+                        runbook_id: document_uuid,
+                        error: "Serial execution failed".to_string(),
+                    })
+                    .await
+                    .map_err(|e| format!("Failed to emit serial execution failed event: {}", e));
+            }
+            ExecutionResult::Cancelled => {
+                let _ = document
+                    .event_bus()
+                    .emit(GCEvent::SerialExecutionCancelled {
+                        runbook_id: document_uuid,
+                    })
+                    .await
+                    .map_err(|e| format!("Failed to emit serial execution cancelled event: {}", e));
+            }
+        };
 
         log::trace!("Serial execution for document {document_id} completed; blocks: {block_ids:?}");
         let state = app.state::<AtuinState>();

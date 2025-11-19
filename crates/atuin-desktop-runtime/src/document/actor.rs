@@ -150,6 +150,7 @@ pub(crate) enum DocumentCommand {
 pub struct DocumentHandle {
     runbook_id: String,
     command_tx: mpsc::UnboundedSender<DocumentCommand>,
+    event_bus: Arc<dyn EventBus>,
 }
 
 impl DocumentHandle {
@@ -166,6 +167,7 @@ impl DocumentHandle {
         let instance = Arc::new(Self {
             runbook_id: runbook_id.clone(),
             command_tx: tx.clone(),
+            event_bus: event_bus.clone(),
         });
 
         // Spawn the document actor
@@ -194,10 +196,12 @@ impl DocumentHandle {
     pub(crate) fn from_raw(
         runbook_id: String,
         command_tx: mpsc::UnboundedSender<DocumentCommand>,
+        event_bus: Arc<dyn EventBus>,
     ) -> Arc<Self> {
         Arc::new(Self {
             runbook_id,
             command_tx,
+            event_bus,
         })
     }
 
@@ -205,6 +209,10 @@ impl DocumentHandle {
     #[allow(unused)]
     pub fn runbook_id(&self) -> &str {
         &self.runbook_id
+    }
+
+    pub fn event_bus(&self) -> Arc<dyn EventBus> {
+        self.event_bus.clone()
     }
 
     pub async fn update_bridge_channel(

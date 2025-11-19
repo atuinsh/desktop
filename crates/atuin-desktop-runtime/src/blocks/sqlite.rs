@@ -283,7 +283,11 @@ mod tests {
 
     fn create_test_context() -> ExecutionContext {
         let (tx, _rx) = mpsc::unbounded_channel::<DocumentCommand>();
-        let document_handle = DocumentHandle::from_raw("test-runbook".to_string(), tx);
+        let document_handle = DocumentHandle::from_raw(
+            "test-runbook".to_string(),
+            tx,
+            Arc::new(MemoryEventBus::new()),
+        );
         let context_resolver = ContextResolver::new();
         let (event_sender, _event_receiver) = tokio::sync::broadcast::channel(16);
 
@@ -303,7 +307,8 @@ mod tests {
         event_bus: Arc<MemoryEventBus>,
     ) -> ExecutionContext {
         let (tx, _rx) = mpsc::unbounded_channel::<DocumentCommand>();
-        let document_handle = DocumentHandle::from_raw("test-runbook".to_string(), tx);
+        let document_handle =
+            DocumentHandle::from_raw("test-runbook".to_string(), tx, event_bus.clone());
         let context_resolver = Arc::new(ContextResolver::new());
         let (event_sender, _event_receiver) = tokio::sync::broadcast::channel(16);
 

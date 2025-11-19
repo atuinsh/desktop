@@ -322,7 +322,11 @@ mod tests {
 
     fn create_test_context(block_id: Uuid) -> (ExecutionContext, TestMessageChannel) {
         let (tx, _rx) = mpsc::unbounded_channel::<DocumentCommand>();
-        let document_handle = DocumentHandle::from_raw("test-runbook".to_string(), tx);
+        let document_handle = DocumentHandle::from_raw(
+            "test-runbook".to_string(),
+            tx,
+            Arc::new(MemoryEventBus::new()),
+        );
         let context_resolver = ContextResolver::new();
         let (event_sender, _event_receiver) = tokio::sync::broadcast::channel(16);
         let message_channel = TestMessageChannel::new();
@@ -344,7 +348,11 @@ mod tests {
         vars: Vec<(&str, &str)>,
     ) -> (ExecutionContext, TestMessageChannel) {
         let (tx, _rx) = mpsc::unbounded_channel::<DocumentCommand>();
-        let document_handle = DocumentHandle::from_raw("test-runbook".to_string(), tx);
+        let document_handle = DocumentHandle::from_raw(
+            "test-runbook".to_string(),
+            tx,
+            Arc::new(MemoryEventBus::new()),
+        );
 
         let vars_map: HashMap<String, String> = vars
             .into_iter()
@@ -375,7 +383,8 @@ mod tests {
         event_bus: Arc<MemoryEventBus>,
     ) -> (ExecutionContext, TestMessageChannel) {
         let (tx, _rx) = mpsc::unbounded_channel::<DocumentCommand>();
-        let document_handle = DocumentHandle::from_raw("test-runbook".to_string(), tx);
+        let document_handle =
+            DocumentHandle::from_raw("test-runbook".to_string(), tx, event_bus.clone());
         let context_resolver = ContextResolver::new();
         let (event_sender, _event_receiver) = tokio::sync::broadcast::channel(16);
         let message_channel = TestMessageChannel::new();
