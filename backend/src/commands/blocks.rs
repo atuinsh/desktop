@@ -492,7 +492,7 @@ pub async fn stop_serial_execution(
     let mut serial_executions = state.serial_executions.write().await;
     if let Some(tx) = serial_executions.remove(&document_id) {
         tx.send(())
-            .map_err(|_| format!("Failed to send stop signal to serial execution"))?;
+            .map_err(|_| "Failed to send stop signal to serial execution")?;
     }
     Ok(())
 }

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { ListFilterIcon, CheckIcon, ChevronsUpDownIcon, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,7 +21,7 @@ import { useStore } from "@/state/store";
 import track_event from "@/tracking";
 import CodeEditor, { TabAutoComplete } from "@/lib/blocks/common/CodeEditor/CodeEditor.tsx";
 import InterpreterSelector from "@/lib/blocks/common/InterpreterSelector.tsx";
-import { useBlockContext, useBlockExecution, useBlockState } from "@/lib/hooks/useDocumentBridge";
+import { useBlockExecution, useBlockState } from "@/lib/hooks/useDocumentBridge";
 import isValidVarName from "../../utils/varNames";
 import { DropdownState } from "@/rs-bindings/DropdownState";
 
