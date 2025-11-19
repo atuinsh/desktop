@@ -121,6 +121,14 @@ impl BlockBehavior for Script {
             handle_id = context.handle().id
         );
 
+        let var_name = match self.output_variable {
+            Some(ref v) => match context.context_resolver.resolve_template(v) {
+                Ok(resolved) => Some(resolved),
+                Err(e) => return Err(Box::new(e)),
+            },
+            None => None,
+        };
+
         let context_clone = context.clone();
         tokio::spawn(async move {
             let (exit_code, captured_output) = self
@@ -142,19 +150,18 @@ impl BlockBehavior for Script {
                     let output = captured_output.trim().to_string();
 
                     // Store output variable as DocumentVar in context
-                    if let Some(var_name) = &self.output_variable {
+                    if let Some(var_name) = var_name {
                         let block_id = self.id;
-                        let var_name_clone = var_name.clone();
                         let output_clone = output.clone();
 
                         let _ = context
                             .update_active_context(block_id, move |ctx| {
                                 log::trace!(
-                                    "Storing output variable {var_name_clone} for script block {block_id}",
-                                    var_name_clone = var_name_clone,
+                                    "Storing output variable {var_name} for script block {block_id}",
+                                    var_name = var_name,
                                     block_id = block_id
                                 );
-                                ctx.insert(DocumentVar::new(var_name_clone, output_clone, "(script output)".to_string()));
+                                ctx.insert(DocumentVar::new(var_name, output_clone, "(script output)".to_string()));
                             })
                             .await;
                     }

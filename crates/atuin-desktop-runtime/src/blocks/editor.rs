@@ -91,13 +91,21 @@ impl BlockBehavior for Editor {
         resolver: &ContextResolver,
         _block_local_value_provider: Option<&dyn LocalValueProvider>,
     ) -> Result<Option<BlockContext>, Box<dyn std::error::Error + Send + Sync>> {
-        let mut context = BlockContext::new();
-        if self.var_name.is_some() {
-            let var_name = self.var_name.as_ref().unwrap();
+        if let Some(var_name) = self.var_name.as_ref() {
+            let mut context = BlockContext::new();
             let var_name = resolver.resolve_template(var_name)?;
             let var_value = resolver.resolve_template(&self.code)?;
-            context.insert(DocumentVar::new(var_name, var_value, self.code.clone()));
+            if var_name.is_empty() {
+                return Ok(None);
+            }
+            context.insert(DocumentVar::new(
+                var_name,
+                var_value,
+                "(editor content)".to_string(),
+            ));
+            Ok(Some(context))
+        } else {
+            Ok(None)
         }
-        Ok(Some(context))
     }
 }
