@@ -849,6 +849,37 @@ mod tests {
             .unwrap();
     }
 
+    async fn wait_for_state_condition<F>(
+        manager_arc: &Arc<Mutex<Option<WorkspaceManager>>>,
+        workspace_id: &str,
+        predicate: F,
+        timeout_ms: u64,
+    ) -> bool
+    where
+        F: Fn(&WorkspaceState) -> bool,
+    {
+        let start = std::time::Instant::now();
+        let timeout = Duration::from_millis(timeout_ms);
+
+        loop {
+            let manager_guard = manager_arc.lock().await;
+            let manager = manager_guard.as_ref().unwrap();
+            if let Some(workspace) = manager.workspaces.get(workspace_id) {
+                if let Ok(state) = &workspace.state {
+                    if predicate(state) {
+                        return true;
+                    }
+                }
+            }
+            drop(manager_guard);
+
+            if start.elapsed() > timeout {
+                return false;
+            }
+            sleep(Duration::from_millis(10)).await;
+        }
+    }
+
     #[tokio::test(flavor = "multi_thread")]
     async fn test_folder_creation_and_runbook_operations() {
         let (temp_dir, workspace_path) = setup_test_workspace().await;
@@ -902,17 +933,24 @@ mod tests {
         );
         collector.clear_events().await;
 
-        // Verify the runbook was added to state
+        // Verify the runbook was added to state using polling
+        assert!(
+            wait_for_state_condition(
+                &manager_arc,
+                "test-workspace",
+                |state| state.runbooks.contains_key("test-runbook-id"),
+                2000
+            )
+            .await,
+            "Runbook was not added to state within timeout"
+        );
+
+        // Verify runbook properties
         {
             let manager_guard = manager_arc.lock().await;
             let manager = manager_guard.as_ref().unwrap();
             if let Some(workspace) = manager.workspaces.get("test-workspace") {
                 if let Ok(state) = &workspace.state {
-                    assert!(
-                        state.runbooks.contains_key("test-runbook-id"),
-                        "Runbook not found in state. Available runbooks: {:?}",
-                        state.runbooks.keys().collect::<Vec<_>>()
-                    );
                     let runbook = state.runbooks.get("test-runbook-id").unwrap();
                     assert_eq!(runbook.name, "test_runbook");
                     assert_eq!(runbook.id, "test-runbook-id");
@@ -930,22 +968,24 @@ mod tests {
             .unwrap();
 
         // Wait for runbook deletion to be detected
-        tokio::time::sleep(Duration::from_millis(200)).await;
+        let deletion_events = collector.wait_for_events(1, 5000).await;
+        assert!(
+            !deletion_events.is_empty(),
+            "Expected runbook deletion events, got: {deletion_events:?}"
+        );
+        collector.clear_events().await;
 
-        // Verify the runbook was removed from state
-        {
-            let manager_guard = manager_arc.lock().await;
-            let manager = manager_guard.as_ref().unwrap();
-            if let Some(workspace) = manager.workspaces.get("test-workspace") {
-                if let Ok(state) = &workspace.state {
-                    assert!(!state.runbooks.contains_key("test-runbook-id"));
-                } else {
-                    panic!("Workspace state should be Ok");
-                }
-            } else {
-                panic!("Workspace should exist");
-            }
-        }
+        // Verify the runbook was removed from state using polling
+        assert!(
+            wait_for_state_condition(
+                &manager_arc,
+                "test-workspace",
+                |state| !state.runbooks.contains_key("test-runbook-id"),
+                2000
+            )
+            .await,
+            "Runbook was not removed from state within timeout"
+        );
 
         // Clean up
         {
@@ -1099,24 +1139,38 @@ mod tests {
             .await
             .unwrap();
 
-        // Wait a bit to ensure any events would have been processed
-        sleep(Duration::from_millis(200)).await;
+        // Wait to ensure any events would have been processed (if they were going to arrive)
+        sleep(Duration::from_millis(500)).await;
 
-        // Verify that gitignored content is not in the workspace state
-        {
-            let manager_guard = manager_arc.lock().await;
-            let manager = manager_guard.as_ref().unwrap();
-            if let Some(workspace) = manager.workspaces.get("test-workspace") {
-                if let Ok(state) = &workspace.state {
-                    assert!(!state.runbooks.contains_key("ignored-runbook-id"));
-                    assert!(!state.runbooks.contains_key("temp-file-id"));
-                } else {
-                    panic!("Workspace state should be Ok");
-                }
-            } else {
-                panic!("Workspace should exist");
+        // Verify no events were generated for ignored files
+        let events = collector.get_events().await;
+        for event in events.iter() {
+            if let WorkspaceEvent::State(state) = event {
+                assert!(
+                    !state.runbooks.contains_key("ignored-runbook-id"),
+                    "Ignored runbook should not be in state events"
+                );
+                assert!(
+                    !state.runbooks.contains_key("temp-file-id"),
+                    "Ignored file should not be in state events"
+                );
             }
         }
+
+        // Verify that gitignored content is not in the workspace state
+        assert!(
+            wait_for_state_condition(
+                &manager_arc,
+                "test-workspace",
+                |state| {
+                    !state.runbooks.contains_key("ignored-runbook-id")
+                        && !state.runbooks.contains_key("temp-file-id")
+                },
+                2000
+            )
+            .await,
+            "Ignored items should not be in state"
+        );
 
         // Clean up
         {
@@ -1266,8 +1320,20 @@ mod tests {
         // Create a valid runbook (should not be ignored)
         create_test_runbook(&workspace_path, "valid_runbook", "valid-runbook-id").await;
 
-        // Wait a bit to ensure any events would have been processed
-        sleep(Duration::from_millis(200)).await;
+        // Wait for the valid runbook to appear in state
+        assert!(
+            wait_for_state_condition(
+                &manager_arc,
+                "test-workspace",
+                |state| state.runbooks.contains_key("valid-runbook-id"),
+                2000
+            )
+            .await,
+            "Valid runbook should be added to state"
+        );
+
+        // Wait a bit longer to ensure any events for ignored items would have arrived (if they were going to)
+        sleep(Duration::from_millis(300)).await;
 
         // Check that only the valid runbook generated events
         let events = collector.get_events().await;
@@ -1276,22 +1342,35 @@ mod tests {
             "Events should be generated for valid runbook"
         );
 
-        // Verify that only the valid runbook is in the workspace state
-        {
-            let manager_guard = manager_arc.lock().await;
-            let manager = manager_guard.as_ref().unwrap();
-            if let Some(workspace) = manager.workspaces.get("test-workspace") {
-                if let Ok(state) = &workspace.state {
-                    assert!(!state.runbooks.contains_key("parent-runbook-id"));
-                    assert!(!state.runbooks.contains_key("parent-file-id"));
-                    assert!(state.runbooks.contains_key("valid-runbook-id"));
-                } else {
-                    panic!("Workspace state should be Ok");
-                }
-            } else {
-                panic!("Workspace should exist");
+        // Verify no events contain the ignored items
+        for event in events.iter() {
+            if let WorkspaceEvent::State(state) = event {
+                assert!(
+                    !state.runbooks.contains_key("parent-runbook-id"),
+                    "Parent-ignored runbook should not be in state events"
+                );
+                assert!(
+                    !state.runbooks.contains_key("parent-file-id"),
+                    "Parent-ignored file should not be in state events"
+                );
             }
         }
+
+        // Verify that only the valid runbook is in the workspace state
+        assert!(
+            wait_for_state_condition(
+                &manager_arc,
+                "test-workspace",
+                |state| {
+                    !state.runbooks.contains_key("parent-runbook-id")
+                        && !state.runbooks.contains_key("parent-file-id")
+                        && state.runbooks.contains_key("valid-runbook-id")
+                },
+                2000
+            )
+            .await,
+            "Only valid runbook should be in state, ignored items should not be present"
+        );
 
         // Clean up
         {
@@ -1344,8 +1423,20 @@ mod tests {
         // Create a valid runbook (should not be ignored)
         create_test_runbook(&workspace_path, "valid_runbook", "valid-runbook-id").await;
 
-        // Wait a bit to ensure any events would have been processed
-        sleep(Duration::from_millis(200)).await;
+        // Wait for the valid runbook to appear in state
+        assert!(
+            wait_for_state_condition(
+                &manager_arc,
+                "test-workspace",
+                |state| state.runbooks.contains_key("valid-runbook-id"),
+                2000
+            )
+            .await,
+            "Valid runbook should be added to state"
+        );
+
+        // Wait a bit longer to ensure any events for hidden items would have arrived (if they were going to)
+        sleep(Duration::from_millis(300)).await;
 
         // Check that only the valid runbook generated events
         let events = collector.get_events().await;
@@ -1354,24 +1445,40 @@ mod tests {
             "Events should be generated for valid runbook"
         );
 
-        // Verify that only the valid runbook is in the workspace state
-        {
-            let manager_guard = manager_arc.lock().await;
-            let manager = manager_guard.as_ref().unwrap();
-            if let Some(workspace) = manager.workspaces.get("test-workspace") {
-                if let Ok(state) = &workspace.state {
-                    for dir_name in &hidden_dirs {
-                        assert!(!state.runbooks.contains_key(&format!("hidden-{dir_name}")));
-                    }
-                    assert!(!state.runbooks.contains_key("hidden-file-id"));
-                    assert!(state.runbooks.contains_key("valid-runbook-id"));
-                } else {
-                    panic!("Workspace state should be Ok");
+        // Verify no events contain the hidden items
+        for event in events.iter() {
+            if let WorkspaceEvent::State(state) = event {
+                for dir_name in &hidden_dirs {
+                    assert!(
+                        !state.runbooks.contains_key(&format!("hidden-{dir_name}")),
+                        "Hidden directory runbook should not be in state events: {dir_name}"
+                    );
                 }
-            } else {
-                panic!("Workspace should exist");
+                assert!(
+                    !state.runbooks.contains_key("hidden-file-id"),
+                    "Hidden file should not be in state events"
+                );
             }
         }
+
+        // Verify that only the valid runbook is in the workspace state
+        assert!(
+            wait_for_state_condition(
+                &manager_arc,
+                "test-workspace",
+                |state| {
+                    let no_hidden_dirs = hidden_dirs
+                        .iter()
+                        .all(|dir| !state.runbooks.contains_key(&format!("hidden-{dir}")));
+                    no_hidden_dirs
+                        && !state.runbooks.contains_key("hidden-file-id")
+                        && state.runbooks.contains_key("valid-runbook-id")
+                },
+                2000
+            )
+            .await,
+            "Only valid runbook should be in state, hidden items should not be present"
+        );
 
         // Clean up
         {
