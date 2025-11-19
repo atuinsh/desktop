@@ -8,6 +8,7 @@ This document provides a comprehensive overview of how the Atuin Desktop backend
 - [Core Components](#core-components)
 - [Execution Flow](#execution-flow)
 - [Context Management](#context-management)
+- [Serial Execution](#serial-execution)
 - [Cancellation & Error Handling](#cancellation--error-handling)
 - [Developer Guide](#developer-guide)
 - [Examples & Patterns](#examples--patterns)
@@ -178,48 +179,57 @@ The `ExecutionContext` contains all the information needed to execute a block:
 
 ```rust
 pub struct ExecutionContext {
-    pub block_id: Uuid,                       // ID of the block being executed
-    pub runbook_id: Uuid,                     // Which runbook this execution belongs to
-    pub document_handle: Arc<DocumentHandle>, // Handle to the document actor for context updates
-    pub context_resolver: Arc<ContextResolver>, // Resolves templates and provides context values
-    output_channel: Option<Arc<dyn ClientMessageChannel<DocumentBridgeMessage>>>, // For sending output to frontend
+    pub(crate) block_id: Uuid,                       // ID of the block being executed
+    pub(crate) runbook_id: Uuid,                     // Which runbook this execution belongs to
+    document_handle: Arc<DocumentHandle>,            // Handle to the document actor (private - use helper methods)
+    pub(crate) context_resolver: Arc<ContextResolver>, // Resolves templates and provides context values
+    output_channel: Option<Arc<dyn MessageChannel<DocumentBridgeMessage>>>, // For sending output to frontend
     workflow_event_sender: broadcast::Sender<WorkflowEvent>, // For sending workflow events
-    pub ssh_pool: Option<SshPoolHandle>,      // SSH connection pool (if available)
-    pub pty_store: Option<PtyStoreHandle>,    // PTY store for terminal blocks (if available)
-    pub gc_event_bus: Option<Arc<dyn EventBus>>, // Grand Central event bus
-    handle: ExecutionHandle,                  // Handle for this execution
+    pub(crate) ssh_pool: Option<SshPoolHandle>,      // SSH connection pool (if available)
+    pub(crate) pty_store: Option<PtyStoreHandle>,    // PTY store for terminal blocks (if available)
+    pub(crate) gc_event_bus: Option<Arc<dyn EventBus>>, // Grand Central event bus
+    handle: ExecutionHandle,                         // Handle for this execution
 }
 ```
 
 **Key Fields:**
 - `block_id` - The UUID of the block currently being executed
 - `context_resolver` - Wrapped in Arc, provides access to variables, cwd, env vars, ssh_host via `resolve_template()` and getter methods
-- `document_handle` - Used to update block's active or passive context (e.g., storing output variables)
+- `document_handle` - (Private) Handle to the document actor; use helper methods (`update_active_context`, etc.) instead of direct access
 - `handle` - The execution handle for this block execution
+
+**Note:** Most fields are marked `pub(crate)` to encourage use of the helper methods rather than direct field access. This provides better encapsulation and ensures proper event emission.
 
 **Helper Methods:**
 The ExecutionContext provides several convenience methods to simplify block implementations:
 
 - **Lifecycle management:**
-  - `block_started()` - Marks block as started and sends appropriate events
-  - `block_finished(exit_code, success)` - Marks block as finished
-  - `block_failed(error)` - Marks block as failed with an error message
-  - `block_cancelled()` - Marks block as cancelled
+  - `block_started()` - Marks block as started, sets status to Running, and sends events to Grand Central, workflow bus, and frontend
+  - `block_finished(exit_code, success)` - Marks block as finished, sets status to Success, and sends finish events
+  - `block_failed(error)` - Marks block as failed with an error message, sets status to Failed, and sends error events
+  - `block_cancelled()` - Marks block as cancelled, sets status to Cancelled, and sends cancellation events
 
 - **Context management:**
-  - `update_passive_context(block_id, update_fn)` - Update a block's passive context
-  - `update_active_context(block_id, update_fn)` - Update a block's active context
-  - `clear_active_context(block_id)` - Clear a block's active context
+  - `update_passive_context<F>(block_id, update_fn)` - Update a block's passive context with a closure
+  - `update_active_context<F>(block_id, update_fn)` - Update a block's active context with a closure
+  - `clear_active_context(block_id)` - Clear a block's active context (resets to empty BlockContext)
+
+- **State management:**
+  - `update_block_state<T, F>(block_id, update_fn)` - Update a block's state with type-safe access to the state struct
 
 - **Communication:**
-  - `send_output(message)` - Send output to the frontend via the document bridge
-  - `emit_workflow_event(event)` - Emit a workflow event
-  - `emit_gc_event(event)` - Emit a Grand Central event
-  - `prompt_client(prompt)` - Prompt the client for input (e.g., password, confirmation)
+  - `send_output(message)` - Send output (stdout, stderr, lifecycle events) to the frontend via the document bridge
+  - `emit_workflow_event(event)` - Emit a workflow event to the workflow event bus
+  - `emit_gc_event(event)` - Emit a Grand Central event for monitoring and serial execution tracking
+  - `prompt_client(prompt)` - Prompt the client for input (e.g., password, confirmation) and await the response
 
 - **Cancellation:**
-  - `cancellation_token()` - Get the cancellation token
-  - `cancellation_receiver()` - Get a receiver for cancellation signals
+  - `cancellation_token()` - Get the cancellation token for this execution
+  - `cancellation_receiver()` - Get a oneshot receiver for cancellation signals (consumed by tokio::select!)
+
+- **Accessors:**
+  - `handle()` - Get the ExecutionHandle for this execution
+  - `context_resolver` - Access the ContextResolver for template resolution and context values
 
 **Lifecycle:**
 1. **Created** by `Document::build_execution_context()` when a block execution is requested
@@ -914,6 +924,199 @@ if let Some(block) = self.document.get_block_mut(&block_id) {
 - **Context**: Execution environment (variables, cwd, env vars); affects blocks below; can be persisted
 - State is NOT persisted to disk and is NOT included in context resolution for other blocks
 
+## Serial Execution
+
+Serial execution allows running all blocks in a runbook sequentially, from top to bottom, stopping if any block fails or is cancelled. This feature was migrated from a frontend-based implementation to a backend command system for better reliability and monitoring.
+
+### Architecture
+
+**Backend Command:**
+The `start_serial_execution` Tauri command manages the entire serial execution lifecycle:
+
+```rust
+#[tauri::command]
+pub async fn start_serial_execution(
+    app: AppHandle,
+    state: State<'_, AtuinState>,
+    document_id: String,
+) -> Result<(), String>
+```
+
+**Key Components:**
+
+1. **Execution Handle Tracking** - Each block execution returns an `ExecutionHandle` with a `finished_channel()` that emits `ExecutionResult` when complete
+2. **Sequential Coordination** - Backend spawns a task that executes blocks one at a time, waiting for each to finish before starting the next
+3. **Cancellation Support** - Serial execution can be cancelled via `cancel_serial_execution` command, which cancels the current block and stops the sequence
+4. **Grand Central Events** - Serial execution lifecycle is tracked via GC events for UI updates
+
+### Execution Flow
+
+1. **Frontend initiates** serial execution via `start_serial_execution(document_id)`
+2. **Backend retrieves** all block IDs from the document in order
+3. **Backend spawns** background task that:
+   - Iterates through blocks sequentially
+   - For each block:
+     - Calls `execute_single_block()` to start execution
+     - Stores the `ExecutionHandle` in global state
+     - Subscribes to the handle's `finished_channel()`
+     - Uses `tokio::select!` to wait for either:
+       - Block completion (via `finished_channel`)
+       - Cancellation signal (via cancellation receiver)
+   - If block succeeds (`ExecutionResult::Success`), continues to next block
+   - If block fails (`ExecutionResult::Failure`) or is cancelled (`ExecutionResult::Cancelled`), stops sequence
+4. **Backend emits** Grand Central events at key points:
+   - `SerialExecutionStarted` - When serial execution begins
+   - `SerialExecutionCompleted` - When all blocks complete successfully
+   - `SerialExecutionFailed` - When a block fails
+   - `SerialExecutionCancelled` - When execution is cancelled
+
+### ExecutionResult Enum
+
+```rust
+pub enum ExecutionResult {
+    Success,   // Block completed successfully (exit code 0)
+    Failure,   // Block failed (non-zero exit code or execution error)
+    Cancelled, // Block was cancelled by user
+}
+```
+
+This enum is sent through the `finished_channel` when a block execution completes, allowing serial execution to determine whether to continue or stop.
+
+### ExecutionHandle Lifecycle Events
+
+The `ExecutionHandle` now includes a `finished_channel` that provides a watch channel for monitoring completion:
+
+```rust
+pub struct ExecutionHandle {
+    // ... other fields
+    pub on_finish: (
+        watch::Sender<Option<ExecutionResult>>,
+        watch::Receiver<Option<ExecutionResult>>,
+    ),
+}
+
+impl ExecutionHandle {
+    pub fn finished_channel(&self) -> watch::Receiver<Option<ExecutionResult>> {
+        self.on_finish.1.clone()
+    }
+}
+```
+
+**Helper Methods in ExecutionContext:**
+- `block_finished()` - Sends `ExecutionResult::Success` through the channel
+- `block_failed()` - Sends `ExecutionResult::Failure` through the channel
+- `block_cancelled()` - Sends `ExecutionResult::Cancelled` through the channel
+
+### Grand Central Serial Execution Events
+
+```rust
+pub enum GCEvent {
+    SerialExecutionStarted { runbook_id: Uuid },
+    SerialExecutionCompleted { runbook_id: Uuid },
+    SerialExecutionCancelled { runbook_id: Uuid },
+    SerialExecutionFailed { runbook_id: Uuid, error: String },
+    // ... other events
+}
+```
+
+**Frontend Integration:**
+The frontend subscribes to these events to update UI state (e.g., showing/hiding a progress indicator, updating the play button state):
+
+```typescript
+useEffect(() => {
+  const unsubscribe = subscribeToGCEvents((event) => {
+    if (event.type === 'SerialExecutionStarted' && event.data.runbookId === currentRunbookId) {
+      setIsSerialExecutionRunning(true);
+    } else if (['SerialExecutionCompleted', 'SerialExecutionFailed', 'SerialExecutionCancelled']
+      .includes(event.type) && event.data.runbookId === currentRunbookId) {
+      setIsSerialExecutionRunning(false);
+    }
+  });
+  return unsubscribe;
+}, [currentRunbookId]);
+```
+
+### Cancellation
+
+Serial execution can be cancelled at any time:
+
+```rust
+#[tauri::command]
+pub async fn cancel_serial_execution(
+    state: State<'_, AtuinState>,
+    document_id: String,
+) -> Result<(), String>
+```
+
+**Cancellation Flow:**
+1. Frontend calls `cancel_serial_execution(document_id)`
+2. Backend looks up the cancellation sender for the serial execution
+3. Backend sends cancellation signal through the oneshot channel
+4. Serial execution task receives signal via `tokio::select!`
+5. Current block execution is cancelled via `handle.cancellation_token.cancel()`
+6. Serial execution loop breaks and emits `SerialExecutionCancelled` event
+7. Cleanup removes handles from global state
+
+### Benefits of Backend Implementation
+
+**Previous (Frontend-based):**
+- Complex coordination logic in TypeScript
+- Race conditions when managing execution state
+- Difficult to track execution across page refreshes
+- Limited error handling and recovery
+
+**Current (Backend-based):**
+- Centralized execution logic in Rust
+- Reliable state management via actor system
+- Proper async/await coordination with tokio
+- Comprehensive event emission for monitoring
+- Consistent error handling via Result types
+- Execution survives frontend navigation (within same session)
+
+### State Management
+
+**Global State:**
+```rust
+pub struct AtuinState {
+    pub serial_executions: Arc<RwLock<HashMap<String, oneshot::Sender<()>>>>,
+    pub block_executions: Arc<RwLock<HashMap<Uuid, ExecutionHandle>>>,
+    // ... other fields
+}
+```
+
+- `serial_executions` - Maps document IDs to cancellation senders for active serial executions
+- `block_executions` - Maps execution IDs to handles for all running block executions (both serial and individual)
+
+### Example Usage
+
+**Starting Serial Execution:**
+```typescript
+await invoke('start_serial_execution', { documentId: runbookId });
+```
+
+**Cancelling Serial Execution:**
+```typescript
+await invoke('cancel_serial_execution', { documentId: runbookId });
+```
+
+**Monitoring Progress:**
+```typescript
+const [runningBlocks, setRunningBlocks] = useState(0);
+
+useEffect(() => {
+  const unsubscribe = subscribeToGCEvents((event) => {
+    if (event.data?.runbookId === runbookId) {
+      if (event.type === 'BlockStarted') {
+        setRunningBlocks(prev => prev + 1);
+      } else if (['BlockFinished', 'BlockFailed', 'BlockCancelled'].includes(event.type)) {
+        setRunningBlocks(prev => prev - 1);
+      }
+    }
+  });
+  return unsubscribe;
+}, [runbookId]);
+```
+
 ## Cancellation & Error Handling
 
 ### Cancellation Mechanism
@@ -934,13 +1137,33 @@ pub struct CancellationToken {
 4. **Running task** receives cancellation signal via `tokio::select!`
 5. **Task cleans up** and sets status to `Cancelled`
 
+**Process Group Cancellation (Script Blocks):**
+
+For script blocks, proper cancellation requires killing the entire process group, not just the parent shell process. This ensures that complex command pipelines (e.g., `seq 1 20 | xargs -I {} sh -c 'echo {}; sleep 1'`) are fully terminated.
+
 ```rust
-// Example cancellation handling in ScriptHandler:
+// When spawning the process (Unix):
+#[cfg(unix)]
+{
+    cmd.process_group(0); // Makes the child a process group leader
+}
+
+// When cancelling (Unix):
 tokio::select! {
     _ = cancel_rx => {
-        // Kill the process gracefully
-        if let Some(pid) = pid {
-            let _ = signal::kill(Pid::from_raw(pid as i32), Signal::SIGTERM);
+        // Kill the entire process group
+        #[cfg(unix)]
+        {
+            use nix::sys::signal::{self, Signal};
+            use nix::unistd::Pid;
+            if let Some(pid) = pid {
+                // Negative PID targets the process group
+                let _ = signal::kill(Pid::from_raw(-(pid as i32)), Signal::SIGTERM);
+            }
+        }
+        #[cfg(windows)]
+        {
+            let _ = child.kill().await;
         }
         return (Err("Script execution cancelled".into()), captured);
     }
@@ -948,6 +1171,56 @@ tokio::select! {
         // Normal completion
     }
 }
+```
+
+**Why Process Groups Matter:**
+- **Simple scripts** (e.g., `echo "hello"; sleep 5`) run entirely within the shell process, so killing the shell suffices
+- **Pipelines** (e.g., `cat file | grep pattern`) spawn multiple processes that form a pipeline
+- **Command substitution** (e.g., `xargs`, `parallel`) spawn many child processes
+- Without process group termination, child processes become orphaned and continue running after cancellation
+
+### Grand Central Event System
+
+The execution system includes a Grand Central event bus that provides global monitoring of block execution lifecycle events. These events enable features like serial execution tracking and UI badge notifications.
+
+**GCEvent Types:**
+```rust
+pub enum GCEvent {
+    BlockStarted { block_id: Uuid, runbook_id: Uuid },
+    BlockFinished { block_id: Uuid, runbook_id: Uuid, success: bool },
+    BlockFailed { block_id: Uuid, runbook_id: Uuid, error: String },
+    BlockCancelled { block_id: Uuid, runbook_id: Uuid },
+}
+```
+
+**Event Flow:**
+1. **Block execution starts** - `context.block_started()` emits `BlockStarted` event
+2. **Block completes** - One of the following events is emitted:
+   - `BlockFinished` - Normal completion (success or failure based on exit code)
+   - `BlockFailed` - Execution error or non-zero exit code
+   - `BlockCancelled` - User-requested cancellation
+3. **Frontend subscribes** to events via `subscribeToGCEvents()` and updates UI accordingly
+
+**Use Cases:**
+- **Tab badges** - Track running block count per runbook tab
+- **Serial execution** - Monitor when all blocks in a sequence complete
+- **Execution monitoring** - Dashboard showing all running blocks across all runbooks
+- **Analytics** - Track block execution patterns and failures
+
+**Example - Tab Badge Counter:**
+```typescript
+useEffect(() => {
+  const unsubscribe = subscribeToGCEvents((event) => {
+    if (event.runbookId === currentRunbookId) {
+      if (event.type === 'BlockStarted') {
+        incrementBadge(1);
+      } else if (['BlockFinished', 'BlockFailed', 'BlockCancelled'].includes(event.type)) {
+        decrementBadge(1);
+      }
+    }
+  });
+  return unsubscribe;
+}, [currentRunbookId]);
 ```
 
 ### Error Handling
@@ -961,7 +1234,7 @@ tokio::select! {
 **Error Propagation:**
 1. **Handler level**: Errors are captured and converted to `ExecutionStatus::Failed`
 2. **Status updates**: Error messages are stored in the ExecutionHandle
-3. **Frontend notification**: Errors are sent via output channels and lifecycle events
+3. **Frontend notification**: Errors are sent via output channels, lifecycle events, and Grand Central events
 
 ## Developer Guide
 
@@ -1021,7 +1294,7 @@ impl BlockBehavior for MyBlock {
         self,
         context: ExecutionContext,
     ) -> Result<Option<ExecutionHandle>, Box<dyn std::error::Error + Send + Sync>> {
-        let handle = context.handle();
+        let context_clone = context.clone();
 
         // Spawn background task
         tokio::spawn(async move {
@@ -1033,9 +1306,13 @@ impl BlockBehavior for MyBlock {
             let cwd = context.context_resolver.cwd();
             let vars = context.context_resolver.vars();
 
+            // Resolve template strings if needed
+            let template_result = context.context_resolver.resolve_template("{{ var.name }}");
+
             // Example: Store result in active context
             let result = "some output";
-            let _ = context.update_active_context(context.block_id, |ctx| {
+            let block_id = context.block_id;
+            let _ = context.update_active_context(block_id, |ctx| {
                 ctx.insert(BlockExecutionOutput {
                     exit_code: Some(0),
                     stdout: Some(result.to_string()),
@@ -1047,7 +1324,7 @@ impl BlockBehavior for MyBlock {
             let _ = context.block_finished(Some(0), true).await;
         });
 
-        Ok(Some(handle))
+        Ok(Some(context_clone.handle()))
     }
 }
 ```
