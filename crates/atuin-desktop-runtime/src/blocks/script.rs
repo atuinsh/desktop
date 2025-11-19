@@ -277,6 +277,11 @@ impl Script {
         cmd.stderr(Stdio::piped());
         cmd.stdin(Stdio::null());
 
+        #[cfg(unix)]
+        {
+            cmd.process_group(0);
+        }
+
         log::trace!("Spawning process for script block {id}", id = self.id,);
 
         let mut child = match cmd.spawn() {
@@ -365,7 +370,9 @@ impl Script {
                         {
                             use nix::sys::signal::{self, Signal};
                             use nix::unistd::Pid;
-                            let _ = signal::kill(Pid::from_raw(pid as i32), Signal::SIGTERM);
+                            log::trace!("Sending SIGTERM to process {pid}", pid = pid);
+                            // Send SIGTERM to the process group
+                            let _ = signal::kill(Pid::from_raw(-(pid as i32)), Signal::SIGTERM);
                         }
                         #[cfg(windows)]
                         {
