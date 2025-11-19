@@ -1,7 +1,7 @@
 // @ts-ignore
 import { createReactBlockSpec } from "@blocknote/react";
 
-import { useMemo, useState, useEffect, useRef, useCallback } from "react";
+import { useMemo, useState, useEffect, useRef, useCallback, useContext } from "react";
 
 import { useStore } from "@/state/store.ts";
 import { Button, Input, Tooltip } from "@heroui/react";
@@ -39,8 +39,11 @@ import {
   useBlockContext,
   useBlockExecution,
   useBlockOutput,
+  useBlockStart,
+  useBlockStop,
 } from "@/lib/hooks/useDocumentBridge";
 import Xterm, { XtermHandle } from "@/components/runbooks/editor/components/Xterm";
+import { TabsContext } from "@/routes/root/Tabs";
 
 interface ScriptBlockProps {
   onChange: (val: string) => void;
@@ -90,6 +93,7 @@ const ScriptBlock = ({
     return script.interpreter in availableShells && !availableShells[script.interpreter];
   }, [script.interpreter, availableShells]);
 
+  const { incrementBadge, decrementBadge } = useContext(TabsContext);
   const colorMode = useStore((state) => state.functionalColorMode);
   const [parentBlock, setParentBlock] = useState<BlockType | null>(null);
   const elementRef = useRef<HTMLDivElement>(null);
@@ -104,11 +108,6 @@ const ScriptBlock = ({
   const sshParent = blockContext.sshHost;
 
   const onBlockOutput = useCallback(async (output: GenericBlockOutput<void>) => {
-    if (output.lifecycle?.type === "started") {
-      setHasRun(true);
-      xtermRef.current?.clear();
-    }
-
     if (output.stdout) {
       xtermRef.current?.write(output.stdout);
     }
@@ -118,6 +117,14 @@ const ScriptBlock = ({
   }, []);
 
   useBlockOutput<void>(script.id, onBlockOutput);
+  useBlockStart(script.id, () => {
+    setHasRun(true);
+    xtermRef.current?.clear();
+    incrementBadge(1);
+  });
+  useBlockStop(script.id, () => {
+    decrementBadge(1);
+  });
 
   // Class name for SSH indicator styling based on connection status
   const blockBorderClass = useMemo(() => {

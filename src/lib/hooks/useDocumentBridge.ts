@@ -1,5 +1,5 @@
 import { Channel, invoke } from "@tauri-apps/api/core";
-import { createContext, useCallback, useContext, useEffect, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { autobind } from "../decorators";
 import Emittery from "emittery";
 import { DocumentBridgeMessage } from "@/rs-bindings/DocumentBridgeMessage";
@@ -298,4 +298,28 @@ export function useBlockExecution(blockId: string): ClientExecutionHandle {
       setExecutionId(null);
     },
   };
+}
+
+export function useBlockStart(blockId: string, callback: () => void): void {
+  const execution = useBlockExecution(blockId);
+
+  useEffect(() => {
+    if (execution.isRunning) {
+      callback();
+    }
+  }, [execution.isRunning]);
+}
+
+export function useBlockStop(blockId: string, callback: () => void): void {
+  const execution = useBlockExecution(blockId);
+  const wasRunning = useRef(false);
+
+  useEffect(() => {
+    if (execution.isRunning) {
+      wasRunning.current = true;
+    } else if (wasRunning.current && !execution.isRunning) {
+      callback();
+      wasRunning.current = false;
+    }
+  }, [execution.isRunning]);
 }

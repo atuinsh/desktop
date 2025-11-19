@@ -25,11 +25,13 @@ import { Badge } from "@heroui/react";
 export const TabsContext = React.createContext<{
   tab: TabType | null;
   setTitle: (title: string) => void;
-  setBadge: (badge: string | null) => void;
+  incrementBadge: (number: number) => void;
+  decrementBadge: (number: number) => void;
 }>({
   tab: null,
   setTitle: () => {},
-  setBadge: () => {},
+  incrementBadge: () => {},
+  decrementBadge: () => {},
 });
 
 export default function Tabs() {
@@ -192,8 +194,23 @@ export default function Tabs() {
             setTitle: (title: string) => {
               setTabTitle(tab.id, title);
             },
-            setBadge: (badge: string | null) => {
-              setTabBadge(tab.id, badge);
+            incrementBadge: (number: number = 1) => {
+              let newBadge = tab.badge ? (parseInt(tab.badge) || 0) + number : number;
+              if (newBadge <= 0) {
+                setTabBadge(tab.id, null);
+                return;
+              }
+
+              setTabBadge(tab.id, newBadge.toString());
+            },
+            decrementBadge: (number: number = 1) => {
+              let newBadge = tab.badge ? (parseInt(tab.badge) || 0) - number : number;
+              if (newBadge <= 0) {
+                setTabBadge(tab.id, null);
+                return;
+              }
+
+              setTabBadge(tab.id, newBadge.toString());
             },
           }}
         >

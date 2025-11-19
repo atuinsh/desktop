@@ -4,7 +4,7 @@ import { usePtyStore } from "@/state/ptyStore";
 import { useStore } from "@/state/store";
 import Snapshot from "@/state/runbooks/snapshot";
 import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { timeoutPromise, useMemory } from "@/lib/utils";
+import { timeoutPromise, useMemory, usePrevious } from "@/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as api from "@/api/api";
 import { snapshotByRunbookAndTag, snapshotsByRunbook } from "@/lib/queries/snapshots";
@@ -59,11 +59,12 @@ export default function Runbooks() {
   const lastRunbookEditor = useRef<RunbookEditor | null>(runbookEditor);
   const serialExecution = useStore((store) => store.serialExecution);
   const stopSerialExecution = useStore((store) => store.stopSerialExecution);
-  const { setTitle, setBadge, tab } = useContext(TabsContext);
+  const { setTitle, incrementBadge, decrementBadge, tab } = useContext(TabsContext);
   const registerTabOnClose = useStore((store) => store.registerTabOnClose);
   const setCurrentWorkspaceId = useStore((store) => store.setCurrentWorkspaceId);
   const ptys = usePtyStore((state) => state.ptys);
   const activePtyCount = Object.values(ptys).filter((pty) => pty.runbook === runbookId).length;
+  const lastActivePtyCount = usePrevious(activePtyCount);
 
   const [documentOpened, setDocumentOpened] = useState(false);
   const [syncingRunbook, setSyncingRunbook] = useState(false);
@@ -154,12 +155,20 @@ export default function Runbooks() {
     if (!currentRunbook) {
       return;
     }
-    if (activePtyCount > 0) {
-      setBadge(String(activePtyCount));
-    } else {
-      setBadge(null);
+
+    if (!lastActivePtyCount) {
+      if (activePtyCount > 0) {
+        incrementBadge(activePtyCount);
+      }
+      return;
     }
-  }, [activePtyCount, currentRunbook]);
+
+    if (activePtyCount > lastActivePtyCount) {
+      incrementBadge(activePtyCount - lastActivePtyCount);
+    } else if (activePtyCount < lastActivePtyCount) {
+      decrementBadge(lastActivePtyCount - activePtyCount);
+    }
+  }, [activePtyCount, lastActivePtyCount, currentRunbook]);
 
   useEffect(() => {
     if (!tab || !currentRunbook) {
