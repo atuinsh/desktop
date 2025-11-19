@@ -91,17 +91,18 @@ impl BlockBehavior for SshConnect {
         _block_local_value_provider: Option<&dyn LocalValueProvider>,
     ) -> Result<Option<BlockContext>, Box<dyn std::error::Error + Send + Sync>> {
         let mut context = BlockContext::new();
+        let resolved_user_host = resolver.resolve_template(&self.user_host)?;
+
         // Basic validation of user_host format
-        if self.user_host.is_empty() {
+        if resolved_user_host.is_empty() {
             return Err("SSH user_host cannot be empty".into());
         }
 
         // Basic format validation (should contain @ or be just hostname)
-        if !self.user_host.contains('@') && self.user_host.contains(' ') {
+        if !resolved_user_host.contains('@') && resolved_user_host.contains(' ') {
             return Err("Invalid SSH user_host format".into());
         }
 
-        let resolved_user_host = resolver.resolve_template(&self.user_host)?;
         context.insert(DocumentSshHost(Some(resolved_user_host)));
         Ok(Some(context))
     }

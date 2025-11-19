@@ -184,7 +184,6 @@ impl SqlBlockBehavior for Clickhouse {
             query.to_string()
         };
 
-        log::info!("Executing query: {}", query_to_execute);
         let request = client.post(uri).body(query_to_execute);
 
         let response = request
@@ -220,7 +219,6 @@ impl SqlBlockBehavior for Clickhouse {
             // Parse each line as a JSON object
             match serde_json::from_str::<Value>(line) {
                 Ok(row) => {
-                    log::info!("Row: {:?}", row);
                     // Extract column names from first row
                     if let Value::Object(map) = row {
                         if column_names.is_empty() {
@@ -256,7 +254,6 @@ impl SqlBlockBehavior for Clickhouse {
     ) -> Result<SqlBlockExecutionResult, SqlBlockError> {
         let (client, uri) = pool;
 
-        log::info!("Executing statement: {}", statement);
         let request = client.post(uri).body(statement.to_string());
 
         let start_time = Instant::now();
@@ -265,7 +262,6 @@ impl SqlBlockBehavior for Clickhouse {
             .await
             .map_err(|e| SqlBlockError::ConnectionError(e.to_string()))?;
         let duration = start_time.elapsed();
-        log::info!("Duration: {:?}", duration);
 
         // Non-SELECT statement (INSERT, UPDATE, DELETE, CREATE, etc.)
         // ClickHouse HTTP interface returns success status for successful operations
@@ -276,8 +272,6 @@ impl SqlBlockBehavior for Clickhouse {
                 .map_err(|e| SqlBlockError::GenericError(e.to_string()))?;
             return Err(SqlBlockError::QueryError(error_text));
         }
-
-        log::info!("Response: {:?}", &response.text().await.unwrap());
 
         Ok(SqlBlockExecutionResult::Statement(
             SqlStatementResult::builder().duration(duration).build(),

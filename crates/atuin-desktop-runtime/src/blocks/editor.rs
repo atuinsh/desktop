@@ -94,12 +94,9 @@ impl BlockBehavior for Editor {
         let mut context = BlockContext::new();
         if self.var_name.is_some() {
             let var_name = self.var_name.as_ref().unwrap();
+            let var_name = resolver.resolve_template(var_name)?;
             let var_value = resolver.resolve_template(&self.code)?;
-            context.insert(DocumentVar::new(
-                var_name.clone(),
-                var_value,
-                self.code.clone(),
-            ));
+            context.insert(DocumentVar::new(var_name, var_value, self.code.clone()));
         }
         Ok(Some(context))
     }

@@ -43,9 +43,10 @@ impl BlockBehavior for Environment {
             return Err("Environment variable name contains invalid characters".into());
         }
 
+        let resolved_name = resolver.resolve_template(&self.name)?;
         let resolved_value = resolver.resolve_template(&self.value)?;
 
-        context.insert(DocumentEnvVar(self.name.clone(), resolved_value));
+        context.insert(DocumentEnvVar(resolved_name, resolved_value));
         Ok(Some(context))
     }
 }
