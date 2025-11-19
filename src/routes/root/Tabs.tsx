@@ -25,11 +25,13 @@ import { Badge } from "@heroui/react";
 export const TabsContext = React.createContext<{
   tab: TabType | null;
   setTitle: (title: string) => void;
+  setPtyCount: (ptyCount: number) => void;
   incrementBadge: (number: number) => void;
   decrementBadge: (number: number) => void;
 }>({
   tab: null,
   setTitle: () => {},
+  setPtyCount: () => {},
   incrementBadge: () => {},
   decrementBadge: () => {},
 });
@@ -41,13 +43,15 @@ export default function Tabs() {
     openTab,
     closeTab,
     setTabTitle,
-    setTabBadge,
     moveTab,
     closeAllTabs,
     closeOtherTabs,
     closeLeftTabs,
     closeRightTabs,
     undoCloseTab,
+    setTabPtyCount,
+    incrementTabBadgeCount,
+    decrementTabBadgeCount,
   } = useStore((state: AtuinState) => ({
     tabs: state.tabs,
     currentTabId: state.currentTabId,
@@ -60,7 +64,9 @@ export default function Tabs() {
     closeRightTabs: state.closeRightTabs,
     undoCloseTab: state.undoCloseTab,
     setTabTitle: state.setTabTitle,
-    setTabBadge: state.setTabBadge,
+    setTabPtyCount: state.setTabPtyCount,
+    incrementTabBadgeCount: state.incrementTabBadgeCount,
+    decrementTabBadgeCount: state.decrementTabBadgeCount,
   }));
 
   const listRef = useRef<HTMLUListElement>(null);
@@ -194,23 +200,14 @@ export default function Tabs() {
             setTitle: (title: string) => {
               setTabTitle(tab.id, title);
             },
+            setPtyCount: (ptyCount: number) => {
+              setTabPtyCount(tab.id, ptyCount);
+            },
             incrementBadge: (number: number = 1) => {
-              let newBadge = tab.badge ? (parseInt(tab.badge) || 0) + number : number;
-              if (newBadge <= 0) {
-                setTabBadge(tab.id, null);
-                return;
-              }
-
-              setTabBadge(tab.id, newBadge.toString());
+              incrementTabBadgeCount(tab.id, number);
             },
             decrementBadge: (number: number = 1) => {
-              let newBadge = tab.badge ? (parseInt(tab.badge) || 0) - number : number;
-              if (newBadge <= 0) {
-                setTabBadge(tab.id, null);
-                return;
-              }
-
-              setTabBadge(tab.id, newBadge.toString());
+              decrementTabBadgeCount(tab.id, number);
             },
           }}
         >

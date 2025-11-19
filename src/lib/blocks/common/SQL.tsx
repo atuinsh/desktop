@@ -2,7 +2,7 @@
 // Intended for databases that have tables
 // postgres, sqlite, etc - not document stores.
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useContext } from "react";
 import {
   Dropdown,
   DropdownTrigger,
@@ -43,8 +43,14 @@ import { useBlockBusRunSubscription } from "@/lib/hooks/useBlockBus";
 import useCodemirrorTheme from "@/lib/hooks/useCodemirrorTheme";
 import { useCodeMirrorValue } from "@/lib/hooks/useCodeMirrorValue";
 import EditableHeading from "@/components/EditableHeading/index";
-import { useBlockExecution, useBlockOutput } from "@/lib/hooks/useDocumentBridge";
+import {
+  useBlockExecution,
+  useBlockOutput,
+  useBlockStart,
+  useBlockStop,
+} from "@/lib/hooks/useDocumentBridge";
 import { SqlBlockExecutionResult } from "@/rs-bindings/SqlBlockExecutionResult";
+import { TabsContext } from "@/routes/root/Tabs";
 
 type QueryCountMessage = {
   type: "queryCount";
@@ -112,6 +118,7 @@ const SQL = ({
   const [queryCount, setQueryCount] = useState<Option<number>>(None);
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
   const [isFullscreenQueryCollapsed, setIsFullscreenQueryCollapsed] = useState<boolean>(false);
+  const { incrementBadge, decrementBadge } = useContext(TabsContext);
 
   const execution = useBlockExecution(block.id);
   useBlockOutput<SqlBlockExecutionResult | QueryCountMessage>(id, (output) => {
@@ -126,6 +133,12 @@ const SQL = ({
         setQueryCount(Some(output.object.count));
       }
     }
+  });
+  useBlockStart(block.id, () => {
+    incrementBadge(1);
+  });
+  useBlockStop(block.id, () => {
+    decrementBadge(1);
   });
 
   const themeObj = useCodemirrorTheme();
