@@ -83,6 +83,8 @@ export default function Runbooks() {
     function syncRunbookIfNotSynced() {
       if (currentRunbookLoading) return;
       if (currentRunbook) return;
+      if (!runbookWorkspace) return;
+      if (!runbookWorkspace.isOnline()) return;
       if (!runbookId) return;
 
       (async function syncRunbook() {

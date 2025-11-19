@@ -2,8 +2,16 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use atuin_desktop_runtime::execution::ExecutionHandle;
+use atuin_desktop_runtime::execution::ExecutionResult;
+use atuin_desktop_runtime::pty::PtyStoreHandle;
+use atuin_desktop_runtime::ssh::SshPoolHandle;
+use atuin_desktop_runtime::workflow::WorkflowEvent;
 use serde_json::Value;
+use tauri::Manager;
 use tauri::{ipc::Channel, AppHandle, State};
+use tokio::sync::broadcast;
+use tokio::sync::oneshot;
 use uuid::Uuid;
 
 use crate::blocks::sqlite_context_storage::SqliteContextStorage;
@@ -84,8 +92,6 @@ pub async fn execute_block(
     let ssh_pool = state.ssh_pool();
     let event_sender = state.event_sender();
 
-    log::debug!("Starting execution of block {block_id} in runbook {runbook_id}");
-
     let mut workspace_context = HashMap::new();
     let workspace_root = if let Some(workspace_manager) = state.workspaces.lock().await.as_ref() {
         workspace_manager
@@ -100,38 +106,23 @@ pub async fn execute_block(
     let mut extra_template_context = HashMap::new();
     extra_template_context.insert("workspace".to_string(), workspace_context);
 
-    // Get execution context
-    let context = document
-        .create_execution_context(
-            block_id,
-            event_sender,
-            Some(ssh_pool),
-            Some(pty_store),
-            Some(extra_template_context),
-        )
-        .await
-        .map_err(|e| format!("Failed to start execution: {}", e))?;
-    // Reset the active context for the block
-    context
-        .clear_active_context(block_id)
-        .await
-        .map_err(|e| format!("Failed to clear active context: {}", e))?;
-
-    // Get the block to execute
-    let block = document
-        .get_block(block_id)
-        .await
-        .ok_or("Failed to execute block: block not found")?;
-
-    // Execute the block
-    let execution_handle = block.execute(context).await.map_err(|e| e.to_string())?;
+    let execution_handle = execute_single_block(
+        runbook_id,
+        document,
+        block_id,
+        event_sender,
+        ssh_pool,
+        pty_store,
+        extra_template_context,
+    )
+    .await?;
 
     // Store execution handle if one was returned
     if let Some(handle) = execution_handle {
         let id = handle.id;
 
         let mut executions = state.block_executions.write().await;
-        executions.insert(id, handle);
+        executions.insert(id, handle.clone());
 
         Ok(Some(id.to_string()))
     } else {
@@ -310,4 +301,197 @@ pub async fn respond_to_block_prompt(
     } else {
         Err("Execution not found".to_string())
     }
+}
+
+#[tauri::command]
+pub async fn start_serial_execution(
+    app: AppHandle,
+    state: State<'_, AtuinState>,
+    document_id: String,
+) -> Result<(), String> {
+    let mut serial_executions = state.serial_executions.write().await;
+    if serial_executions.contains_key(&document_id) {
+        return Err("Serial execution already started".to_string());
+    }
+
+    log::debug!("Starting serial execution for document {document_id}");
+
+    let documents = state.documents.read().await;
+    let document = documents.get(&document_id).ok_or("Document not found")?;
+
+    let pty_store = state.pty_store();
+    let ssh_pool = state.ssh_pool();
+    let event_sender = state.event_sender();
+
+    let block_ids = document
+        .blocks()
+        .await
+        .map_err(|e| format!("Failed to get blocks from document {document_id}: {}", e))?
+        .iter()
+        .map(|b| b.id())
+        .collect::<Vec<_>>();
+
+    let mut workspace_context = HashMap::new();
+    let workspace_root = if let Some(workspace_manager) = state.workspaces.lock().await.as_ref() {
+        workspace_manager
+            .workspace_root(&document_id)
+            .map(|path| path.to_string_lossy().to_string())
+            .unwrap_or_default()
+    } else {
+        String::new()
+    };
+
+    workspace_context.insert("root".to_string(), workspace_root.to_string());
+
+    let (tx, mut rx) = oneshot::channel();
+    serial_executions.insert(document_id.clone(), tx);
+
+    let document = document.clone();
+    tokio::spawn(async move {
+        let mut extra_template_context = HashMap::new();
+        extra_template_context.insert("workspace".to_string(), workspace_context);
+
+        log::trace!("Starting serial execution for document {document_id}; blocks: {block_ids:?}");
+        'outer: for block_id in &block_ids {
+            log::trace!("Executing block {block_id} in document {document_id}");
+            let handle = execute_single_block(
+                document_id.clone(),
+                &document,
+                *block_id,
+                event_sender.clone(),
+                ssh_pool.clone(),
+                pty_store.clone(),
+                extra_template_context.clone(),
+            )
+            .await;
+
+            let app_clone = app.clone();
+            let cleanup = async move |handle_id: Uuid| {
+                let state = app_clone.state::<AtuinState>();
+                let mut executions = state.block_executions.write().await;
+                executions.remove(&handle_id);
+            };
+
+            match handle {
+                Ok(Some(handle)) => {
+                    let mut finished_channel = handle.finished_channel();
+                    let state = app.state::<AtuinState>();
+                    let mut executions = state.block_executions.write().await;
+                    executions.insert(handle.id, handle.clone());
+                    drop(executions);
+
+                    let mut stop_serial_exec = false;
+                    tokio::select! {
+                        _ = finished_channel.changed() => {
+                            match *(finished_channel.borrow_and_update()) {
+                                None => {
+                                    log::debug!("Block {block_id} in document {document_id} still running");
+                                }
+                                Some(ExecutionResult::Success) => {
+                                    log::debug!("Block {block_id} in document {document_id} finished successfully");
+                                }
+                                Some(ExecutionResult::Failure) => {
+                                    log::debug!("Block {block_id} in document {document_id} failed");
+                                    stop_serial_exec = true;
+                                }
+                                Some(ExecutionResult::Cancelled) => {
+                                    log::debug!("Block {block_id} in document {document_id} cancelled");
+                                    stop_serial_exec = true;
+                                }
+                            }
+
+                            log::trace!("Cleaning up execution handle for block {block_id} in document {document_id}");
+                            cleanup(handle.id).await;
+                            if stop_serial_exec {
+                                log::trace!("Stopping serial execution for document {document_id} because block {block_id} failed");
+                                break 'outer;
+                            }
+                        }
+                        _ = &mut rx => {
+                            handle.cancellation_token.cancel();
+                            log::debug!("Serial execution cancelled");
+                            cleanup(handle.id).await;
+                            break 'outer;
+                        }
+                    }
+                }
+                Err(e) => {
+                    log::error!(
+                        "Failed to execute block {block_id} in document {document_id}: {e}"
+                    );
+                    break 'outer;
+                }
+                Ok(None) => {
+                    // Block did not return an execution handle; move to the next block.
+                }
+            }
+        }
+
+        log::trace!("Serial execution for document {document_id} completed; blocks: {block_ids:?}");
+        let state = app.state::<AtuinState>();
+        let mut serial_executions = state.serial_executions.write().await;
+        serial_executions.remove(&document_id);
+
+        log::debug!("Serial execution for document {document_id} completed");
+    });
+
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn stop_serial_execution(
+    state: State<'_, AtuinState>,
+    document_id: String,
+) -> Result<(), String> {
+    let mut serial_executions = state.serial_executions.write().await;
+    if let Some(tx) = serial_executions.remove(&document_id) {
+        tx.send(())
+            .map_err(|_| format!("Failed to send stop signal to serial execution"))?;
+    }
+    Ok(())
+}
+
+async fn execute_single_block(
+    document_id: String,
+    document: &Arc<DocumentHandle>,
+    block_id: Uuid,
+    event_sender: broadcast::Sender<WorkflowEvent>,
+    ssh_pool: SshPoolHandle,
+    pty_store: PtyStoreHandle,
+    extra_template_context: HashMap<String, HashMap<String, String>>,
+) -> Result<Option<ExecutionHandle>, String> {
+    log::debug!("Starting block execution for block {block_id} in document {document_id}");
+
+    // Get execution context
+    let context = document
+        .create_execution_context(
+            block_id,
+            event_sender,
+            Some(ssh_pool),
+            Some(pty_store),
+            Some(extra_template_context),
+        )
+        .await
+        .map_err(|e| format!("Failed to start execution: {}", e))?;
+    // Reset the active context for the block
+    context
+        .clear_active_context(block_id)
+        .await
+        .map_err(|e| format!("Failed to clear active context: {}", e))?;
+
+    // // Ensure that we send the block started event to the client
+    // // so that they have the execution ID to use for cancellation.
+    // context
+    //     .block_started()
+    //     .await
+    //     .map_err(|e| format!("Failed to start block: {}", e))?;
+
+    // Get the block to execute
+    let block = document
+        .get_block(block_id)
+        .await
+        .ok_or("Failed to execute block: block not found")?;
+
+    // Execute the block
+    block.execute(context).await.map_err(|e| e.to_string())
 }

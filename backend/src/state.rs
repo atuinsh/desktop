@@ -6,7 +6,7 @@ use std::{
 };
 use tauri::Emitter;
 use tauri::{async_runtime::RwLock, AppHandle};
-use tokio::sync::{broadcast, mpsc};
+use tokio::sync::{broadcast, mpsc, oneshot};
 use uuid::Uuid;
 
 use crate::{
@@ -41,6 +41,8 @@ pub(crate) struct AtuinState {
 
     // File-based workspaces
     pub workspaces: Arc<tokio::sync::Mutex<Option<WorkspaceManager>>>,
+
+    pub serial_executions: Arc<RwLock<HashMap<String, oneshot::Sender<()>>>>,
 
     executor: Mutex<Option<ExecutorHandle>>,
     event_sender: Mutex<Option<broadcast::Sender<WorkflowEvent>>>,
@@ -89,6 +91,7 @@ impl AtuinState {
             db_instances: Arc::new(DbInstances::new(app_path.clone(), dev_prefix.clone())),
             shared_state: Mutex::new(None),
             workspaces: Arc::new(tokio::sync::Mutex::new(None)),
+            serial_executions: Default::default(),
             executor: Mutex::new(None),
             event_sender: Mutex::new(None),
             gc_event_sender: Mutex::new(None),

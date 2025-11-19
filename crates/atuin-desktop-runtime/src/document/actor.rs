@@ -113,6 +113,11 @@ pub(crate) enum DocumentCommand {
         reply: Reply<()>,
     },
 
+    /// Get all blocks
+    GetBlocks {
+        reply: Reply<Vec<Block>>,
+    },
+
     /// Get a block by ID (for inspection/debugging)
     GetBlock {
         block_id: Uuid,
@@ -364,6 +369,15 @@ impl DocumentHandle {
         rx.await.map_err(|_| DocumentError::ActorSendError)?
     }
 
+    /// Get all blocks
+    pub async fn blocks(&self) -> Result<Vec<Block>, DocumentError> {
+        let (tx, rx) = oneshot::channel();
+        self.command_tx
+            .send(DocumentCommand::GetBlocks { reply: tx })
+            .map_err(|_| DocumentError::ActorSendError)?;
+        rx.await.map_err(|_| DocumentError::ActorSendError)?
+    }
+
     /// Get a block by ID (for debugging/inspection)
     #[allow(unused)]
     pub async fn get_block(&self, block_id: Uuid) -> Option<Block> {
@@ -545,6 +559,15 @@ impl DocumentActor {
                 DocumentCommand::GetBlockState { block_id, reply } => {
                     let state = self.document.get_block_state(&block_id);
                     let _ = reply.send(state);
+                }
+                DocumentCommand::GetBlocks { reply } => {
+                    let blocks = self
+                        .document
+                        .blocks()
+                        .iter()
+                        .map(|b| b.block().clone())
+                        .collect();
+                    let _ = reply.send(Ok(blocks));
                 }
                 DocumentCommand::GetBlock { block_id, reply } => {
                     let block = self

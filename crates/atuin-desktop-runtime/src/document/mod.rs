@@ -264,6 +264,11 @@ impl Document {
         Ok(())
     }
 
+    /// Get all blocks
+    pub fn blocks(&self) -> &[BlockWithContext] {
+        &self.blocks
+    }
+
     /// Get a block's index
     pub fn get_block_index(&self, block_id: &Uuid) -> Option<usize> {
         self.blocks.iter().position(|block| &block.id() == block_id)

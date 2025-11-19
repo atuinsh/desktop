@@ -427,7 +427,7 @@ mod tests {
                 assert_eq!(*block_id, http_id);
                 assert!(matches!(
                     output.lifecycle,
-                    Some(BlockLifecycleEvent::Started)
+                    Some(BlockLifecycleEvent::Started(_))
                 ));
             }
             _ => panic!("Expected BlockOutput message"),

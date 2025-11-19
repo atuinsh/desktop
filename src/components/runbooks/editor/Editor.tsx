@@ -414,12 +414,12 @@ export default function Editor({ runbook, editable, runbookEditor }: EditorProps
       if (!insertionAnchorRef.current) {
         insertionAnchorRef.current = editor.getTextCursorPosition().block.id;
       }
-      
+
       // Insert after the last inserted block, or after anchor if this is the first
       const insertAfterId = lastInsertedBlockRef.current || insertionAnchorRef.current;
-      
+
       const insertedBlocks = editor.insertBlocks([block], insertAfterId, "after");
-      
+
       // Track the last inserted block for the next one
       if (insertedBlocks && insertedBlocks.length > 0) {
         lastInsertedBlockRef.current = insertedBlocks[0].id;
@@ -459,7 +459,7 @@ export default function Editor({ runbook, editable, runbookEditor }: EditorProps
 
     return () => {
       if (serialExecuteRef.current) {
-        BlockBus.get().unsubscribeStartWorkflow(runbook.id, serialExecuteRef.current);
+        serialExecuteRef.current();
       }
     };
   }, [editor, runbook]);
@@ -718,7 +718,9 @@ export default function Editor({ runbook, editable, runbookEditor }: EditorProps
                 insertRunbookLink(editor as any, showRunbookLinkPopup),
                 insertSavedBlock(editor as any, showSavedBlockPopup),
                 insertHorizontalRule(editor as any),
-                ...(copiedBlock.isSome() ? [insertPastedBlock(editor as any, copiedBlock.unwrap())] : []),
+                ...(copiedBlock.isSome()
+                  ? [insertPastedBlock(editor as any, copiedBlock.unwrap())]
+                  : []),
 
                 // Monitoring group
                 insertPrometheus(schema)(editor),

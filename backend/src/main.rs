@@ -538,6 +538,8 @@ fn main() {
             commands::blocks::notify_block_kv_value_changed,
             commands::blocks::reset_runbook_state,
             commands::blocks::respond_to_block_prompt,
+            commands::blocks::start_serial_execution,
+            commands::blocks::stop_serial_execution,
             commands::events::subscribe_to_events,
             commands::updates::check_for_updates,
             commands::workspaces::copy_welcome_workspace,

@@ -15,10 +15,6 @@ import {
 } from "lucide-react";
 import EditableHeading from "@/components/EditableHeading/index.tsx";
 
-import { Terminal } from "@xterm/xterm";
-import { FitAddon } from "@xterm/addon-fit";
-import { WebglAddon } from "@xterm/addon-webgl";
-import "@xterm/xterm/css/xterm.css";
 import { Command } from "@codemirror/view";
 import { ScriptBlock as ScriptBlockType } from "@/lib/workflow/blocks/script.ts";
 import { default as BlockType } from "@/lib/workflow/blocks/block.ts";
@@ -38,7 +34,13 @@ import Block from "@/lib/blocks/common/Block.tsx";
 import InterpreterSelector, { supportedShells } from "@/lib/blocks/common/InterpreterSelector.tsx";
 import { exportPropMatter, cn } from "@/lib/utils";
 import { useBlockLocalState } from "@/lib/hooks/useBlockLocalState";
-import { useBlockContext, useBlockExecution, useBlockOutput } from "@/lib/hooks/useDocumentBridge";
+import {
+  GenericBlockOutput,
+  useBlockContext,
+  useBlockExecution,
+  useBlockOutput,
+} from "@/lib/hooks/useDocumentBridge";
+import Xterm, { XtermHandle } from "@/components/runbooks/editor/components/Xterm";
 
 interface ScriptBlockProps {
   onChange: (val: string) => void;
@@ -75,8 +77,7 @@ const ScriptBlock = ({
   setCollapseCode,
 }: ScriptBlockProps) => {
   const [hasRun, setHasRun] = useState<boolean>(false);
-  const [terminal, setTerminal] = useState<Terminal | null>(null);
-  const [fitAddon, setFitAddon] = useState<FitAddon | null>(null);
+  const xtermRef = useRef<XtermHandle>(null);
   // Track available shells
   const [availableShells, setAvailableShells] = useState<Record<string, boolean>>({});
 
@@ -90,7 +91,6 @@ const ScriptBlock = ({
   }, [script.interpreter, availableShells]);
 
   const colorMode = useStore((state) => state.functionalColorMode);
-  const terminalRef = useRef<HTMLDivElement>(null);
   const [parentBlock, setParentBlock] = useState<BlockType | null>(null);
   const elementRef = useRef<HTMLDivElement>(null);
   const lightModeEditorTheme = useStore((state) => state.lightModeEditorTheme);
@@ -103,14 +103,21 @@ const ScriptBlock = ({
   const blockContext = useBlockContext(script.id);
   const sshParent = blockContext.sshHost;
 
-  useBlockOutput<void>(script.id, (output) => {
+  const onBlockOutput = useCallback(async (output: GenericBlockOutput<void>) => {
+    if (output.lifecycle?.type === "started") {
+      setHasRun(true);
+      xtermRef.current?.clear();
+    }
+
     if (output.stdout) {
-      terminal?.write(output.stdout);
+      xtermRef.current?.write(output.stdout);
     }
     if (output.stderr) {
-      terminal?.write(output.stderr);
+      xtermRef.current?.write(output.stderr);
     }
-  });
+  }, []);
+
+  useBlockOutput<void>(script.id, onBlockOutput);
 
   // Class name for SSH indicator styling based on connection status
   const blockBorderClass = useMemo(() => {
@@ -187,51 +194,6 @@ const ScriptBlock = ({
     checkShellsAvailable();
   }, [supportedShells]);
 
-  // Initialize terminal lazily when needed
-  const initializeTerminal = useCallback(async () => {
-    if (terminal || !script.outputVisible) return terminal;
-
-    const term = new Terminal({
-      fontFamily: "FiraCode, monospace",
-      fontSize: 14,
-      convertEol: true,
-    });
-
-    const fit = new FitAddon();
-    term.loadAddon(fit);
-
-    // Add WebGL support if enabled in settings
-    const useWebGL = await Settings.terminalGL();
-    if (useWebGL) {
-      try {
-        const webglAddon = new WebglAddon();
-        term.loadAddon(webglAddon);
-      } catch (e) {
-        console.warn("WebGL addon failed to load", e);
-      }
-    }
-
-    setTerminal(term);
-    setFitAddon(fit);
-
-    return term;
-  }, [terminal, script.outputVisible]);
-
-  // Handle terminal attachment
-  useEffect(() => {
-    if (!terminal || !terminalRef.current || !script.outputVisible) return;
-
-    terminal.open(terminalRef.current);
-    fitAddon?.fit();
-
-    const handleResize = () => fitAddon?.fit();
-    window.addEventListener("resize", handleResize);
-
-    return () => {
-      window.removeEventListener("resize", handleResize);
-    };
-  }, [terminal, fitAddon, script.outputVisible]);
-
   // handle dependency change
   useEffect(() => {
     if (!script.dependency.parent) {
@@ -250,27 +212,11 @@ const ScriptBlock = ({
     }
   }, [script.dependency]);
 
-  // Clean up terminal when output becomes hidden
-  useEffect(() => {
-    if (!script.outputVisible && terminal) {
-      terminal.dispose();
-      setTerminal(null);
-      setFitAddon(null);
-    }
-  }, [script.outputVisible, terminal]);
-
   const handlePlay = useCallback(async () => {
     if (blockExecution.isRunning) return;
 
-    // Initialize terminal only when needed and output is visible
-    const currentTerminal = script.outputVisible ? await initializeTerminal() : null;
-    if (script.outputVisible && !currentTerminal) return;
-
-    setHasRun(true);
-    currentTerminal?.clear();
-
     await blockExecution.execute();
-  }, [script, initializeTerminal, editor.document]);
+  }, [blockExecution]);
 
   useBlockBusRunSubscription(script.id, handlePlay);
   useBlockBusStopSubscription(script.id, blockExecution.cancel);
@@ -302,12 +248,10 @@ const ScriptBlock = ({
         <>
           <div className="flex flex-row justify-between w-full">
             <h1 className="text-default-700 font-semibold">
-              {
-                <EditableHeading
-                  initialText={script.name || "Script"}
-                  onTextChange={(text) => setName(text)}
-                />
-              }
+              <EditableHeading
+                initialText={script.name || "Script"}
+                onTextChange={(text) => setName(text)}
+              />
             </h1>
 
             <div className="flex flex-row items-center gap-2" ref={elementRef}>
@@ -344,7 +288,6 @@ const ScriptBlock = ({
               >
                 <Button
                   onPress={() => {
-                    setHasRun(false);
                     setOutputVisible(!script.outputVisible);
                   }}
                   size="sm"
@@ -426,7 +369,11 @@ const ScriptBlock = ({
         </>
       }
     >
-      {script.outputVisible && <div ref={terminalRef} className="min-h-[200px] w-full" />}
+      <Xterm
+        ref={xtermRef}
+        className="min-h-[200px] w-full"
+        visible={script.outputVisible && hasRun}
+      />
     </Block>
   );
 };

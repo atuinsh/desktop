@@ -239,19 +239,22 @@ export default function Topbar(props: TopbarProps) {
           tooltip="Run this runbook in serial mode (top-to-bottom)"
           tooltipPlacement="bottom"
           onPlay={() => {
+            let unsub: (() => void) | null = null;
             track_event("runbooks.serial.execute");
-            BlockBus.get().startWorkflow(runbook.id);
-            startSerialExecution(runbook.id);
+            invoke("start_serial_execution", { documentId: runbook.id });
+            // BlockBus.get().startWorkflow(runbook.id);
+            // startSerialExecution(runbook.id);
 
-            const onStop = () => {
-              stopSerialExecution(runbook.id);
-              BlockBus.get().unsubscribeWorkflowFinished(runbook.id, onStop);
-            };
+            // const onStop = () => {
+            //   stopSerialExecution(runbook.id);
+            //   unsub?.();
+            // };
 
-            BlockBus.get().subscribeWorkflowFinished(runbook.id, onStop);
+            // unsub = BlockBus.get().subscribeWorkflowFinished(runbook.id, onStop);
+            // return unsub;
           }}
           onStop={async () => {
-            await invoke("workflow_stop", { id: runbook.id });
+            await invoke("stop_serial_execution", { documentId: runbook.id });
           }}
         />
       </div>

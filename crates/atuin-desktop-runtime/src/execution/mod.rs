@@ -12,7 +12,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
-use tokio::sync::{broadcast, oneshot, Mutex, RwLock};
+use tokio::sync::{broadcast, oneshot, watch, Mutex, RwLock};
 use ts_rs::TS;
 use typed_builder::TypedBuilder;
 use uuid::Uuid;
@@ -24,6 +24,12 @@ use crate::events::{EventBus, GCEvent};
 use crate::pty::PtyStoreHandle;
 use crate::ssh::SshPoolHandle;
 use crate::workflow::WorkflowEvent;
+
+pub enum ExecutionResult {
+    Success,
+    Failure,
+    Cancelled,
+}
 
 /// Context provided to blocks during execution
 ///
@@ -64,6 +70,11 @@ impl ExecutionContext {
     /// Get the execution handle
     pub fn handle(&self) -> ExecutionHandle {
         self.handle.clone()
+    }
+
+    /// Subscribe to the finish event
+    pub fn finished_channel(&self) -> watch::Receiver<Option<ExecutionResult>> {
+        self.handle().finished_channel()
     }
 
     /// Emit a Workflow event
@@ -192,7 +203,7 @@ impl ExecutionContext {
             .send_output(
                 BlockOutput::builder()
                     .block_id(self.block_id)
-                    .lifecycle(BlockLifecycleEvent::Started)
+                    .lifecycle(BlockLifecycleEvent::Started(self.handle.id))
                     .build(),
             )
             .await;
@@ -220,6 +231,11 @@ impl ExecutionContext {
                     .build(),
             )
             .await;
+        let _ = self
+            .handle()
+            .on_finish
+            .0
+            .send(Some(ExecutionResult::Success));
         Ok(())
     }
 
@@ -239,6 +255,11 @@ impl ExecutionContext {
                     .build(),
             )
             .await;
+        let _ = self
+            .handle()
+            .on_finish
+            .0
+            .send(Some(ExecutionResult::Failure));
         Ok(())
     }
 
@@ -256,6 +277,11 @@ impl ExecutionContext {
                     .build(),
             )
             .await;
+        let _ = self
+            .handle()
+            .on_finish
+            .0
+            .send(Some(ExecutionResult::Cancelled));
         Ok(())
     }
 
@@ -362,6 +388,10 @@ pub struct ExecutionHandle {
     pub output_variable: Option<String>,
     /// Callbacks for client prompt responses
     pub prompt_callbacks: Arc<Mutex<HashMap<Uuid, oneshot::Sender<ClientPromptResult>>>>,
+    pub on_finish: (
+        watch::Sender<Option<ExecutionResult>>,
+        watch::Receiver<Option<ExecutionResult>>,
+    ),
 }
 
 impl ExecutionHandle {
@@ -374,6 +404,7 @@ impl ExecutionHandle {
             status: Arc::new(RwLock::new(ExecutionStatus::Running)),
             output_variable: None,
             prompt_callbacks: Arc::new(Mutex::new(HashMap::new())),
+            on_finish: watch::channel(None),
         }
     }
 
@@ -391,6 +422,10 @@ impl ExecutionHandle {
 
     pub async fn set_cancelled(&self) {
         *self.status.write().await = ExecutionStatus::Cancelled;
+    }
+
+    pub fn finished_channel(&self) -> watch::Receiver<Option<ExecutionResult>> {
+        self.on_finish.1.clone()
     }
 }
 
@@ -448,7 +483,7 @@ pub struct BlockErrorData {
 #[ts(tag = "type", content = "data", export)]
 #[serde(rename_all = "camelCase", tag = "type", content = "data")]
 pub enum BlockLifecycleEvent {
-    Started,
+    Started(Uuid),
     Finished(BlockFinishedData),
     Cancelled,
     Error(BlockErrorData),

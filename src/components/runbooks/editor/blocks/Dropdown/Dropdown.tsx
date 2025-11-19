@@ -265,7 +265,6 @@ const Dropdown = ({
   const { isOpen, onOpen, onOpenChange } = useDisclosure();
   const [comboboxOpen, setComboboxOpen] = useState(false);
 
-  const context = useBlockContext(id);
   const dropdownState = useBlockState<DropdownState>(id);
   const execution = useBlockExecution(id);
 

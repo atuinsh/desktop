@@ -43,6 +43,8 @@ export class DocumentBridge {
 
   @autobind
   private async onMessage(message: DocumentBridgeMessage) {
+    this.logger.debug("Received message from document bridge", message);
+
     switch (message.type) {
       case "blockContextUpdate":
         this.emitter.emit(`block_context:update:${message.data.blockId}`, message.data.context);
@@ -266,6 +268,9 @@ export function useBlockExecution(blockId: string): ClientExecutionHandle {
         break;
       case "started":
         setLifecycle("running");
+        if (output.lifecycle?.data) {
+          setExecutionId(output.lifecycle.data);
+        }
         setError(null);
         break;
 
