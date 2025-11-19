@@ -28,10 +28,6 @@ import { Command } from "@codemirror/view";
 import { TerminalBlock } from "./schema.ts";
 import { logExecution } from "@/lib/exec_log.ts";
 import { DependencySpec } from "@/lib/workflow/dependency.ts";
-import {
-  useBlockBusRunSubscription,
-  useBlockBusStopSubscription,
-} from "@/lib/hooks/useBlockBus.ts";
 import Terminal from "./components/terminal.tsx";
 import Block from "../common/Block.tsx";
 import PlayButton from "../common/PlayButton.tsx";
@@ -214,9 +210,6 @@ export const RunBlock = ({
 
     return true;
   }, [execution.isRunning]);
-
-  useBlockBusRunSubscription(terminal.id, handlePlay);
-  useBlockBusStopSubscription(terminal.id, handleStop);
 
   // Handle ESC key to exit fullscreen and prevent body scroll
   useEffect(() => {

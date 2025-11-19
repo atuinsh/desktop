@@ -31,7 +31,6 @@ import { PromLineChart } from "./lineChart";
 import { Settings } from "@/state/settings";
 import { PrometheusBlock as PrometheusBlockType } from "@/lib/workflow/blocks/prometheus";
 import { DependencySpec } from "@/lib/workflow/dependency";
-import { useBlockBusRunSubscription } from "@/lib/hooks/useBlockBus";
 import track_event from "@/tracking";
 import useCodemirrorTheme from "@/lib/hooks/useCodemirrorTheme";
 import { useCodeMirrorValue } from "@/lib/hooks/useCodeMirrorValue";
@@ -117,20 +116,11 @@ const Prometheus = ({
   const isRunning = execution.isRunning;
 
   useBlockOutput<PrometheusQueryResult>(prometheus.id, (output) => {
-    console.log("output", output);
-
     if (output.object) {
       // Backend returns PrometheusQueryResult in the object field
       const result = output.object as PrometheusQueryResult;
       setData(result.series as any[]);
     }
-  });
-
-  // Handle block bus run events
-  useBlockBusRunSubscription(prometheus.id, () => {
-    // Backend handles execution, just clear any previous errors
-    // TODO
-    // setError(null);
   });
 
   useInterval(

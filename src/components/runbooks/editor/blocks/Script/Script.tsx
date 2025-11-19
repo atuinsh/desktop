@@ -21,10 +21,6 @@ import { default as BlockType } from "@/lib/workflow/blocks/block.ts";
 import { convertBlocknoteToAtuin } from "@/lib/workflow/blocks/convert.ts";
 import { DependencySpec } from "@/lib/workflow/dependency.ts";
 import BlockBus from "@/lib/workflow/block_bus.ts";
-import {
-  useBlockBusRunSubscription,
-  useBlockBusStopSubscription,
-} from "@/lib/hooks/useBlockBus.ts";
 import track_event from "@/tracking";
 import { invoke } from "@tauri-apps/api/core";
 import { Settings } from "@/state/settings.ts";
@@ -224,9 +220,6 @@ const ScriptBlock = ({
 
     await blockExecution.execute();
   }, [blockExecution]);
-
-  useBlockBusRunSubscription(script.id, handlePlay);
-  useBlockBusStopSubscription(script.id, blockExecution.cancel);
 
   const handleCmdEnter: Command = useCallback(() => {
     if (!blockExecution.isRunning) {

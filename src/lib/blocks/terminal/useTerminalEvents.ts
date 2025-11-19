@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { addToast } from "@heroui/react";
 import { logExecution } from "@/lib/exec_log.ts";
-import BlockBus from "@/lib/workflow/block_bus.ts";
 import { TerminalBlock } from "./schema.ts";
 
 export const useTerminalEvents = (terminalData: any, terminal: TerminalBlock) => {
@@ -29,12 +28,11 @@ export const useTerminalEvents = (terminalData: any, terminal: TerminalBlock) =>
       setIsRunning(false);
       setExitCode(exitCode);
       setCommandDuration(duration);
-      
+
       // Log execution for history
       if (duration) {
         const startTime = Date.now() * 1000000 - duration * 1000;
         logExecution(terminal, terminal.typeName, startTime, Date.now() * 1000000, "");
-        BlockBus.get().blockFinished(terminal);
       }
     };
 
@@ -54,17 +52,17 @@ export const useTerminalEvents = (terminalData: any, terminal: TerminalBlock) =>
     };
 
     // Set up event listeners
-    terminalData.on('execution_started', handleExecutionStarted);
-    terminalData.on('execution_finished', handleExecutionFinished);
-    terminalData.on('execution_cancelled', handleExecutionCancelled);
-    terminalData.on('execution_error', handleExecutionError);
+    terminalData.on("execution_started", handleExecutionStarted);
+    terminalData.on("execution_finished", handleExecutionFinished);
+    terminalData.on("execution_cancelled", handleExecutionCancelled);
+    terminalData.on("execution_error", handleExecutionError);
 
     return () => {
       // Clean up event listeners
-      terminalData.off('execution_started', handleExecutionStarted);
-      terminalData.off('execution_finished', handleExecutionFinished);
-      terminalData.off('execution_cancelled', handleExecutionCancelled);
-      terminalData.off('execution_error', handleExecutionError);
+      terminalData.off("execution_started", handleExecutionStarted);
+      terminalData.off("execution_finished", handleExecutionFinished);
+      terminalData.off("execution_cancelled", handleExecutionCancelled);
+      terminalData.off("execution_error", handleExecutionError);
     };
   }, [terminalData, terminal]);
 

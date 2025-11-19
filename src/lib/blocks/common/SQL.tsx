@@ -39,7 +39,6 @@ import Block from "./Block";
 import { useBlockNoteEditor } from "@blocknote/react";
 import { cn, toSnakeCase } from "@/lib/utils";
 import { DependencySpec } from "@/lib/workflow/dependency";
-import { useBlockBusRunSubscription } from "@/lib/hooks/useBlockBus";
 import useCodemirrorTheme from "@/lib/hooks/useCodemirrorTheme";
 import { useCodeMirrorValue } from "@/lib/hooks/useCodeMirrorValue";
 import EditableHeading from "@/components/EditableHeading/index";
@@ -170,8 +169,6 @@ const SQL = ({
   const handlePlay = async () => {
     execution.execute();
   };
-
-  useBlockBusRunSubscription(block.id, handlePlay);
 
   useInterval(
     () => {

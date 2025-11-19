@@ -13,7 +13,6 @@ import RequestHeaders from "./components/RequestHeaders";
 import { useStore } from "@/state/store";
 import { HttpBlock as HttpBlockType, HttpVerb, HttpHeaders } from "./schema";
 import { DependencySpec } from "@/lib/workflow/dependency";
-import { useBlockBusRunSubscription } from "@/lib/hooks/useBlockBus";
 import useCodemirrorTheme from "@/lib/hooks/useCodemirrorTheme";
 import { useCodeMirrorValue } from "@/lib/hooks/useCodeMirrorValue";
 import PlayButton from "../common/PlayButton";
@@ -63,8 +62,6 @@ export const Http = ({
   const onPlay = useCallback(async () => {
     execution.execute();
   }, []);
-
-  useBlockBusRunSubscription(http.id, onPlay);
 
   const themeObj = useCodemirrorTheme();
   const codeMirrorValue = useCodeMirrorValue(body, setBody);
