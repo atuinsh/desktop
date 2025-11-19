@@ -337,7 +337,7 @@ const Dropdown = ({
             onOpenChange={(open) => {
               setComboboxOpen(open);
               // Refresh options when dropdown is opened
-              if (open && (optionsType === "variable" || optionsType === "command")) {
+              if (open) {
                 execution?.execute();
               }
             }}
