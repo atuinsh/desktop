@@ -43,6 +43,7 @@ import { generateBlocks } from "./lib/ai/block_generator";
 import WorkspaceManager from "./lib/workspaces/manager";
 import Root from "./routes/root/Root";
 import RunbookBus from "./lib/app/runbook_bus";
+import { grandCentral } from "./lib/events/grand_central";
 
 (async () => {
   try {
@@ -102,6 +103,7 @@ DevConsole.addAppObject("invoke", invoke)
   .addAppObject("BlockBus", BlockBus.get())
   .addAppObject("SharedStateManager", SharedStateManager)
   .addAppObject("generateBlocks", generateBlocks)
+  .addAppObject("grandCentral", grandCentral)
   .addAppObject("models", {
     Runbook,
     Workspace,
@@ -173,6 +175,12 @@ async function setup() {
   invoke<void>("reset_workspaces");
   const currentVersion = await invoke<string>("get_app_version");
   useStore.getState().setCurrentVersion(currentVersion);
+  try {
+    await grandCentral.startListening();
+  } catch (err) {
+    console.warn("Failed to start Grand Central:", err);
+    console.warn("Note: this is normal after a page refresh");
+  }
 }
 
 (async () => {
