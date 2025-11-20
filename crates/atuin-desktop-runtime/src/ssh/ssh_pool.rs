@@ -451,7 +451,7 @@ impl SshPool {
                             log::trace!("SSH connection to {host} with username {username} cancelled");
                             let _ = connect_cancel_tx.send(());
                             let _ = pool_guard.disconnect(&host, &username).await;
-                            Err(SshPoolConnectionError::Cancelled.into())
+                            Err(SshPoolConnectionError::Cancelled)
                         }
                     };
                     drop(pool_guard);
