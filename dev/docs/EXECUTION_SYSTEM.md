@@ -10,8 +10,6 @@ This document provides a comprehensive overview of how the Atuin Desktop backend
 - [Context Management](#context-management)
 - [Serial Execution](#serial-execution)
 - [Cancellation & Error Handling](#cancellation--error-handling)
-- [Developer Guide](#developer-guide)
-- [Examples & Patterns](#examples--patterns)
 
 ## Architecture Overview
 
@@ -55,8 +53,6 @@ Some blocks can maintain their own internal state that exists independently from
 - **Persistent during runtime**: State survives document updates and context rebuilds
 - **Accessible on frontend**: Blocks can use `useBlockState(block_id)` to access and react to state changes
 
-**Example use case**: A dropdown block could use state to track the currently selected option in the UI, which doesn't need to be persisted or affect other blocks.
-
 ## Core Components
 
 ### BlockBehavior Trait
@@ -94,8 +90,8 @@ pub trait BlockBehavior: Sized + Send + Sync {
 **Key Methods:**
 - `into_block()` - Converts the block into the generic `Block` enum
 - `id()` - Returns the unique identifier (UUID) for this block instance
-- `passive_context()` - For context blocks, returns the context this block provides (evaluated on document changes)
-- `execute()` - For execution blocks, performs the actual block execution (returns immediately with a handle)
+- `passive_context()` - Returns the passive context this block provides (evaluated on document changes)
+- `execute()` - Performs the actual block execution (returns immediately with a handle)
 - `create_state()` - Optionally returns initial state for the block (called when block is created)
 
 ### BlockState Trait
@@ -113,9 +109,9 @@ pub trait BlockState: erased_serde::Serialize + Send + Sync + std::fmt::Debug + 
 ```
 
 **Purpose:**
-- **Runtime state management**: Store block-specific state that doesn't belong in context (e.g., UI state, editor content)
+- **Runtime state management**: Store block-specific state that doesn't belong in context
 - **Frontend communication**: State changes are automatically serialized and sent to frontend via `BlockStateChanged` messages
-- **Type-safe access**: Use the `BlockStateExt` trait to downcast to concrete state types
+- **Type-safe access**: Uses the `BlockStateExt` trait to downcast to concrete state types
 
 **Helper Trait:**
 ```rust
@@ -154,23 +150,12 @@ impl BlockBehavior for Dropdown {
 
 **Accessing and Updating State:**
 
-Blocks can access and modify their state through `BlockWithContext`:
+Blocks can access and modify their state through `ExecutionContext`:
 
 ```rust
-// Get immutable reference to state
-if let Some(state) = block_with_context.state() {
-    if let Some(dropdown_state) = state.downcast_ref::<DropdownBlockState>() {
-        // Use dropdown_state
-    }
-}
-
-// Get mutable reference to state
-if let Some(state) = block_with_context.state_mut() {
-    if let Some(dropdown_state) = state.downcast_mut::<DropdownBlockState>() {
-        dropdown_state.selected_option = Some("option1".to_string());
-        // State change will be sent to frontend automatically
-    }
-}
+execution_context.update_block_state::<DropdownState, _>(self.id, |state| {
+    state.resolved = ...;
+}).await?;
 ```
 
 ### ExecutionContext
@@ -197,8 +182,6 @@ pub struct ExecutionContext {
 - `context_resolver` - Wrapped in Arc, provides access to variables, cwd, env vars, ssh_host via `resolve_template()` and getter methods
 - `document_handle` - (Private) Handle to the document actor; use helper methods (`update_active_context`, etc.) instead of direct access
 - `handle` - The execution handle for this block execution
-
-**Note:** Most fields are marked `pub(crate)` to encourage use of the helper methods rather than direct field access. This provides better encapsulation and ensures proper event emission.
 
 **Helper Methods:**
 The ExecutionContext provides several convenience methods to simplify block implementations:
@@ -234,7 +217,7 @@ The ExecutionContext provides several convenience methods to simplify block impl
 **Lifecycle:**
 1. **Created** by `Document::build_execution_context()` when a block execution is requested
 2. **Contains** a snapshot of the cumulative context from all blocks above the executing block
-3. **Used** by execution blocks to resolve templates and access context values
+3. **Used** by blocks to resolve templates and access context values
 4. **Discarded** after execution completes
 
 ### ExecutionHandle
@@ -247,7 +230,6 @@ pub struct ExecutionHandle {
     pub block_id: Uuid,                              // ID of the block being executed
     pub cancellation_token: CancellationToken,       // For graceful cancellation
     pub status: Arc<RwLock<ExecutionStatus>>,        // Current execution status
-    pub output_variable: Option<String>,             // Output variable name (if any)
     pub prompt_callbacks: Arc<Mutex<HashMap<Uuid, oneshot::Sender<ClientPromptResult>>>>, // Callbacks for client prompts
 }
 ```
@@ -256,7 +238,6 @@ pub struct ExecutionHandle {
 - **Async Management**: Allows tracking of long-running operations
 - **Cancellation**: Provides mechanism to stop execution gracefully
 - **Status Monitoring**: Frontend can poll execution status
-- **Output Capture**: Links execution results to variables for use in subsequent blocks
 - **Client Prompts**: Manages callbacks for prompting the client for input (e.g., passwords, confirmations)
 
 **Helper Methods:**
@@ -278,8 +259,6 @@ pub enum ExecutionStatus {
     Cancelled,
 }
 ```
-
-**Note:** In earlier versions, `Success` contained the output value, but this is now stored in the block's active context instead, allowing it to persist across app restarts.
 
 ### Context System Components
 
@@ -321,10 +300,11 @@ Resolves templates and provides access to cumulative context from blocks above:
 
 ```rust
 pub struct ContextResolver {
-    vars: HashMap<String, String>,      // Variables from Var blocks
-    cwd: String,                        // Working directory from Directory blocks
-    env_vars: HashMap<String, String>,  // Environment variables from Environment blocks
-    ssh_host: Option<String>,           // SSH host from Host/SshConnect blocks
+    vars: HashMap<String, String>,                 // Variables from Var blocks
+    cwd: String,                                   // Working directory from Directory blocks
+    env_vars: HashMap<String, String>,             // Environment variables from Environment blocks
+    ssh_host: Option<String>,                      // SSH host from Host/SshConnect blocks
+    extra_template_context: HashMap<String, Value> // Extra template context for blocks
 }
 ```
 
@@ -334,6 +314,7 @@ A serializable snapshot of context for the frontend:
 ```rust
 pub struct ResolvedContext {
     pub variables: HashMap<String, String>,
+    pub variables_sources: HashMap<String, String>,
     pub cwd: String,
     pub env_vars: HashMap<String, String>,
     pub ssh_host: Option<String>,
@@ -508,15 +489,6 @@ where
 }
 ```
 
-**Benefits:**
-- SQL blocks (Postgres, MySQL, ClickHouse, SQLite) automatically get:
-  - Connection management
-  - Timeout handling
-  - Cancellation support
-  - Lifecycle event handling
-  - SQL parsing and multiple query support
-- Only need to implement database-specific connection and execution logic
-
 **BlockExecutionError Trait**
 
 To preserve error type information while providing infrastructure error handling, all query block errors must implement `BlockExecutionError`:
@@ -591,13 +563,6 @@ QueryBlockBehavior (query-executing blocks)
            ├─ ClickHouse
            └─ SQLite
 ```
-
-**Architecture Benefits:**
-- **Code reuse**: Common execution logic implemented once in `QueryBlockBehavior::execute_query_block()`
-- **Type safety**: Errors preserve semantic meaning (not converted to strings)
-- **Consistency**: All query blocks behave uniformly (timeouts, cancellation, lifecycle)
-- **Extensibility**: Easy to add new query-executing blocks
-- **Maintainability**: SQL-specific logic isolated in `SqlBlockBehavior`
 
 ### Supporting Traits
 
@@ -920,7 +885,7 @@ if let Some(block) = self.document.get_block_mut(&block_id) {
 ```
 
 **State vs Context:**
-- **State**: UI-specific data, editor content, temporary runtime values; sent to frontend on changes
+- **State**: Block-specific data, temporary runtime values, etc; sent to frontend on changes
 - **Context**: Execution environment (variables, cwd, env vars); affects blocks below; can be persisted
 - State is NOT persisted to disk and is NOT included in context resolution for other blocks
 
@@ -1235,385 +1200,3 @@ useEffect(() => {
 1. **Handler level**: Errors are captured and converted to `ExecutionStatus::Failed`
 2. **Status updates**: Error messages are stored in the ExecutionHandle
 3. **Frontend notification**: Errors are sent via output channels, lifecycle events, and Grand Central events
-
-## Developer Guide
-
-### Adding New Execution Blocks
-
-1. **Define the block struct** in `backend/src/runtime/blocks/my_block.rs`:
-```rust
-use async_trait::async_trait;
-use serde::{Deserialize, Serialize};
-use typed_builder::TypedBuilder;
-use uuid::Uuid;
-use crate::runtime::blocks::{Block, BlockBehavior, FromDocument};
-use crate::runtime::blocks::handler::{ExecutionContext, ExecutionHandle};
-
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, TypedBuilder)]
-#[serde(rename_all = "camelCase")]
-pub struct MyBlock {
-    #[builder(setter(into))]
-    pub id: Uuid,
-
-    #[builder(setter(into))]
-    pub name: String,
-
-    // ... other fields
-}
-
-impl FromDocument for MyBlock {
-    fn from_document(block_data: &serde_json::Value) -> Result<Self, String> {
-        let id = block_data.get("id")
-            .and_then(|v| v.as_str())
-            .and_then(|s| Uuid::parse_str(s).ok())
-            .ok_or("Invalid or missing id")?;
-
-        let props = block_data.get("props")
-            .and_then(|p| p.as_object())
-            .ok_or("Invalid or missing props")?;
-
-        // Extract fields from props
-        Ok(MyBlock::builder()
-            .id(id)
-            .name(props.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string())
-            .build())
-    }
-}
-
-#[async_trait]
-impl BlockBehavior for MyBlock {
-    fn into_block(self) -> Block {
-        Block::MyBlock(self)
-    }
-
-    fn id(&self) -> Uuid {
-        self.id
-    }
-
-    async fn execute(
-        self,
-        context: ExecutionContext,
-    ) -> Result<Option<ExecutionHandle>, Box<dyn std::error::Error + Send + Sync>> {
-        let context_clone = context.clone();
-
-        // Spawn background task
-        tokio::spawn(async move {
-            // Mark block as started - sends events to Grand Central, workflow bus, and frontend
-            let _ = context.block_started().await;
-
-            // Do the actual work
-            // Use context.context_resolver to access cwd, env vars, variables, etc.
-            let cwd = context.context_resolver.cwd();
-            let vars = context.context_resolver.vars();
-
-            // Resolve template strings if needed
-            let template_result = context.context_resolver.resolve_template("{{ var.name }}");
-
-            // Example: Store result in active context
-            let result = "some output";
-            let block_id = context.block_id;
-            let _ = context.update_active_context(block_id, |ctx| {
-                ctx.insert(BlockExecutionOutput {
-                    exit_code: Some(0),
-                    stdout: Some(result.to_string()),
-                    stderr: None,
-                });
-            }).await;
-
-            // Mark block as finished - sends appropriate events
-            let _ = context.block_finished(Some(0), true).await;
-        });
-
-        Ok(Some(context_clone.handle()))
-    }
-}
-```
-
-2. **Add to Block enum** in `backend/src/runtime/blocks/mod.rs`:
-```rust
-pub enum Block {
-    // ... existing variants
-    MyBlock(my_block::MyBlock),
-}
-```
-
-3. **Add to Block methods** in `backend/src/runtime/blocks/mod.rs`:
-```rust
-impl Block {
-    pub fn id(&self) -> Uuid {
-        match self {
-            // ... existing cases
-            Block::MyBlock(my_block) => my_block.id,
-        }
-    }
-
-    pub fn from_document(block_data: &serde_json::Value) -> Result<Self, String> {
-        match block_type {
-            // ... existing cases
-            "my-block" => Ok(Block::MyBlock(MyBlock::from_document(block_data)?)),
-            // ...
-        }
-    }
-
-    pub async fn passive_context(&self, ...) -> Result<Option<BlockContext>, _> {
-        match self {
-            // ... existing cases
-            Block::MyBlock(my_block) => my_block.passive_context(resolver, block_local_value_provider).await,
-        }
-    }
-
-    pub async fn execute(self, context: ExecutionContext) -> Result<Option<ExecutionHandle>, _> {
-        match self {
-            // ... existing cases
-            Block::MyBlock(my_block) => my_block.execute(context).await,
-        }
-    }
-}
-```
-
-4. **Add module to** `backend/src/runtime/blocks/mod.rs`:
-```rust
-pub(crate) mod my_block;
-```
-
-### Adding New Context Blocks
-
-Follow the pattern in `backend/src/runtime/blocks/directory.rs` or `environment.rs`:
-
-1. **Create module** `backend/src/runtime/blocks/my_context.rs`
-2. **Define block struct** with `TypedBuilder`, `Serialize`, `Deserialize`, implementing `FromDocument` and `BlockBehavior`
-3. **Define a context type** (e.g., `pub struct MyContextValue(pub String);`) to store in `BlockContext`
-4. **Implement `typetag::serde`** for your context type if it needs to be serialized (for active context persistence)
-5. **Implement `passive_context()`** to return your context value
-6. **Update `ContextResolver`** in `backend/src/runtime/blocks/document/block_context.rs` to accumulate your context type
-7. **Add comprehensive tests** covering edge cases
-
-Example:
-```rust
-use crate::runtime::blocks::{Block, BlockBehavior, FromDocument};
-use crate::runtime::blocks::document::block_context::{BlockContext, ContextResolver};
-
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, TypedBuilder)]
-pub struct MyContext {
-    pub id: Uuid,
-    pub value: String,
-}
-
-// Define a type to store in BlockContext
-pub struct MyContextValue(pub String);
-
-impl FromDocument for MyContext {
-    // ... parse from JSON
-}
-
-#[async_trait]
-impl BlockBehavior for MyContext {
-    fn into_block(self) -> Block {
-        Block::MyContext(self)
-    }
-
-    async fn passive_context(
-        &self,
-        resolver: &ContextResolver,
-        _: Option<&dyn BlockLocalValueProvider>,
-    ) -> Result<Option<BlockContext>, Box<dyn std::error::Error + Send + Sync>> {
-        let mut context = BlockContext::new();
-        let resolved_value = resolver.resolve_template(&self.value)?;
-        context.insert(MyContextValue(resolved_value));
-        Ok(Some(context))
-    }
-}
-```
-
-Then update `ContextResolver::push_block()` to accumulate values of type `MyContextValue`.
-
-### Adding Blocks with State
-
-If your block needs to maintain state that should be communicated to the frontend (but doesn't affect other blocks):
-
-1. **Define a state struct** that implements `BlockState`:
-```rust
-use serde::{Deserialize, Serialize};
-use crate::context::BlockState;
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct MyBlockState {
-    pub some_field: String,
-    pub another_field: Option<i32>,
-}
-
-impl BlockState for MyBlockState {
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-
-    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
-        self
-    }
-}
-```
-
-2. **Implement `create_state()` in your BlockBehavior**:
-```rust
-impl BlockBehavior for MyBlock {
-    fn create_state(&self) -> Option<Box<dyn BlockState>> {
-        Some(Box::new(MyBlockState {
-            some_field: "initial value".to_string(),
-            another_field: None,
-        }))
-    }
-
-    // ... other methods
-}
-```
-
-3. **Update state during execution or in response to commands**:
-```rust
-// In a document command handler:
-if let Some(block) = self.document.get_block_mut(&block_id) {
-    if let Some(state) = block.state_mut() {
-        if let Some(my_state) = state.downcast_mut::<MyBlockState>() {
-            my_state.some_field = "updated value".to_string();
-            // This will send BlockStateChanged to frontend
-            self.document.emit_state_changed(block_id, state).await?;
-        }
-    }
-}
-```
-
-4. **Access state on the frontend** using `useBlockState`:
-```typescript
-const state = useBlockState<MyBlockState>(blockId);
-// state will update whenever the backend sends BlockStateChanged
-```
-
-**Important notes:**
-- State is NOT persisted to disk (unlike active context)
-- State does NOT affect other blocks (unlike passive/active context)
-- State updates must explicitly call `emit_state_changed()` to notify the frontend
-- Use state for UI-specific data like editor content, temporary selections, etc.
-
-### Testing Patterns
-
-**Context Block Tests:**
-- Basic functionality
-- Edge cases (empty values, special characters)
-- Error handling (validation failures)
-- Serialization (JSON round-trip)
-- Integration (multiple contexts, field preservation)
-
-**Execution Block Tests:**
-- Successful execution
-- Error scenarios
-- Cancellation handling
-- Output capture
-- Variable substitution
-
-## Examples & Patterns
-
-### Simple Script Execution
-
-```rust
-// 1. Document contains these blocks:
-// Block 0: Directory { path: "/tmp" }
-// Block 1: Environment { name: "DEBUG", value: "1" }
-// Block 2: Script { code: "echo $DEBUG" }
-
-// 2. When Script executes, ExecutionContext is built with:
-// - context_resolver built from blocks 0-1
-// - context_resolver.cwd() = "/tmp"
-// - context_resolver.env_vars() = {"DEBUG": "1"}
-
-// 3. Script uses context_resolver to:
-// - Get working directory: context.context_resolver.cwd()
-// - Get env vars: context.context_resolver.env_vars()
-// - Resolve templates: context.context_resolver.resolve_template("echo {{ env.DEBUG }}")
-```
-
-### Complex Workflow
-
-```rust
-// Runbook blocks in order:
-// 1. Directory { path: "/app" }
-// 2. Environment { name: "NODE_ENV", value: "production" }
-// 3. Host { host: "deploy@server.com" }
-// 4. Script { code: "npm run build", output_variable: "build_result" }
-// 5. Script { code: "echo 'Build: {{ var.build_result }}'" }
-
-// Passive context building (when document loads/changes):
-// Block 1: passive_context() inserts DocumentCwd("/app")
-// Block 2: passive_context() inserts DocumentEnvVar("NODE_ENV", "production")
-// Block 3: passive_context() inserts DocumentSshHost("deploy@server.com")
-// Block 4: passive_context() returns None (execution block)
-// Block 5: passive_context() returns None (execution block)
-
-// When block 4 executes:
-// - ContextResolver built from blocks 0-3 (passive contexts)
-// - resolver.cwd() = "/app"
-// - resolver.env_vars() = {"NODE_ENV": "production"}
-// - resolver.ssh_host() = Some("deploy@server.com")
-// - Script runs via SSH: ssh deploy@server.com "cd /app && NODE_ENV=production npm run build"
-// - On success, block 4's active context updated with DocumentVar("build_result", output)
-
-// When block 5 executes:
-// - ContextResolver built from blocks 0-4 (passive + active contexts)
-// - resolver.vars() = {"build_result": "<output from block 4>"}
-// - Script resolves template: "echo 'Build: {{ var.build_result }}'" → "echo 'Build: <output from block 4>'"
-```
-
-### Cancellation Example
-
-```rust
-// 1. Start long-running script
-let document = state.documents.get(&runbook_id)?;
-let context = document.start_execution(block_id, ...).await?;
-let block = document.get_block(block_id).await?;
-let handle = block.execute(context).await?;
-
-// 2. Store handle for later cancellation
-state.block_executions.insert(handle.id, handle);
-
-// 3. User clicks cancel button
-// 4. Frontend calls cancel_block_execution(handle.id)
-// 5. Backend finds handle and calls cancel()
-handle.cancellation_token.cancel();
-
-// 6. Running script receives signal via tokio::select! and cleans up
-// 7. Status updated to ExecutionStatus::Cancelled
-```
-
-## Architecture Benefits
-
-### Type Safety
-- **Compile-time guarantees** for block structure
-- **Type-safe context storage** using `TypeId` (no stringly-typed context)
-- **Type-safe state access** via downcasting with `BlockStateExt`
-- **Clear interfaces** between components via `BlockBehavior` trait
-- **Strongly-typed context values** (DocumentCwd, DocumentVar, etc.)
-- **Serializable state** using `erased_serde` for frontend communication
-
-### Performance
-- **Direct method dispatch** via enum matching (no trait objects for hot path)
-- **Async execution** doesn't block the main thread
-- **Efficient cancellation** via tokio channels
-- **Actor-based document management** prevents lock contention
-- **Incremental context rebuilding** - only rebuilds affected blocks when document changes
-
-### Maintainability
-- **Clear separation** of data (Block structs) and behavior (BlockBehavior implementations)
-- **Modular design** - each block is self-contained in its own module
-- **Comprehensive testing** ensures reliability
-- **Self-documenting** code with clear patterns
-- **Passive/Active context separation** makes it clear when contexts are updated
-- **State vs Context separation** - clear distinction between execution environment and UI state
-
-### Extensibility
-- **Easy to add new block types** - just implement BlockBehavior
-- **Flexible context system** - add new context types by defining new structs
-- **Optional block state** - blocks can opt-in to state management as needed
-- **Event system** for monitoring and debugging (Grand Central)
-- **Variable system** enables block chaining and workflows
-- **Document bridge** allows real-time updates to frontend (context and state changes)
-- **Actor pattern** allows for future improvements (e.g., persistent documents, undo/redo)
-
-This execution system provides a robust foundation for running complex, multi-step runbooks with proper error handling, cancellation, and state management.

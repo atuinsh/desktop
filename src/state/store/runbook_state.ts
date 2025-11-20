@@ -10,7 +10,6 @@ export interface AtuinRunbookState {
 
   // The ID of the runbook that is currently being executed
   // Right now we do not support concurrent or background runbook execution
-  serialExecution: string[];
   lastTagForRunbook: { [key: string]: string };
   backgroundSync: boolean;
   syncConcurrency: number;
@@ -19,8 +18,6 @@ export interface AtuinRunbookState {
   importRunbooks: () => Promise<string[]>;
   refreshRunbooks: () => Promise<void>;
 
-  startSerialExecution: (id: string) => void;
-  stopSerialExecution: (id: string) => void;
   selectTag: (runbookId: string, tag: string | null) => void;
   getLastTagForRunbook: (runbookId: string) => string | null;
 
@@ -47,7 +44,6 @@ export const createRunbookState: StateCreator<AtuinRunbookState> = (
 ): AtuinRunbookState => ({
   runbooks: [],
   lastTagForRunbook: {},
-  serialExecution: [],
   backgroundSync: true,
   syncConcurrency: 1,
   openInDesktopImport: null,
@@ -97,18 +93,6 @@ export const createRunbookState: StateCreator<AtuinRunbookState> = (
   },
 
   currentWorkspaceId: "",
-
-  startSerialExecution: (id: string) => {
-    if (get().serialExecution.includes(id)) {
-      return;
-    }
-
-    set({ serialExecution: [...get().serialExecution, id] });
-  },
-
-  stopSerialExecution: (id: string) => {
-    set({ serialExecution: get().serialExecution.filter((sid) => sid !== id) });
-  },
 
   setCurrentWorkspaceId: (id: string) => {
     set({ currentWorkspaceId: id });

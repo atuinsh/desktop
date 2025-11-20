@@ -6,6 +6,7 @@ import {
   onSerialExecutionStarted,
 } from "../events/grand_central";
 import { invoke } from "@tauri-apps/api/core";
+import { UnsubscribeFunction } from "emittery";
 
 export interface SerialExecutionHandle {
   isRunning: boolean;
@@ -17,7 +18,7 @@ export interface SerialExecutionHandle {
   stop: () => void;
 }
 
-export function useSerialExecution(runbookId: string) {
+export function useSerialExecution(runbookId: string | undefined | null) {
   const [isRunning, setIsRunning] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [isError, setIsError] = useState(false);
@@ -25,15 +26,17 @@ export function useSerialExecution(runbookId: string) {
   const [error, setError] = useState<string | null>(null);
 
   const start = () => {
+    if (!runbookId) return;
     invoke("start_serial_execution", { documentId: runbookId });
   };
 
   const stop = () => {
+    if (!runbookId) return;
     invoke("stop_serial_execution", { documentId: runbookId });
   };
 
   useEffect(() => {
-    const unsubs = [];
+    const unsubs: UnsubscribeFunction[] = [];
 
     unsubs.push(
       onSerialExecutionStarted((data) => {
@@ -85,7 +88,11 @@ export function useSerialExecution(runbookId: string) {
         }
       }),
     );
-  }, []);
+
+    return () => {
+      unsubs.forEach((unsub) => unsub());
+    };
+  }, [runbookId]);
 
   const handle = useMemo(
     () => ({
@@ -97,7 +104,7 @@ export function useSerialExecution(runbookId: string) {
       start: start,
       stop: stop,
     }),
-    [isRunning, start, stop],
+    [isRunning, isSuccess, isError, isCancelled, error, start, stop],
   );
 
   return handle;

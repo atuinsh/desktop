@@ -227,6 +227,38 @@ impl Script {
         }
     }
 
+    /// Determine the correct flag for passing code to the interpreter
+    fn get_interpreter_flag(interpreter: &str) -> Option<&'static str> {
+        let interpreter = Self::get_program_name(interpreter);
+
+        match interpreter {
+            "ruby" | "node" | "nodejs" | "perl" | "lua" => Some("-e"),
+            "php" => Some("-r"),
+            "bash" | "sh" | "zsh" | "fish" => Some("-c"),
+            s if s.starts_with("python") => Some("-c"),
+            _ => None,
+        }
+    }
+
+    fn get_program_name(path: &str) -> &str {
+        std::path::Path::new(path)
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or(path)
+    }
+
+    fn has_flag(args: &[&str], char_flag: char) -> bool {
+        args.iter().any(|arg| {
+            if arg.starts_with("--") {
+                false
+            } else if arg.starts_with('-') {
+                arg.chars().any(|c| c == char_flag)
+            } else {
+                false
+            }
+        })
+    }
+
     async fn run_script(
         &self,
         context: ExecutionContext,
@@ -276,8 +308,37 @@ impl Script {
         }
         let env_vars = context.context_resolver.env_vars();
 
-        let mut cmd = Command::new(&self.interpreter);
-        cmd.arg("-c");
+        // Parse interpreter string into program and args
+        let parts: Vec<&str> = self.interpreter.split_whitespace().collect();
+        let binding = self.interpreter.as_str();
+        let program = parts.first().copied().unwrap_or(binding);
+        let args = if parts.len() > 1 { &parts[1..] } else { &[] };
+
+        let program_name = Self::get_program_name(program);
+        let mut final_args: Vec<String> = args.iter().map(|s| s.to_string()).collect();
+
+        // For shells, ensure we run as a login shell if no other login args are present
+        // This ensures environment variables (like from .bash_profile) are loaded
+        if ["bash", "zsh", "sh", "fish"].contains(&program_name)
+            && !Self::has_flag(args, 'l')
+            && !args.contains(&"--login")
+        {
+            final_args.insert(0, "-l".to_string());
+        }
+
+        let mut cmd = Command::new(program);
+
+        // Add interpreter flag if not already present
+        if let Some(flag) = Self::get_interpreter_flag(program) {
+            // Get the char flag (e.g. 'c' from "-c")
+            if let Some(char_flag) = flag.chars().last() {
+                if !Self::has_flag(args, char_flag) {
+                    final_args.push(flag.to_string());
+                }
+            }
+        }
+
+        cmd.args(final_args);
         cmd.arg(&code);
         cmd.current_dir(&cwd);
         cmd.envs(env_vars);
@@ -295,6 +356,9 @@ impl Script {
         let mut child = match cmd.spawn() {
             Ok(child) => child,
             Err(e) => {
+                let _ = context
+                    .block_failed(format!("Failed to spawn process: {}", e))
+                    .await;
                 return (Err(e.into()), String::new());
             }
         };
@@ -762,6 +826,22 @@ mod tests {
             Script::parse_ssh_host("host.com:2222"),
             (None, "host.com".to_string())
         );
+    }
+
+    #[tokio::test]
+    async fn test_interpreter_flag_logic() {
+        assert_eq!(Script::get_interpreter_flag("ruby"), Some("-e"));
+        assert_eq!(Script::get_interpreter_flag("node"), Some("-e"));
+        assert_eq!(Script::get_interpreter_flag("php"), Some("-r"));
+        assert_eq!(Script::get_interpreter_flag("bash"), Some("-c"));
+        assert_eq!(Script::get_interpreter_flag("/usr/bin/ruby"), Some("-e"));
+        assert_eq!(
+            Script::get_interpreter_flag("/usr/local/bin/python3"),
+            Some("-c")
+        );
+        assert_eq!(Script::get_interpreter_flag("python3.10"), Some("-c"));
+        assert_eq!(Script::get_interpreter_flag("awk"), None);
+        assert_eq!(Script::get_interpreter_flag("my-custom-tool"), None);
     }
 
     #[tokio::test]

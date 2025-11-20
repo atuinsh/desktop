@@ -421,15 +421,11 @@ impl Session {
         let agent_result = if let Some(ref identity_agent) = self.ssh_config.identity_agent {
             log::info!("Using custom IdentityAgent: {identity_agent}");
             // Connect to custom agent socket
-            russh::keys::agent::client::AgentClient::connect_uds(identity_agent)
-                .await
-                .map_err(|_| russh::Error::NotAuthenticated)
+            russh::keys::agent::client::AgentClient::connect_uds(identity_agent).await
         } else {
             log::info!("Using default SSH agent from environment");
             // Use default SSH agent from environment
-            russh::keys::agent::client::AgentClient::connect_env()
-                .await
-                .map_err(|_| russh::Error::NotAuthenticated)
+            russh::keys::agent::client::AgentClient::connect_env().await
         };
 
         match agent_result {
@@ -581,6 +577,38 @@ impl Session {
         Ok(())
     }
 
+    /// Determine the correct flag for passing code to the interpreter
+    fn get_interpreter_flag(interpreter: &str) -> Option<&'static str> {
+        let interpreter = Self::get_program_name(interpreter);
+
+        match interpreter {
+            "ruby" | "node" | "nodejs" | "perl" | "lua" => Some("-e"),
+            "php" => Some("-r"),
+            "bash" | "sh" | "zsh" | "fish" => Some("-c"),
+            s if s.starts_with("python") => Some("-c"),
+            _ => None,
+        }
+    }
+
+    fn get_program_name(path: &str) -> &str {
+        std::path::Path::new(path)
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or(path)
+    }
+
+    fn has_flag(args: &[&str], char_flag: char) -> bool {
+        args.iter().any(|arg| {
+            if arg.starts_with("--") {
+                false
+            } else if arg.starts_with('-') {
+                arg.chars().any(|c| c == char_flag)
+            } else {
+                false
+            }
+        })
+    }
+
     /// Open a new SSH channel and execute a command
     #[allow(clippy::too_many_arguments)]
     pub async fn exec(
@@ -597,7 +625,41 @@ impl Session {
         let mut channel = self.session.channel_open_session().await?;
 
         // Create the actual command to execute
-        let full_command = format!("{} -c '{}'", interpreter, command.replace('\'', "'\"'\"'"));
+        // Parse interpreter string into program and args
+        let parts: Vec<&str> = interpreter.split_whitespace().collect();
+        let program = parts.first().unwrap_or(&interpreter);
+        let args = if parts.len() > 1 { &parts[1..] } else { &[] };
+
+        let program_name = Self::get_program_name(program);
+        let mut full_command_parts = Vec::new();
+        full_command_parts.push(program.to_string());
+
+        let mut final_args: Vec<String> = args.iter().map(|s| s.to_string()).collect();
+
+        // For shells, ensure we run as a login shell if no other login args are present
+        // This ensures environment variables (like from .bash_profile) are loaded
+        if ["bash", "zsh", "sh", "fish"].contains(&program_name)
+            && !Self::has_flag(args, 'l')
+            && !args.contains(&"--login")
+        {
+            final_args.insert(0, "-l".to_string());
+        }
+
+        full_command_parts.extend(final_args);
+
+        // Add interpreter flag if not already present
+        if let Some(flag) = Self::get_interpreter_flag(program) {
+            // Get the char flag (e.g. 'c' from "-c")
+            if let Some(char_flag) = flag.chars().last() {
+                if !Self::has_flag(args, char_flag) {
+                    full_command_parts.push(flag.to_string());
+                }
+            }
+        }
+
+        full_command_parts.push(format!("'{}'", command.replace('\'', "'\"'\"'")));
+
+        let full_command = full_command_parts.join(" ");
 
         log::debug!("Executing command on remote: {full_command}");
 
