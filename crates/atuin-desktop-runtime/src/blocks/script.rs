@@ -454,8 +454,19 @@ impl Script {
         let captured_output = Arc::new(RwLock::new(String::new()));
         let captured_output_clone = captured_output.clone();
 
-        let exec_result = ssh_pool
-            .exec(
+        // Take the cancellation receiver once at the start
+        let mut cancel_rx = match cancellation_token.take_receiver() {
+            Some(rx) => rx,
+            None => {
+                let error_msg = "Cancellation receiver already taken";
+                let _ = context.block_failed(error_msg.to_string()).await;
+                return (Err(error_msg.into()), String::new());
+            }
+        };
+
+        // Execute SSH command with cancellation support
+        let exec_result = tokio::select! {
+            result = ssh_pool.exec(
                 &hostname,
                 username.as_deref(),
                 &self.interpreter,
@@ -463,8 +474,16 @@ impl Script {
                 &channel_id,
                 output_sender,
                 result_tx,
-            )
-            .await;
+            ) => {
+                result
+            }
+            _ = &mut cancel_rx => {
+                log::trace!("Sending cancel to SSH execution for channel {channel_id}");
+                let _ = ssh_pool.exec_cancel(&channel_id).await;
+                let _ = context.block_cancelled().await;
+                return (Err("SSH script execution cancelled before start".into()), String::new());
+            }
+        };
 
         if let Err(e) = exec_result {
             let error_msg = format!("Failed to start SSH execution: {}", e);
@@ -472,7 +491,6 @@ impl Script {
             return (Err(error_msg.into()), String::new());
         }
 
-        let cancellation_receiver = cancellation_token.take_receiver();
         let context_clone = context.clone();
         let block_id = self.id;
         let ssh_pool_clone = ssh_pool.clone();
@@ -493,22 +511,17 @@ impl Script {
             }
         });
 
-        let exit_code = if let Some(cancel_rx) = cancellation_receiver {
-            tokio::select! {
-                _ = cancel_rx => {
-                    let _ = ssh_pool_clone.exec_cancel(&channel_id_clone).await;
-                    let captured = captured_output.read().await.clone();
+        let exit_code = tokio::select! {
+            _ = cancel_rx => {
+                let _ = ssh_pool_clone.exec_cancel(&channel_id_clone).await;
+                let captured = captured_output.read().await.clone();
 
-                    let _ = context.block_cancelled().await;
-                    return (Err("SSH script execution cancelled".into()), captured);
-                }
-                _ = result_rx => {
-                    0
-                }
+                let _ = context.block_cancelled().await;
+                return (Err("SSH script execution cancelled".into()), captured);
             }
-        } else {
-            let _ = result_rx.await;
-            0
+            _ = result_rx => {
+                0
+            }
         };
 
         let _ = context

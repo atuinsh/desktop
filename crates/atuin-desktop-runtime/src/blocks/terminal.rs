@@ -156,6 +156,11 @@ impl Terminal {
             .clone()
             .ok_or("PTY store not available in execution context")?;
 
+        // Take the cancellation receiver once at the start so we can use it throughout
+        let mut cancel_rx = cancellation_token
+            .take_receiver()
+            .ok_or("Cancellation receiver already taken")?;
+
         // Open PTY based on context (local or SSH)
         let cancellation_token_clone = cancellation_token.clone();
         let pty: Box<dyn PtyLike + Send> =
@@ -169,19 +174,33 @@ impl Terminal {
                     .clone()
                     .ok_or("SSH pool not available in execution context")?;
 
-                // Create SSH PTY
+                // Create SSH PTY with cancellation support
                 let (output_sender, mut output_receiver) = tokio::sync::mpsc::channel(100);
-                let (pty_tx, resize_tx) = ssh_pool
-                    .open_pty(
-                        &hostname,
-                        username.as_deref(),
-                        &self.id.to_string(),
-                        output_sender,
+                let hostname_clone = hostname.clone();
+                let username_clone = username.clone();
+                let pty_id_str = self.id.to_string();
+                let ssh_pool_clone = ssh_pool.clone();
+
+                // Open SSH PTY with cancellation support - use the receiver we took earlier
+                let ssh_result = tokio::select! {
+                    result = ssh_pool_clone.open_pty(
+                        &hostname_clone,
+                        username_clone.as_deref(),
+                        &pty_id_str,
+                        output_sender.clone(),
                         80,
                         24,
-                    )
-                    .await
-                    .map_err(|e| format!("Failed to open SSH PTY: {}", e))?;
+                    ) => {
+                        result.map_err(|e| format!("Failed to open SSH PTY: {}", e))
+                    }
+                    _ = &mut cancel_rx => {
+                        let _ = ssh_pool_clone.close_pty(&pty_id_str).await;
+                        let _ = context.block_cancelled().await;
+                        return Err("SSH PTY connection cancelled".into());
+                    }
+                };
+
+                let (pty_tx, resize_tx) = ssh_result?;
 
                 // Forward SSH output to binary channel
                 let context_clone = context.clone();
@@ -321,31 +340,26 @@ impl Terminal {
         // They stay running until cancelled
         // Natural termination is handled by the PTY reader loop detecting EOF, usually because the
         // user has run 'exit', pressed ctrl-d, or similar.
-        let cancellation_receiver = cancellation_token.take_receiver();
-        if let Some(cancel_rx) = cancellation_receiver {
-            log::trace!(
-                "Awaiting terminal cancellation for block {id}",
-                id = self.id
-            );
+        log::trace!(
+            "Awaiting terminal cancellation for block {id}",
+            id = self.id
+        );
 
-            let _ = cancel_rx.await;
+        let _ = cancel_rx.await;
 
-            log::debug!("Cancelling terminal execution for block {id}", id = self.id);
+        log::debug!("Cancelling terminal execution for block {id}", id = self.id);
 
-            // Remove PTY from store (this will also kill it)
-            let _ = pty_store.remove_pty(self.id).await;
-            let _ = context
-                .emit_gc_event(GCEvent::PtyClosed { pty_id: self.id })
-                .await;
+        // Remove PTY from store (this will also kill it)
+        let _ = pty_store.remove_pty(self.id).await;
+        let _ = context
+            .emit_gc_event(GCEvent::PtyClosed { pty_id: self.id })
+            .await;
 
-            // If the block is still running, cancel it.
-            // This will happen when the user manually cancels the block execution.
-            if *context.handle().status.read().await == ExecutionStatus::Running {
-                let _ = context.block_cancelled().await;
-            }
-            Ok(true)
-        } else {
-            Ok(false)
+        // If the block is still running, cancel it.
+        // This will happen when the user manually cancels the block execution.
+        if *context.handle().status.read().await == ExecutionStatus::Running {
+            let _ = context.block_cancelled().await;
         }
+        Ok(true)
     }
 }
