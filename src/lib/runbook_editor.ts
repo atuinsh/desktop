@@ -15,7 +15,7 @@ import Logger from "./logger";
 import Snapshot from "@/state/runbooks/snapshot";
 import Operation from "@/state/runbooks/operation";
 import { invoke } from "@tauri-apps/api/core";
-import Emittery from "emittery";
+import Emittery, { UnsubscribeFunction } from "emittery";
 
 const SAVE_DEBOUNCE = 1000;
 const SEND_CHANGES_DEBOUNCE = 100;
@@ -52,6 +52,7 @@ export default class RunbookEditor {
   private saveArgs: [Runbook | undefined, BlockNoteEditor] | null = null;
   private isShutdown = false;
   private maybeNeedsContentConversion = true;
+  private unsubSelectionChange: UnsubscribeFunction | null = null;
 
   constructor(
     runbook: Runbook,
@@ -190,6 +191,11 @@ export default class RunbookEditor {
           this.runbook.content = JSON.stringify(content);
           this.save(this.runbook, editor as any as BlockNoteEditor);
         }
+
+        this.unsubSelectionChange = editor.onSelectionChange((editor: any) => {
+          const typedEditor = editor as BlockNoteEditor;
+          this.emitter.emit("block_focus", typedEditor.getTextCursorPosition().block.id);
+        });
         resolve(editor as any as BlockNoteEditor);
         return;
       }
@@ -206,7 +212,7 @@ export default class RunbookEditor {
       provider.on("presence:join", this.onPresenceJoin);
       provider.on("presence:leave", this.onPresenceLeave);
 
-      editor.onSelectionChange((editor: any) => {
+      this.unsubSelectionChange = editor.onSelectionChange((editor: any) => {
         const typedEditor = editor as BlockNoteEditor;
         this.emitter.emit("block_focus", typedEditor.getTextCursorPosition().block.id);
       });
@@ -268,6 +274,11 @@ export default class RunbookEditor {
       // Note[mkt]: I'm not sure why, but after BlockNote 0.39, `this.editor` is no longer the same as the editor from args.
       // `this.editor` contains a document that is out of date, so we go ahead and replace the editor with the one from the args.
       this.logger.warn("Replacing editor with editor from args");
+      this.unsubSelectionChange?.();
+      this.unsubSelectionChange = editorArg.onSelectionChange((editor: any) => {
+        const typedEditor = editor as BlockNoteEditor;
+        this.emitter.emit("block_focus", typedEditor.getTextCursorPosition().block.id);
+      });
       this.editor = Promise.resolve(editorArg);
     }
 
