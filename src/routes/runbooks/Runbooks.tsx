@@ -111,6 +111,8 @@ export default function Runbooks() {
             // If the runbook wasn't synced when this tab was loaded,
             // we need to set the workspace ID.
             setCurrentWorkspaceId(runbook.workspaceId);
+          } else {
+            throw new Error(`Runbook ${runbookId} not found after sync`);
           }
         } catch (err) {
           setFailedToSyncRunbook(true);
