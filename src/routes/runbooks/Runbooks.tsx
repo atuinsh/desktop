@@ -27,6 +27,7 @@ import RunbookControls from "./RunbookControls";
 import { DocumentBridge, DocumentBridgeContext } from "@/lib/hooks/useDocumentBridge";
 import DebugWindow from "@/lib/dev/DebugWindow";
 import { ResolvedContext } from "@/rs-bindings/ResolvedContext";
+import { Button, Spinner } from "@heroui/react";
 
 const Editor = React.lazy(() => import("@/components/runbooks/editor/Editor"));
 const Topbar = React.lazy(() => import("@/components/runbooks/TopBar/TopBar"));
@@ -49,9 +50,12 @@ export default function Runbooks() {
   const refreshRunbooks = useStore((store) => store.refreshRunbooks);
   const getLastTagForRunbook = useStore((store) => store.getLastTagForRunbook);
   const setLastTagForRunbook = useStore((store) => store.selectTag);
-  const { data: currentRunbook, isLoading: currentRunbookLoading } = useQuery(
-    runbookById(runbookId),
-  );
+  const {
+    data: currentRunbook,
+    isLoading: currentRunbookLoading,
+    isFetching: isFetchingRunbook,
+    isError: isErrorFetchingRunbook,
+  } = useQuery(runbookById(runbookId));
   const { data: runbookWorkspace } = useQuery(workspaceById(currentRunbook?.workspaceId || null));
   const lastRunbookRef = useMemory(currentRunbook);
   const [presences, setPresences] = useState<PresenceUserInfo[]>([]);
@@ -81,11 +85,16 @@ export default function Runbooks() {
 
   useEffect(
     function syncRunbookIfNotSynced() {
+      if (!runbookId) return;
       if (currentRunbookLoading) return;
       if (currentRunbook) return;
-      if (!runbookWorkspace) return;
-      if (!runbookWorkspace.isOnline()) return;
-      if (!runbookId) return;
+
+      // If this runbook is in an online workspace and doesn't exist in the local database
+      // (due to background sync being off), we need to sync it. However, we don't know yet
+      // if the runbook is in an online workspace or not, as the offline workspace
+      // manager may take some time to return the runbook - but we don't want to wait until
+      // the offline workspace manager times out before we decide this must be an online runbook.
+      // So, we'll attempt to sync as soon as `isPending` is false for the runbook query.
 
       (async function syncRunbook() {
         setSyncingRunbook(true);
@@ -102,7 +111,10 @@ export default function Runbooks() {
           }
         } catch (err) {
           setFailedToSyncRunbook(true);
-          console.error("Error syncing runbook", err);
+          console.warn(
+            "Error syncing runbook; this could be normal if the runbook is offline",
+            err,
+          );
         } finally {
           setSyncingRunbook(false);
         }
@@ -211,14 +223,17 @@ export default function Runbooks() {
 
   useEffect(() => {
     if (currentRunbook && documentBridge) {
-      console.log("Opening document", currentRunbook.id);
       invoke("open_document", {
         documentId: currentRunbook.id,
         document: currentRunbook.content ? JSON.parse(currentRunbook.content) : "[]",
         documentBridge: documentBridge.channel,
-      }).then(() => {
-        setDocumentOpened(true);
-      });
+      })
+        .then(() => {
+          setDocumentOpened(true);
+        })
+        .catch((err) => {
+          console.error("Error opening document in runtime backend", err);
+        });
     }
   }, [currentRunbook?.id, documentBridge?.channel]);
 
@@ -545,21 +560,36 @@ export default function Runbooks() {
             </div>
           )}
 
-          {!currentRunbook && !syncingRunbook && !failedToSyncRunbook && (
+          {!currentRunbook && failedToSyncRunbook && isErrorFetchingRunbook && (
+            <div className="flex align-middle justify-center flex-col h-screen w-full">
+              <h1 className="text-center">We were unable to load this runbook.</h1>
+              <Button
+                className="inline-block mx-auto"
+                onPress={() => {
+                  tabsApi.reloadTab();
+                }}
+              >
+                Retry
+              </Button>
+            </div>
+          )}
+
+          {/* {!currentRunbook && !syncingRunbook && !failedToSyncRunbook && isErrorFetchingRunbook && (
             <div className="flex align-middle justify-center flex-col h-screen w-full">
               <h1 className="text-center">Select or create a runbook</h1>
             </div>
           )}
 
-          {!currentRunbook && !syncingRunbook && failedToSyncRunbook && (
+          {!currentRunbook && !syncingRunbook && failedToSyncRunbook && isErrorFetchingRunbook && (
             <div className="flex align-middle justify-center flex-col h-screen w-full">
               <h1 className="text-center">We were unable to sync this runbook</h1>
             </div>
-          )}
+          )}*/}
 
-          {!currentRunbook && syncingRunbook && (
+          {!currentRunbook && (syncingRunbook || isFetchingRunbook) && (
             <div className="flex align-middle justify-center flex-col h-screen w-full">
-              <h1 className="text-center">Runbook is syncing, please wait...</h1>
+              <h1 className="text-center">Loading runbook, please wait...</h1>
+              <Spinner />
             </div>
           )}
         </div>

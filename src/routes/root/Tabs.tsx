@@ -28,12 +28,16 @@ export const TabsContext = React.createContext<{
   setPtyCount: (ptyCount: number) => void;
   incrementBadge: (number: number) => void;
   decrementBadge: (number: number) => void;
+  closeTab: () => void;
+  reloadTab: () => void;
 }>({
   tab: null,
   setTitle: () => {},
   setPtyCount: () => {},
   incrementBadge: () => {},
   decrementBadge: () => {},
+  closeTab: () => {},
+  reloadTab: () => {},
 });
 
 export default function Tabs() {
@@ -208,6 +212,15 @@ export default function Tabs() {
             },
             decrementBadge: (number: number = 1) => {
               decrementTabBadgeCount(tab.id, number);
+            },
+            closeTab: () => {
+              closeTab(tab.id);
+            },
+            reloadTab: () => {
+              closeTab(tab.id);
+              setTimeout(() => {
+                undoCloseTab();
+              }, 100);
             },
           }}
         >
