@@ -16,6 +16,14 @@ use std::sync::Arc;
 
 use crate::pty::PtyLike;
 
+#[derive(thiserror::Error, Debug)]
+enum SshPoolConnectionError {
+    #[error("SSH connection cancelled")]
+    Cancelled,
+    #[error("{0}")]
+    ConnectionError(#[from] eyre::Report),
+}
+
 pub struct SshPty {
     pub tx: mpsc::Sender<Bytes>,
     pub resize_tx: mpsc::Sender<(u16, u16)>,
@@ -433,17 +441,17 @@ impl SshPool {
                 // Run the SSH connection in a task to avoid blocking the actor
                 tokio::spawn(async move {
                     log::trace!("Connecting to SSH host {host} with username {username}");
-                    let session = tokio::select! {
                     let mut pool_guard = pool.write().await;
+                    let session: Result<Arc<Session>, SshPoolConnectionError> = tokio::select! {
                         result = pool_guard.connect(&host, Some(username.as_str()), None, Some(connect_cancel_rx)) => {
                             log::trace!("SSH connection to {host} with username {username} successful");
-                            result
+                            result.map_err(SshPoolConnectionError::from)
                         }
                         _ = &mut cancel_rx => {
                             log::trace!("SSH connection to {host} with username {username} cancelled");
                             let _ = connect_cancel_tx.send(());
                             let _ = pool_guard.disconnect(&host, &username).await;
-                            Err(eyre::eyre!("SSH connection cancelled"))
+                            Err(SshPoolConnectionError::Cancelled.into())
                         }
                     };
                     drop(pool_guard);
@@ -451,11 +459,21 @@ impl SshPool {
                     let session = match session {
                         Ok(session) => session,
                         Err(e) => {
-                            log::error!("Failed to connect to SSH host {host}: {e}");
-                            if let Err(e) = reply_to.send(Err(e)) {
-                                log::error!("Failed to send error to reply_to: {e:?}");
+                            match e {
+                                SshPoolConnectionError::Cancelled => {
+                                    log::debug!("SSH connection to {host} with username {username} cancelled");
+                                    let _ = reply_to
+                                        .send(Err(SshPoolConnectionError::Cancelled.into()));
+                                    return;
+                                }
+                                SshPoolConnectionError::ConnectionError(e) => {
+                                    log::error!("Failed to connect to SSH host {host}: {e}");
+                                    if let Err(e) = reply_to.send(Err(e)) {
+                                        log::error!("Failed to send error to reply_to: {e:?}");
+                                    }
+                                    return;
+                                }
                             }
-                            return;
                         }
                     };
 
