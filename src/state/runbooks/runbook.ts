@@ -102,7 +102,7 @@ export default abstract class Runbook {
     return online + offline;
   }
 
-  public static async load(id: string): Promise<Runbook | null> {
+  public static async load(id: string, throwIfMissing: boolean = false): Promise<Runbook | null> {
     const online = await OnlineRunbook.load(id);
     if (online) {
       return online;
@@ -113,7 +113,11 @@ export default abstract class Runbook {
       return offline;
     }
 
-    throw new Error(`Runbook ${id} not found`);
+    if (throwIfMissing) {
+      throw new Error(`Runbook ${id} not found`);
+    }
+
+    return null;
   }
 
   public static async allFromWorkspace(workspaceId: string): Promise<Runbook[]> {

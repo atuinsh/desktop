@@ -13,7 +13,7 @@ export function runbookById(id: string | undefined) {
     queryKey: ["runbook", id],
     queryFn: () => {
       if (id) {
-        return Runbook.load(id);
+        return Runbook.load(id, true);
       } else {
         return Promise.resolve(null);
       }
