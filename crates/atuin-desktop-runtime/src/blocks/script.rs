@@ -79,7 +79,8 @@ impl FromDocument for Script {
                 props
                     .get("outputVariable")
                     .and_then(|v| v.as_str())
-                    .map(|s| s.to_string()),
+                    .map(|s| s.to_string())
+                    .and_then(|s| if s.is_empty() { None } else { Some(s) }),
             )
             .output_visible(
                 props
