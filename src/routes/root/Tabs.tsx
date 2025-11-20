@@ -217,9 +217,10 @@ export default function Tabs() {
               closeTab(tab.id);
             },
             reloadTab: () => {
+              const tabUrl = tab.url;
               closeTab(tab.id);
               setTimeout(() => {
-                undoCloseTab();
+                openTab(tabUrl);
               }, 100);
             },
           }}
