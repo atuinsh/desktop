@@ -581,6 +581,20 @@ impl Session {
         Ok(())
     }
 
+    /// Determine the correct flag for passing code to the interpreter
+    fn get_interpreter_flag(interpreter: &str) -> &'static str {
+        let interpreter = std::path::Path::new(interpreter)
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or(interpreter);
+
+        match interpreter {
+            "ruby" | "node" | "nodejs" | "perl" | "lua" => "-e",
+            "php" => "-r",
+            _ => "-c",
+        }
+    }
+
     /// Open a new SSH channel and execute a command
     #[allow(clippy::too_many_arguments)]
     pub async fn exec(
@@ -597,7 +611,12 @@ impl Session {
         let mut channel = self.session.channel_open_session().await?;
 
         // Create the actual command to execute
-        let full_command = format!("{} -c '{}'", interpreter, command.replace('\'', "'\"'\"'"));
+        let full_command = format!(
+            "{} {} '{}'",
+            interpreter,
+            Self::get_interpreter_flag(interpreter),
+            command.replace('\'', "'\"'\"'")
+        );
 
         log::debug!("Executing command on remote: {full_command}");
 

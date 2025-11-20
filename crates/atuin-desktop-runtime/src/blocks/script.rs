@@ -219,6 +219,20 @@ impl Script {
         }
     }
 
+    /// Determine the correct flag for passing code to the interpreter
+    fn get_interpreter_flag(interpreter: &str) -> &'static str {
+        let interpreter = std::path::Path::new(interpreter)
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or(interpreter);
+
+        match interpreter {
+            "ruby" | "node" | "nodejs" | "perl" | "lua" => "-e",
+            "php" => "-r",
+            _ => "-c",
+        }
+    }
+
     async fn run_script(
         &self,
         context: ExecutionContext,
@@ -269,7 +283,7 @@ impl Script {
         let env_vars = context.context_resolver.env_vars();
 
         let mut cmd = Command::new(&self.interpreter);
-        cmd.arg("-c");
+        cmd.arg(Self::get_interpreter_flag(&self.interpreter));
         cmd.arg(&code);
         cmd.current_dir(&cwd);
         cmd.envs(env_vars);
