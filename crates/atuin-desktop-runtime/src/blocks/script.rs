@@ -221,10 +221,7 @@ impl Script {
 
     /// Determine the correct flag for passing code to the interpreter
     fn get_interpreter_flag(interpreter: &str) -> Option<&'static str> {
-        let interpreter = std::path::Path::new(interpreter)
-            .file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or(interpreter);
+        let interpreter = Self::get_program_name(interpreter);
 
         match interpreter {
             "ruby" | "node" | "nodejs" | "perl" | "lua" => Some("-e"),
@@ -233,6 +230,25 @@ impl Script {
             s if s.starts_with("python") => Some("-c"),
             _ => None,
         }
+    }
+
+    fn get_program_name(path: &str) -> &str {
+        std::path::Path::new(path)
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or(path)
+    }
+
+    fn has_flag(args: &[&str], char_flag: char) -> bool {
+        args.iter().any(|arg| {
+            if arg.starts_with("--") {
+                false
+            } else if arg.starts_with('-') {
+                arg.chars().any(|c| c == char_flag)
+            } else {
+                false
+            }
+        })
     }
 
     async fn run_script(
@@ -290,18 +306,31 @@ impl Script {
         let program = parts.first().copied().unwrap_or(binding);
         let args = if parts.len() > 1 { &parts[1..] } else { &[] };
 
+        let program_name = Self::get_program_name(program);
+        let mut final_args: Vec<String> = args.iter().map(|s| s.to_string()).collect();
+
+        // For shells, ensure we run as a login shell if no other login args are present
+        // This ensures environment variables (like from .bash_profile) are loaded
+        if ["bash", "zsh", "sh", "fish"].contains(&program_name)
+            && !Self::has_flag(args, 'l')
+            && !args.contains(&"--login")
+        {
+            final_args.insert(0, "-l".to_string());
+        }
+
         let mut cmd = Command::new(program);
-        
-        // Add user-provided args
-        cmd.args(args);
 
         // Add interpreter flag if not already present
         if let Some(flag) = Self::get_interpreter_flag(program) {
-            if !args.contains(&flag) {
-                cmd.arg(flag);
+            // Get the char flag (e.g. 'c' from "-c")
+            if let Some(char_flag) = flag.chars().last() {
+                if !Self::has_flag(args, char_flag) {
+                    final_args.push(flag.to_string());
+                }
             }
         }
 
+        cmd.args(final_args);
         cmd.arg(&code);
         cmd.current_dir(&cwd);
         cmd.envs(env_vars);
@@ -798,7 +827,10 @@ mod tests {
         assert_eq!(Script::get_interpreter_flag("php"), Some("-r"));
         assert_eq!(Script::get_interpreter_flag("bash"), Some("-c"));
         assert_eq!(Script::get_interpreter_flag("/usr/bin/ruby"), Some("-e"));
-        assert_eq!(Script::get_interpreter_flag("/usr/local/bin/python3"), Some("-c"));
+        assert_eq!(
+            Script::get_interpreter_flag("/usr/local/bin/python3"),
+            Some("-c")
+        );
         assert_eq!(Script::get_interpreter_flag("python3.10"), Some("-c"));
         assert_eq!(Script::get_interpreter_flag("awk"), None);
         assert_eq!(Script::get_interpreter_flag("my-custom-tool"), None);
