@@ -316,6 +316,9 @@ impl Script {
         let mut child = match cmd.spawn() {
             Ok(child) => child,
             Err(e) => {
+                let _ = context
+                    .block_failed(format!("Failed to spawn process: {}", e))
+                    .await;
                 return (Err(e.into()), String::new());
             }
         };
