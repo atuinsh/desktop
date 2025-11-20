@@ -184,9 +184,12 @@ const EditorBlock = ({
                         onSelectionChange={(e) => setCopyFromVar(e.currentKey ?? null)}
                         disabled={!isEditable}
                       >
-                        {variables.map((variable) => (
-                          <SelectItem key={variable}>{variable}</SelectItem>
-                        ))}
+                        {variables
+                          .filter((variable) => !!variable)
+                          .toSorted((a, b) => a.localeCompare(b))
+                          .map((variable) => (
+                            <SelectItem key={variable}>{variable}</SelectItem>
+                          ))}
                       </Select>
                       <Button
                         size="sm"
