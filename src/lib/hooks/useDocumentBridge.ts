@@ -307,7 +307,7 @@ export function useBlockStart(blockId: string, callback: () => void): void {
     if (execution.isRunning) {
       callback();
     }
-  }, [execution.isRunning]);
+  }, [execution.isRunning, blockId]);
 }
 
 export function useBlockStop(blockId: string, callback: () => void): void {
@@ -321,5 +321,5 @@ export function useBlockStop(blockId: string, callback: () => void): void {
       callback();
       wasRunning.current = false;
     }
-  }, [execution.isRunning]);
+  }, [execution.isRunning, blockId]);
 }
