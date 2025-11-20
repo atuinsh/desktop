@@ -3,7 +3,7 @@ import useRemoteRunbook from "@/lib/useRemoteRunbook";
 import { usePtyStore } from "@/state/ptyStore";
 import { useStore } from "@/state/store";
 import Snapshot from "@/state/runbooks/snapshot";
-import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import React, { useContext, useEffect, useMemo, useRef, useState } from "react";
 import { timeoutPromise, useMemory } from "@/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as api from "@/api/api";
@@ -30,7 +30,6 @@ import {
   useBlockContext,
 } from "@/lib/hooks/useDocumentBridge";
 import DebugWindow from "@/lib/dev/DebugWindow";
-import { ResolvedContext } from "@/rs-bindings/ResolvedContext";
 
 const Editor = React.lazy(() => import("@/components/runbooks/editor/Editor"));
 const Topbar = React.lazy(() => import("@/components/runbooks/TopBar/TopBar"));
