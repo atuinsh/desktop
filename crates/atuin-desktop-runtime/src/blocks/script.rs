@@ -490,14 +490,17 @@ impl Script {
             let _ = context.block_failed(error_msg.to_string()).await;
             return (Err(error_msg.into()), String::new());
         }
-
         let context_clone = context.clone();
         let block_id = self.id;
         let ssh_pool_clone = ssh_pool.clone();
         let channel_id_clone = channel_id.clone();
 
         tokio::spawn(async move {
-            while let Some(line) = output_receiver.recv().await {
+            while let Some(mut line) = output_receiver.recv().await {
+                if !line.ends_with('\n') {
+                    line.push('\n');
+                }
+
                 let _ = context_clone
                     .send_output(
                         BlockOutput::builder()
