@@ -136,8 +136,6 @@ function App() {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [showInviteFriends, setShowInviteFriends] = useState(false);
   const [showFeedback, setShowFeedback] = useState(false);
-  const serialExecution = useStore((state: AtuinState) => state.serialExecution);
-  const stopSerialExecution = useStore((state: AtuinState) => state.stopSerialExecution);
   const [runbookIdToDelete, setRunbookIdToDelete] = useState<string | null>(null);
   const selectedOrg = useStore((state: AtuinState) => state.selectedOrg);
   const connectionState = useStore((state: AtuinState) => state.connectionState);
@@ -416,10 +414,8 @@ function App() {
   };
 
   async function doDeleteRunbook(workspaceId: string, runbookId: string) {
-    if (serialExecution.includes(runbookId)) {
-      await invoke("workflow_stop", { id: runbookId });
-      stopSerialExecution(runbookId);
-    }
+    // Cancel any running serial execution for this runbook
+    invoke("stop_serial_execution", { documentId: runbookId });
 
     const workspace = await Workspace.get(workspaceId);
 

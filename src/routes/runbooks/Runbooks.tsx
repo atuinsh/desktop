@@ -27,6 +27,7 @@ import RunbookControls from "./RunbookControls";
 import { DocumentBridge, DocumentBridgeContext } from "@/lib/hooks/useDocumentBridge";
 import DebugWindow from "@/lib/dev/DebugWindow";
 import { ResolvedContext } from "@/rs-bindings/ResolvedContext";
+import { useSerialExecution } from "@/lib/hooks/useSerialExecution";
 import { Button, Spinner } from "@heroui/react";
 
 const Editor = React.lazy(() => import("@/components/runbooks/editor/Editor"));
@@ -61,8 +62,7 @@ export default function Runbooks() {
   const [presences, setPresences] = useState<PresenceUserInfo[]>([]);
   const [runbookEditor, setRunbookEditor] = useState<RunbookEditor | null>(null);
   const lastRunbookEditor = useRef<RunbookEditor | null>(runbookEditor);
-  const serialExecution = useStore((store) => store.serialExecution);
-  const stopSerialExecution = useStore((store) => store.stopSerialExecution);
+  const serialExecution = useSerialExecution(runbookId);
   const { tab, ...tabsApi } = useContext(TabsContext);
   const registerTabOnClose = useStore((store) => store.registerTabOnClose);
   const setCurrentWorkspaceId = useStore((store) => store.setCurrentWorkspaceId);
@@ -176,9 +176,7 @@ export default function Runbooks() {
     }
 
     return registerTabOnClose(tab.id, async () => {
-      const serialExecution = useStore.getState().serialExecution;
-
-      if (serialExecution.includes(currentRunbook.id)) {
+      if (serialExecution.isRunning) {
         const answer = await new DialogBuilder()
           .title(`Cancel workflow execution?`)
           .icon("question")
@@ -198,13 +196,12 @@ export default function Runbooks() {
 
         if (answer === "ok") {
           try {
-            await invoke("workflow_stop", { id: currentRunbook.id });
+            serialExecution.stop();
           } catch (error) {
             console.error("Error stopping workflow", error);
             return false;
           }
           await timeoutPromise(250, undefined);
-          stopSerialExecution(currentRunbook.id);
           return true;
         } else {
           return false;
@@ -213,7 +210,7 @@ export default function Runbooks() {
 
       return true;
     });
-  }, [currentRunbook?.id, tab?.id]);
+  }, [currentRunbook?.id, tab?.id, serialExecution.isRunning]);
 
   useEffect(() => {
     if (currentRunbook) {
@@ -437,7 +434,7 @@ export default function Runbooks() {
   }, [currentRunbook?.id]);
 
   function handleShowTagMenu() {
-    if (currentRunbook && serialExecution.includes(currentRunbook.id)) {
+    if (currentRunbook && serialExecution.isRunning) {
       new DialogBuilder()
         .title("Cannot switch tags")
         .message("You cannot switch tags while a runbook is executing a workflow.")
@@ -573,18 +570,6 @@ export default function Runbooks() {
               </Button>
             </div>
           )}
-
-          {/* {!currentRunbook && !syncingRunbook && !failedToSyncRunbook && isErrorFetchingRunbook && (
-            <div className="flex align-middle justify-center flex-col h-screen w-full">
-              <h1 className="text-center">Select or create a runbook</h1>
-            </div>
-          )}
-
-          {!currentRunbook && !syncingRunbook && failedToSyncRunbook && isErrorFetchingRunbook && (
-            <div className="flex align-middle justify-center flex-col h-screen w-full">
-              <h1 className="text-center">We were unable to sync this runbook</h1>
-            </div>
-          )}*/}
 
           {!currentRunbook && (syncingRunbook || isFetchingRunbook) && (
             <div className="flex align-middle justify-center flex-col h-screen w-full">

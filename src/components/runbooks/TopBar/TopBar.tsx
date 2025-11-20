@@ -273,7 +273,6 @@ export default function Topbar(props: TopbarProps) {
         <PlayButton
           className="mt-1 ml-2"
           isRunning={serialExecution.isRunning}
-          // disabled={serialExecution.length > 0 && !serialExecution.includes(runbook.id)}
           cancellable={true}
           tooltip="Run this runbook in serial mode (top-to-bottom)"
           tooltipPlacement="bottom"

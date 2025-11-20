@@ -1,5 +1,5 @@
+import { useSerialExecution } from "@/lib/hooks/useSerialExecution";
 import { cn, useDebounce } from "@/lib/utils";
-import { useStore } from "@/state/store";
 import {
   Button,
   Divider,
@@ -51,10 +51,7 @@ export default function TagSelector(props: TagSelectorProps) {
   const [error, setError] = useState<string | null>(null);
   const [isDebounced, resetDebounce, clearDebounce] = useDebounce(1000);
   const tagMenuRef = useRef<HTMLDivElement>(null);
-  const serialExecution = useStore((store) => store.serialExecution);
-  const serialExecutionActive = useMemo(() => {
-    return serialExecution.includes(props.runbookId);
-  }, [serialExecution, props.runbookId]);
+  const serialExecution = useSerialExecution(props.runbookId);
 
   let tag = props.currentTag;
   let currentTagNames = useMemo(() => {
@@ -129,8 +126,8 @@ export default function TagSelector(props: TagSelectorProps) {
             className={cn(
               "flex flex-row justify-between hover:bg-gray-300 hover:cursor-pointer px-2 mb-1 py-1 rounded-md dark:hover:bg-content3",
               {
-                "hover:cursor-pointer": !serialExecutionActive,
-                "hover:cursor-not-allowed": serialExecutionActive,
+                "hover:cursor-pointer": !serialExecution.isRunning,
+                "hover:cursor-not-allowed": serialExecution.isRunning,
               },
             )}
             onClick={() => props.onSelectTag(value)}
@@ -170,10 +167,10 @@ export default function TagSelector(props: TagSelectorProps) {
             "bg-gray-200 mt-[-5px] truncate": true,
             "dark:bg-content2 dark:border-default-300 hover:dark:bg-content3": true,
             "sm:grow md:grow-0": true,
-            "cursor-pointer": !serialExecutionActive,
-            "cursor-not-allowed": serialExecutionActive,
-            "text-gray-400 dark:text-gray-500": serialExecutionActive,
-            "text-gray-700 dark:text-gray-300": !serialExecutionActive,
+            "cursor-pointer": !serialExecution.isRunning,
+            "cursor-not-allowed": serialExecution.isRunning,
+            "text-gray-400 dark:text-gray-500": serialExecution.isRunning,
+            "text-gray-700 dark:text-gray-300": !serialExecution.isRunning,
           })}
         >
           <span className="w-full truncate overflow-ellipsis">@ {tagLabel}</span>
