@@ -226,7 +226,7 @@ impl Script {
         match interpreter {
             "ruby" | "node" | "nodejs" | "perl" | "lua" => Some("-e"),
             "php" => Some("-r"),
-            "bash" | "sh" | "zsh" | "fish" => Some("-lc"),
+            "bash" | "sh" | "zsh" | "fish" => Some("-c"),
             s if s.starts_with("python") => Some("-c"),
             _ => None,
         }
