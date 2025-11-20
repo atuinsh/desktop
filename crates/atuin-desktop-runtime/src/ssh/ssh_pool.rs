@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use bytes::Bytes;
-use tokio::sync::{mpsc, oneshot, Mutex};
+use tokio::sync::{mpsc, oneshot, RwLock};
 use tokio::time::interval;
 
 use crate::pty::PtyMetadata;
@@ -298,7 +298,7 @@ pub(crate) struct SshPool {
 
     pub channels: HashMap<String, ChannelMeta>,
 
-    pool: Arc<Mutex<Pool>>,
+    pool: Arc<RwLock<Pool>>,
 }
 
 impl SshPool {
@@ -309,7 +309,7 @@ impl SshPool {
         Self {
             sender,
             receiver,
-            pool: Arc::new(Mutex::new(Pool::new())),
+            pool: Arc::new(RwLock::new(Pool::new())),
             channels: HashMap::new(),
         }
     }
@@ -378,7 +378,7 @@ impl SshPool {
             } => {
                 let result = self
                     .pool
-                    .lock()
+                    .write()
                     .await
                     .connect(&host, username.as_deref(), auth, None)
                     .await;
@@ -390,16 +390,16 @@ impl SshPool {
                 username,
                 reply_to,
             } => {
-                let result = self.pool.lock().await.disconnect(&host, &username).await;
+                let result = self.pool.write().await.disconnect(&host, &username).await;
                 let _ = reply_to.send(result);
             }
             SshPoolMessage::ListConnections { reply_to } => {
                 // Get the keys from the pool's connections
-                let connections = self.pool.lock().await.connections.keys().cloned().collect();
+                let connections = self.pool.read().await.connections.keys().cloned().collect();
                 let _ = reply_to.send(connections);
             }
             SshPoolMessage::Len { reply_to } => {
-                let len = self.pool.lock().await.connections.len();
+                let len = self.pool.read().await.connections.len();
                 let _ = reply_to.send(len);
             }
             SshPoolMessage::Exec {
@@ -433,8 +433,8 @@ impl SshPool {
                 // Run the SSH connection in a task to avoid blocking the actor
                 tokio::spawn(async move {
                     log::trace!("Connecting to SSH host {host} with username {username}");
-                    let mut pool_guard = pool.lock().await;
                     let session = tokio::select! {
+                    let mut pool_guard = pool.write().await;
                         result = pool_guard.connect(&host, Some(username.as_str()), None, Some(connect_cancel_rx)) => {
                             log::trace!("SSH connection to {host} with username {username} successful");
                             result
@@ -483,13 +483,13 @@ impl SshPool {
                             || error_str.contains("broken pipe")
                         {
                             log::debug!("Removing SSH connection due to connection error: {key}");
-                            pool.lock().await.connections.remove(&key);
-                        } else if let Some(session) = pool.lock().await.connections.get(&key) {
+                            pool.write().await.connections.remove(&key);
+                        } else if let Some(session) = pool.read().await.connections.get(&key) {
                             if !session.send_keepalive().await {
                                 log::debug!(
                                     "Removing dead SSH connection after exec failure: {key}"
                                 );
-                                pool.lock().await.connections.remove(&key);
+                                pool.write().await.connections.remove(&key);
                             }
                         }
                     }
@@ -528,7 +528,7 @@ impl SshPool {
                 let username = username.unwrap_or_else(whoami::username);
                 let session = self
                     .pool
-                    .lock()
+                    .write()
                     .await
                     .connect(&host, Some(username.as_str()), None, None)
                     .await;
@@ -591,13 +591,13 @@ impl SshPool {
                             log::debug!(
                                 "Removing SSH connection due to PTY connection error: {key}"
                             );
-                            self.pool.lock().await.connections.remove(&key);
-                        } else if let Some(session) = self.pool.lock().await.connections.get(&key) {
+                            self.pool.write().await.connections.remove(&key);
+                        } else if let Some(session) = self.pool.read().await.connections.get(&key) {
                             if !session.send_keepalive().await {
                                 log::debug!(
                                     "Removing dead SSH connection after PTY failure: {key}"
                                 );
-                                self.pool.lock().await.connections.remove(&key);
+                                self.pool.write().await.connections.remove(&key);
                             }
                         }
 
@@ -637,14 +637,14 @@ impl SshPool {
                 }
             }
             SshPoolMessage::HealthCheck { reply_to } => {
-                let connection_count = self.pool.lock().await.connections.len();
+                let connection_count = self.pool.read().await.connections.len();
                 log::debug!(
                     "Running SSH connection health check with keepalives on {connection_count} connections"
                 );
                 let mut dead_connections = Vec::new();
 
                 // Check all connections for liveness using actual keepalives
-                for (key, session) in &self.pool.lock().await.connections {
+                for (key, session) in &self.pool.read().await.connections {
                     if !session.send_keepalive().await {
                         log::debug!("SSH keepalive failed for connection: {key}");
                         dead_connections.push(key.clone());
@@ -653,12 +653,12 @@ impl SshPool {
 
                 let dead_count = dead_connections.len();
                 for key in &dead_connections {
-                    self.pool.lock().await.connections.remove(key);
+                    self.pool.write().await.connections.remove(key);
                 }
                 if dead_count > 0 {
                     log::debug!(
                         "Health check removed {dead_count} dead connections, {} remaining",
-                        self.pool.lock().await.connections.len()
+                        self.pool.read().await.connections.len()
                     );
                 } else if connection_count > 0 {
                     log::debug!(
