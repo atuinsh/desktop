@@ -2,6 +2,7 @@ use super::session::{Authentication, Session};
 use eyre::Result;
 use std::collections::HashMap;
 use std::sync::Arc;
+use tokio::sync::oneshot;
 
 // A pool of ssh connections
 // This avoids opening several ssh connections to the same host
@@ -35,6 +36,7 @@ impl Pool {
         host: &str,
         username: Option<&str>,
         auth: Option<Authentication>,
+        cancellation_rx: Option<oneshot::Receiver<()>>,
     ) -> Result<Arc<Session>> {
         let current_user = whoami::username();
         let username = username.unwrap_or(&current_user);
@@ -56,10 +58,27 @@ impl Pool {
             }
         }
 
+        let async_session = async {
+            let mut session = Session::open(host).await?;
+            session.authenticate(auth, Some(username)).await?;
+            Ok::<_, eyre::Report>(session)
+        };
+
         // Create a new connection
         log::debug!("Creating new SSH connection for {key}");
-        let mut session = Session::open(host).await?;
-        session.authenticate(auth, Some(username)).await?;
+        let session = if let Some(mut cancellation_rx) = cancellation_rx {
+            tokio::select! {
+                result = async_session => {
+                    result?
+                }
+                _ = &mut cancellation_rx => {
+                    log::debug!("SSH connection {key} cancelled");
+                    return Err(eyre::eyre!("SSH connection cancelled"));
+                }
+            }
+        } else {
+            async_session.await?
+        };
 
         let session = Arc::new(session);
         self.connections.insert(key, session.clone());

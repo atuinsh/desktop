@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use bytes::Bytes;
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::{mpsc, oneshot, Mutex};
 use tokio::time::interval;
 
 use crate::pty::PtyMetadata;
@@ -298,7 +298,7 @@ pub(crate) struct SshPool {
 
     pub channels: HashMap<String, ChannelMeta>,
 
-    pool: Pool,
+    pool: Arc<Mutex<Pool>>,
 }
 
 impl SshPool {
@@ -309,7 +309,7 @@ impl SshPool {
         Self {
             sender,
             receiver,
-            pool: Pool::new(),
+            pool: Arc::new(Mutex::new(Pool::new())),
             channels: HashMap::new(),
         }
     }
@@ -376,7 +376,12 @@ impl SshPool {
                 auth,
                 reply_to,
             } => {
-                let result = self.pool.connect(&host, username.as_deref(), auth).await;
+                let result = self
+                    .pool
+                    .lock()
+                    .await
+                    .connect(&host, username.as_deref(), auth, None)
+                    .await;
 
                 let _ = reply_to.send(result);
             }
@@ -385,16 +390,16 @@ impl SshPool {
                 username,
                 reply_to,
             } => {
-                let result = self.pool.disconnect(&host, &username).await;
+                let result = self.pool.lock().await.disconnect(&host, &username).await;
                 let _ = reply_to.send(result);
             }
             SshPoolMessage::ListConnections { reply_to } => {
                 // Get the keys from the pool's connections
-                let connections = self.pool.connections.keys().cloned().collect();
+                let connections = self.pool.lock().await.connections.keys().cloned().collect();
                 let _ = reply_to.send(connections);
             }
             SshPoolMessage::Len { reply_to } => {
-                let len = self.pool.connections.len();
+                let len = self.pool.lock().await.connections.len();
                 let _ = reply_to.send(len);
             }
             SshPoolMessage::Exec {
@@ -407,25 +412,9 @@ impl SshPool {
                 reply_to,
                 result_tx,
             } => {
+                let (cancel_tx, mut cancel_rx) = oneshot::channel();
+
                 let username = username.unwrap_or_else(whoami::username);
-                let session = self
-                    .pool
-                    .connect(&host, Some(username.as_str()), None)
-                    .await;
-
-                let session = match session {
-                    Ok(session) => session,
-                    Err(e) => {
-                        log::error!("Failed to connect to SSH host {host}: {e}");
-                        if let Err(e) = reply_to.send(Err(e)) {
-                            log::error!("Failed to send error to reply_to: {e:?}");
-                        }
-                        return;
-                    }
-                };
-
-                let (cancel_tx, cancel_rx) = oneshot::channel();
-
                 self.channels.insert(
                     channel.clone(),
                     ChannelMeta {
@@ -437,42 +426,78 @@ impl SshPool {
                     },
                 );
 
-                log::debug!("Executing command on channel {channel}: {command}");
-                let result = session
-                    .exec(
-                        self.handle(),
-                        channel.clone(),
-                        output_stream,
-                        cancel_rx,
-                        interpreter.as_str(),
-                        command.as_str(),
-                    )
-                    .await;
+                let (connect_cancel_tx, connect_cancel_rx) = oneshot::channel();
 
-                // Handle exec failures - if the session failed, remove it from the pool
-                if let Err(ref e) = result {
-                    log::error!("SSH exec failed for {host}: {e}");
-                    let key = format!("{username}@{host}");
+                let pool = self.pool.clone();
+                let handle = self.handle();
+                // Run the SSH connection in a task to avoid blocking the actor
+                tokio::spawn(async move {
+                    log::trace!("Connecting to SSH host {host} with username {username}");
+                    let mut pool_guard = pool.lock().await;
+                    let session = tokio::select! {
+                        result = pool_guard.connect(&host, Some(username.as_str()), None, Some(connect_cancel_rx)) => {
+                            log::trace!("SSH connection to {host} with username {username} successful");
+                            result
+                        }
+                        _ = &mut cancel_rx => {
+                            log::trace!("SSH connection to {host} with username {username} cancelled");
+                            let _ = connect_cancel_tx.send(());
+                            let _ = pool_guard.disconnect(&host, &username).await;
+                            Err(eyre::eyre!("SSH connection cancelled"))
+                        }
+                    };
+                    drop(pool_guard);
 
-                    // TODO: use a proper error enum
-                    let error_str = e.to_string().to_lowercase();
-                    if error_str.contains("timeout")
-                        || error_str.contains("connection")
-                        || error_str.contains("broken pipe")
-                    {
-                        log::debug!("Removing SSH connection due to connection error: {key}");
-                        self.pool.connections.remove(&key);
-                    } else if let Some(session) = self.pool.connections.get(&key) {
-                        if !session.send_keepalive().await {
-                            log::debug!("Removing dead SSH connection after exec failure: {key}");
-                            self.pool.connections.remove(&key);
+                    let session = match session {
+                        Ok(session) => session,
+                        Err(e) => {
+                            log::error!("Failed to connect to SSH host {host}: {e}");
+                            if let Err(e) = reply_to.send(Err(e)) {
+                                log::error!("Failed to send error to reply_to: {e:?}");
+                            }
+                            return;
+                        }
+                    };
+
+                    log::trace!("Executing command on channel {channel}: {command}");
+                    let result = session
+                        .exec(
+                            handle,
+                            channel.clone(),
+                            output_stream,
+                            cancel_rx,
+                            interpreter.as_str(),
+                            command.as_str(),
+                        )
+                        .await;
+
+                    // Handle exec failures - if the session failed, remove it from the pool
+                    if let Err(ref e) = result {
+                        log::error!("SSH exec failed for {host}: {e}");
+                        let key = format!("{username}@{host}");
+
+                        // TODO: use a proper error enum
+                        let error_str = e.to_string().to_lowercase();
+                        if error_str.contains("timeout")
+                            || error_str.contains("connection")
+                            || error_str.contains("broken pipe")
+                        {
+                            log::debug!("Removing SSH connection due to connection error: {key}");
+                            pool.lock().await.connections.remove(&key);
+                        } else if let Some(session) = pool.lock().await.connections.get(&key) {
+                            if !session.send_keepalive().await {
+                                log::debug!(
+                                    "Removing dead SSH connection after exec failure: {key}"
+                                );
+                                pool.lock().await.connections.remove(&key);
+                            }
                         }
                     }
-                }
 
-                if let Err(e) = reply_to.send(result) {
-                    log::error!("Failed to send result to reply_to: {e:?}");
-                }
+                    if let Err(e) = reply_to.send(result) {
+                        log::error!("Failed to send result to reply_to: {e:?}");
+                    }
+                });
             }
             SshPoolMessage::ExecFinished { channel, reply_to } => {
                 log::debug!("ExecFinished for channel: {channel}");
@@ -487,6 +512,7 @@ impl SshPool {
                 log::debug!("ExecCancel for channel: {channel}");
 
                 if let Some(meta) = self.channels.remove(&channel) {
+                    log::trace!("Sending cancel to channel {channel}");
                     let _ = meta.cancel_tx.send(());
                 }
             }
@@ -502,7 +528,9 @@ impl SshPool {
                 let username = username.unwrap_or_else(whoami::username);
                 let session = self
                     .pool
-                    .connect(&host, Some(username.as_str()), None)
+                    .lock()
+                    .await
+                    .connect(&host, Some(username.as_str()), None, None)
                     .await;
 
                 let session = match session {
@@ -563,13 +591,13 @@ impl SshPool {
                             log::debug!(
                                 "Removing SSH connection due to PTY connection error: {key}"
                             );
-                            self.pool.connections.remove(&key);
-                        } else if let Some(session) = self.pool.connections.get(&key) {
+                            self.pool.lock().await.connections.remove(&key);
+                        } else if let Some(session) = self.pool.lock().await.connections.get(&key) {
                             if !session.send_keepalive().await {
                                 log::debug!(
                                     "Removing dead SSH connection after PTY failure: {key}"
                                 );
-                                self.pool.connections.remove(&key);
+                                self.pool.lock().await.connections.remove(&key);
                             }
                         }
 
@@ -609,14 +637,14 @@ impl SshPool {
                 }
             }
             SshPoolMessage::HealthCheck { reply_to } => {
-                let connection_count = self.pool.connections.len();
+                let connection_count = self.pool.lock().await.connections.len();
                 log::debug!(
                     "Running SSH connection health check with keepalives on {connection_count} connections"
                 );
                 let mut dead_connections = Vec::new();
 
                 // Check all connections for liveness using actual keepalives
-                for (key, session) in &self.pool.connections {
+                for (key, session) in &self.pool.lock().await.connections {
                     if !session.send_keepalive().await {
                         log::debug!("SSH keepalive failed for connection: {key}");
                         dead_connections.push(key.clone());
@@ -625,12 +653,12 @@ impl SshPool {
 
                 let dead_count = dead_connections.len();
                 for key in &dead_connections {
-                    self.pool.connections.remove(key);
+                    self.pool.lock().await.connections.remove(key);
                 }
                 if dead_count > 0 {
                     log::debug!(
                         "Health check removed {dead_count} dead connections, {} remaining",
-                        self.pool.connections.len()
+                        self.pool.lock().await.connections.len()
                     );
                 } else if connection_count > 0 {
                     log::debug!(
