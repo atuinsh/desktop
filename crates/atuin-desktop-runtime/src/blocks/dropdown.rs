@@ -231,13 +231,13 @@ impl BlockBehavior for Dropdown {
         resolver: &ContextResolver,
         _block_local_value_provider: Option<&dyn LocalValueProvider>,
     ) -> Result<Option<BlockContext>, Box<dyn std::error::Error + Send + Sync>> {
-        let mut context = BlockContext::new();
         let name = resolver.resolve_template(&self.name)?;
         let value = resolver.resolve_template(&self.value)?;
-        if (name.is_empty()) {
+        if name.is_empty() {
             return Ok(None);
         }
 
+        let mut context = BlockContext::new();
         context.insert(DocumentVar::new(name, value, self.value.clone()));
         Ok(Some(context))
     }
