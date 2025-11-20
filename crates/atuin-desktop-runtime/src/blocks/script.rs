@@ -220,16 +220,18 @@ impl Script {
     }
 
     /// Determine the correct flag for passing code to the interpreter
-    fn get_interpreter_flag(interpreter: &str) -> &'static str {
+    fn get_interpreter_flag(interpreter: &str) -> Option<&'static str> {
         let interpreter = std::path::Path::new(interpreter)
             .file_name()
             .and_then(|n| n.to_str())
             .unwrap_or(interpreter);
 
         match interpreter {
-            "ruby" | "node" | "nodejs" | "perl" | "lua" => "-e",
-            "php" => "-r",
-            _ => "-c",
+            "ruby" | "node" | "nodejs" | "perl" | "lua" => Some("-e"),
+            "php" => Some("-r"),
+            "bash" | "sh" | "zsh" | "fish" => Some("-c"),
+            s if s.starts_with("python") => Some("-c"),
+            _ => None,
         }
     }
 
@@ -294,9 +296,10 @@ impl Script {
         cmd.args(args);
 
         // Add interpreter flag if not already present
-        let flag = Self::get_interpreter_flag(program);
-        if !args.contains(&flag) {
-            cmd.arg(flag);
+        if let Some(flag) = Self::get_interpreter_flag(program) {
+            if !args.contains(&flag) {
+                cmd.arg(flag);
+            }
         }
 
         cmd.arg(&code);
@@ -790,12 +793,15 @@ mod tests {
 
     #[tokio::test]
     async fn test_interpreter_flag_logic() {
-        assert_eq!(Script::get_interpreter_flag("ruby"), "-e");
-        assert_eq!(Script::get_interpreter_flag("node"), "-e");
-        assert_eq!(Script::get_interpreter_flag("php"), "-r");
-        assert_eq!(Script::get_interpreter_flag("bash"), "-c");
-        assert_eq!(Script::get_interpreter_flag("/usr/bin/ruby"), "-e");
-        assert_eq!(Script::get_interpreter_flag("/usr/local/bin/python3"), "-c");
+        assert_eq!(Script::get_interpreter_flag("ruby"), Some("-e"));
+        assert_eq!(Script::get_interpreter_flag("node"), Some("-e"));
+        assert_eq!(Script::get_interpreter_flag("php"), Some("-r"));
+        assert_eq!(Script::get_interpreter_flag("bash"), Some("-c"));
+        assert_eq!(Script::get_interpreter_flag("/usr/bin/ruby"), Some("-e"));
+        assert_eq!(Script::get_interpreter_flag("/usr/local/bin/python3"), Some("-c"));
+        assert_eq!(Script::get_interpreter_flag("python3.10"), Some("-c"));
+        assert_eq!(Script::get_interpreter_flag("awk"), None);
+        assert_eq!(Script::get_interpreter_flag("my-custom-tool"), None);
     }
 
     #[tokio::test]

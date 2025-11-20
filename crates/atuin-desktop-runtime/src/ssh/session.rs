@@ -582,16 +582,18 @@ impl Session {
     }
 
     /// Determine the correct flag for passing code to the interpreter
-    fn get_interpreter_flag(interpreter: &str) -> &'static str {
+    fn get_interpreter_flag(interpreter: &str) -> Option<&'static str> {
         let interpreter = std::path::Path::new(interpreter)
             .file_name()
             .and_then(|n| n.to_str())
             .unwrap_or(interpreter);
 
         match interpreter {
-            "ruby" | "node" | "nodejs" | "perl" | "lua" => "-e",
-            "php" => "-r",
-            _ => "-c",
+            "ruby" | "node" | "nodejs" | "perl" | "lua" => Some("-e"),
+            "php" => Some("-r"),
+            "bash" | "sh" | "zsh" | "fish" => Some("-c"),
+            s if s.starts_with("python") => Some("-c"),
+            _ => None,
         }
     }
 
@@ -622,8 +624,10 @@ impl Session {
         full_command_parts.push(program.to_string());
         full_command_parts.extend(args.iter().map(|s| s.to_string()));
 
-        if !args.contains(&flag) {
-            full_command_parts.push(flag.to_string());
+        if let Some(flag) = flag {
+            if !args.contains(&flag) {
+                full_command_parts.push(flag.to_string());
+            }
         }
 
         full_command_parts.push(format!("'{}'", command.replace('\'', "'\"'\"'")));
