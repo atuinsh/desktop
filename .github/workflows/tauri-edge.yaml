@@ -103,8 +103,6 @@ jobs:
 
       - name: Rust cache
         uses: swatinem/rust-cache@v2
-        with:
-          workspaces: "./backend -> target"
 
       - name: install frontend dependencies
         run: pnpm install
@@ -112,13 +110,13 @@ jobs:
       - name: update edge version
         run: |
           # Get the current version from Cargo.toml
-          version=$(grep -m 1 '^version = ' backend/Cargo.toml | sed 's/version = "\(.*\)"/\1/')
+          version=$(grep -m 1 '^version = ' Cargo.toml | sed 's/version = "\(.*\)"/\1/')
           # Get the short commit SHA
           commit_sha=$(git rev-parse --short HEAD)
           # Create the new version string
           new_version="${version}-${commit_sha}"
           # Replace the version in Cargo.toml
-          sed -i.bak "s/^version = \"${version}\"/version = \"${new_version}\"/" backend/Cargo.toml
+          sed -i.bak "s/^version = \"${version}\"/version = \"${new_version}\"/" Cargo.toml
 
       - uses: tauri-apps/tauri-action@v0
         id: tauri-action
