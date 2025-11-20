@@ -65,16 +65,16 @@ export default function Block({
           <div className="flex items-center gap-2">
             {topRightElement}
             {hasDependency && parentBlock && (
-            <Tooltip content={`This ${type} depends on ${parentBlock?.name}`}>
-              <Chip
-                variant="flat"
-                size="sm"
-                className="pl-3 py-2"
-                startContent={<WorkflowIcon size={14} />}
-              >
-                {parentBlock?.name}
-              </Chip>
-            </Tooltip>
+              <Tooltip content={`This ${type} depends on ${parentBlock?.name}`}>
+                <Chip
+                  variant="flat"
+                  size="sm"
+                  className="pl-3 py-2"
+                  startContent={<WorkflowIcon size={14} />}
+                >
+                  {parentBlock?.name}
+                </Chip>
+              </Tooltip>
             )}
           </div>
         </div>
@@ -87,7 +87,7 @@ export default function Block({
         {header && header}
       </CardHeader>
 
-      {children && !hideChild && <CardBody>{children}</CardBody>}
+      {children && <CardBody className={hideChild ? "hidden" : ""}>{children}</CardBody>}
 
       {footer && <CardFooter>{footer}</CardFooter>}
     </Card>

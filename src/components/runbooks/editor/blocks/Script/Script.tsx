@@ -107,6 +107,9 @@ const ScriptBlock = ({
     if (output.stdout) {
       xtermRef.current?.write(output.stdout);
     }
+    if (output.binary) {
+      xtermRef.current?.write(new Uint8Array(output.binary));
+    }
     if (output.stderr) {
       xtermRef.current?.write(output.stderr);
     }
@@ -372,7 +375,6 @@ const ScriptBlock = ({
       <Xterm
         ref={xtermRef}
         className="min-h-[200px] w-full"
-        visible={script.outputVisible && hasRun}
       />
     </Block>
   );

@@ -8,19 +8,18 @@ import debounce from "lodash.debounce";
 
 interface XtermProps {
   className?: string;
-  visible?: boolean;
 }
 
 export interface XtermHandle {
   clear: () => void;
-  write: (data: string) => void;
+  write: (data: string | Uint8Array) => void;
 }
 
-const Xterm = forwardRef<XtermHandle, XtermProps>(({ className = "min-h-[200px] w-full", visible = true }, ref) => {
+const Xterm = forwardRef<XtermHandle, XtermProps>(({ className = "min-h-[200px] w-full" }, ref) => {
   const [terminal, setTerminal] = useState<Terminal | null>(null);
   const [fitAddon, setFitAddon] = useState<FitAddon | null>(null);
   const terminalRef = useRef<HTMLDivElement>(null);
-  const writeBuffer = useRef<string[]>([]);
+  const writeBuffer = useRef<(string | Uint8Array)[]>([]);
   const clearPending = useRef(false);
 
   // Expose methods via ref
@@ -36,7 +35,7 @@ const Xterm = forwardRef<XtermHandle, XtermProps>(({ className = "min-h-[200px] 
           writeBuffer.current = [];
         }
       },
-      write: (data: string) => {
+      write: (data: string | Uint8Array) => {
         if (terminal) {
           terminal.write(data);
         } else {
@@ -115,19 +114,7 @@ const Xterm = forwardRef<XtermHandle, XtermProps>(({ className = "min-h-[200px] 
     };
   }, [terminal, fitAddon]);
 
-  // Re-fit terminal when visibility changes
-  useEffect(() => {
-    if (!terminal || !fitAddon || !visible) return;
-
-    // Use requestAnimationFrame to ensure the DOM has updated
-    const rafId = requestAnimationFrame(() => {
-      fitAddon.fit();
-    });
-
-    return () => cancelAnimationFrame(rafId);
-  }, [visible, terminal, fitAddon]);
-
-  return <div ref={terminalRef} className={className} style={{ display: visible ? 'block' : 'none' }} />;
+  return <div ref={terminalRef} className={className} />;
 });
 
 Xterm.displayName = "Xterm";
