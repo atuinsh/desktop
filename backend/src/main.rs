@@ -30,6 +30,7 @@ mod state;
 mod stats;
 mod store;
 mod templates;
+mod util;
 mod workspaces;
 
 // If this works out ergonomically, we should move all the commands into a single module
@@ -609,6 +610,20 @@ fn main() {
             }
         })
         .setup(|app| {
+            // Load login shell environment early in startup
+            // This is best-effort only and should never crash the app
+            #[cfg(unix)]
+            run_async_command(async {
+                match crate::util::load_login_shell_environment().await {
+                    Ok(()) => {
+                        log::info!("Successfully loaded login shell environment");
+                    }
+                    Err(e) => {
+                        log::warn!("Failed to load login shell environment: {}", e);
+                    }
+                }
+            });
+
             backup_databases(app)?;
 
             let handle = app.handle();
