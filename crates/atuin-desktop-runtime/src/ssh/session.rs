@@ -611,12 +611,24 @@ impl Session {
         let mut channel = self.session.channel_open_session().await?;
 
         // Create the actual command to execute
-        let full_command = format!(
-            "{} {} '{}'",
-            interpreter,
-            Self::get_interpreter_flag(interpreter),
-            command.replace('\'', "'\"'\"'")
-        );
+        // Parse interpreter string into program and args
+        let parts: Vec<&str> = interpreter.split_whitespace().collect();
+        let program = parts.first().unwrap_or(&interpreter);
+        let args = if parts.len() > 1 { &parts[1..] } else { &[] };
+
+        let flag = Self::get_interpreter_flag(program);
+
+        let mut full_command_parts = Vec::new();
+        full_command_parts.push(program.to_string());
+        full_command_parts.extend(args.iter().map(|s| s.to_string()));
+
+        if !args.contains(&flag) {
+            full_command_parts.push(flag.to_string());
+        }
+
+        full_command_parts.push(format!("'{}'", command.replace('\'', "'\"'\"'")));
+
+        let full_command = full_command_parts.join(" ");
 
         log::debug!("Executing command on remote: {full_command}");
 

@@ -282,8 +282,23 @@ impl Script {
         }
         let env_vars = context.context_resolver.env_vars();
 
-        let mut cmd = Command::new(&self.interpreter);
-        cmd.arg(Self::get_interpreter_flag(&self.interpreter));
+        // Parse interpreter string into program and args
+        let parts: Vec<&str> = self.interpreter.split_whitespace().collect();
+        let binding = self.interpreter.as_str();
+        let program = parts.first().copied().unwrap_or(binding);
+        let args = if parts.len() > 1 { &parts[1..] } else { &[] };
+
+        let mut cmd = Command::new(program);
+        
+        // Add user-provided args
+        cmd.args(args);
+
+        // Add interpreter flag if not already present
+        let flag = Self::get_interpreter_flag(program);
+        if !args.contains(&flag) {
+            cmd.arg(flag);
+        }
+
         cmd.arg(&code);
         cmd.current_dir(&cwd);
         cmd.envs(env_vars);
@@ -768,6 +783,16 @@ mod tests {
             Script::parse_ssh_host("host.com:2222"),
             (None, "host.com".to_string())
         );
+    }
+
+    #[tokio::test]
+    async fn test_interpreter_flag_logic() {
+        assert_eq!(Script::get_interpreter_flag("ruby"), "-e");
+        assert_eq!(Script::get_interpreter_flag("node"), "-e");
+        assert_eq!(Script::get_interpreter_flag("php"), "-r");
+        assert_eq!(Script::get_interpreter_flag("bash"), "-c");
+        assert_eq!(Script::get_interpreter_flag("/usr/bin/ruby"), "-e");
+        assert_eq!(Script::get_interpreter_flag("/usr/local/bin/python3"), "-c");
     }
 
     #[tokio::test]
