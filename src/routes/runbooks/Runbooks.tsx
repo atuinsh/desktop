@@ -30,7 +30,6 @@ import {
   useBlockContext,
 } from "@/lib/hooks/useDocumentBridge";
 import DebugWindow from "@/lib/dev/DebugWindow";
-import { ResolvedContext } from "@/rs-bindings/ResolvedContext";
 import { useSerialExecution } from "@/lib/hooks/useSerialExecution";
 import { Button, Spinner } from "@heroui/react";
 
