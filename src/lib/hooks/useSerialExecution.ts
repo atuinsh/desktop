@@ -104,7 +104,7 @@ export function useSerialExecution(runbookId: string | undefined | null) {
       start: start,
       stop: stop,
     }),
-    [isRunning, start, stop],
+    [isRunning, isSuccess, isError, isCancelled, error, start, stop],
   );
 
   return handle;
