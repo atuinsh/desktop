@@ -121,6 +121,7 @@ jobs:
       - uses: tauri-apps/tauri-action@v0
         id: tauri-action
         env:
+          CI: true
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
