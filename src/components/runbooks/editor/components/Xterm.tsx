@@ -4,7 +4,6 @@ import { FitAddon } from "@xterm/addon-fit";
 import { WebglAddon } from "@xterm/addon-webgl";
 import "@xterm/xterm/css/xterm.css";
 import { Settings } from "@/state/settings.ts";
-import debounce from "lodash.debounce";
 import useResizeObserver from "use-resize-observer";
 
 interface XtermProps {
