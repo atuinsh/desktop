@@ -372,10 +372,7 @@ const ScriptBlock = ({
         </>
       }
     >
-      <Xterm
-        ref={xtermRef}
-        className="min-h-[200px] w-full"
-      />
+      {hasRun && <Xterm ref={xtermRef} className="min-h-[200px] w-full" />}
     </Block>
   );
 };
