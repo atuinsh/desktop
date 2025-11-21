@@ -664,6 +664,10 @@ export default function Editor({ runbook, editable, runbookEditor }: EditorProps
         editable={editable}
       >
         <SuggestionMenuController
+          floatingOptions={{
+            strategy: "absolute",
+            placement: "right",
+          }}
           triggerCharacter={"/"}
           getItems={async (query: any) =>
             filterSuggestionItems(
