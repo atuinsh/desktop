@@ -6,8 +6,20 @@ import "@xterm/xterm/css/xterm.css";
 import { Settings } from "@/state/settings.ts";
 import useResizeObserver from "use-resize-observer";
 
+/**
+ * Calculate terminal row height based on font size.
+ * xterm.js with lineHeight: 1 typically renders rows at ~1.2x the font size
+ * due to internal padding and line metrics.
+ */
+export function calculateRowHeight(fontSize: number): number {
+  return Math.ceil(fontSize * 1.2);
+}
+
 interface XtermProps {
   className?: string;
+  height?: number;
+  /** Called after terminal renders with actual dimensions for precise sizing */
+  onDimensionsReady?: (dimensions: { actualHeight: number; cellHeight: number }) => void;
 }
 
 export interface XtermHandle {
@@ -15,7 +27,7 @@ export interface XtermHandle {
   write: (data: string | Uint8Array) => void;
 }
 
-const Xterm = forwardRef<XtermHandle, XtermProps>(({ className = "min-h-[200px] w-full" }, ref) => {
+const Xterm = forwardRef<XtermHandle, XtermProps>(({ className = "min-h-[200px] w-full", height, onDimensionsReady }, ref) => {
   const [terminal, setTerminal] = useState<Terminal | null>(null);
   const [fitAddon, setFitAddon] = useState<FitAddon | null>(null);
   const [readyToAttach, setReadyToAttach] = useState(false);
@@ -54,17 +66,24 @@ const Xterm = forwardRef<XtermHandle, XtermProps>(({ className = "min-h-[200px] 
     let webglAddon: WebglAddon | null = null;
 
     const initializeTerminal = async () => {
+      // Load font settings from Settings (matching pty_state.ts behavior)
+      const font = (await Settings.terminalFont()) || Settings.DEFAULT_FONT;
+      const fontSize = (await Settings.terminalFontSize()) || Settings.DEFAULT_FONT_SIZE;
+      const useWebGL = await Settings.terminalGL();
+
       const term = new Terminal({
-        fontFamily: "FiraCode, monospace",
-        fontSize: 14,
+        fontFamily: `${font}, monospace`,
+        fontSize: fontSize,
         convertEol: true,
+        rescaleOverlappingGlyphs: true,
+        letterSpacing: 0,
+        lineHeight: 1,
       });
 
       fitAddon = new FitAddon();
       term.loadAddon(fitAddon);
 
       // Add WebGL support if enabled in settings
-      const useWebGL = await Settings.terminalGL();
       if (useWebGL) {
         try {
           webglAddon = new WebglAddon();
@@ -108,7 +127,19 @@ const Xterm = forwardRef<XtermHandle, XtermProps>(({ className = "min-h-[200px] 
     if (!readyToAttach || !fitAddon || !terminal) return;
 
     terminal.open(terminalRef.current!);
-  }, [terminal, fitAddon, readyToAttach]);
+
+    // Must call fit() after opening to properly size the terminal to its container
+    fitAddon.fit();
+
+    // Report actual dimensions after terminal renders
+    // @ts-ignore - accessing internal xterm.js API for accurate cell dimensions
+    const cellHeight = terminal._core?._renderService?.dimensions?.css?.cell?.height;
+    const actualHeight = terminal.element?.offsetHeight;
+
+    if (actualHeight && cellHeight && onDimensionsReady) {
+      onDimensionsReady({ actualHeight, cellHeight });
+    }
+  }, [terminal, fitAddon, readyToAttach, onDimensionsReady]);
 
   const compositeRef = (elem: HTMLDivElement) => {
     terminalRef.current = elem;
@@ -122,7 +153,28 @@ const Xterm = forwardRef<XtermHandle, XtermProps>(({ className = "min-h-[200px] 
     },
   });
 
-  return <div ref={compositeRef} className={className} />;
+  // Explicitly fit when height prop changes and report new dimensions
+  useEffect(() => {
+    if (!fitAddon || !terminal) return;
+    fitAddon.fit();
+
+    // Report updated dimensions after fit
+    // @ts-ignore - accessing internal xterm.js API
+    const cellHeight = terminal._core?._renderService?.dimensions?.css?.cell?.height;
+    const actualHeight = terminal.element?.offsetHeight;
+
+    if (actualHeight && cellHeight && onDimensionsReady) {
+      onDimensionsReady({ actualHeight, cellHeight });
+    }
+  }, [fitAddon, terminal, height, onDimensionsReady]);
+
+  return (
+    <div
+      ref={compositeRef}
+      className={`overflow-hidden ${className}`}
+      style={height ? { height: `${height}px` } : undefined}
+    />
+  );
 });
 
 Xterm.displayName = "Xterm";

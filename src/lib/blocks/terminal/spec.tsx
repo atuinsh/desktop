@@ -46,6 +46,12 @@ export default createReactBlockSpec(TERMINAL_BLOCK_SCHEMA, {
       });
     };
 
+    const setTerminalRows = (rows: number) => {
+      editor.updateBlock(block, {
+        props: { ...block.props, terminalRows: rows },
+      });
+    };
+
     let dependency = DependencySpec.deserialize(block.props.dependency);
     let terminal = new TerminalBlock(
       block.id,
@@ -68,6 +74,8 @@ export default createReactBlockSpec(TERMINAL_BLOCK_SCHEMA, {
         onCodeMirrorFocus={handleCodeMirrorFocus}
         collapseCode={collapseCode}
         setCollapseCode={setCollapseCode}
+        terminalRows={block.props.terminalRows}
+        setTerminalRows={setTerminalRows}
       />
     );
   },

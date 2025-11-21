@@ -31,6 +31,7 @@ import { DependencySpec } from "@/lib/workflow/dependency.ts";
 import Terminal from "./components/terminal.tsx";
 import Block from "../common/Block.tsx";
 import PlayButton from "../common/PlayButton.tsx";
+import ResizeHandle from "@/components/common/ResizeHandle.tsx";
 import { useCurrentRunbookId } from "@/context/runbook_id_context.ts";
 import {
   useBlockContext,
@@ -38,6 +39,11 @@ import {
   useBlockOutput,
 } from "@/lib/hooks/useDocumentBridge.ts";
 import { PtyMetadata } from "@/rs-bindings/PtyMetadata.ts";
+import { Settings } from "@/state/settings.ts";
+import { calculateRowHeight } from "@/components/runbooks/editor/components/Xterm.tsx";
+
+const MIN_TERMINAL_ROWS = 5;
+const MAX_TERMINAL_ROWS = 40;
 
 interface RunBlockProps {
   onChange: (val: string) => void;
@@ -54,6 +60,9 @@ interface RunBlockProps {
   collapseCode: boolean;
   setCollapseCode: (collapse: boolean) => void;
 
+  terminalRows: number;
+  setTerminalRows: (rows: number) => void;
+
   terminal: TerminalBlock;
 }
 
@@ -69,6 +78,8 @@ export const RunBlock = ({
   onCodeMirrorFocus,
   collapseCode,
   setCollapseCode,
+  terminalRows,
+  setTerminalRows,
 }: RunBlockProps) => {
   let editor = useBlockNoteEditor();
   const colorMode = useStore((state) => state.functionalColorMode);
@@ -85,6 +96,22 @@ export const RunBlock = ({
   const [commandStart, setCommandStart] = useState<number | null>(null);
   const elementRef = useRef<HTMLDivElement>(null);
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
+
+  // Terminal dimensions - rowHeight for resize snapping, actualHeight for precise container sizing
+  const [rowHeight, setRowHeight] = useState(() => calculateRowHeight(Settings.DEFAULT_FONT_SIZE));
+  const [actualTerminalHeight, setActualTerminalHeight] = useState<number | null>(null);
+
+  // Load font size setting on mount for initial estimate
+  useEffect(() => {
+    Settings.terminalFontSize().then((fontSize) => {
+      setRowHeight(calculateRowHeight(fontSize || Settings.DEFAULT_FONT_SIZE));
+    });
+  }, []);
+
+  // Preview height during resize drag (null when not dragging)
+  const [previewHeight, setPreviewHeight] = useState<number | null>(null);
+  // Use actual rendered height when available, fall back to calculated estimate
+  const effectiveHeight = previewHeight ?? actualTerminalHeight ?? terminalRows * rowHeight;
 
   const lightModeEditorTheme = useStore((state) => state.lightModeEditorTheme);
   const darkModeEditorTheme = useStore((state) => state.darkModeEditorTheme);
@@ -232,6 +259,7 @@ export const RunBlock = ({
   return (
     <Block
       className={sshBorderClass}
+      bodyClassName="p-0 overflow-visible"
       hasDependency
       name={terminal.name}
       block={terminal}
@@ -343,12 +371,32 @@ export const RunBlock = ({
       {terminal.outputVisible && (
         <>
           {!isFullscreen && pty && execution.isRunning && (
-            <div className="overflow-hidden transition-all duration-300 ease-in-out min-w-0 max-h-[400px]">
+            <div className="overflow-hidden min-w-0">
               <Terminal
                 pty={pty.pid}
                 setCommandRunning={setCommandRunning}
                 setExitCode={setExitCode}
                 setCommandDuration={setCommandDuration}
+                height={effectiveHeight}
+                onDimensionsReady={({ actualHeight, cellHeight }) => {
+                  setActualTerminalHeight(actualHeight);
+                  setRowHeight(cellHeight);
+                }}
+              />
+              <ResizeHandle
+                currentHeight={effectiveHeight}
+                onResizePreview={setPreviewHeight}
+                onResize={(newHeight) => {
+                  setPreviewHeight(null);
+                  setActualTerminalHeight(null); // Reset so we recalculate for new row count
+                  const newRows = Math.round(newHeight / rowHeight);
+                  setTerminalRows(
+                    Math.max(MIN_TERMINAL_ROWS, Math.min(MAX_TERMINAL_ROWS, newRows)),
+                  );
+                }}
+                snapIncrement={rowHeight}
+                minHeight={MIN_TERMINAL_ROWS * rowHeight}
+                maxHeight={MAX_TERMINAL_ROWS * rowHeight}
               />
             </div>
           )}
