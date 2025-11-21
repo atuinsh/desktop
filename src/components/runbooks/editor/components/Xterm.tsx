@@ -5,6 +5,7 @@ import { WebglAddon } from "@xterm/addon-webgl";
 import "@xterm/xterm/css/xterm.css";
 import { Settings } from "@/state/settings.ts";
 import debounce from "lodash.debounce";
+import useResizeObserver from "use-resize-observer";
 
 interface XtermProps {
   className?: string;
@@ -18,6 +19,7 @@ export interface XtermHandle {
 const Xterm = forwardRef<XtermHandle, XtermProps>(({ className = "min-h-[200px] w-full" }, ref) => {
   const [terminal, setTerminal] = useState<Terminal | null>(null);
   const [fitAddon, setFitAddon] = useState<FitAddon | null>(null);
+  const [readyToAttach, setReadyToAttach] = useState(false);
   const terminalRef = useRef<HTMLDivElement>(null);
   const writeBuffer = useRef<(string | Uint8Array)[]>([]);
   const clearPending = useRef(false);
@@ -93,18 +95,15 @@ const Xterm = forwardRef<XtermHandle, XtermProps>(({ className = "min-h-[200px] 
     }
 
     // Flush buffered writes
-    if (writeBuffer.current.length > 0) {
-      writeBuffer.current.forEach((data) => terminal.write(data));
-      writeBuffer.current = [];
-    }
+    writeBuffer.current.forEach((data) => terminal.write(data));
+    writeBuffer.current = [];
   }, [terminal]);
 
   // Handle terminal attachment and resizing
   useEffect(() => {
-    if (!terminal || !terminalRef.current) return;
+    if (!readyToAttach || !fitAddon || !terminal) return;
 
-    terminal.open(terminalRef.current);
-    fitAddon?.fit();
+    terminal.open(terminalRef.current!);
 
     const handleResize = debounce(() => fitAddon?.fit(), 100);
     window.addEventListener("resize", handleResize);
@@ -112,9 +111,21 @@ const Xterm = forwardRef<XtermHandle, XtermProps>(({ className = "min-h-[200px] 
     return () => {
       window.removeEventListener("resize", handleResize);
     };
-  }, [terminal, fitAddon]);
+  }, [terminal, fitAddon, readyToAttach]);
 
-  return <div ref={terminalRef} className={className} />;
+  const compositeRef = (elem: HTMLDivElement) => {
+    terminalRef.current = elem;
+    setReadyToAttach(true);
+  };
+
+  useResizeObserver({
+    ref: terminalRef.current,
+    onResize: () => {
+      fitAddon?.fit();
+    },
+  });
+
+  return <div ref={compositeRef} className={className} />;
 });
 
 Xterm.displayName = "Xterm";
