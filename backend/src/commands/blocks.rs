@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use atuin_desktop_runtime::context::BlockContextStorage;
 use atuin_desktop_runtime::events::GCEvent;
 use atuin_desktop_runtime::execution::ExecutionHandle;
 use atuin_desktop_runtime::execution::ExecutionResult;
@@ -302,6 +303,33 @@ pub async fn respond_to_block_prompt(
     } else {
         Err("Execution not found".to_string())
     }
+}
+
+#[tauri::command]
+pub async fn remove_stored_context_for_document(
+    state: State<'_, AtuinState>,
+    document_id: String,
+) -> Result<(), String> {
+    let context_storage = SqliteContextStorage::new(
+        state
+            .db_instances
+            .get_pool("context")
+            .await
+            .map_err(|e| format!("Failed to get context storage pool: {}", e))?,
+    )
+    .await
+    .map_err(|e| format!("Failed to create context storage: {}", e))?;
+
+    context_storage
+        .delete_for_document(&document_id)
+        .await
+        .map_err(|e| {
+            format!(
+                "Failed to remove stored context for document {document_id}: {}",
+                e
+            )
+        })?;
+    Ok(())
 }
 
 #[tauri::command]

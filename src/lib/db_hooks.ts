@@ -24,6 +24,7 @@ import Operation from "@/state/runbooks/operation";
 import Workspace from "@/state/runbooks/workspace";
 import SavedBlock from "@/state/runbooks/saved_block";
 import { savedBlocks } from "./queries/saved_blocks";
+import { invoke } from "@tauri-apps/api/core";
 
 export type Model = "runbook" | "workspace" | "legacy_workspace" | "snapshot" | "saved_block";
 export type Action = "create" | "update" | "delete";
@@ -40,6 +41,11 @@ export async function dbHook(kind: Model, action: Action, model: any) {
       const op = new Operation({ operation: { type: "runbook_deleted", runbookId: model.id } });
       op.save();
     }
+
+    // Remove stored context for the runbook
+    invoke("remove_stored_context_for_document", {
+      documentId: model.id,
+    });
   }
 
   if (kind === "workspace" && action === "delete") {
