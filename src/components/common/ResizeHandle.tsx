@@ -120,18 +120,3 @@ export default function ResizeHandle({
     </div>
   );
 }
-
-/**
- * Hook to calculate terminal row height from a terminal instance.
- * Returns the height of a single row in pixels.
- */
-export function useTerminalRowHeight(
-  terminal: { rows: number } | null,
-  containerHeight: number,
-): number {
-  if (!terminal || terminal.rows === 0) {
-    // Default estimate: 18px per row (common for 14px font)
-    return 18;
-  }
-  return containerHeight / terminal.rows;
-}
