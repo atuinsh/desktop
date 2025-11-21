@@ -520,7 +520,7 @@ dependencies = [
 
 [[package]]
 name = "atuin-desktop"
-version = "0.2.0"
+version = "0.1.11"
 dependencies = [
  "async-trait",
  "atuin-client",
@@ -588,7 +588,7 @@ dependencies = [
 
 [[package]]
 name = "atuin-desktop-runtime"
-version = "0.2.0"
+version = "0.1.11"
 dependencies = [
  "async-trait",
  "atuin-desktop-templates",
@@ -628,7 +628,7 @@ dependencies = [
 
 [[package]]
 name = "atuin-desktop-templates"
-version = "0.2.0"
+version = "0.1.11"
 dependencies = [
  "minijinja",
  "serde",

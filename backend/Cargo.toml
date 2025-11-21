@@ -3,7 +3,7 @@ name = "atuin-desktop"
 description = "Atuin Desktop"
 publish = false
 workspace = ".."
-version.workspace = true
+version = "0.1.11"            # duplicated here as CN CLI can't handle workspace version
 edition.workspace = true
 
 [lints.clippy]
