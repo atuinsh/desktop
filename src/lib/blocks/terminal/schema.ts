@@ -48,6 +48,8 @@ export const TERMINAL_LLM_PROMPT = `
     - Example: {"type": "run", "props": {"code": "curl {{ var.api_url }}/users", "name": "Get users", "outputVariable": "users_response"}, "id": "original-id"},
 `;
 
+export const DEFAULT_TERMINAL_ROWS = 20;
+
 export const TERMINAL_BLOCK_SCHEMA = {
   type: "run",
   propSchema: {
@@ -62,6 +64,7 @@ export const TERMINAL_BLOCK_SCHEMA = {
       default: true,
     },
     dependency: { default: "{}" },
+    terminalRows: { default: DEFAULT_TERMINAL_ROWS },
   },
   content: "none",
 } as const;

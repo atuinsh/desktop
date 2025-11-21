@@ -38,8 +38,12 @@ import {
   useBlockStart,
   useBlockStop,
 } from "@/lib/hooks/useDocumentBridge";
-import Xterm, { XtermHandle } from "@/components/runbooks/editor/components/Xterm";
+import Xterm, { XtermHandle, calculateRowHeight } from "@/components/runbooks/editor/components/Xterm";
+import ResizeHandle from "@/components/common/ResizeHandle";
 import { TabsContext } from "@/routes/root/Tabs";
+
+const MIN_SCRIPT_TERMINAL_ROWS = 5;
+const MAX_SCRIPT_TERMINAL_ROWS = 40;
 
 interface ScriptBlockProps {
   onChange: (val: string) => void;
@@ -55,6 +59,9 @@ interface ScriptBlockProps {
 
   collapseCode: boolean;
   setCollapseCode: (collapse: boolean) => void;
+
+  terminalRows: number;
+  setTerminalRows: (rows: number) => void;
 
   script: ScriptBlockType;
 }
@@ -74,11 +81,29 @@ const ScriptBlock = ({
   onCodeMirrorFocus,
   collapseCode,
   setCollapseCode,
+  terminalRows,
+  setTerminalRows,
 }: ScriptBlockProps) => {
   const [hasRun, setHasRun] = useState<boolean>(false);
   const xtermRef = useRef<XtermHandle>(null);
   // Track available shells
   const [availableShells, setAvailableShells] = useState<Record<string, boolean>>({});
+
+  // Terminal dimensions - rowHeight for resize snapping, actualHeight for precise container sizing
+  const [rowHeight, setRowHeight] = useState(() => calculateRowHeight(Settings.DEFAULT_FONT_SIZE));
+  const [actualTerminalHeight, setActualTerminalHeight] = useState<number | null>(null);
+
+  // Load font size setting on mount for initial estimate
+  useEffect(() => {
+    Settings.terminalFontSize().then((fontSize) => {
+      setRowHeight(calculateRowHeight(fontSize || Settings.DEFAULT_FONT_SIZE));
+    });
+  }, []);
+
+  // Preview height during resize drag (null when not dragging)
+  const [previewHeight, setPreviewHeight] = useState<number | null>(null);
+  // Use actual rendered height when available, fall back to calculated estimate
+  const effectiveHeight = previewHeight ?? actualTerminalHeight ?? terminalRows * rowHeight;
 
   // Check if selected shell is missing
   const shellMissing = useMemo(() => {
@@ -245,6 +270,7 @@ const ScriptBlock = ({
       setName={setName}
       inlineHeader
       className={blockBorderClass}
+      bodyClassName="p-0 overflow-visible"
       hideChild={!script.outputVisible || !hasRun}
       topRightElement={topRightWarning}
       header={
@@ -372,10 +398,39 @@ const ScriptBlock = ({
         </>
       }
     >
-      {hasRun && <Xterm ref={xtermRef} className="min-h-[200px] w-full" />}
+      {hasRun && (
+        <>
+          <Xterm
+            ref={xtermRef}
+            className="w-full"
+            height={effectiveHeight}
+            onDimensionsReady={({ actualHeight, cellHeight }) => {
+              setActualTerminalHeight(actualHeight);
+              setRowHeight(cellHeight);
+            }}
+          />
+          <ResizeHandle
+            currentHeight={effectiveHeight}
+            onResizePreview={setPreviewHeight}
+            onResize={(newHeight) => {
+              setPreviewHeight(null);
+              setActualTerminalHeight(null); // Reset so we recalculate for new row count
+              const newRows = Math.round(newHeight / rowHeight);
+              setTerminalRows(
+                Math.max(MIN_SCRIPT_TERMINAL_ROWS, Math.min(MAX_SCRIPT_TERMINAL_ROWS, newRows)),
+              );
+            }}
+            snapIncrement={rowHeight}
+            minHeight={MIN_SCRIPT_TERMINAL_ROWS * rowHeight}
+            maxHeight={MAX_SCRIPT_TERMINAL_ROWS * rowHeight}
+          />
+        </>
+      )}
     </Block>
   );
 };
+
+export const DEFAULT_SCRIPT_TERMINAL_ROWS = 12;
 
 export default createReactBlockSpec(
   {
@@ -396,6 +451,9 @@ export default createReactBlockSpec(
       },
       dependency: {
         default: "{}",
+      },
+      terminalRows: {
+        default: DEFAULT_SCRIPT_TERMINAL_ROWS,
       },
     },
     content: "none",
@@ -486,6 +544,12 @@ export default createReactBlockSpec(
         );
       };
 
+      const setTerminalRows = (rows: number) => {
+        editor.updateBlock(block, {
+          props: { ...block.props, terminalRows: rows },
+        });
+      };
+
       let dependency = DependencySpec.deserialize(block.props.dependency);
       let script = new ScriptBlockType(
         block.id,
@@ -511,6 +575,8 @@ export default createReactBlockSpec(
           onCodeMirrorFocus={handleCodeMirrorFocus}
           collapseCode={collapseCode}
           setCollapseCode={setCollapseCode}
+          terminalRows={block.props.terminalRows}
+          setTerminalRows={setTerminalRows}
         />
       );
     },

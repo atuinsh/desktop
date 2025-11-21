@@ -23,6 +23,7 @@ interface BlockProps {
   hasDependency?: boolean;
   ref?: React.RefObject<HTMLDivElement>;
   className?: string;
+  bodyClassName?: string;
   topRightElement?: React.ReactNode;
 }
 
@@ -39,6 +40,7 @@ export default function Block({
   hasDependency,
   ref,
   className,
+  bodyClassName,
   topRightElement,
 }: BlockProps) {
   let editor = useBlockNoteEditor();
@@ -87,7 +89,7 @@ export default function Block({
         {header && header}
       </CardHeader>
 
-      {children && <CardBody className={hideChild ? "hidden" : ""}>{children}</CardBody>}
+      {children && <CardBody className={cn(hideChild ? "hidden" : "", bodyClassName)}>{children}</CardBody>}
 
       {footer && <CardFooter>{footer}</CardFooter>}
     </Card>
