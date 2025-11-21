@@ -50,6 +50,9 @@ const Xterm = forwardRef<XtermHandle, XtermProps>(({ className = "min-h-[200px] 
 
   // Initialize terminal on mount
   useEffect(() => {
+    let fitAddon: FitAddon | null = null;
+    let webglAddon: WebglAddon | null = null;
+
     const initializeTerminal = async () => {
       const term = new Terminal({
         fontFamily: "FiraCode, monospace",
@@ -57,14 +60,14 @@ const Xterm = forwardRef<XtermHandle, XtermProps>(({ className = "min-h-[200px] 
         convertEol: true,
       });
 
-      const fit = new FitAddon();
-      term.loadAddon(fit);
+      fitAddon = new FitAddon();
+      term.loadAddon(fitAddon);
 
       // Add WebGL support if enabled in settings
       const useWebGL = await Settings.terminalGL();
       if (useWebGL) {
         try {
-          const webglAddon = new WebglAddon();
+          webglAddon = new WebglAddon();
           term.loadAddon(webglAddon);
         } catch (e) {
           console.warn("WebGL addon failed to load", e);
@@ -72,7 +75,7 @@ const Xterm = forwardRef<XtermHandle, XtermProps>(({ className = "min-h-[200px] 
       }
 
       setTerminal(term);
-      setFitAddon(fit);
+      setFitAddon(fitAddon);
     };
 
     initializeTerminal();
@@ -80,6 +83,8 @@ const Xterm = forwardRef<XtermHandle, XtermProps>(({ className = "min-h-[200px] 
     // Cleanup on unmount
     return () => {
       terminal?.dispose();
+      fitAddon?.dispose();
+      webglAddon?.dispose();
     };
   }, []);
 
