@@ -45,6 +45,10 @@ pub(crate) struct Document {
     pub(crate) known_unsupported_blocks: HashSet<String>,
     pub(crate) block_local_value_provider: Option<Box<dyn LocalValueProvider>>,
     pub(crate) context_storage: Option<Box<dyn BlockContextStorage>>,
+    /// Tracks the last ResolvedContext sent to the frontend for each block.
+    /// Used to avoid sending redundant BlockContextUpdate messages when the
+    /// resolved context hasn't actually changed.
+    last_sent_contexts: HashMap<Uuid, ResolvedContext>,
 }
 
 impl Document {
@@ -63,6 +67,7 @@ impl Document {
             known_unsupported_blocks: HashSet::new(),
             block_local_value_provider,
             context_storage,
+            last_sent_contexts: HashMap::new(),
         };
         doc.put_document(document).await?;
 
@@ -70,6 +75,9 @@ impl Document {
     }
 
     pub async fn reset_state(&mut self) -> Result<(), DocumentError> {
+        // Clear last sent contexts so rebuild_contexts will send fresh updates
+        self.last_sent_contexts.clear();
+
         for block in &mut self.blocks {
             block.replace_passive_context(BlockContext::new());
             block.replace_active_context(BlockContext::new());
@@ -177,6 +185,9 @@ impl Document {
         if !existing_blocks_map.is_empty() {
             // Find the minimum position where a deletion occurred
             for deleted_id in existing_blocks_map.keys() {
+                // Clean up last sent context for deleted block
+                self.last_sent_contexts.remove(deleted_id);
+
                 if let Some(storage) = self.context_storage.as_ref() {
                     let result = storage
                         .delete(self.id.as_str(), deleted_id)
@@ -445,14 +456,25 @@ impl Document {
                 }
             }
 
-            let document_bridge = self.document_bridge.clone();
+            // Only send BlockContextUpdate if the resolved context actually changed
+            let new_resolved_context = ResolvedContext::from_resolver(&context_resolver);
+            let context_changed = self
+                .last_sent_contexts
+                .get(&block_id)
+                .map(|last| last != &new_resolved_context)
+                .unwrap_or(true);
 
-            let _ = document_bridge
-                .send(DocumentBridgeMessage::BlockContextUpdate {
-                    block_id,
-                    context: ResolvedContext::from_resolver(&context_resolver),
-                })
-                .await;
+            if context_changed {
+                let document_bridge = self.document_bridge.clone();
+                let _ = document_bridge
+                    .send(DocumentBridgeMessage::BlockContextUpdate {
+                        block_id,
+                        context: new_resolved_context.clone(),
+                    })
+                    .await;
+                self.last_sent_contexts
+                    .insert(block_id, new_resolved_context);
+            }
 
             // Update the context resolver for the next block
             context_resolver.push_block(&self.blocks[i]);

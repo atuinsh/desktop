@@ -13,7 +13,7 @@ use crate::{
 /// A struct representing the resolved context of a block.
 /// Since it's built from a `ContextResolver`, it's a snapshot
 /// of the final context based on the blocks above it.
-#[derive(Debug, Clone, Serialize, Deserialize, TS, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS, Default, PartialEq)]
 #[ts(export)]
 #[serde(rename_all = "camelCase")]
 pub struct ResolvedContext {
