@@ -104,22 +104,15 @@ const Xterm = forwardRef<XtermHandle, XtermProps>(({ className = "min-h-[200px] 
     if (!readyToAttach || !fitAddon || !terminal) return;
 
     terminal.open(terminalRef.current!);
-
-    const handleResize = debounce(() => fitAddon?.fit(), 100);
-    window.addEventListener("resize", handleResize);
-
-    return () => {
-      window.removeEventListener("resize", handleResize);
-    };
   }, [terminal, fitAddon, readyToAttach]);
 
   const compositeRef = (elem: HTMLDivElement) => {
     terminalRef.current = elem;
+    resizeRef(elem);
     setReadyToAttach(true);
   };
 
-  useResizeObserver({
-    ref: terminalRef.current,
+  const { ref: resizeRef } = useResizeObserver({
     onResize: () => {
       fitAddon?.fit();
     },
