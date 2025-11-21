@@ -114,6 +114,10 @@ const middleware = (f: StateCreator<AtuinState>) =>
             state.user = userObj;
           }
 
+          state.tabs.forEach((tab) => {
+            tab.badgeCount = 0;
+          });
+
           // Initialize vim mode from persistent settings if not already set
           const enabled = await Settings.editorVimMode();
           if (state.vimModeEnabled !== enabled) {
