@@ -12,7 +12,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
-use tokio::sync::{broadcast, oneshot, watch, Mutex, RwLock};
+use tokio::sync::{oneshot, watch, Mutex, RwLock};
 use ts_rs::TS;
 use typed_builder::TypedBuilder;
 use uuid::Uuid;
@@ -23,7 +23,6 @@ use crate::document::{DocumentError, DocumentHandle};
 use crate::events::{EventBus, GCEvent};
 use crate::pty::PtyStoreHandle;
 use crate::ssh::SshPoolHandle;
-use crate::workflow::WorkflowEvent;
 
 pub enum ExecutionResult {
     Success,
@@ -47,7 +46,6 @@ pub struct ExecutionContext {
     pub(crate) context_resolver: Arc<ContextResolver>,
     #[builder(default, setter(strip_option(fallback = output_channel_opt)))]
     output_channel: Option<Arc<dyn MessageChannel<DocumentBridgeMessage>>>,
-    workflow_event_sender: broadcast::Sender<WorkflowEvent>,
     #[builder(default, setter(strip_option(fallback = ssh_pool_opt)))]
     pub(crate) ssh_pool: Option<SshPoolHandle>,
     #[builder(default, setter(strip_option(fallback = pty_store_opt)))]
@@ -75,14 +73,6 @@ impl ExecutionContext {
     /// Subscribe to the finish event
     pub fn finished_channel(&self) -> watch::Receiver<Option<ExecutionResult>> {
         self.handle().finished_channel()
-    }
-
-    /// Emit a Workflow event
-    pub fn emit_workflow_event(&self, event: WorkflowEvent) -> Result<(), DocumentError> {
-        self.workflow_event_sender
-            .send(event)
-            .map_err(|_| DocumentError::EventSendError)?;
-        Ok(())
     }
 
     /// Send a message to the output channel
@@ -198,7 +188,6 @@ impl ExecutionContext {
     pub async fn block_started(&self) -> Result<(), DocumentError> {
         let _ = self.handle().set_running().await;
         let _ = self.emit_block_started().await;
-        let _ = self.emit_workflow_event(WorkflowEvent::BlockStarted { id: self.block_id });
         let _ = self
             .send_output(
                 BlockOutput::builder()
@@ -219,7 +208,6 @@ impl ExecutionContext {
     ) -> Result<(), DocumentError> {
         let _ = self.handle().set_success().await;
         let _ = self.emit_block_finished(success).await;
-        let _ = self.emit_workflow_event(WorkflowEvent::BlockFinished { id: self.block_id });
         let _ = self
             .send_output(
                 BlockOutput::builder()
@@ -244,7 +232,6 @@ impl ExecutionContext {
     pub async fn block_failed(&self, error: String) -> Result<(), DocumentError> {
         let _ = self.handle().set_failed(error.clone()).await;
         let _ = self.emit_block_failed(error.clone()).await;
-        let _ = self.emit_workflow_event(WorkflowEvent::BlockFinished { id: self.block_id });
         let _ = self
             .send_output(
                 BlockOutput::builder()
@@ -268,7 +255,6 @@ impl ExecutionContext {
     pub async fn block_cancelled(&self) -> Result<(), DocumentError> {
         let _ = self.handle().set_cancelled().await;
         let _ = self.emit_block_cancelled().await;
-        let _ = self.emit_workflow_event(WorkflowEvent::BlockFinished { id: self.block_id });
         let _ = self
             .send_output(
                 BlockOutput::builder()

@@ -312,7 +312,6 @@ impl Document {
         block_id: &Uuid,
         handle: Arc<DocumentHandle>,
         event_bus: Arc<dyn EventBus>,
-        event_sender: tokio::sync::broadcast::Sender<WorkflowEvent>,
         ssh_pool: Option<SshPoolHandle>,
         pty_store: Option<PtyStoreHandle>,
         extra_template_context: Option<HashMap<String, HashMap<String, String>>>,
@@ -363,7 +362,6 @@ impl Document {
             .document_handle(document_handle)
             .context_resolver(Arc::new(context_resolver))
             .output_channel(output_channel)
-            .workflow_event_sender(event_sender)
             .ssh_pool_opt(ssh_pool)
             .pty_store_opt(pty_store)
             .gc_event_bus(event_bus)

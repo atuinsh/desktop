@@ -640,7 +640,6 @@ mod tests {
             Arc::new(MemoryEventBus::new()),
         );
         let context_resolver = ContextResolver::new();
-        let (event_sender, _event_receiver) = tokio::sync::broadcast::channel(16);
 
         let block_id = Uuid::new_v4();
         ExecutionContext::builder()
@@ -648,7 +647,6 @@ mod tests {
             .runbook_id(Uuid::new_v4())
             .document_handle(document_handle)
             .context_resolver(Arc::new(context_resolver))
-            .workflow_event_sender(event_sender)
             .handle(ExecutionHandle::new(block_id))
             .build()
     }
@@ -668,15 +666,12 @@ mod tests {
 
         let context_resolver = ContextResolver::with_vars(vars_map);
 
-        let (event_sender, _event_receiver) = tokio::sync::broadcast::channel(16);
-
         let block_id = Uuid::new_v4();
         ExecutionContext::builder()
             .block_id(block_id)
             .runbook_id(Uuid::new_v4())
             .document_handle(document_handle)
             .context_resolver(Arc::new(context_resolver))
-            .workflow_event_sender(event_sender)
             .handle(ExecutionHandle::new(block_id))
             .build()
     }
@@ -689,14 +684,12 @@ mod tests {
         let document_handle =
             DocumentHandle::from_raw("test-runbook".to_string(), tx, event_bus.clone());
         let context_resolver = ContextResolver::new();
-        let (event_sender, _event_receiver) = tokio::sync::broadcast::channel(16);
 
         ExecutionContext::builder()
             .block_id(block_id)
             .runbook_id(Uuid::new_v4())
             .document_handle(document_handle)
             .context_resolver(Arc::new(context_resolver))
-            .workflow_event_sender(event_sender)
             .gc_event_bus(event_bus)
             .handle(ExecutionHandle::new(block_id))
             .build()

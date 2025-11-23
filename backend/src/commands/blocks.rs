@@ -8,11 +8,9 @@ use atuin_desktop_runtime::execution::ExecutionHandle;
 use atuin_desktop_runtime::execution::ExecutionResult;
 use atuin_desktop_runtime::pty::PtyStoreHandle;
 use atuin_desktop_runtime::ssh::SshPoolHandle;
-use atuin_desktop_runtime::workflow::WorkflowEvent;
 use serde_json::Value;
 use tauri::Manager;
 use tauri::{ipc::Channel, AppHandle, State};
-use tokio::sync::broadcast;
 use tokio::sync::oneshot;
 use uuid::Uuid;
 
@@ -92,7 +90,6 @@ pub async fn execute_block(
     // Get resources from state
     let pty_store = state.pty_store();
     let ssh_pool = state.ssh_pool();
-    let event_sender = state.event_sender();
 
     let mut workspace_context = HashMap::new();
     let workspace_root = if let Some(workspace_manager) = state.workspaces.lock().await.as_ref() {
@@ -112,7 +109,6 @@ pub async fn execute_block(
         runbook_id,
         document,
         block_id,
-        event_sender,
         ssh_pool,
         pty_store,
         extra_template_context,
@@ -350,7 +346,6 @@ pub async fn start_serial_execution(
 
     let pty_store = state.pty_store();
     let ssh_pool = state.ssh_pool();
-    let event_sender = state.event_sender();
 
     let block_ids = document
         .blocks()
@@ -397,7 +392,6 @@ pub async fn start_serial_execution(
                 document_id.clone(),
                 &document,
                 *block_id,
-                event_sender.clone(),
                 ssh_pool.clone(),
                 pty_store.clone(),
                 extra_template_context.clone(),
@@ -529,7 +523,6 @@ async fn execute_single_block(
     document_id: String,
     document: &Arc<DocumentHandle>,
     block_id: Uuid,
-    event_sender: broadcast::Sender<WorkflowEvent>,
     ssh_pool: SshPoolHandle,
     pty_store: PtyStoreHandle,
     extra_template_context: HashMap<String, HashMap<String, String>>,
@@ -540,7 +533,6 @@ async fn execute_single_block(
     let context = document
         .create_execution_context(
             block_id,
-            event_sender,
             Some(ssh_pool),
             Some(pty_store),
             Some(extra_template_context),

@@ -15,7 +15,6 @@ use crate::events::EventBus;
 use crate::execution::ExecutionContext;
 use crate::pty::PtyStoreHandle;
 use crate::ssh::SshPoolHandle;
-use crate::workflow::WorkflowEvent;
 
 /// Errors that can occur during document operations
 #[derive(thiserror::Error, Debug, Clone)]
@@ -78,7 +77,6 @@ pub(crate) enum DocumentCommand {
     /// Start execution of a block, returning a snapshot of its context
     CreateExecutionContext {
         block_id: Uuid,
-        event_sender: tokio::sync::broadcast::Sender<WorkflowEvent>,
         ssh_pool: Option<SshPoolHandle>,
         pty_store: Option<PtyStoreHandle>,
         extra_template_context: Option<HashMap<String, HashMap<String, String>>>,
@@ -248,7 +246,6 @@ impl DocumentHandle {
     pub async fn create_execution_context(
         &self,
         block_id: Uuid,
-        event_sender: tokio::sync::broadcast::Sender<WorkflowEvent>,
         ssh_pool: Option<SshPoolHandle>,
         pty_store: Option<PtyStoreHandle>,
         extra_template_context: Option<HashMap<String, HashMap<String, String>>>,
@@ -257,7 +254,6 @@ impl DocumentHandle {
         self.command_tx
             .send(DocumentCommand::CreateExecutionContext {
                 block_id,
-                event_sender,
                 ssh_pool,
                 pty_store,
                 extra_template_context,
@@ -509,7 +505,6 @@ impl DocumentActor {
                 }
                 DocumentCommand::CreateExecutionContext {
                     block_id,
-                    event_sender,
                     ssh_pool,
                     pty_store,
                     extra_template_context,
@@ -518,7 +513,6 @@ impl DocumentActor {
                     let result = self
                         .handle_create_execution_context(
                             block_id,
-                            event_sender,
                             ssh_pool,
                             pty_store,
                             extra_template_context,
@@ -628,7 +622,6 @@ impl DocumentActor {
     async fn handle_create_execution_context(
         &mut self,
         block_id: Uuid,
-        event_sender: tokio::sync::broadcast::Sender<WorkflowEvent>,
         ssh_pool: Option<SshPoolHandle>,
         pty_store: Option<PtyStoreHandle>,
         extra_template_context: Option<HashMap<String, HashMap<String, String>>>,
@@ -638,7 +631,6 @@ impl DocumentActor {
             &block_id,
             self.handle.clone(),
             self.event_bus.clone(),
-            event_sender,
             ssh_pool,
             pty_store,
             extra_template_context,
