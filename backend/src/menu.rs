@@ -183,7 +183,6 @@ fn link_menu_item<R: Runtime>(
 
 #[derive(Debug, Clone, Deserialize)]
 pub(crate) struct TabItem {
-    id: String,
     url: String,
     title: String,
 }
@@ -206,25 +205,10 @@ pub fn menu<R: Runtime>(app_handle: &AppHandle<R>, tab_items: &[TabItem]) -> Res
         .iter()
         .map(|tab| {
             let app_handle = app_handle.clone();
-            let item = MenuItemBuilder::new(&tab.title)
+            MenuItemBuilder::new(&tab.title)
                 .id(format!("window-tab-item:{}", tab.url.clone()))
                 .build(&app_handle)
-                .ok();
-
-            let id = tab.id.clone();
-            let url = tab.url.clone();
-            let app_handle_clone = app_handle.clone();
-            if let Some(item) = item {
-                app_handle.on_menu_event(move |_, event| {
-                    if event.id().0 == id {
-                        app_handle_clone.emit("activate-tab", url.clone()).unwrap();
-                    }
-                });
-
-                Some(item)
-            } else {
-                None
-            }
+                .ok()
         })
         .collect();
 
