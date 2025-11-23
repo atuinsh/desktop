@@ -4,8 +4,8 @@ use std::{
     path::PathBuf,
     sync::{Arc, Mutex},
 };
+use tauri::ipc::Channel;
 use tauri::{async_runtime::RwLock, AppHandle};
-use tauri::{ipc::Channel, Emitter};
 use tokio::sync::{broadcast, mpsc, oneshot};
 use uuid::Uuid;
 
@@ -19,7 +19,7 @@ use atuin_desktop_runtime::{
     execution::ExecutionHandle,
     pty::PtyStoreHandle,
     ssh::SshPoolHandle,
-    workflow::{ExecutorHandle, WorkflowCommand, WorkflowEvent},
+    workflow::{ExecutorHandle, WorkflowEvent},
 };
 
 pub(crate) struct AtuinState {
@@ -107,7 +107,7 @@ impl AtuinState {
             use_hub_updater_service,
         }
     }
-    pub async fn init(&self, app: &AppHandle) -> Result<()> {
+    pub async fn init(&self, _app: &AppHandle) -> Result<()> {
         let path = if let Some(ref prefix) = self.dev_prefix {
             self.app_path.join(format!("{prefix}_exec_log.db"))
         } else {

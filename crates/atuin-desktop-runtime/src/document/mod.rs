@@ -32,7 +32,6 @@ use crate::{
     execution::{ExecutionContext, ExecutionHandle},
     pty::PtyStoreHandle,
     ssh::SshPoolHandle,
-    workflow::WorkflowEvent,
 };
 
 /// Document-level context containing all block contexts
