@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use eyre::Result;
 use serde::Deserialize;
 use tauri::{
@@ -16,9 +18,11 @@ impl IdWithNoColons {
         }
         Ok(Self(id))
     }
+}
 
-    pub fn to_string(&self) -> String {
-        self.0.clone()
+impl Display for IdWithNoColons {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
     }
 }
 
@@ -81,13 +85,13 @@ pub(crate) fn initialize_menu_handlers<R: Runtime>(handle: &AppHandle<R>) {
             other_id if other_id.starts_with("link-menu-item:") => {
                 let href = other_id.splitn(3, ":").nth(2);
                 if let Some(href) = href {
-                    let _ = open::that(&href);
+                    let _ = open::that(href);
                 } else {
                     log::warn!("Unknown menu event: {other_id}");
                 }
             }
             other_id if other_id.starts_with("window-tab-item:") => {
-                let url = other_id.splitn(2, ":").nth(1);
+                let url = other_id.split_once(":").map(|x| x.1);
                 if let Some(url) = url {
                     app_handle.emit("activate-tab", url).unwrap();
                 } else {
@@ -171,7 +175,7 @@ fn link_menu_item<R: Runtime>(
     href: &str,
     handle: &AppHandle<R>,
 ) -> Result<MenuItem<R>> {
-    let id = format!("link-menu-item:{}:{href}", id.to_string());
+    let id = format!("link-menu-item:{id}:{href}");
     let link = MenuItemBuilder::new(name).id(id).build(handle)?;
 
     Ok(link)

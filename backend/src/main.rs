@@ -639,7 +639,7 @@ fn main() {
             backup_databases(app)?;
 
             let handle = app.handle();
-            menu::initialize_menu_handlers(&handle);
+            menu::initialize_menu_handlers(handle);
 
             let app_path = app
                 .path()
