@@ -7,19 +7,105 @@ use tauri::{
     AppHandle, Emitter, Manager, Runtime,
 };
 
+struct IdWithNoColons(String);
+
+impl IdWithNoColons {
+    pub fn new(id: String) -> Result<Self> {
+        if id.contains(":") {
+            return Err(eyre::eyre!("ID cannot contain colons"));
+        }
+        Ok(Self(id))
+    }
+
+    pub fn to_string(&self) -> String {
+        self.0.clone()
+    }
+}
+
+impl TryFrom<String> for IdWithNoColons {
+    type Error = eyre::Error;
+    fn try_from(id: String) -> Result<Self> {
+        Self::new(id)
+    }
+}
+
+impl TryFrom<&str> for IdWithNoColons {
+    type Error = eyre::Error;
+    fn try_from(id: &str) -> Result<Self> {
+        Self::new(id.to_string())
+    }
+}
+
+pub(crate) fn initialize_menu_handlers<R: Runtime>(handle: &AppHandle<R>) {
+    handle.on_menu_event(move |app_handle, event| {
+        match event.id().0.as_str() {
+            "update-check" => {
+                app_handle
+                    .emit("update-check", 0)
+                    .expect("Failed to emit menu event");
+            }
+            "start-sync" => {
+                app_handle
+                    .emit("start-sync", 0)
+                    .expect("Failed to emit menu event");
+            }
+            "import-runbook" => {
+                app_handle
+                    .emit("import-runbook", 0)
+                    .expect("Failed to emit menu event");
+            }
+            "new-runbook" => {
+                app_handle
+                    .emit("new-runbook", 0)
+                    .expect("Failed to emit menu event");
+            }
+            "new-workspace" => {
+                app_handle
+                    .emit("new-workspace", 0)
+                    .expect("Failed to emit menu event");
+            }
+            "export-markdown" => {
+                app_handle
+                    .emit("export-markdown", 0)
+                    .expect("Failed to emit menu event");
+            }
+            "toggle-devtools" => {
+                let window = app_handle.get_webview_window("main").unwrap();
+                if window.is_devtools_open() {
+                    window.close_devtools();
+                } else {
+                    window.open_devtools();
+                }
+            }
+            // The following branch expects `id` and `href` to be in scope if needed
+            other_id if other_id.starts_with("link-menu-item:") => {
+                let href = other_id.splitn(3, ":").nth(2);
+                if let Some(href) = href {
+                    let _ = open::that(&href);
+                } else {
+                    log::warn!("Unknown menu event: {other_id}");
+                }
+            }
+            other_id if other_id.starts_with("window-tab-item:") => {
+                let url = other_id.splitn(2, ":").nth(1);
+                if let Some(url) = url {
+                    app_handle.emit("activate-tab", url).unwrap();
+                } else {
+                    log::warn!("Unknown menu event: {other_id}");
+                }
+            }
+            other_id => {
+                log::warn!("Unknown menu event: {other_id}");
+            }
+        }
+    });
+}
+
 #[allow(dead_code)]
 fn update_check<R: Runtime>(handle: &AppHandle<R>) -> Result<MenuItem<R>> {
     let update_check = MenuItemBuilder::new("Check for Updates")
         .id("update-check")
         .build(handle)?;
-
-    handle.on_menu_event(move |window, event| {
-        if event.id().0 == "update-check" {
-            window
-                .emit("update-check", 0)
-                .expect("Failed to emit menu event");
-        }
-    });
 
     Ok(update_check)
 }
@@ -30,14 +116,6 @@ fn start_sync<R: Runtime>(handle: &AppHandle<R>) -> Result<MenuItem<R>> {
         .id("start-sync")
         .build(handle)?;
 
-    handle.on_menu_event(move |window, event| {
-        if event.id().0 == "start-sync" {
-            window
-                .emit("start-sync", 0)
-                .expect("Failed to emit menu event");
-        }
-    });
-
     Ok(start_sync)
 }
 
@@ -47,13 +125,6 @@ fn import_runbook<R: Runtime>(handle: &AppHandle<R>) -> Result<MenuItem<R>> {
         .id("import-runbook")
         .build(handle)?;
 
-    handle.on_menu_event(move |window, event| {
-        if event.id().0 == "import-runbook" {
-            window
-                .emit("import-runbook", 0)
-                .expect("Failed to emit menu event");
-        }
-    });
     Ok(import_runbook)
 }
 
@@ -63,13 +134,6 @@ fn new_runbook<R: Runtime>(handle: &AppHandle<R>) -> Result<MenuItem<R>> {
         .id("new-runbook")
         .build(handle)?;
 
-    handle.on_menu_event(move |window, event| {
-        if event.id().0 == "new-runbook" {
-            window
-                .emit("new-runbook", 0)
-                .expect("Failed to emit menu event");
-        }
-    });
     Ok(new_runbook)
 }
 
@@ -79,13 +143,6 @@ fn new_workspace<R: Runtime>(handle: &AppHandle<R>) -> Result<MenuItem<R>> {
         .id("new-workspace")
         .build(handle)?;
 
-    handle.on_menu_event(move |window, event| {
-        if event.id().0 == "new-workspace" {
-            window
-                .emit("new-workspace", 0)
-                .expect("Failed to emit menu event");
-        }
-    });
     Ok(import_workspace)
 }
 
@@ -95,13 +152,6 @@ fn export_markdown<R: Runtime>(handle: &AppHandle<R>) -> Result<MenuItem<R>> {
         .id("export-markdown")
         .build(handle)?;
 
-    handle.on_menu_event(move |window, event| {
-        if event.id().0 == "export-markdown" {
-            window
-                .emit("export-markdown", 0)
-                .expect("Failed to emit menu event");
-        }
-    });
     Ok(export_markdown)
 }
 
@@ -112,37 +162,17 @@ fn show_devtools<R: Runtime>(handle: &AppHandle<R>) -> Result<MenuItem<R>> {
         .accelerator("CmdOrCtrl+Shift+I")
         .build(handle)?;
 
-    handle.on_menu_event(move |handle, event| {
-        if event.id().0 == "toggle-devtools" {
-            let window = handle.get_webview_window("main").unwrap();
-            if window.is_devtools_open() {
-                window.close_devtools();
-            } else {
-                window.open_devtools();
-            }
-        }
-    });
-
     Ok(show_devtools)
 }
 
 fn link_menu_item<R: Runtime>(
-    id: &str,
+    id: IdWithNoColons,
     name: &str,
     href: &str,
     handle: &AppHandle<R>,
 ) -> Result<MenuItem<R>> {
+    let id = format!("link-menu-item:{}:{href}", id.to_string());
     let link = MenuItemBuilder::new(name).id(id).build(handle)?;
-
-    let href = href.to_string();
-    let id = id.to_string();
-
-    handle.on_menu_event(move |_, event| {
-        if event.id().0 == id {
-            // Failing to open a link sucks but let's not error
-            let _ = open::that(&href);
-        }
-    });
 
     Ok(link)
 }
@@ -173,7 +203,7 @@ pub fn menu<R: Runtime>(app_handle: &AppHandle<R>, tab_items: &[TabItem]) -> Res
         .map(|tab| {
             let app_handle = app_handle.clone();
             let item = MenuItemBuilder::new(&tab.title)
-                .id(tab.id.clone())
+                .id(format!("window-tab-item:{}", tab.url.clone()))
                 .build(&app_handle)
                 .ok();
 
@@ -228,13 +258,13 @@ pub fn menu<R: Runtime>(app_handle: &AppHandle<R>, tab_items: &[TabItem]) -> Res
             #[cfg(not(target_os = "macos"))]
             &PredefinedMenuItem::separator(app_handle)?,
             &link_menu_item(
-                "twitter",
+                "twitter".try_into()?,
                 "Atuin Twitter",
                 "https://x.com/atuinsh",
                 app_handle,
             )?,
             &link_menu_item(
-                "mastodon",
+                "mastodon".try_into()?,
                 "Atuin Mastodon",
                 "https://hachyderm.io/@atuin",
                 app_handle,
