@@ -184,7 +184,7 @@ impl ExecutionContext {
     }
 
     /// Mark a block as started
-    /// Sends appropriate events to Grand Centra, the workflow event bus, and the output channel
+    /// Sends appropriate events to Grand Central and the output channel
     pub async fn block_started(&self) -> Result<(), DocumentError> {
         let _ = self.handle().set_running().await;
         let _ = self.emit_block_started().await;
@@ -200,7 +200,7 @@ impl ExecutionContext {
     }
 
     /// Mark a block as finished
-    /// Sends appropriate events to Grand Centra, the workflow event bus, and the output channel
+    /// Sends appropriate events to Grand Central and the output channel
     pub async fn block_finished(
         &self,
         exit_code: Option<i32>,
@@ -228,7 +228,7 @@ impl ExecutionContext {
     }
 
     /// Mark a block as failed
-    /// Sends appropriate events to Grand Centra, the workflow event bus, and the output channel
+    /// Sends appropriate events to Grand Central and the output channel
     pub async fn block_failed(&self, error: String) -> Result<(), DocumentError> {
         let _ = self.handle().set_failed(error.clone()).await;
         let _ = self.emit_block_failed(error.clone()).await;
@@ -251,7 +251,7 @@ impl ExecutionContext {
     }
 
     /// Mark a block as cancelled
-    /// Sends appropriate events to Grand Centra, the workflow event bus, and the output channel
+    /// Sends appropriate events to Grand Central and the output channel
     pub async fn block_cancelled(&self) -> Result<(), DocumentError> {
         let _ = self.handle().set_cancelled().await;
         let _ = self.emit_block_cancelled().await;
