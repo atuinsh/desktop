@@ -339,6 +339,10 @@ function App() {
     setShowNewWorkspaceDialog(true);
   });
 
+  useTauriEvent("activate-tab", async (event) => {
+    openTab(event.payload);
+  });
+
   useEffect(() => {
     const check = () => {
       (async () => {

@@ -21,6 +21,8 @@ import { createMemoryRouter, RouterProvider } from "react-router-dom";
 import { SyntheticListenerMap } from "@dnd-kit/core/dist/hooks/utilities";
 import { createTabBarMenu, createTabMenu } from "@/components/runbooks/List/menus";
 import { Badge } from "@heroui/react";
+import { invoke } from "@tauri-apps/api/core";
+import debounce from "lodash.debounce";
 
 export const TabsContext = React.createContext<{
   tab: TabType | null;
@@ -72,6 +74,17 @@ export default function Tabs() {
     incrementTabBadgeCount: state.incrementTabBadgeCount,
     decrementTabBadgeCount: state.decrementTabBadgeCount,
   }));
+
+  const updateWindowMenuTabs = useCallback(
+    debounce(async (tabs: TabType[]) => {
+      invoke<void>("update_window_menu_tabs", { tabs: tabs });
+    }, 250),
+    [],
+  );
+
+  useEffect(() => {
+    updateWindowMenuTabs(tabs);
+  }, [tabs]);
 
   const listRef = useRef<HTMLUListElement>(null);
   const [activeDragId, setActiveDragId] = useState<string | null>(null);

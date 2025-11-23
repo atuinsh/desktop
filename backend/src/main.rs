@@ -43,6 +43,8 @@ use atuin_history::stats as atuin_stats;
 use db::{GlobalStats, HistoryDB, UIHistory};
 use dotfiles::aliases::aliases;
 
+use crate::menu::TabItem;
+
 #[derive(Debug, serde::Serialize)]
 struct HomeInfo {
     pub record_count: u64,
@@ -340,6 +342,14 @@ async fn get_platform_info() -> Result<String, String> {
     Ok(base_os)
 }
 
+#[tauri::command]
+async fn update_window_menu_tabs(app: AppHandle, tabs: Vec<TabItem>) -> Result<(), String> {
+    let new_menu = menu::menu(&app, &tabs).map_err(|e| e.to_string())?;
+    let _ = app.set_menu(new_menu);
+
+    Ok(())
+}
+
 fn backup_databases(app: &App) -> tauri::Result<()> {
     let version = app.package_info().version.to_string();
     // This seems like the wrong directory to use, but it's what the SQL plugin uses so ¯\_(ツ)_/¯
@@ -489,6 +499,7 @@ fn main() {
             cli_settings,
             get_app_version,
             get_platform_info,
+            update_window_menu_tabs,
             run::pty::pty_write,
             run::pty::pty_resize,
             run::shell::check_binary_exists,
@@ -658,7 +669,7 @@ fn main() {
                 apply_runbooks_migrations(&handle_clone).await.unwrap();
             });
 
-            handle.set_menu(menu::menu(handle).expect("Failed to build menu"))?;
+            handle.set_menu(menu::menu(handle, &[]).expect("Failed to build menu"))?;
 
             let handle_clone = handle.clone();
             tauri::async_runtime::spawn(async move {

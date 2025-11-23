@@ -1,6 +1,9 @@
 use eyre::Result;
+use serde::Deserialize;
 use tauri::{
-    menu::{AboutMetadata, Menu, MenuItem, MenuItemBuilder, PredefinedMenuItem, Submenu},
+    menu::{
+        AboutMetadata, IsMenuItem, Menu, MenuItem, MenuItemBuilder, PredefinedMenuItem, Submenu,
+    },
     AppHandle, Emitter, Manager, Runtime,
 };
 
@@ -144,7 +147,14 @@ fn link_menu_item<R: Runtime>(
     Ok(link)
 }
 
-pub fn menu<R: Runtime>(app_handle: &AppHandle<R>) -> Result<Menu<R>> {
+#[derive(Debug, Clone, Deserialize)]
+pub(crate) struct TabItem {
+    id: String,
+    url: String,
+    title: String,
+}
+
+pub fn menu<R: Runtime>(app_handle: &AppHandle<R>, tab_items: &[TabItem]) -> Result<Menu<R>> {
     // Totally just ripped the default menu from the Tauri source, and edited
     // Easier than screwing around with the API 🤫
     let pkg_info = app_handle.package_info();
@@ -157,19 +167,51 @@ pub fn menu<R: Runtime>(app_handle: &AppHandle<R>) -> Result<Menu<R>> {
         ..Default::default()
     };
 
-    let window_menu = Submenu::with_id_and_items(
-        app_handle,
-        "window_menu",
-        "Window",
-        true,
-        &[
-            &PredefinedMenuItem::minimize(app_handle, None)?,
-            &PredefinedMenuItem::maximize(app_handle, None)?,
-            #[cfg(target_os = "macos")]
-            &PredefinedMenuItem::separator(app_handle)?,
-            &PredefinedMenuItem::close_window(app_handle, None)?,
-        ],
-    )?;
+    // Build tab menu items first
+    let tab_menu_items: Vec<_> = tab_items
+        .iter()
+        .map(|tab| {
+            let app_handle = app_handle.clone();
+            let item = MenuItemBuilder::new(&tab.title)
+                .id(tab.id.clone())
+                .build(&app_handle)
+                .ok();
+
+            let id = tab.id.clone();
+            let url = tab.url.clone();
+            let app_handle_clone = app_handle.clone();
+            if let Some(item) = item {
+                app_handle.on_menu_event(move |_, event| {
+                    if event.id().0 == id {
+                        app_handle_clone.emit("activate-tab", url.clone()).unwrap();
+                    }
+                });
+
+                Some(item)
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    // Create a vector of all window menu items
+    let minimize = PredefinedMenuItem::minimize(app_handle, None)?;
+    let maximize = PredefinedMenuItem::maximize(app_handle, None)?;
+    #[cfg(target_os = "macos")]
+    let separator1 = PredefinedMenuItem::separator(app_handle)?;
+
+    let mut window_items: Vec<&dyn IsMenuItem<R>> = vec![&minimize, &maximize];
+
+    #[cfg(target_os = "macos")]
+    window_items.push(&separator1);
+
+    // Add tab menu items
+    for item in tab_menu_items.iter().flatten() {
+        window_items.push(item);
+    }
+
+    let window_menu =
+        Submenu::with_id_and_items(app_handle, "window_menu", "Window", true, &window_items)?;
 
     let help_menu = Submenu::with_id_and_items(
         app_handle,
@@ -178,7 +220,13 @@ pub fn menu<R: Runtime>(app_handle: &AppHandle<R>) -> Result<Menu<R>> {
         true,
         &[
             #[cfg(not(target_os = "macos"))]
-            &PredefinedMenuItem::about(app_handle, None, Some(about_metadata))?,
+            &PredefinedMenuItem::about(
+                app_handle,
+                Some("About Atuin Desktop"),
+                Some(about_metadata),
+            )?,
+            #[cfg(not(target_os = "macos"))]
+            &PredefinedMenuItem::separator(app_handle)?,
             &link_menu_item(
                 "twitter",
                 "Atuin Twitter",
@@ -203,16 +251,20 @@ pub fn menu<R: Runtime>(app_handle: &AppHandle<R>) -> Result<Menu<R>> {
                 pkg_info.name.clone(),
                 true,
                 &[
-                    &PredefinedMenuItem::about(app_handle, None, Some(about_metadata))?,
+                    &PredefinedMenuItem::about(
+                        app_handle,
+                        Some("About Atuin Desktop"),
+                        Some(about_metadata),
+                    )?,
                     &update_check(app_handle)?,
                     &start_sync(app_handle)?,
                     &PredefinedMenuItem::separator(app_handle)?,
                     &PredefinedMenuItem::services(app_handle, None)?,
                     &PredefinedMenuItem::separator(app_handle)?,
-                    &PredefinedMenuItem::hide(app_handle, None)?,
+                    &PredefinedMenuItem::hide(app_handle, Some("Hide Atuin Desktop"))?,
                     &PredefinedMenuItem::hide_others(app_handle, None)?,
                     &PredefinedMenuItem::separator(app_handle)?,
-                    &PredefinedMenuItem::quit(app_handle, None)?,
+                    &PredefinedMenuItem::quit(app_handle, Some("Quit Atuin Desktop"))?,
                 ],
             )?,
             #[cfg(not(any(
@@ -246,9 +298,8 @@ pub fn menu<R: Runtime>(app_handle: &AppHandle<R>) -> Result<Menu<R>> {
                         &[&export_markdown(app_handle)?],
                     )?,
                     &PredefinedMenuItem::separator(app_handle)?,
-                    &PredefinedMenuItem::close_window(app_handle, None)?,
                     #[cfg(not(target_os = "macos"))]
-                    &PredefinedMenuItem::quit(app_handle, None)?,
+                    &PredefinedMenuItem::quit(app_handle, Some("Quit Atuin Desktop"))?,
                 ],
             )?,
             &Submenu::with_items(
