@@ -140,6 +140,9 @@ impl AtuinState {
         // Hence, we pass in the sender and not a receiver
         // This is a BROADCAST channel, not a normal mpsc!
         // TODO: handle broadcast channel lag
+        //
+        // Used by the executor for sending workflow events,
+        // but not currently used in the application after the 0.2.0 runtime update.
         let (event_sender, mut _event_receiver) = tokio::sync::broadcast::channel(24);
         let (cmd_sender, mut _cmd_receiver) = mpsc::channel(8);
 
