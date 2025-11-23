@@ -39,3 +39,25 @@
     font-size: 0.9em;
     color: currentColor;
 }
+
+.bn-container > div[data-floating-ui-focusable] {
+    left: -1rem !important;
+}
+
+.bn-block-group {
+    margin-left: 1rem !important;
+}
+
+/* Heading indentation */
+.bn-block-group .bn-block-outer .bn-block .bn-block-content[data-content-type="heading"] {
+    margin-left: -1rem !important;
+}
+
+/* Extra space above headings (not the first block) - use padding on block-outer
+   so the floating UI aligns with the content, not the spacing */
+.bn-block-group .bn-block-outer:not(:first-child):has(.bn-block-content[data-content-type="heading"]) {
+    padding-top: 0.5em !important;
+}
+.bn-block-group .bn-block-outer:has(.bn-block-content[data-content-type="paragraph"]) {
+    margin-top: 0.25em !important;
+}
