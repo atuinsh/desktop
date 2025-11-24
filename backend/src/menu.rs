@@ -41,66 +41,63 @@ impl TryFrom<&str> for IdWithNoColons {
 }
 
 pub(crate) fn initialize_menu_handlers<R: Runtime>(handle: &AppHandle<R>) {
-    handle.on_menu_event(move |app_handle, event| {
-        match event.id().0.as_str() {
-            "update-check" => {
-                app_handle
-                    .emit("update-check", 0)
-                    .expect("Failed to emit menu event");
+    handle.on_menu_event(move |app_handle, event| match event.id().0.as_str() {
+        "update-check" => {
+            app_handle
+                .emit("update-check", 0)
+                .expect("Failed to emit menu event");
+        }
+        "start-sync" => {
+            app_handle
+                .emit("start-sync", 0)
+                .expect("Failed to emit menu event");
+        }
+        "import-runbook" => {
+            app_handle
+                .emit("import-runbook", 0)
+                .expect("Failed to emit menu event");
+        }
+        "new-runbook" => {
+            app_handle
+                .emit("new-runbook", 0)
+                .expect("Failed to emit menu event");
+        }
+        "new-workspace" => {
+            app_handle
+                .emit("new-workspace", 0)
+                .expect("Failed to emit menu event");
+        }
+        "export-markdown" => {
+            app_handle
+                .emit("export-markdown", 0)
+                .expect("Failed to emit menu event");
+        }
+        "toggle-devtools" => {
+            let window = app_handle.get_webview_window("main").unwrap();
+            if window.is_devtools_open() {
+                window.close_devtools();
+            } else {
+                window.open_devtools();
             }
-            "start-sync" => {
-                app_handle
-                    .emit("start-sync", 0)
-                    .expect("Failed to emit menu event");
-            }
-            "import-runbook" => {
-                app_handle
-                    .emit("import-runbook", 0)
-                    .expect("Failed to emit menu event");
-            }
-            "new-runbook" => {
-                app_handle
-                    .emit("new-runbook", 0)
-                    .expect("Failed to emit menu event");
-            }
-            "new-workspace" => {
-                app_handle
-                    .emit("new-workspace", 0)
-                    .expect("Failed to emit menu event");
-            }
-            "export-markdown" => {
-                app_handle
-                    .emit("export-markdown", 0)
-                    .expect("Failed to emit menu event");
-            }
-            "toggle-devtools" => {
-                let window = app_handle.get_webview_window("main").unwrap();
-                if window.is_devtools_open() {
-                    window.close_devtools();
-                } else {
-                    window.open_devtools();
-                }
-            }
-            // The following branch expects `id` and `href` to be in scope if needed
-            other_id if other_id.starts_with("link-menu-item:") => {
-                let href = other_id.splitn(3, ":").nth(2);
-                if let Some(href) = href {
-                    let _ = open::that(href);
-                } else {
-                    log::warn!("Unknown menu event: {other_id}");
-                }
-            }
-            other_id if other_id.starts_with("window-tab-item:") => {
-                let url = other_id.split_once(":").map(|x| x.1);
-                if let Some(url) = url {
-                    app_handle.emit("activate-tab", url).unwrap();
-                } else {
-                    log::warn!("Unknown menu event: {other_id}");
-                }
-            }
-            other_id => {
+        }
+        other_id if other_id.starts_with("link-menu-item:") => {
+            let href = other_id.splitn(3, ":").nth(2);
+            if let Some(href) = href {
+                let _ = open::that(href);
+            } else {
                 log::warn!("Unknown menu event: {other_id}");
             }
+        }
+        other_id if other_id.starts_with("window-tab-item:") => {
+            let url = other_id.split_once(":").map(|x| x.1);
+            if let Some(url) = url {
+                app_handle.emit("activate-tab", url).unwrap();
+            } else {
+                log::warn!("Unknown menu event: {other_id}");
+            }
+        }
+        other_id => {
+            log::warn!("Unknown menu event: {other_id}");
         }
     });
 }
@@ -203,7 +200,7 @@ pub fn menu<R: Runtime>(app_handle: &AppHandle<R>, tab_items: &[TabItem]) -> Res
     // Build tab menu items first
     let tab_menu_items: Vec<_> = tab_items
         .iter()
-        .map(|tab| {
+        .flat_map(|tab| {
             let app_handle = app_handle.clone();
             MenuItemBuilder::new(&tab.title)
                 .id(format!("window-tab-item:{}", tab.url.clone()))
@@ -215,16 +212,16 @@ pub fn menu<R: Runtime>(app_handle: &AppHandle<R>, tab_items: &[TabItem]) -> Res
     // Create a vector of all window menu items
     let minimize = PredefinedMenuItem::minimize(app_handle, None)?;
     let maximize = PredefinedMenuItem::maximize(app_handle, None)?;
-    #[cfg(target_os = "macos")]
     let separator1 = PredefinedMenuItem::separator(app_handle)?;
 
     let mut window_items: Vec<&dyn IsMenuItem<R>> = vec![&minimize, &maximize];
 
-    #[cfg(target_os = "macos")]
-    window_items.push(&separator1);
+    if !tab_menu_items.is_empty() {
+        window_items.push(&separator1);
+    }
 
     // Add tab menu items
-    for item in tab_menu_items.iter().flatten() {
+    for item in tab_menu_items.iter() {
         window_items.push(item);
     }
 
