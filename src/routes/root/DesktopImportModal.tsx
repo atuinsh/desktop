@@ -35,6 +35,8 @@ export default function DesktopImportModal(props: DesktopImportModalProps) {
   const currentWorkspaceId = useStore((state) => state.currentWorkspaceId);
   const workspaces = useQuery(allWorkspaces());
   const remoteRunbookQuery = useQuery(remoteRunbook(props.runbookId));
+  const cannotImport =
+    connectionState !== ConnectionState.Online && connectionState !== ConnectionState.LoggedOut;
 
   const [step, setStep] = useState<ModalStep>("checking");
   const [forkedRunbooks, setForkedRunbooks] = useState<Runbook[]>([]);
@@ -238,30 +240,29 @@ export default function DesktopImportModal(props: DesktopImportModalProps) {
         <Button onPress={handleClose}>Close</Button>
       </ModalFooter>
     );
+  } else if (cannotImport) {
+    body = (
+      <p>
+        Cannot connect to Atuin Hub. Ensure your Internet connection is good, or try again later.
+      </p>
+    );
+    footer = (
+      <ModalFooter>
+        <Button onPress={handleClose}>Close</Button>
+      </ModalFooter>
+    );
   } else if (!ready) {
-    if (
-      connectionState !== ConnectionState.Online &&
-      connectionState !== ConnectionState.LoggedOut
-    ) {
-      body = <p>You must be online to import a runbook.</p>;
-      footer = (
-        <ModalFooter>
-          <Button onPress={handleClose}>Close</Button>
-        </ModalFooter>
-      );
-    } else {
-      body = (
-        <div className="flex flex-col items-center justify-center gap-2">
-          <Spinner />
-          <p>Loading runbook information...</p>
-        </div>
-      );
-      footer = (
-        <ModalFooter>
-          <Button onPress={handleClose}>Cancel</Button>
-        </ModalFooter>
-      );
-    }
+    body = (
+      <div className="flex flex-col items-center justify-center gap-2">
+        <Spinner />
+        <p>Loading runbook information...</p>
+      </div>
+    );
+    footer = (
+      <ModalFooter>
+        <Button onPress={handleClose}>Cancel</Button>
+      </ModalFooter>
+    );
   } else {
     body = (
       <>
@@ -283,7 +284,7 @@ export default function DesktopImportModal(props: DesktopImportModalProps) {
         <Button
           onPress={confirmImportRunbook}
           color="primary"
-          isDisabled={failed || !ready || !selectedWorkspaceId || importing}
+          isDisabled={failed || !ready || !selectedWorkspaceId || importing || cannotImport}
           isLoading={importing}
         >
           Import
