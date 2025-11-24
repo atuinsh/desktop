@@ -99,27 +99,13 @@ pub trait BlockBehavior: Sized + Send + Sync {
 The `BlockState` trait allows blocks to maintain internal state that can be updated and communicated to the frontend:
 
 ```rust
-pub trait BlockState: erased_serde::Serialize + Send + Sync + std::fmt::Debug + Any {
-    /// Returns a reference to the state as `Any` for downcasting
-    fn as_any(&self) -> &dyn Any;
-
-    /// Returns a mutable reference to the state as `Any` for downcasting
-    fn as_any_mut(&mut self) -> &mut dyn Any;
-}
+pub trait BlockState: erased_serde::Serialize + Send + Sync + std::fmt::Debug + Any {}
 ```
 
 **Purpose:**
 - **Runtime state management**: Store block-specific state that doesn't belong in context
 - **Frontend communication**: State changes are automatically serialized and sent to frontend via `BlockStateChanged` messages
 - **Type-safe access**: Uses the `BlockStateExt` trait to downcast to concrete state types
-
-**Helper Trait:**
-```rust
-pub trait BlockStateExt {
-    fn downcast_ref<T: BlockState>(&self) -> Option<&T>;
-    fn downcast_mut<T: BlockState>(&mut self) -> Option<&mut T>;
-}
-```
 
 **Example - Dropdown Block State:**
 ```rust
@@ -128,15 +114,7 @@ pub struct DropdownBlockState {
     pub selected_option: Option<String>,
 }
 
-impl BlockState for DropdownBlockState {
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-
-    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
-        self
-    }
-}
+impl BlockState for DropdownBlockState {}
 
 // In the Dropdown block implementation:
 impl BlockBehavior for Dropdown {
@@ -276,6 +254,23 @@ BlockContext stores typed values (like `DocumentVar`, `DocumentCwd`, etc.) that 
 Each block has two independent contexts:
 - **Passive context** - Evaluated when the document changes, provides context for blocks below it (e.g., working directory, environment variables). Not persisted to disk.
 - **Active context** - Set during execution, stores output variables and execution results. Persisted to disk via `ContextStorage`, allowing state to survive app restarts.
+
+
+**BlockContextItem**
+
+To store a value in context, implement the `BlockContextItem` trait and use `typetag::serde` for serialization.
+
+**Example Implementation:**
+
+```rust
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DocumentVar {
+    // ...
+}
+
+#[typetag::serde]
+impl BlockContextItem for DocumentVar {}
+```
 
 **BlockWithContext**
 Wrapper that pairs a block with its contexts and state:
