@@ -7,8 +7,7 @@ use uuid::Uuid;
 use crate::blocks::Block;
 use crate::client::{DocumentBridgeMessage, LocalValueProvider, MessageChannel};
 use crate::context::{
-    BlockContext, BlockContextStorage, BlockState, BlockStateExt, BlockStateUpdater,
-    ResolvedContext,
+    BlockContext, BlockContextStorage, BlockState, BlockStateUpdater, ResolvedContext,
 };
 use crate::document::Document;
 use crate::events::EventBus;

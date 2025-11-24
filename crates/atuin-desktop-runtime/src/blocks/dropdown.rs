@@ -76,15 +76,7 @@ struct DropdownState {
     resolved: Option<ResolvedDropdownState>,
 }
 
-impl BlockState for DropdownState {
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-
-    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
-        self
-    }
-}
+impl BlockState for DropdownState {}
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, TS)]
 #[ts(export)]

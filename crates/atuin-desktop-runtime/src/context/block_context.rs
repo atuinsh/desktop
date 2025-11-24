@@ -1,8 +1,7 @@
-use std::{
-    any::{Any, TypeId},
-    collections::HashMap,
-};
+use std::{any::TypeId, collections::HashMap};
 
+use downcast_rs::{impl_downcast, Downcast};
+use dyn_clone::DynClone;
 use serde::{ser::SerializeSeq, Deserialize, Deserializer, Serialize, Serializer};
 use uuid::Uuid;
 
@@ -12,32 +11,8 @@ use crate::blocks::Block;
 ///
 /// Each block type can define its own state struct and implement this trait.
 /// The state can be accessed via downcasting from `Box<dyn BlockState>`.
-pub trait BlockState: erased_serde::Serialize + Send + Sync + std::fmt::Debug + Any {
-    /// Returns a reference to the state as `Any` for downcasting
-    fn as_any(&self) -> &dyn Any;
-
-    /// Returns a mutable reference to the state as `Any` for downcasting
-    fn as_any_mut(&mut self) -> &mut dyn Any;
-}
-
-/// Extension trait for easier downcasting of `Box<dyn BlockState>`
-pub trait BlockStateExt {
-    /// Attempt to downcast to a concrete state type
-    fn downcast_ref<T: BlockState>(&self) -> Option<&T>;
-
-    /// Attempt to mutably downcast to a concrete state type
-    fn downcast_mut<T: BlockState>(&mut self) -> Option<&mut T>;
-}
-
-impl BlockStateExt for Box<dyn BlockState> {
-    fn downcast_ref<T: BlockState>(&self) -> Option<&T> {
-        self.as_any().downcast_ref::<T>()
-    }
-
-    fn downcast_mut<T: BlockState>(&mut self) -> Option<&mut T> {
-        self.as_any_mut().downcast_mut::<T>()
-    }
-}
+pub trait BlockState: erased_serde::Serialize + Send + Sync + std::fmt::Debug + Downcast {}
+impl_downcast!(BlockState);
 
 pub type BlockStateUpdater = Box<dyn FnOnce(&mut Box<dyn BlockState>) + Send>;
 
@@ -74,7 +49,7 @@ impl BlockContext {
     pub fn get<T: BlockContextItem + 'static>(&self) -> Option<&T> {
         self.entries
             .get(&TypeId::of::<T>())
-            .and_then(|boxed| boxed.as_any().downcast_ref::<T>())
+            .and_then(|boxed| boxed.downcast_ref::<T>())
     }
 }
 
@@ -82,7 +57,7 @@ impl Clone for BlockContext {
     fn clone(&self) -> Self {
         let mut entries = HashMap::new();
         for (type_id, item) in &self.entries {
-            entries.insert(*type_id, item.clone_box());
+            entries.insert(*type_id, dyn_clone::clone_box(&**item));
         }
         Self { entries }
     }
@@ -109,7 +84,7 @@ impl<'de> Deserialize<'de> for BlockContext {
         let items: Vec<Box<dyn BlockContextItem>> = Vec::deserialize(deserializer)?;
         let mut context = Self::new();
         for item in items {
-            let type_id = item.concrete_type_id();
+            let type_id = (&*item as &dyn std::any::Any).type_id();
             context.entries.insert(type_id, item);
         }
         Ok(context)
@@ -196,21 +171,10 @@ impl BlockWithContext {
 /// Any type that implements this trait should use `#[typetag::serde]` to implement serialization
 /// and deserialization.
 #[typetag::serde(tag = "type")]
-pub trait BlockContextItem: Any + std::fmt::Debug + Send + Sync {
-    /// Returns a reference to the item as a dynamic [`Any`] type.
-    /// You can implement this method by returning `self` from the method.
-    fn as_any(&self) -> &dyn Any;
+pub trait BlockContextItem: std::fmt::Debug + Send + Sync + DynClone + Downcast {}
 
-    /// Returns the concrete type ID of the item. This is used to identify the item when it is
-    /// stored in a hash map.
-    /// You can implement this method by returning `TypeId::of::<Self>()`.
-    fn concrete_type_id(&self) -> TypeId;
-
-    /// Returns a boxed clone of the item. This is used to clone the item when it is stored in a
-    /// hash map.
-    /// You can implement this method by returning `Box::new(self.clone())`.
-    fn clone_box(&self) -> Box<dyn BlockContextItem>;
-}
+dyn_clone::clone_trait_object!(BlockContextItem);
+impl_downcast!(BlockContextItem);
 
 /// Variables defined by template variable blocks
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -231,76 +195,28 @@ impl DocumentVar {
 }
 
 #[typetag::serde]
-impl BlockContextItem for DocumentVar {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
-    fn concrete_type_id(&self) -> TypeId {
-        TypeId::of::<Self>()
-    }
-
-    fn clone_box(&self) -> Box<dyn BlockContextItem> {
-        Box::new(self.clone())
-    }
-}
+impl BlockContextItem for DocumentVar {}
 
 /// Current working directory set by directory blocks
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DocumentCwd(pub String);
 
 #[typetag::serde]
-impl BlockContextItem for DocumentCwd {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
-    fn concrete_type_id(&self) -> TypeId {
-        TypeId::of::<Self>()
-    }
-
-    fn clone_box(&self) -> Box<dyn BlockContextItem> {
-        Box::new(self.clone())
-    }
-}
+impl BlockContextItem for DocumentCwd {}
 
 /// Environment variables set by environment blocks
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DocumentEnvVar(pub String, pub String);
 
 #[typetag::serde]
-impl BlockContextItem for DocumentEnvVar {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
-    fn concrete_type_id(&self) -> TypeId {
-        TypeId::of::<Self>()
-    }
-
-    fn clone_box(&self) -> Box<dyn BlockContextItem> {
-        Box::new(self.clone())
-    }
-}
+impl BlockContextItem for DocumentEnvVar {}
 
 /// SSH connection information from SSH connection and host blocks
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DocumentSshHost(pub Option<String>);
 
 #[typetag::serde]
-impl BlockContextItem for DocumentSshHost {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
-    fn concrete_type_id(&self) -> TypeId {
-        TypeId::of::<Self>()
-    }
-
-    fn clone_box(&self) -> Box<dyn BlockContextItem> {
-        Box::new(self.clone())
-    }
-}
+impl BlockContextItem for DocumentSshHost {}
 
 /// Execution output from blocks that produce results
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -312,16 +228,4 @@ pub struct BlockExecutionOutput {
 }
 
 #[typetag::serde]
-impl BlockContextItem for BlockExecutionOutput {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
-    fn concrete_type_id(&self) -> TypeId {
-        TypeId::of::<Self>()
-    }
-
-    fn clone_box(&self) -> Box<dyn BlockContextItem> {
-        Box::new(self.clone())
-    }
-}
+impl BlockContextItem for BlockExecutionOutput {}

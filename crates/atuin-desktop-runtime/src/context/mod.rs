@@ -16,11 +16,11 @@ mod block_context;
 mod resolution;
 mod storage;
 
+pub use block_context::BlockState;
 pub use block_context::{
     BlockContext, BlockContextItem, BlockExecutionOutput, BlockStateUpdater, BlockWithContext,
     DocumentCwd, DocumentEnvVar, DocumentSshHost, DocumentVar,
 };
-pub use block_context::{BlockState, BlockStateExt};
 pub use resolution::{ContextResolver, ResolvedContext};
 pub use storage::BlockContextStorage;
 pub use typetag::serde as typetag_serde;
