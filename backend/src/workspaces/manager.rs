@@ -240,10 +240,11 @@ impl WorkspaceManager {
         parent_folder_id: Option<&str>,
         name: &str,
         content: &Value,
+        forked_from: Option<&str>,
     ) -> Result<String, WorkspaceError> {
         let workspace = self.get_workspace_mut(workspace_id)?;
         workspace
-            .create_runbook(parent_folder_id, name, content)
+            .create_runbook(parent_folder_id, name, content, forked_from)
             .await
     }
 
@@ -255,8 +256,23 @@ impl WorkspaceManager {
         content: Value,
     ) -> Result<String, WorkspaceError> {
         let workspace = self.get_workspace_mut(workspace_id)?;
+
+        // Preserve existing forked_from value when saving
+        let forked_from = workspace
+            .state
+            .as_ref()
+            .ok()
+            .and_then(|s| s.runbooks.get(runbook_id))
+            .and_then(|r| r.forked_from.clone());
+
         workspace
-            .save_runbook(runbook_id, name, &content, None::<&Path>)
+            .save_runbook(
+                runbook_id,
+                name,
+                &content,
+                None::<&Path>,
+                forked_from.as_deref(),
+            )
             .await
     }
 

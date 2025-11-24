@@ -118,6 +118,7 @@ pub struct WorkspaceRunbook {
     pub path: PathBuf,
     #[ts(type = "{ secs_since_epoch: number, nanos_since_epoch: number } | null")]
     pub lastmod: Option<SystemTime>,
+    pub forked_from: Option<String>,
 }
 
 impl WorkspaceRunbook {
@@ -127,6 +128,7 @@ impl WorkspaceRunbook {
         version: u64,
         path: impl AsRef<Path>,
         lastmod: Option<SystemTime>,
+        forked_from: Option<String>,
     ) -> Self {
         Self {
             id: id.to_string(),
@@ -134,6 +136,7 @@ impl WorkspaceRunbook {
             version,
             path: path.as_ref().to_path_buf(),
             lastmod,
+            forked_from,
         }
     }
 
@@ -160,6 +163,10 @@ impl WorkspaceRunbook {
             .get("version")
             .and_then(|v| v.as_u64())
             .ok_or_else(|| WorkspaceStateError::InvalidAtrbFile(path.as_ref().to_path_buf()))?;
+        let forked_from = yaml_value
+            .get("forkedFrom")
+            .and_then(|v| v.as_str())
+            .map(|v| v.to_string());
 
         Ok(Self::new(
             &id,
@@ -167,6 +174,7 @@ impl WorkspaceRunbook {
             version,
             path.as_ref(),
             stats.modified().ok(),
+            forked_from,
         ))
     }
 }

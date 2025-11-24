@@ -272,6 +272,7 @@ export default class OfflineStrategy implements WorkspaceStrategy {
       true,
       remoteRunbook.name,
       tagContent,
+      runbookId,
     );
     if (rb === null) {
       return Err({

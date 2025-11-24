@@ -710,6 +710,7 @@ export class OfflineRunbook extends Runbook {
     persist: boolean = true,
     name: string = "Untitled",
     content: any = [],
+    forkedFrom: string | null = null,
   ): Promise<OfflineRunbook | null> {
     if (!persist) {
       throw new Error("Cannot create offline runbook without persisting");
@@ -720,6 +721,7 @@ export class OfflineRunbook extends Runbook {
       parentFolderId,
       name,
       content,
+      forkedFrom,
     );
     if (idResult.isErr()) {
       console.error("Failed to create runbook", idResult.unwrapErr());

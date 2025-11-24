@@ -186,13 +186,20 @@ impl Workspace {
         parent_folder_id: Option<&str>,
         name: &str,
         content: &Value,
+        forked_from: Option<&str>,
     ) -> Result<String, WorkspaceError> {
         let id = uuid_v7();
 
         let parent_folder = parent_folder_id.map(PathBuf::from);
 
-        self.save_runbook(&id.to_string(), name, content, parent_folder.as_ref())
-            .await?;
+        self.save_runbook(
+            &id.to_string(),
+            name,
+            content,
+            parent_folder.as_ref(),
+            forked_from,
+        )
+        .await?;
 
         Ok(id.to_string())
     }
@@ -205,6 +212,7 @@ impl Workspace {
         name: &str,
         content: &Value,
         parent_folder: Option<impl AsRef<Path>>,
+        forked_from: Option<&str>,
     ) -> Result<String, WorkspaceError> {
         if let Err(e) = &self.state {
             return Err(WorkspaceError::RunbookSaveError {
@@ -247,6 +255,12 @@ impl Workspace {
         map.insert(
             Value::String("version".to_string()),
             Value::Number(1.into()),
+        );
+        map.insert(
+            Value::String("forkedFrom".to_string()),
+            forked_from
+                .map(|s| Value::String(s.to_string()))
+                .unwrap_or(Value::Null),
         );
         map.insert(
             Value::String("content".to_string()),

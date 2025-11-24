@@ -122,9 +122,10 @@ export async function createRunbook(
   parentFolderId: string | null,
   name: string = "Untitled",
   content: any = [],
+  forkedFrom: string | null = null,
 ): Promise<Result<string, WorkspaceError>> {
   return promiseResult<string, WorkspaceError>(
-    invoke("create_runbook", { workspaceId, parentFolderId, name, content }),
+    invoke("create_runbook", { workspaceId, parentFolderId, name, content, forkedFrom }),
   );
 }
 
