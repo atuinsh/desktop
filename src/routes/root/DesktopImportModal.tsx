@@ -1,6 +1,7 @@
 import { remoteRunbook } from "@/lib/queries/runbooks";
 import { allWorkspaces } from "@/lib/queries/workspaces";
 import { getWorkspaceStrategy } from "@/lib/workspaces/strategy";
+import Runbook, { OfflineRunbook, OnlineRunbook } from "@/state/runbooks/runbook";
 import Workspace from "@/state/runbooks/workspace";
 import { useStore } from "@/state/store";
 import { ConnectionState } from "@/state/store/user_state";
@@ -12,11 +13,13 @@ import {
   ModalContent,
   ModalFooter,
   ModalHeader,
+  Select,
+  SelectItem,
   Spinner,
 } from "@heroui/react";
 import { useQuery } from "@tanstack/react-query";
 import { DynamicIcon } from "lucide-react/dynamic";
-import { useLayoutEffect, useMemo, useReducer, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useReducer, useState } from "react";
 
 interface DesktopImportModalProps {
   runbookId: string;
@@ -25,11 +28,17 @@ interface DesktopImportModalProps {
   onClose: () => void;
 }
 
+type ModalStep = "checking" | "forked-options" | "import";
+
 export default function DesktopImportModal(props: DesktopImportModalProps) {
   const connectionState = useStore((state) => state.connectionState);
   const currentWorkspaceId = useStore((state) => state.currentWorkspaceId);
   const workspaces = useQuery(allWorkspaces());
   const remoteRunbookQuery = useQuery(remoteRunbook(props.runbookId));
+
+  const [step, setStep] = useState<ModalStep>("checking");
+  const [forkedRunbooks, setForkedRunbooks] = useState<Runbook[]>([]);
+  const [selectedForkedRunbookId, setSelectedForkedRunbookId] = useState<string | null>(null);
 
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(currentWorkspaceId);
   const selectedWorkspace = useMemo(() => {
@@ -38,8 +47,43 @@ export default function DesktopImportModal(props: DesktopImportModalProps) {
   const [importing, setImporting] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
 
+  // Check for existing forked runbooks when component mounts
+  useEffect(() => {
+    async function checkForForkedRunbooks() {
+      try {
+        const [onlineForked, offlineForked] = await Promise.all([
+          OnlineRunbook.allForkedFrom(props.runbookId),
+          OfflineRunbook.allForkedFrom(props.runbookId),
+        ]);
+
+        const allForked = [...onlineForked, ...offlineForked];
+
+        if (allForked.length > 0) {
+          setForkedRunbooks(allForked);
+          setStep("forked-options");
+        } else {
+          setStep("import");
+        }
+      } catch (error) {
+        console.error("Error checking for forked runbooks:", error);
+        setStep("import");
+      }
+    }
+
+    checkForForkedRunbooks();
+  }, [props.runbookId]);
+
   function handleClose() {
     props.onClose();
+  }
+
+  async function handleOpenForkedRunbook(runbookId: string) {
+    await props.activateRunbook(runbookId);
+    props.onClose();
+  }
+
+  function handleImportNew() {
+    setStep("import");
   }
 
   async function confirmImportRunbook() {
@@ -90,18 +134,97 @@ export default function DesktopImportModal(props: DesktopImportModalProps) {
   const ready = remoteRunbookQuery.isSuccess && workspaces.isSuccess;
 
   let body: React.ReactNode | null = null;
+  let footer: React.ReactNode | null = null;
 
-  if (importing) {
+  if (step === "checking") {
+    body = (
+      <div className="flex flex-col items-center justify-center gap-2">
+        <Spinner />
+        <p>Checking for existing copies...</p>
+      </div>
+    );
+    footer = (
+      <ModalFooter>
+        <Button onPress={handleClose}>Cancel</Button>
+      </ModalFooter>
+    );
+  } else if (step === "forked-options") {
+    const isImportNew = selectedForkedRunbookId === "__import_new__";
+    const hasSelection = selectedForkedRunbookId !== null;
+
+    body = (
+      <div className="flex flex-col gap-4">
+        <p>
+          You already have {forkedRunbooks.length === 1 ? "a copy" : "copies"} of this runbook.
+          Would you like to open an existing copy or import a new one?
+        </p>
+        <Select
+          label="Choose an action"
+          placeholder="Select an option"
+          selectedKeys={selectedForkedRunbookId ? [selectedForkedRunbookId] : []}
+          onSelectionChange={(keys) => {
+            const selected = Array.from(keys)[0] as string | undefined;
+            setSelectedForkedRunbookId(selected ?? null);
+          }}
+          items={[
+            { id: "__import_new__", name: "Import as new copy" },
+            ...forkedRunbooks.map((runbook) => ({
+              id: runbook.id,
+              name: `Open "${runbook.name || "Untitled"}"`,
+            })),
+          ]}
+        >
+          {(item) => <SelectItem key={item.id}>{item.name}</SelectItem>}
+        </Select>
+      </div>
+    );
+    footer = (
+      <ModalFooter>
+        <Button onPress={handleClose}>Cancel</Button>
+        <Button
+          color="primary"
+          isDisabled={!hasSelection}
+          onPress={() => {
+            if (isImportNew) {
+              handleImportNew();
+            } else if (selectedForkedRunbookId) {
+              handleOpenForkedRunbook(selectedForkedRunbookId);
+            }
+          }}
+        >
+          {isImportNew ? "Import" : hasSelection ? "Open" : "Continue"}
+        </Button>
+      </ModalFooter>
+    );
+  } else if (importing) {
     body = (
       <div className="flex flex-col items-center justify-center gap-2">
         <p>Importing runbook...</p>
       </div>
+    );
+    footer = (
+      <ModalFooter>
+        <Button onPress={handleClose} isDisabled>
+          Cancel
+        </Button>
+        <Button color="primary" isLoading>
+          Import
+        </Button>
+      </ModalFooter>
     );
   } else if (importError) {
     body = (
       <p>
         Failed to import the runbook: <strong>{importError}</strong>
       </p>
+    );
+    footer = (
+      <ModalFooter>
+        <Button onPress={handleClose}>Close</Button>
+        <Button onPress={confirmImportRunbook} color="primary">
+          Retry
+        </Button>
+      </ModalFooter>
     );
   } else if (failed) {
     body = (
@@ -110,12 +233,22 @@ export default function DesktopImportModal(props: DesktopImportModalProps) {
         to access it.
       </p>
     );
+    footer = (
+      <ModalFooter>
+        <Button onPress={handleClose}>Close</Button>
+      </ModalFooter>
+    );
   } else if (!ready) {
     if (
       connectionState !== ConnectionState.Online &&
       connectionState !== ConnectionState.LoggedOut
     ) {
       body = <p>You must be online to import a runbook.</p>;
+      footer = (
+        <ModalFooter>
+          <Button onPress={handleClose}>Close</Button>
+        </ModalFooter>
+      );
     } else {
       body = (
         <div className="flex flex-col items-center justify-center gap-2">
@@ -123,43 +256,52 @@ export default function DesktopImportModal(props: DesktopImportModalProps) {
           <p>Loading runbook information...</p>
         </div>
       );
+      footer = (
+        <ModalFooter>
+          <Button onPress={handleClose}>Cancel</Button>
+        </ModalFooter>
+      );
     }
+  } else {
+    body = (
+      <>
+        <p>
+          To open the runbook <strong>{remoteRunbookQuery.data?.name}</strong>@
+          <strong>{props.tag}</strong>, you need to import it into a workspace. Choose a workspace
+          below to import it into.
+        </p>
+        <WorkspaceSelector
+          workspaces={workspaces.data ?? []}
+          selectedWorkspace={selectedWorkspace}
+          onSelect={setSelectedWorkspaceId}
+        />
+      </>
+    );
+    footer = (
+      <ModalFooter>
+        <Button onPress={handleClose}>Cancel</Button>
+        <Button
+          onPress={confirmImportRunbook}
+          color="primary"
+          isDisabled={failed || !ready || !selectedWorkspaceId || importing}
+          isLoading={importing}
+        >
+          Import
+        </Button>
+      </ModalFooter>
+    );
   }
 
   return (
     <Modal isOpen onClose={handleClose}>
       <ModalContent>
-        {(onClose) => (
+        {() => (
           <>
-            <ModalHeader>Import Runbook</ModalHeader>
-            {body && <ModalBody>{body}</ModalBody>}
-            {!body && (
-              <ModalBody>
-                <p>
-                  To open the runbook <strong>{remoteRunbookQuery.data?.name}</strong>@
-                  <strong>{props.tag}</strong>, you need to import it into a workspace. Choose a
-                  workspace below to import it into.
-                </p>
-                {
-                  <WorkspaceSelector
-                    workspaces={workspaces.data ?? []}
-                    selectedWorkspace={selectedWorkspace}
-                    onSelect={setSelectedWorkspaceId}
-                  />
-                }
-              </ModalBody>
-            )}
-            <ModalFooter>
-              <Button onPress={onClose}>Cancel</Button>
-              <Button
-                onPress={confirmImportRunbook}
-                color="primary"
-                isDisabled={failed || !ready || !selectedWorkspaceId || importing}
-                isLoading={importing}
-              >
-                Import
-              </Button>
-            </ModalFooter>
+            <ModalHeader>
+              {step === "forked-options" ? "Open Runbook" : "Import Runbook"}
+            </ModalHeader>
+            <ModalBody>{body}</ModalBody>
+            {footer}
           </>
         )}
       </ModalContent>
