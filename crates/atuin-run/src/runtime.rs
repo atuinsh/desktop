@@ -18,6 +18,17 @@ impl EventBus for NullEventBus {
     }
 }
 
+pub struct NullDocumentBridge;
+
+#[async_trait::async_trait]
+impl MessageChannel<DocumentBridgeMessage> for NullDocumentBridge {
+    async fn send(
+        &self,
+        _message: DocumentBridgeMessage,
+    ) -> std::result::Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        Ok(())
+    }
+}
 pub struct ChannelDocumentBridge {
     sender: mpsc::Sender<DocumentBridgeMessage>,
 }
