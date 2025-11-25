@@ -43,7 +43,7 @@ pub struct ExecutionContext {
     pub(crate) block_id: Uuid,
     pub(crate) runbook_id: Uuid,
     document_handle: Arc<DocumentHandle>,
-    pub(crate) context_resolver: Arc<ContextResolver>,
+    pub context_resolver: Arc<ContextResolver>,
     #[builder(default, setter(strip_option(fallback = output_channel_opt)))]
     output_channel: Option<Arc<dyn MessageChannel<DocumentBridgeMessage>>>,
     #[builder(default, setter(strip_option(fallback = ssh_pool_opt)))]

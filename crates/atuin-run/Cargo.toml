@@ -15,3 +15,7 @@ serde_yaml = { workspace = true }
 eyre = { workspace = true }
 thiserror = { workspace = true }
 async-trait = { workspace = true }
+crossterm = "0.29.0"
+vt100 = "0.16.2"
+textwrap = "0.16.2"
+bytes = { workspace = true }
