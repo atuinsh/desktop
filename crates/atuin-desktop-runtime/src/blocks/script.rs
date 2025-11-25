@@ -299,13 +299,7 @@ impl Script {
         }
 
         // Local execution
-        let mut cwd = context.context_resolver.cwd().to_string();
-        if cwd.is_empty() {
-            cwd = std::env::current_dir()
-                .unwrap_or_default()
-                .to_string_lossy()
-                .to_string()
-        }
+        let cwd = context.context_resolver.cwd().to_string();
         let env_vars = context.context_resolver.env_vars();
 
         // Parse interpreter string into program and args

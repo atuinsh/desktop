@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, path::PathBuf};
 
 use minijinja::{value::Object, Environment, Value};
 use serde::{Deserialize, Serialize};
@@ -68,10 +68,7 @@ impl ContextResolver {
     pub fn new() -> Self {
         Self {
             vars: HashMap::new(),
-            cwd: std::env::current_dir()
-                .unwrap_or_default()
-                .to_string_lossy()
-                .to_string(),
+            cwd: default_cwd(),
             env_vars: HashMap::new(),
             ssh_host: None,
             extra_template_context: HashMap::new(),
@@ -136,7 +133,20 @@ impl ContextResolver {
 
             if let Some(dir) = ctx.get::<DocumentCwd>() {
                 if let Ok(resolved_value) = self.resolve_template(&dir.0) {
-                    self.cwd = resolved_value;
+                    if resolved_value.is_empty() {
+                        self.cwd = default_cwd();
+                        continue;
+                    }
+
+                    let path = PathBuf::from(&resolved_value);
+                    if path.is_absolute() {
+                        self.cwd = path.to_string_lossy().to_string();
+                    } else {
+                        self.cwd = PathBuf::from(self.cwd.clone())
+                            .join(&path)
+                            .to_string_lossy()
+                            .to_string();
+                    }
                 } else {
                     log::warn!("Failed to resolve template for directory {}", dir.0);
                 }
@@ -236,6 +246,15 @@ impl ContextResolver {
     pub fn ssh_host(&self) -> Option<&String> {
         self.ssh_host.as_ref()
     }
+}
+
+fn default_cwd() -> String {
+    // Defaults to home directory because placeholder in directory blocks is `~`
+    dirs::home_dir()
+        .or(std::env::current_dir().ok())
+        .unwrap_or("/".into())
+        .to_string_lossy()
+        .to_string()
 }
 
 impl Default for ContextResolver {
