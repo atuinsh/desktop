@@ -120,7 +120,14 @@ impl Dropdown {
                 let command = context
                     .context_resolver
                     .resolve_template(&self.command_options)?;
+
+                let cwd = context.context_resolver.cwd().to_string();
+                let envs = context.context_resolver.env_vars().clone();
+                log::trace!("Running dropdown command in directory {cwd}");
+
                 let output = Command::new(&self.interpreter)
+                    .current_dir(cwd)
+                    .envs(envs)
                     .arg("-c")
                     .arg(&command)
                     .output()
@@ -239,8 +246,18 @@ impl BlockBehavior for Dropdown {
         context: ExecutionContext,
     ) -> Result<Option<ExecutionHandle>, Box<dyn std::error::Error + Send + Sync>> {
         let resolved_options = self.resolve_options(&context).await?;
+        log::trace!(
+            "Resolved options for dropdown block {id}: {options:?}",
+            id = self.id,
+            options = resolved_options
+        );
+        let id = self.id.clone();
         context
-            .update_block_state::<DropdownState, _>(self.id, |state| {
+            .update_block_state::<DropdownState, _>(self.id, move |state| {
+                log::trace!(
+                    "Updating dropdown state for block {id}: {options:?}",
+                    options = resolved_options
+                );
                 state.resolved = Some(ResolvedDropdownState {
                     options: resolved_options,
                 });
