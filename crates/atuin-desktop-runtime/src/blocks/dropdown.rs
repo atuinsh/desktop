@@ -245,19 +245,16 @@ impl BlockBehavior for Dropdown {
         self,
         context: ExecutionContext,
     ) -> Result<Option<ExecutionHandle>, Box<dyn std::error::Error + Send + Sync>> {
+        let _ = context.block_started().await;
+
         let resolved_options = self.resolve_options(&context).await?;
         log::trace!(
             "Resolved options for dropdown block {id}: {options:?}",
             id = self.id,
             options = resolved_options
         );
-        let id = self.id.clone();
         context
             .update_block_state::<DropdownState, _>(self.id, move |state| {
-                log::trace!(
-                    "Updating dropdown state for block {id}: {options:?}",
-                    options = resolved_options
-                );
                 state.resolved = Some(ResolvedDropdownState {
                     options: resolved_options,
                 });
