@@ -65,6 +65,7 @@ interface DropdownProps {
   interpreter: string;
   isEditable: boolean;
   editor: any;
+  dropdown: any;
 
   onNameUpdate: (name: string) => void;
   onOptionsUpdate: (type: OptionType, options: string) => void;
@@ -248,6 +249,7 @@ const CommandTab = ({
 
 const Dropdown = ({
   id,
+  dropdown,
   name = "",
   options = "",
   value = "",
@@ -278,6 +280,20 @@ const Dropdown = ({
       setHasNameError(false);
     }
   }, [name]);
+
+  useEffect(function fixMissingOptions() {
+    // We've seen cases where `options` is populated, but none of
+    // `fixedOptions`, `variableOptions` or `commandOptions` are.
+    // In these cases, `optionsType` is set. So, if we detect this scenario,
+    // check that `optionsType` is fixed and populate the missing options.
+    const { fixedOptions } = dropdown.props;
+
+    if (options !== "" && fixedOptions === "" && optionsType === "fixed") {
+      if (optionsType === "fixed") {
+        onOptionsUpdate(OptionType.FIXED, options);
+      }
+    }
+  }, []);
 
   const optionsChangeHandler = useCallback(
     (type: OptionType) => (options: string) => onOptionsUpdate(type, options),
@@ -537,6 +553,7 @@ export default createReactBlockSpec(
       return (
         <Dropdown
           editor={editor}
+          dropdown={block}
           id={block.id}
           name={block.props.name}
           options={block.props.options}
