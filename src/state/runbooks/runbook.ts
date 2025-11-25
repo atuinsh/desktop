@@ -574,7 +574,7 @@ export class OnlineRunbook extends Runbook {
 
     const db = await AtuinDB.load("runbooks");
 
-    logger.time(`Moving runbook to workspace ${targetWorkspace.get("id")}`, async () => {
+    await logger.time(`Moving runbook to workspace ${targetWorkspace.get("id")}`, async () => {
       await db.execute(`UPDATE runbooks SET workspace_id = $1 where id = $2`, [
         targetWorkspace.get("id")!,
         this.id,
