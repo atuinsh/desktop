@@ -42,9 +42,10 @@ export default function RuntimeUpdateNotice(props: RuntimeUpdateNoticeProps) {
         icon={<InfoIcon />}
         isClosable={true}
         onClose={closeAlert}
-        title={<h3 className="text-lg font-semibold">Atuin Desktop's New Execution Engine</h3>}
+        title="Atuin Desktop's New Execution Engine"
         classNames={{
           base: cn(["!bg-success-50/100"]),
+          title: cn(["!text-lg", "!font-semibold"]),
         }}
         description={
           <>
