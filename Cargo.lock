@@ -615,6 +615,7 @@ dependencies = [
  "russh-keys",
  "serde",
  "serde_json",
+ "shellexpand",
  "sqlparser",
  "sqlx",
  "tempfile",

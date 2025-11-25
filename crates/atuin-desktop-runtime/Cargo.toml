@@ -52,6 +52,7 @@ erased-serde = "0.4.9"
 downcast-rs = { workspace = true }
 dyn-clone = { workspace = true }
 regex = { workspace = true }
+shellexpand = { workspace = true }
 
 [dev-dependencies]
 httpmock = "0.8"

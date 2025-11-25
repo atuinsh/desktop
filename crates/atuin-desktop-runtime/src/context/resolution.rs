@@ -120,6 +120,7 @@ impl ContextResolver {
         let active_context = block.active_context();
 
         for ctx in [passive_context, active_context] {
+            // Process variables first as they can be used in templates
             if let Some(var) = ctx.get::<DocumentVar>() {
                 if let Ok(resolved_value) = self.resolve_template(&var.value) {
                     self.vars.insert(
@@ -131,27 +132,7 @@ impl ContextResolver {
                 }
             }
 
-            if let Some(dir) = ctx.get::<DocumentCwd>() {
-                if let Ok(resolved_value) = self.resolve_template(&dir.0) {
-                    if resolved_value.is_empty() {
-                        self.cwd = default_cwd();
-                        continue;
-                    }
-
-                    let path = PathBuf::from(&resolved_value);
-                    if path.is_absolute() {
-                        self.cwd = path.to_string_lossy().to_string();
-                    } else {
-                        self.cwd = PathBuf::from(self.cwd.clone())
-                            .join(&path)
-                            .to_string_lossy()
-                            .to_string();
-                    }
-                } else {
-                    log::warn!("Failed to resolve template for directory {}", dir.0);
-                }
-            }
-
+            // Process environment variables before cwd, as cwd may reference them
             if let Some(env) = ctx.get::<DocumentEnvVar>() {
                 if let Ok(resolved_value) = self.resolve_template(&env.1) {
                     self.env_vars.insert(env.0.clone(), resolved_value);
@@ -160,6 +141,31 @@ impl ContextResolver {
                         "Failed to resolve template for environment variable {}",
                         env.0
                     );
+                }
+            }
+
+            // Process cwd after env vars so it can expand ${VAR} references
+            if let Some(dir) = ctx.get::<DocumentCwd>() {
+                if let Ok(resolved_value) = self.resolve_template(&dir.0) {
+                    let trimmed_value = resolved_value.trim();
+
+                    if trimmed_value.is_empty() {
+                        self.cwd = default_cwd();
+                        continue;
+                    }
+
+                    let expanded_value = expand_path_variables(trimmed_value, &self.env_vars);
+                    let path = PathBuf::from(&expanded_value);
+
+                    let normalized_path = if path.is_absolute() {
+                        normalize_path(&path)
+                    } else {
+                        normalize_path(&PathBuf::from(self.cwd.clone()).join(&path))
+                    };
+
+                    self.cwd = normalized_path.to_string_lossy().to_string();
+                } else {
+                    log::warn!("Failed to resolve template for directory {}", dir.0);
                 }
             }
 
@@ -185,6 +191,7 @@ impl ContextResolver {
         // Create a minijinja environment
         let mut env = Environment::new();
         env.set_trim_blocks(true);
+        env.set_undefined_behavior(minijinja::UndefinedBehavior::Strict);
 
         // Build the context object for template rendering
         let mut context: HashMap<&str, Value> = HashMap::new();
@@ -255,6 +262,46 @@ fn default_cwd() -> String {
         .unwrap_or("/".into())
         .to_string_lossy()
         .to_string()
+}
+
+/// Expand tilde (~) and shell-style environment variables ($VAR, ${VAR}) in a path
+fn expand_path_variables(path: &str, env_vars: &HashMap<String, String>) -> String {
+    // Use shellexpand with a custom context that checks our env_vars map first
+    let result: Result<std::borrow::Cow<str>, shellexpand::LookupError<std::env::VarError>> =
+        shellexpand::full_with_context(
+            path,
+            || dirs::home_dir().map(|p| std::borrow::Cow::Owned(p.to_string_lossy().to_string())),
+            |var_name| {
+                Ok(env_vars
+                    .get(var_name)
+                    .map(|s| std::borrow::Cow::Borrowed(s.as_str())))
+            },
+        );
+
+    result
+        .unwrap_or_else(|_| std::borrow::Cow::Borrowed(path))
+        .to_string()
+}
+
+/// Normalize a path by resolving . and .. components without requiring the path to exist
+fn normalize_path(path: &PathBuf) -> PathBuf {
+    let mut normalized = PathBuf::new();
+
+    for component in path.components() {
+        match component {
+            std::path::Component::ParentDir => {
+                normalized.pop();
+            }
+            std::path::Component::CurDir => {
+                // Skip current directory references
+            }
+            _ => {
+                normalized.push(component);
+            }
+        }
+    }
+
+    normalized
 }
 
 impl Default for ContextResolver {
@@ -338,5 +385,548 @@ impl ContextResolverBuilder {
             ssh_host: self.ssh_host,
             extra_template_context: self.extra_template_context.unwrap_or_default(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::blocks::host::Host;
+    use crate::blocks::Block;
+    use crate::context::BlockContext;
+
+    fn create_block_with_context(
+        passive_context: BlockContext,
+        active_context: Option<BlockContext>,
+    ) -> BlockWithContext {
+        let host = Host::builder()
+            .id(uuid::Uuid::new_v4())
+            .host("localhost")
+            .build();
+
+        BlockWithContext::new(Block::Host(host), passive_context, active_context, None)
+    }
+
+    #[test]
+    fn test_cwd_absolute_path() {
+        let mut resolver = ContextResolver::new();
+
+        let mut passive_context = BlockContext::new();
+        passive_context.insert(DocumentCwd("/absolute/path".to_string()));
+        let block = create_block_with_context(passive_context, None);
+
+        resolver.push_block(&block);
+        assert_eq!(resolver.cwd(), "/absolute/path");
+    }
+
+    #[test]
+    fn test_cwd_relative_path() {
+        let mut resolver = ContextResolverBuilder::new()
+            .cwd("/base/path".to_string())
+            .build();
+
+        let mut passive_context = BlockContext::new();
+        passive_context.insert(DocumentCwd("subdir".to_string()));
+        let block = create_block_with_context(passive_context, None);
+
+        resolver.push_block(&block);
+        assert_eq!(resolver.cwd(), "/base/path/subdir");
+    }
+
+    #[test]
+    fn test_cwd_relative_path_with_parent_directory() {
+        let mut resolver = ContextResolverBuilder::new()
+            .cwd("/base/path/deep".to_string())
+            .build();
+
+        let mut passive_context = BlockContext::new();
+        passive_context.insert(DocumentCwd("../sibling".to_string()));
+        let block = create_block_with_context(passive_context, None);
+
+        resolver.push_block(&block);
+        assert_eq!(resolver.cwd(), "/base/path/sibling");
+    }
+
+    #[test]
+    fn test_cwd_with_template_variable() {
+        let mut resolver = ContextResolverBuilder::new()
+            .vars(HashMap::from([(
+                "home".to_string(),
+                "/home/user".to_string(),
+            )]))
+            .build();
+
+        let mut passive_context = BlockContext::new();
+        passive_context.insert(DocumentCwd("{{ var.home }}/projects".to_string()));
+        let block = create_block_with_context(passive_context, None);
+
+        resolver.push_block(&block);
+        assert_eq!(resolver.cwd(), "/home/user/projects");
+    }
+
+    #[test]
+    fn test_cwd_with_environment_variable() {
+        let mut resolver = ContextResolverBuilder::new()
+            .env_vars(HashMap::from([(
+                "HOME".to_string(),
+                "/home/user".to_string(),
+            )]))
+            .build();
+
+        let mut passive_context = BlockContext::new();
+        passive_context.insert(DocumentCwd("{{ env.HOME }}/documents".to_string()));
+        let block = create_block_with_context(passive_context, None);
+
+        resolver.push_block(&block);
+        assert_eq!(resolver.cwd(), "/home/user/documents");
+    }
+
+    #[test]
+    fn test_cwd_with_literal_dollar_sign_no_template() {
+        let mut resolver = ContextResolver::new();
+
+        let mut passive_context = BlockContext::new();
+        passive_context.insert(DocumentCwd("/path/with/$dollar".to_string()));
+        let block = create_block_with_context(passive_context, None);
+
+        resolver.push_block(&block);
+        assert_eq!(resolver.cwd(), "/path/with/$dollar");
+    }
+
+    #[test]
+    fn test_cwd_empty_resets_to_default() {
+        let mut resolver = ContextResolverBuilder::new()
+            .cwd("/some/path".to_string())
+            .build();
+
+        let mut passive_context = BlockContext::new();
+        passive_context.insert(DocumentCwd("".to_string()));
+        let block = create_block_with_context(passive_context, None);
+
+        resolver.push_block(&block);
+        assert_eq!(resolver.cwd(), default_cwd());
+    }
+
+    #[test]
+    fn test_cwd_chaining_multiple_changes() {
+        let mut resolver = ContextResolver::new();
+
+        let mut context1 = BlockContext::new();
+        context1.insert(DocumentCwd("/base".to_string()));
+        let block1 = create_block_with_context(context1, None);
+        resolver.push_block(&block1);
+        assert_eq!(resolver.cwd(), "/base");
+
+        let mut context2 = BlockContext::new();
+        context2.insert(DocumentCwd("subdir1".to_string()));
+        let block2 = create_block_with_context(context2, None);
+        resolver.push_block(&block2);
+        assert_eq!(resolver.cwd(), "/base/subdir1");
+
+        let mut context3 = BlockContext::new();
+        context3.insert(DocumentCwd("subdir2".to_string()));
+        let block3 = create_block_with_context(context3, None);
+        resolver.push_block(&block3);
+        assert_eq!(resolver.cwd(), "/base/subdir1/subdir2");
+    }
+
+    #[test]
+    fn test_cwd_with_combined_templates() {
+        let mut resolver = ContextResolverBuilder::new()
+            .vars(HashMap::from([
+                ("user".to_string(), "alice".to_string()),
+                ("project".to_string(), "myproject".to_string()),
+            ]))
+            .env_vars(HashMap::from([("BASE".to_string(), "/home".to_string())]))
+            .build();
+
+        let mut passive_context = BlockContext::new();
+        passive_context.insert(DocumentCwd(
+            "{{ env.BASE }}/{{ var.user }}/{{ var.project }}".to_string(),
+        ));
+        let block = create_block_with_context(passive_context, None);
+
+        resolver.push_block(&block);
+        assert_eq!(resolver.cwd(), "/home/alice/myproject");
+    }
+
+    #[test]
+    fn test_variables_with_templates() {
+        let mut resolver = ContextResolverBuilder::new()
+            .vars(HashMap::from([("base".to_string(), "hello".to_string())]))
+            .build();
+
+        let mut passive_context = BlockContext::new();
+        passive_context.insert(DocumentVar::new(
+            "greeting".to_string(),
+            "{{ var.base }} world".to_string(),
+            "test".to_string(),
+        ));
+        let block = create_block_with_context(passive_context, None);
+
+        resolver.push_block(&block);
+        assert_eq!(resolver.get_var("greeting").unwrap(), "hello world");
+    }
+
+    #[test]
+    fn test_env_vars_with_templates() {
+        let mut resolver = ContextResolverBuilder::new()
+            .vars(HashMap::from([("port".to_string(), "8080".to_string())]))
+            .build();
+
+        let mut passive_context = BlockContext::new();
+        passive_context.insert(DocumentEnvVar(
+            "SERVER_URL".to_string(),
+            "http://localhost:{{ var.port }}".to_string(),
+        ));
+        let block = create_block_with_context(passive_context, None);
+
+        resolver.push_block(&block);
+        assert_eq!(
+            resolver.env_vars().get("SERVER_URL").unwrap(),
+            "http://localhost:8080"
+        );
+    }
+
+    #[test]
+    fn test_ssh_host_with_template() {
+        let mut resolver = ContextResolverBuilder::new()
+            .vars(HashMap::from([(
+                "domain".to_string(),
+                "example.com".to_string(),
+            )]))
+            .build();
+
+        let mut passive_context = BlockContext::new();
+        passive_context.insert(DocumentSshHost(Some("server.{{ var.domain }}".to_string())));
+        let block = create_block_with_context(passive_context, None);
+
+        resolver.push_block(&block);
+        assert_eq!(resolver.ssh_host().unwrap(), "server.example.com");
+    }
+
+    #[test]
+    fn test_from_blocks_processes_in_order() {
+        let mut context1 = BlockContext::new();
+        context1.insert(DocumentCwd("/base".to_string()));
+
+        let mut context2 = BlockContext::new();
+        context2.insert(DocumentVar::new(
+            "key".to_string(),
+            "value1".to_string(),
+            "block1".to_string(),
+        ));
+
+        let mut context3 = BlockContext::new();
+        context3.insert(DocumentVar::new(
+            "key".to_string(),
+            "value2".to_string(),
+            "block2".to_string(),
+        ));
+
+        let blocks = vec![
+            create_block_with_context(context1, None),
+            create_block_with_context(context2, None),
+            create_block_with_context(context3, None),
+        ];
+
+        let resolver = ContextResolver::from_blocks(&blocks);
+        assert_eq!(resolver.cwd(), "/base");
+        assert_eq!(resolver.get_var("key").unwrap(), "value2");
+    }
+
+    #[test]
+    fn test_cwd_with_tilde_home_dir() {
+        let mut resolver = ContextResolver::new();
+        let mut passive_context = BlockContext::new();
+        passive_context.insert(DocumentCwd("~/Documents".to_string()));
+        let block = create_block_with_context(passive_context, None);
+
+        resolver.push_block(&block);
+        assert_eq!(
+            resolver.cwd(),
+            dirs::home_dir()
+                .unwrap()
+                .join("Documents")
+                .to_string_lossy()
+                .to_string()
+        );
+    }
+
+    #[test]
+    fn test_cwd_with_actual_env_var() {
+        let mut resolver = ContextResolver::new();
+        let mut passive_context = BlockContext::new();
+        passive_context.insert(DocumentEnvVar(
+            "HOME".to_string(),
+            dirs::home_dir().unwrap().to_string_lossy().to_string(),
+        ));
+        passive_context.insert(DocumentCwd("${HOME}/Documents".to_string()));
+        let block = create_block_with_context(passive_context.clone(), None);
+
+        resolver.push_block(&block);
+        assert_eq!(
+            resolver.cwd(),
+            dirs::home_dir()
+                .unwrap()
+                .join("Documents")
+                .to_string_lossy()
+                .to_string()
+        );
+
+        passive_context.insert(DocumentCwd("$HOME/Documents".to_string()));
+        let block = create_block_with_context(passive_context, None);
+        resolver.push_block(&block);
+        assert_eq!(
+            resolver.cwd(),
+            dirs::home_dir()
+                .unwrap()
+                .join("Documents")
+                .to_string_lossy()
+                .to_string()
+        );
+    }
+
+    #[test]
+    fn test_cwd_with_tilde_in_literal() {
+        let mut resolver = ContextResolver::new();
+        let mut passive_context = BlockContext::new();
+        passive_context.insert(DocumentCwd("/path/with/~tilde".to_string()));
+        let block = create_block_with_context(passive_context, None);
+
+        resolver.push_block(&block);
+        assert_eq!(resolver.cwd(), "/path/with/~tilde");
+    }
+
+    #[test]
+    fn test_resolve_template_without_markers() {
+        let resolver = ContextResolver::new();
+        let result = resolver.resolve_template("plain text").unwrap();
+        assert_eq!(result, "plain text");
+    }
+
+    #[test]
+    fn test_resolve_template_with_undefined_var() {
+        let resolver = ContextResolver::new();
+        let result = resolver.resolve_template("{{ var.undefined }}");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_active_context_overrides_passive() {
+        let mut resolver = ContextResolver::new();
+        let mut passive_context = BlockContext::new();
+        passive_context.insert(DocumentVar::new(
+            "key".to_string(),
+            "passive".to_string(),
+            "source1".to_string(),
+        ));
+        let mut active_context = BlockContext::new();
+        active_context.insert(DocumentVar::new(
+            "key".to_string(),
+            "active".to_string(),
+            "source2".to_string(),
+        ));
+        let block = create_block_with_context(passive_context, Some(active_context));
+
+        resolver.push_block(&block);
+        assert_eq!(resolver.get_var("key").unwrap(), "active");
+    }
+
+    #[test]
+    fn test_resolved_context_from_resolver() {
+        let resolver = ContextResolverBuilder::new()
+            .vars(HashMap::from([("key1".to_string(), "value1".to_string())]))
+            .cwd("/test/path".to_string())
+            .env_vars(HashMap::from([("VAR".to_string(), "val".to_string())]))
+            .ssh_host("host.example.com".to_string())
+            .build();
+
+        let resolved = ResolvedContext::from_resolver(&resolver);
+        assert_eq!(resolved.variables.get("key1").unwrap(), "value1");
+        assert_eq!(resolved.cwd, "/test/path");
+        assert_eq!(resolved.env_vars.get("VAR").unwrap(), "val");
+        assert_eq!(resolved.ssh_host.as_ref().unwrap(), "host.example.com");
+    }
+
+    #[test]
+    fn test_cwd_with_special_characters() {
+        let mut resolver = ContextResolver::new();
+        let mut passive_context = BlockContext::new();
+        passive_context.insert(DocumentCwd("/path/with spaces/and-dashes".to_string()));
+        let block = create_block_with_context(passive_context, None);
+
+        resolver.push_block(&block);
+        assert_eq!(resolver.cwd(), "/path/with spaces/and-dashes");
+    }
+
+    #[test]
+    fn test_cwd_relative_with_dot_slash() {
+        let mut resolver = ContextResolverBuilder::new()
+            .cwd("/base".to_string())
+            .build();
+
+        let mut passive_context = BlockContext::new();
+        passive_context.insert(DocumentCwd("./subdir".to_string()));
+        let block = create_block_with_context(passive_context, None);
+
+        resolver.push_block(&block);
+        // Path normalization removes ./ which is correct behavior
+        assert_eq!(resolver.cwd(), "/base/subdir");
+    }
+
+    #[test]
+    fn test_cwd_multiple_parent_dirs() {
+        let mut resolver = ContextResolverBuilder::new()
+            .cwd("/a/b/c/d/e".to_string())
+            .build();
+
+        let mut passive_context = BlockContext::new();
+        passive_context.insert(DocumentCwd("../../other".to_string()));
+        let block = create_block_with_context(passive_context, None);
+
+        resolver.push_block(&block);
+        assert_eq!(resolver.cwd(), "/a/b/c/other");
+    }
+
+    #[test]
+    fn test_cwd_parent_beyond_root() {
+        let mut resolver = ContextResolverBuilder::new()
+            .cwd("/home".to_string())
+            .build();
+
+        let mut passive_context = BlockContext::new();
+        passive_context.insert(DocumentCwd("../../../../../../etc".to_string()));
+        let block = create_block_with_context(passive_context, None);
+
+        resolver.push_block(&block);
+        // Should normalize to /etc (can't go above root)
+        assert_eq!(resolver.cwd(), "/etc");
+    }
+
+    #[test]
+    fn test_cwd_with_trailing_slash() {
+        let mut resolver = ContextResolver::new();
+
+        let mut passive_context = BlockContext::new();
+        passive_context.insert(DocumentCwd("/path/to/dir/".to_string()));
+        let block = create_block_with_context(passive_context, None);
+
+        resolver.push_block(&block);
+        // Trailing slash should be preserved or handled correctly
+        assert!(
+            resolver.cwd() == "/path/to/dir/" || resolver.cwd() == "/path/to/dir",
+            "cwd was: {}",
+            resolver.cwd()
+        );
+    }
+
+    #[test]
+    fn test_cwd_with_whitespace() {
+        let mut resolver = ContextResolver::new();
+
+        let mut passive_context = BlockContext::new();
+        passive_context.insert(DocumentCwd("  /path/to/dir  ".to_string()));
+        let block = create_block_with_context(passive_context, None);
+
+        resolver.push_block(&block);
+        // Whitespace should be trimmed
+        assert_eq!(resolver.cwd(), "/path/to/dir");
+    }
+
+    #[test]
+    fn test_cwd_complex_relative_paths() {
+        let mut resolver = ContextResolverBuilder::new()
+            .cwd("/base/current".to_string())
+            .build();
+
+        let mut context1 = BlockContext::new();
+        context1.insert(DocumentCwd("../other".to_string()));
+        let block1 = create_block_with_context(context1, None);
+        resolver.push_block(&block1);
+        assert_eq!(resolver.cwd(), "/base/other");
+
+        let mut context2 = BlockContext::new();
+        context2.insert(DocumentCwd("./subfolder/deep".to_string()));
+        let block2 = create_block_with_context(context2, None);
+        resolver.push_block(&block2);
+        assert_eq!(resolver.cwd(), "/base/other/subfolder/deep");
+
+        let mut context3 = BlockContext::new();
+        context3.insert(DocumentCwd("../../sibling".to_string()));
+        let block3 = create_block_with_context(context3, None);
+        resolver.push_block(&block3);
+        // From /base/other/subfolder/deep, ../../sibling goes to /base/other/sibling
+        assert_eq!(resolver.cwd(), "/base/other/sibling");
+    }
+
+    #[test]
+    fn test_cwd_reset_with_absolute_after_relative() {
+        let mut resolver = ContextResolverBuilder::new()
+            .cwd("/initial".to_string())
+            .build();
+
+        // First, navigate relatively
+        let mut context1 = BlockContext::new();
+        context1.insert(DocumentCwd("relative/path".to_string()));
+        let block1 = create_block_with_context(context1, None);
+        resolver.push_block(&block1);
+        assert_eq!(resolver.cwd(), "/initial/relative/path");
+
+        // Then reset with absolute path
+        let mut context2 = BlockContext::new();
+        context2.insert(DocumentCwd("/completely/new/path".to_string()));
+        let block2 = create_block_with_context(context2, None);
+        resolver.push_block(&block2);
+        assert_eq!(resolver.cwd(), "/completely/new/path");
+    }
+
+    #[test]
+    fn test_cwd_with_dots_in_directory_names() {
+        let mut resolver = ContextResolver::new();
+
+        let mut passive_context = BlockContext::new();
+        passive_context.insert(DocumentCwd(
+            "/path/to/.hidden/dir.name.with.dots".to_string(),
+        ));
+        let block = create_block_with_context(passive_context, None);
+
+        resolver.push_block(&block);
+        assert_eq!(resolver.cwd(), "/path/to/.hidden/dir.name.with.dots");
+    }
+
+    #[test]
+    fn test_cwd_template_resolves_before_path_expansion() {
+        let mut resolver = ContextResolverBuilder::new()
+            .vars(HashMap::from([
+                ("base".to_string(), "/home/user".to_string()),
+                ("subdir".to_string(), "documents".to_string()),
+            ]))
+            .build();
+
+        let mut passive_context = BlockContext::new();
+        passive_context.insert(DocumentCwd("{{ var.base }}/{{ var.subdir }}".to_string()));
+        let block = create_block_with_context(passive_context, None);
+
+        resolver.push_block(&block);
+        assert_eq!(resolver.cwd(), "/home/user/documents");
+    }
+
+    #[test]
+    fn test_cwd_env_var_in_relative_path() {
+        let mut resolver = ContextResolverBuilder::new()
+            .cwd("/base".to_string())
+            .env_vars(HashMap::from([(
+                "SUBDIR".to_string(),
+                "myproject".to_string(),
+            )]))
+            .build();
+
+        let mut passive_context = BlockContext::new();
+        passive_context.insert(DocumentCwd("$SUBDIR/src".to_string()));
+        let block = create_block_with_context(passive_context, None);
+
+        resolver.push_block(&block);
+        assert_eq!(resolver.cwd(), "/base/myproject/src");
     }
 }
