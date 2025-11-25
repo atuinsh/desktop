@@ -550,7 +550,7 @@ export class OnlineRunbook extends Runbook {
 
   public static async saveYDocForRunbook(id: string, update: Uint8Array | null) {
     if (update) {
-      logger.time(`Saving Y.Doc for runbook ${id}...`, async () => {
+      await logger.time(`Saving Y.Doc for runbook ${id}...`, async () => {
         await invoke("save_ydoc_for_runbook", update, {
           headers: {
             id: id,
@@ -717,7 +717,9 @@ export class OfflineRunbook extends Runbook {
         .map((runbook) => runbook!.id);
     });
 
-    const runbooks = await Promise.allSettled(forkedRunbookIds.map((id) => OfflineRunbook.load(id)));
+    const runbooks = await Promise.allSettled(
+      forkedRunbookIds.map((id) => OfflineRunbook.load(id)),
+    );
     return runbooks
       .filter((result) => result.status === "fulfilled")
       .map((result) => result.value)
