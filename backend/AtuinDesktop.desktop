@@ -1,7 +1,7 @@
 [Desktop Entry]
 Categories={{ categories }}
 Comment={{ comment }}
-Exec={{ exec }}
+Exec={{ exec }} %u
 Icon={{ icon }}
 Name={{ name }}
 Terminal=false
