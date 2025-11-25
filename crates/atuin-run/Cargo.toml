@@ -1,0 +1,17 @@
+[package]
+name = "atuin-run"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+
+[dependencies]
+atuin-desktop-runtime = { workspace = true }
+clap = { version = "4.5.53", features = ["derive"] }
+tokio = { workspace = true }
+uuid = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+serde_yaml = { workspace = true }
+eyre = { workspace = true }
+thiserror = { workspace = true }
+async-trait = { workspace = true }
