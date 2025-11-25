@@ -58,3 +58,4 @@ bigdecimal = "0.4"
 nix = { version = "0.29.0", features = ["signal"] }
 downcast-rs = "2.0.2"
 dyn-clone = "1.0.20"
+regex = "1.12.2"

@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 use tokio::process::Command;
 use ts_rs::TS;
@@ -41,10 +42,12 @@ pub struct DropdownOption {
 
 impl DropdownOption {
     pub fn vec_from_str(value: &str) -> Result<Vec<Self>, String> {
-        value
-            // Split on ",", ", ", or newlines using regex
-            .split([',', '\n'])
-            .flat_map(|part| part.split(", ")) // extra split for ", " if not caught by the char ','
+        if value.trim().is_empty() {
+            return Ok(vec![]);
+        }
+
+        let re = Regex::new(r",\s*|\r?\n").unwrap();
+        re.split(value)
             .map(|part| part.trim())
             .filter(|part| !part.is_empty())
             .map(|part| part.try_into())
@@ -112,8 +115,9 @@ impl Dropdown {
                 let value = context
                     .context_resolver
                     .get_var(&self.variable_options)
-                    .ok_or("Variable not found")?;
-                let options = DropdownOption::vec_from_str(value)?;
+                    .map(|v| v.to_string())
+                    .unwrap_or_default();
+                let options = DropdownOption::vec_from_str(&value)?;
                 Ok(options)
             }
             DropdownOptionType::Command => {
