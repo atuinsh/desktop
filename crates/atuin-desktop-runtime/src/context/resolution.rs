@@ -1,4 +1,7 @@
-use std::{collections::HashMap, path::PathBuf};
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+};
 
 use minijinja::{value::Object, Environment, Value};
 use serde::{Deserialize, Serialize};
@@ -279,12 +282,12 @@ fn expand_path_variables(path: &str, env_vars: &HashMap<String, String>) -> Stri
         );
 
     result
-        .unwrap_or_else(|_| std::borrow::Cow::Borrowed(path))
+        .unwrap_or(std::borrow::Cow::Borrowed(path))
         .to_string()
 }
 
 /// Normalize a path by resolving . and .. components without requiring the path to exist
-fn normalize_path(path: &PathBuf) -> PathBuf {
+fn normalize_path(path: &Path) -> PathBuf {
     let mut normalized = PathBuf::new();
 
     for component in path.components() {
