@@ -105,26 +105,39 @@ pub async fn execute_block(
     let mut extra_template_context = HashMap::new();
     extra_template_context.insert("workspace".to_string(), workspace_context);
 
-    let execution_handle = execute_single_block(
-        runbook_id,
+    let execution_handle_result = execute_single_block(
+        runbook_id.clone(),
         document,
         block_id,
         ssh_pool,
         pty_store,
         extra_template_context,
     )
-    .await?;
+    .await;
 
-    // Store execution handle if one was returned
-    if let Some(handle) = execution_handle {
-        let id = handle.id;
-
-        let mut executions = state.block_executions.write().await;
-        executions.insert(id, handle.clone());
-
-        Ok(Some(id.to_string()))
-    } else {
-        Ok(None)
+    match execution_handle_result {
+        Ok(Some(handle)) => {
+            let id = handle.id;
+            log::trace!(
+                "Block {block_id} in runbook {runbook_id} returned an execution handle; handle ID: {id}",
+            );
+            let mut executions = state.block_executions.write().await;
+            executions.insert(id, handle.clone());
+            Ok(Some(id.to_string()))
+        }
+        Ok(None) => {
+            log::trace!(
+                "Block {block_id} in runbook {runbook_id} did not return an execution handle",
+            );
+            Ok(None)
+        }
+        Err(e) => {
+            log::error!(
+                "Failed to execute block {block_id} in runbook {runbook_id}: {e}",
+                e = e
+            );
+            Err(e.to_string())
+        }
     }
 }
 
@@ -407,6 +420,7 @@ pub async fn start_serial_execution(
 
             match handle {
                 Ok(Some(handle)) => {
+                    log::trace!("Block {block_id} in document {document_id} returned an execution handle; handle ID: {id}", id = handle.id);
                     let mut finished_channel = handle.finished_channel();
                     let state = app.state::<AtuinState>();
                     let mut executions = state.block_executions.write().await;
@@ -459,6 +473,7 @@ pub async fn start_serial_execution(
                     break 'outer;
                 }
                 Ok(None) => {
+                    log::trace!("Block {block_id} in document {document_id} did not return an execution handle; moving to the next block");
                     // Block did not return an execution handle; move to the next block.
                 }
             }
@@ -526,7 +541,7 @@ async fn execute_single_block(
     ssh_pool: SshPoolHandle,
     pty_store: PtyStoreHandle,
     extra_template_context: HashMap<String, HashMap<String, String>>,
-) -> Result<Option<ExecutionHandle>, String> {
+) -> Result<Option<ExecutionHandle>, Box<dyn std::error::Error + Send + Sync>> {
     log::debug!("Starting block execution for block {block_id} in document {document_id}");
 
     // Get execution context
@@ -545,13 +560,6 @@ async fn execute_single_block(
         .await
         .map_err(|e| format!("Failed to clear active context: {}", e))?;
 
-    // // Ensure that we send the block started event to the client
-    // // so that they have the execution ID to use for cancellation.
-    // context
-    //     .block_started()
-    //     .await
-    //     .map_err(|e| format!("Failed to start block: {}", e))?;
-
     // Get the block to execute
     let block = document
         .get_block(block_id)
@@ -559,5 +567,5 @@ async fn execute_single_block(
         .ok_or("Failed to execute block: block not found")?;
 
     // Execute the block
-    block.execute(context).await.map_err(|e| e.to_string())
+    block.execute(context).await
 }

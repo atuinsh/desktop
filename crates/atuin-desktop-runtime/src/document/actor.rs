@@ -712,8 +712,8 @@ impl DocumentActor {
         update_fn: BlockStateUpdater,
     ) -> Result<(), DocumentError> {
         log::trace!(
-            "Updating block state for block {block_id} in document {}",
-            self.document.id
+            "Updating block state for block {block_id} in document {doc_id}",
+            doc_id = self.document.id
         );
 
         let state = {
