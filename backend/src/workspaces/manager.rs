@@ -637,11 +637,11 @@ impl WorkspaceManager {
                             );
                             if let Err(e) = workspace
                                 ._debouncer
-                                .watch(parent_path, RecursiveMode::NonRecursive)
+                                .watch(&entry.path, RecursiveMode::NonRecursive)
                             {
                                 log::warn!(
                                     "Failed to watch new directory {}: {}",
-                                    parent_path.display(),
+                                    entry.path.display(),
                                     e
                                 );
                             } else {
@@ -1653,6 +1653,108 @@ mod tests {
                 }
             }
         }
+
+        // Clean up
+        {
+            let mut manager_guard = manager_arc.lock().await;
+            let manager = manager_guard.as_mut().unwrap();
+            manager.unwatch_workspace("test-workspace").await.unwrap();
+        }
+
+        drop(temp_dir);
+    }
+
+    /// Regression test for https://github.com/atuinsh/desktop/issues/232
+    ///
+    /// This test specifically targets the bug in `rescan_and_notify` where the code
+    /// watches `parent_path` instead of `entry.path`, causing subdirectories discovered
+    /// during rescan to not be watched properly.
+    ///
+    /// The scenario:
+    /// 1. Start watching a workspace
+    /// 2. Create a nested folder structure (folder + subfolder) in a single batch
+    ///    that triggers a rescan
+    /// 3. The rescan discovers the new folders but due to the bug, only watches
+    ///    the parent paths, not the folders themselves
+    /// 4. Creating a runbook in the deepest folder is never detected
+    ///
+    /// The fix: In rescan_and_notify, watch `entry.path` (the directory itself)
+    /// instead of `parent_path`.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_rescan_watches_subdirectories_correctly() {
+        let (temp_dir, workspace_path) = setup_test_workspace().await;
+        let collector = TestEventCollector::new();
+        let manager = WorkspaceManager::new();
+        let manager_arc = Arc::new(Mutex::new(Some(manager)));
+
+        // Start watching the workspace
+        {
+            let mut manager_guard = manager_arc.lock().await;
+            let manager = manager_guard.as_mut().unwrap();
+            manager
+                .watch_workspace(
+                    &workspace_path,
+                    "test-workspace",
+                    collector.create_handler(),
+                    manager_arc.clone(),
+                )
+                .await
+                .unwrap();
+        }
+
+        // Wait for initial state event
+        let initial_events = collector.wait_for_events(1, 1000).await;
+        assert!(!initial_events.is_empty());
+        collector.clear_events().await;
+
+        // Give the workspace manager time to set up file watching
+        sleep(Duration::from_millis(250)).await;
+
+        // Create a nested folder structure: folder1/folder2
+        // We create both quickly so they're discovered together during the rescan
+        // triggered by the first folder creation.
+        let folder1 = workspace_path.join("folder1");
+        let folder2 = folder1.join("folder2");
+        tokio::fs::create_dir(&folder1).await.unwrap();
+        tokio::fs::create_dir(&folder2).await.unwrap();
+
+        // Wait for the folder creation events and rescan to complete
+        let folder_events = collector.wait_for_events(1, 2000).await;
+        assert!(
+            !folder_events.is_empty(),
+            "Folder creation should trigger events"
+        );
+        collector.clear_events().await;
+
+        // Give time for watchers to be set up after rescan
+        // This is where the bug manifests: folder2 won't be watched because
+        // rescan_and_notify watches parent_path (folder1) instead of entry.path (folder2)
+        sleep(Duration::from_millis(300)).await;
+
+        // Now create a runbook in folder2
+        // With the bug, this file creation is never detected because folder2 isn't watched
+        create_test_runbook(&folder2, "deep_runbook", "deep-runbook-id").await;
+
+        // Wait for the runbook creation to be detected
+        // This will timeout with the bug because folder2 isn't being watched
+        let runbook_events = collector.wait_for_events(1, 3000).await;
+        assert!(
+            !runbook_events.is_empty(),
+            "Runbook creation in nested subdirectory should trigger events. \
+             If this fails, the rescan is not correctly setting up watchers for subdirectories."
+        );
+
+        // Verify the runbook appears in the workspace state
+        assert!(
+            wait_for_state_condition(
+                &manager_arc,
+                "test-workspace",
+                |state| state.runbooks.contains_key("deep-runbook-id"),
+                3000
+            )
+            .await,
+            "Runbook created in nested subdirectory should appear in workspace state"
+        );
 
         // Clean up
         {
