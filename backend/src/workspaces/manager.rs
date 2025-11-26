@@ -698,8 +698,10 @@ impl WorkspaceManager {
                     }
 
                     // Add watchers for new directories
-                    let dirs_to_add: Vec<_> =
-                        new_watched_dirs.difference(&workspace.watched_dirs).cloned().collect();
+                    let dirs_to_add: Vec<_> = new_watched_dirs
+                        .difference(&workspace.watched_dirs)
+                        .cloned()
+                        .collect();
                     for dir in dirs_to_add {
                         log::debug!(
                             "Adding watcher for directory found during rescan: {}",
@@ -716,8 +718,11 @@ impl WorkspaceManager {
                     }
 
                     // Remove watchers for deleted directories
-                    let dirs_to_remove: Vec<_> =
-                        workspace.watched_dirs.difference(&new_watched_dirs).cloned().collect();
+                    let dirs_to_remove: Vec<_> = workspace
+                        .watched_dirs
+                        .difference(&new_watched_dirs)
+                        .cloned()
+                        .collect();
                     for dir in dirs_to_remove {
                         log::debug!(
                             "Removing watcher for directory removed during rescan: {}",
