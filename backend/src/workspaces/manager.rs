@@ -192,7 +192,7 @@ impl WorkspaceManager {
         }
 
         // Use selective watching with ignore patterns instead of recursive watching
-        self.setup_selective_watching(&mut debouncer, path.as_ref(), id)?;
+        let watched_dirs = self.setup_selective_watching(&mut debouncer, path.as_ref(), id)?;
 
         let ws = Workspace {
             id: id.to_string(),
@@ -202,6 +202,7 @@ impl WorkspaceManager {
             _debouncer: debouncer,
             fs_ops,
             on_event,
+            watched_dirs,
         };
 
         self.workspaces.insert(id.to_string(), ws);
@@ -516,16 +517,30 @@ impl WorkspaceManager {
                         }
 
                         if let Some(workspace) = self.workspaces.get_mut(workspace_id) {
-                            if workspace.path.join("atuin.toml") == *path {
+                            // Canonicalize for consistent comparison (handles symlinks like /var -> /private/var)
+                            let canonical_path =
+                                path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+                            let canonical_atuin_toml = workspace
+                                .path
+                                .join("atuin.toml")
+                                .canonicalize()
+                                .unwrap_or_else(|_| workspace.path.join("atuin.toml"));
+
+                            if canonical_atuin_toml == canonical_path {
                                 full_rescan = true;
                                 break;
                             }
 
-                            let matching_runbook = workspace
-                                .state
-                                .as_ref()
-                                .ok()
-                                .and_then(|s| s.runbooks.values().find(|r| r.path == *path));
+                            let matching_runbook =
+                                workspace.state.as_ref().ok().and_then(|s| {
+                                    s.runbooks.values().find(|r| {
+                                        let canonical_runbook_path = r
+                                            .path
+                                            .canonicalize()
+                                            .unwrap_or_else(|_| r.path.clone());
+                                        canonical_runbook_path == canonical_path
+                                    })
+                                });
 
                             if let Some(runbook) = matching_runbook {
                                 known_events
@@ -542,11 +557,12 @@ impl WorkspaceManager {
                                 if let Some(workspace) = self.workspaces.get_mut(workspace_id) {
                                     let parent_path = path.parent().unwrap_or(&workspace.path);
                                     let gitignore = create_ignore_matcher(parent_path).ok();
-                                    if !should_ignore_path(
-                                        path,
-                                        &workspace.path,
-                                        gitignore.as_ref(),
-                                    ) {
+                                    // Canonicalize to handle symlinks (e.g., /var -> /private/var on macOS)
+                                    let canonical_path =
+                                        path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+                                    if !should_ignore_path(path, &workspace.path, gitignore.as_ref())
+                                        && !workspace.watched_dirs.contains(&canonical_path)
+                                    {
                                         log::debug!(
                                             "Adding watcher for new directory: {}",
                                             path.display()
@@ -560,19 +576,27 @@ impl WorkspaceManager {
                                                 path.display(),
                                                 e
                                             );
+                                        } else {
+                                            workspace.watched_dirs.insert(canonical_path);
                                         }
                                     }
                                 }
                             }
                             EventKind::Remove(_) => {
                                 // Remove watcher for deleted directory/file
-                                if let Some(workspace_mut) = self.workspaces.get_mut(workspace_id) {
-                                    log::debug!(
-                                        "Removing watcher for deleted path: {}",
-                                        path.display()
-                                    );
-                                    if let Err(e) = workspace_mut._debouncer.unwatch(path) {
-                                        log::debug!("Failed to unwatch deleted path {} (this is normal): {}", path.display(), e);
+                                if let Some(workspace) = self.workspaces.get_mut(workspace_id) {
+                                    // Note: canonicalize may fail for deleted paths, so we try both
+                                    let canonical_path =
+                                        path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+                                    if workspace.watched_dirs.contains(&canonical_path) {
+                                        log::debug!(
+                                            "Removing watcher for deleted path: {}",
+                                            path.display()
+                                        );
+                                        if let Err(e) = workspace._debouncer.unwatch(path) {
+                                            log::debug!("Failed to unwatch deleted path {} (this is normal): {}", path.display(), e);
+                                        }
+                                        workspace.watched_dirs.remove(&canonical_path);
                                     }
                                 }
                             }
@@ -647,37 +671,63 @@ impl WorkspaceManager {
                         }
                     }
 
-                    let mut watched_dirs = HashSet::new();
+                    // Collect all directories that should be watched from the new state
+                    // Use canonicalized paths to handle symlinks (e.g., /var -> /private/var on macOS)
+                    let mut new_watched_dirs: HashSet<PathBuf> = HashSet::new();
+                    // Always include the workspace root
+                    let canonical_root = workspace
+                        .path
+                        .canonicalize()
+                        .unwrap_or_else(|_| workspace.path.clone());
+                    new_watched_dirs.insert(canonical_root);
+
                     for entry in updated.entries.iter() {
                         if !entry.path.is_dir() {
-                            continue;
-                        }
-
-                        if watched_dirs.contains(&entry.path) {
                             continue;
                         }
 
                         let parent_path = entry.path.parent().unwrap_or(&workspace.path);
                         let gitignore = create_ignore_matcher(parent_path).ok();
                         if !should_ignore_path(&entry.path, &workspace.path, gitignore.as_ref()) {
-                            log::debug!(
-                                "Adding watcher for directory found during rescan: {}",
-                                entry.path.display()
-                            );
-                            if let Err(e) = workspace
-                                ._debouncer
-                                .watch(entry.path.clone(), RecursiveMode::NonRecursive)
-                            {
-                                log::warn!(
-                                    "Failed to watch new directory {}: {}",
-                                    entry.path.display(),
-                                    e
-                                );
-                            } else {
-                                watched_dirs.insert(&entry.path);
-                            }
+                            let canonical_path = entry
+                                .path
+                                .canonicalize()
+                                .unwrap_or_else(|_| entry.path.clone());
+                            new_watched_dirs.insert(canonical_path);
                         }
                     }
+
+                    // Add watchers for new directories
+                    for dir in new_watched_dirs.difference(&workspace.watched_dirs) {
+                        log::debug!(
+                            "Adding watcher for directory found during rescan: {}",
+                            dir.display()
+                        );
+                        if let Err(e) = workspace
+                            ._debouncer
+                            .watch(dir.clone(), RecursiveMode::NonRecursive)
+                        {
+                            log::warn!("Failed to watch new directory {}: {}", dir.display(), e);
+                        }
+                    }
+
+                    // Remove watchers for deleted directories
+                    for dir in workspace.watched_dirs.difference(&new_watched_dirs) {
+                        log::debug!(
+                            "Removing watcher for directory removed during rescan: {}",
+                            dir.display()
+                        );
+                        if let Err(e) = workspace._debouncer.unwatch(dir) {
+                            log::debug!(
+                                "Failed to unwatch deleted directory {} (this is normal): {}",
+                                dir.display(),
+                                e
+                            );
+                        }
+                    }
+
+                    // Update the tracked set of watched directories
+                    workspace.watched_dirs = new_watched_dirs;
 
                     workspace.state = Ok(updated);
                     (workspace.on_event)(workspace.state.clone().into());
@@ -744,7 +794,7 @@ impl WorkspaceManager {
         >,
         root_path: &Path,
         workspace_id: &str,
-    ) -> Result<(), WorkspaceError> {
+    ) -> Result<HashSet<PathBuf>, WorkspaceError> {
         log::debug!(
             "Setting up selective watching for workspace {} at {}",
             workspace_id,
@@ -754,7 +804,7 @@ impl WorkspaceManager {
         // TODO: This is a single threaded walker. Investigate perf bonus of a parallel walker
         let walker = create_ignore_walker(root_path).build();
 
-        let mut watched_count = 0;
+        let mut watched_dirs = HashSet::new();
         for entry in walker.filter_map(Result::ok) {
             let path = entry.path();
             if path.is_dir() {
@@ -765,12 +815,17 @@ impl WorkspaceManager {
                         workspace_id: workspace_id.to_string(),
                         message: format!("Failed to watch directory {}: {}", path.display(), e),
                     })?;
-                watched_count += 1;
+                // Canonicalize to handle symlinks (e.g., /var -> /private/var on macOS)
+                let canonical_path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+                watched_dirs.insert(canonical_path);
             }
         }
 
-        log::info!("Watching {watched_count} directories for workspace {workspace_id}",);
-        Ok(())
+        log::info!(
+            "Watching {} directories for workspace {workspace_id}",
+            watched_dirs.len()
+        );
+        Ok(watched_dirs)
     }
 }
 

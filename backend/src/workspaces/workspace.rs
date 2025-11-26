@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     path::{Path, PathBuf},
     sync::Arc,
 };
@@ -86,6 +86,9 @@ pub struct Workspace {
     pub _debouncer: Debouncer<RecommendedWatcher, RecommendedCache>,
     pub fs_ops: FsOpsHandle,
     pub on_event: Arc<dyn OnEvent>,
+    /// Tracks which directories are currently being watched.
+    /// Used to avoid duplicate watch calls and to properly unwatch deleted directories.
+    pub watched_dirs: HashSet<PathBuf>,
 }
 
 impl Workspace {
