@@ -698,7 +698,9 @@ impl WorkspaceManager {
                     }
 
                     // Add watchers for new directories
-                    for dir in new_watched_dirs.difference(&workspace.watched_dirs) {
+                    let dirs_to_add: Vec<_> =
+                        new_watched_dirs.difference(&workspace.watched_dirs).cloned().collect();
+                    for dir in dirs_to_add {
                         log::debug!(
                             "Adding watcher for directory found during rescan: {}",
                             dir.display()
@@ -708,16 +710,20 @@ impl WorkspaceManager {
                             .watch(dir.clone(), RecursiveMode::NonRecursive)
                         {
                             log::warn!("Failed to watch new directory {}: {}", dir.display(), e);
+                            // Don't track directories we failed to watch
+                            new_watched_dirs.remove(&dir);
                         }
                     }
 
                     // Remove watchers for deleted directories
-                    for dir in workspace.watched_dirs.difference(&new_watched_dirs) {
+                    let dirs_to_remove: Vec<_> =
+                        workspace.watched_dirs.difference(&new_watched_dirs).cloned().collect();
+                    for dir in dirs_to_remove {
                         log::debug!(
                             "Removing watcher for directory removed during rescan: {}",
                             dir.display()
                         );
-                        if let Err(e) = workspace._debouncer.unwatch(dir) {
+                        if let Err(e) = workspace._debouncer.unwatch(&dir) {
                             log::debug!(
                                 "Failed to unwatch deleted directory {} (this is normal): {}",
                                 dir.display(),
