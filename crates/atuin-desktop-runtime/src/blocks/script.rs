@@ -146,6 +146,10 @@ impl BlockBehavior for Script {
             );
 
             // Determine status based on exit code
+            // IMPORTANT: We must call update_active_context BEFORE block_finished/block_failed
+            // to avoid a race condition. The non-interactive executor is fast enough that it
+            // will move to the next block immediately after receiving the Finished event,
+            // before the context has been updated.
             match exit_code {
                 Ok(0) => {
                     let output = captured_output.trim().to_string();
@@ -169,15 +173,19 @@ impl BlockBehavior for Script {
 
                     // Store execution output in context
                     let block_id = self.id;
+                    let output_clone = output.clone();
                     let _ = context
                         .update_active_context(block_id, move |ctx| {
                             ctx.insert(BlockExecutionOutput {
                                 exit_code: Some(0),
-                                stdout: Some(output),
+                                stdout: Some(output_clone),
                                 stderr: None,
                             });
                         })
                         .await;
+
+                    // Signal completion AFTER context is updated
+                    let _ = context.block_finished(Some(0), true).await;
 
                     ExecutionStatus::Success
                 }
@@ -195,9 +203,17 @@ impl BlockBehavior for Script {
                         })
                         .await;
 
+                    // Signal failure AFTER context is updated
+                    let _ = context
+                        .block_failed(format!("Script exited with code {}", code))
+                        .await;
+
                     ExecutionStatus::Failed(format!("Process exited with code {}", code))
                 }
-                Err(e) => ExecutionStatus::Failed(e.to_string()),
+                Err(e) => {
+                    let _ = context.block_failed(e.to_string()).await;
+                    ExecutionStatus::Failed(e.to_string())
+                }
             };
         });
 
@@ -484,16 +500,6 @@ impl Script {
             }
         };
 
-        if exit_code == 0 {
-            let _ = context
-                .block_finished(Some(exit_code), exit_code == 0)
-                .await;
-        } else {
-            let _ = context
-                .block_failed(format!("Script exited with code {}", exit_code))
-                .await;
-        }
-
         let captured = captured_output.read().await.clone();
         (Ok(exit_code), captured)
     }
@@ -598,10 +604,6 @@ impl Script {
                 0
             }
         };
-
-        let _ = context
-            .block_finished(Some(exit_code), exit_code == 0)
-            .await;
 
         let captured = captured_output.read().await.clone();
         (Ok(exit_code), captured)
