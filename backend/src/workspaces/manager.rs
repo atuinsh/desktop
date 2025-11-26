@@ -531,16 +531,13 @@ impl WorkspaceManager {
                                 break;
                             }
 
-                            let matching_runbook =
-                                workspace.state.as_ref().ok().and_then(|s| {
-                                    s.runbooks.values().find(|r| {
-                                        let canonical_runbook_path = r
-                                            .path
-                                            .canonicalize()
-                                            .unwrap_or_else(|_| r.path.clone());
-                                        canonical_runbook_path == canonical_path
-                                    })
-                                });
+                            let matching_runbook = workspace.state.as_ref().ok().and_then(|s| {
+                                s.runbooks.values().find(|r| {
+                                    let canonical_runbook_path =
+                                        r.path.canonicalize().unwrap_or_else(|_| r.path.clone());
+                                    canonical_runbook_path == canonical_path
+                                })
+                            });
 
                             if let Some(runbook) = matching_runbook {
                                 known_events
@@ -560,8 +557,11 @@ impl WorkspaceManager {
                                     // Canonicalize to handle symlinks (e.g., /var -> /private/var on macOS)
                                     let canonical_path =
                                         path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
-                                    if !should_ignore_path(path, &workspace.path, gitignore.as_ref())
-                                        && !workspace.watched_dirs.contains(&canonical_path)
+                                    if !should_ignore_path(
+                                        path,
+                                        &workspace.path,
+                                        gitignore.as_ref(),
+                                    ) && !workspace.watched_dirs.contains(&canonical_path)
                                     {
                                         log::debug!(
                                             "Adding watcher for new directory: {}",
