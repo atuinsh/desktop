@@ -14,21 +14,19 @@ env:
 jobs:
   build:
     name: Build and Upload
-    runs-on: depot-ubuntu-22.04-4
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: depot-ubuntu-22.04-4
+            target: x86_64-unknown-linux-gnu
+          - platform: macos-latest
+            target: aarch64-apple-darwin
+
+    runs-on: ${{ matrix.platform }}
 
     steps:
       - uses: actions/checkout@v4
-
-      - name: Determine target triple
-        id: target
-        run: |
-          ARCH=$(uname -m)
-          case "${{ runner.os }}" in
-            Linux) OS="unknown-linux-gnu" ;;
-            macOS) OS="apple-darwin" ;;
-            Windows) OS="pc-windows-msvc" ;;
-          esac
-          echo "triple=${ARCH}-${OS}" >> $GITHUB_OUTPUT
 
       - name: Install latest rust
         uses: dtolnay/rust-toolchain@master
@@ -49,4 +47,4 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET_ACCESS_KEY }}
           AWS_ENDPOINT_URL: ${{ vars.S3_ENDPOINT_URL }}
         run: |
-          aws s3 cp target/release/atuin-run s3://${{ vars.S3_BUCKET }}/bin/main/${{ steps.target.outputs.triple }}/atuin-run
+          aws s3 cp target/release/atuin-run s3://${{ vars.S3_BUCKET }}/bin/main/${{ matrix.target }}/atuin-run
