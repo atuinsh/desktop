@@ -742,6 +742,8 @@ export class OfflineRunbook extends Runbook {
     content: any = [],
     forkedFrom: string | null = null,
   ): Promise<OfflineRunbook | null> {
+    const MAX_FS_WAIT_TIME = 5000;
+
     if (!persist) {
       throw new Error("Cannot create offline runbook without persisting");
     }
@@ -769,11 +771,11 @@ export class OfflineRunbook extends Runbook {
       if (runbook) {
         return runbook;
       }
-      if (Date.now() - startAttempts > 2000) {
-        console.error("Failed to load runbook after 2 seconds");
+      if (Date.now() - startAttempts > 5000) {
+        console.error(`Failed to load runbook after ${MAX_FS_WAIT_TIME} ms`);
         return null;
       }
-      await timeoutPromise(50, null);
+      await timeoutPromise(100, null);
     }
 
     return null;
