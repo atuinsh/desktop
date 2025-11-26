@@ -1,0 +1,136 @@
+id: 019abe12-2fae-7803-a241-ce877f6d3df1
+name: Run Rust tests
+version: 1
+forkedFrom: null
+content:
+- id: f6596d68-4414-48f3-b502-eb54c9a00b17
+  type: heading
+  props:
+    backgroundColor: default
+    textColor: default
+    textAlignment: left
+    level: 1
+    isToggleable: false
+  content:
+  - type: text
+    text: Run Rust tests
+    styles: {}
+  children: []
+- id: b823b764-102f-4b5f-a353-44e96a4d1c5e
+  type: paragraph
+  props:
+    backgroundColor: default
+    textColor: default
+    textAlignment: left
+  content:
+  - type: text
+    text: Install the latest rust. We’re passing the headless flag to Rustup here, so no need to interact with it. This assumes you are running the runbook from a directory containing the latest Desktop code.
+    styles: {}
+  children: []
+- id: d51a1d1f-49a1-4b2e-9f3d-c86d7eff070e
+  type: script
+  props:
+    interpreter: bash
+    outputVariable: ''
+    name: Install Rust
+    code: curl https://sh.rustup.rs -sSf | sh -s -- -y
+    outputVisible: true
+    dependency: '{}'
+    terminalRows: 10
+  children: []
+- id: 569b1f84-e637-4b3a-94af-2909e710b6aa
+  type: paragraph
+  props:
+    backgroundColor: default
+    textColor: default
+    textAlignment: left
+  content: []
+  children: []
+- id: 666f5791-5f8e-454b-8b27-5385353dc29f
+  type: paragraph
+  props:
+    backgroundColor: default
+    textColor: default
+    textAlignment: left
+  content:
+  - type: text
+    text: For Linux, we require that you have a bunch of webkitgtk packages installed. We’re assuming you’re running ubuntu-ish, or at least have apt available.
+    styles: {}
+  children: []
+- id: cce0cfcc-2037-4bcc-88f6-d53fa2f73d83
+  type: paragraph
+  props:
+    backgroundColor: default
+    textColor: default
+    textAlignment: left
+  content: []
+  children: []
+- id: 90e51f0c-b90a-41b7-a900-fdc638670808
+  type: script
+  props:
+    interpreter: bash
+    outputVariable: ''
+    name: Linux deps
+    code: |-
+      if [[ $(uname) == 'Linux' ]]; then
+         sudo apt install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      fi
+    outputVisible: true
+    dependency: '{}'
+    terminalRows: 12
+  children: []
+- id: 194dde68-da80-4e75-a6f9-346212a8591d
+  type: paragraph
+  props:
+    backgroundColor: default
+    textColor: default
+    textAlignment: left
+  content: []
+  children: []
+- id: 6aa36cc7-9fed-404f-b4a1-8cbb591d691a
+  type: paragraph
+  props:
+    backgroundColor: default
+    textColor: default
+    textAlignment: left
+  content:
+  - type: text
+    text: Now just run the tests!
+    styles: {}
+  children: []
+- id: 08902d90-bf83-4cf0-8c39-b10a7bae0523
+  type: paragraph
+  props:
+    backgroundColor: default
+    textColor: default
+    textAlignment: left
+  content: []
+  children: []
+- id: 5a48a967-06cf-47a5-8ec7-b27f82cd6366
+  type: script
+  props:
+    interpreter: bash
+    outputVariable: ''
+    name: Test
+    code: cargo test
+    outputVisible: true
+    dependency: '{}'
+    terminalRows: 12
+  children: []
+- id: cbb7c79f-4b05-497d-bf95-cc880a77fc15
+  type: paragraph
+  props:
+    backgroundColor: default
+    textColor: default
+    textAlignment: left
+  content: []
+  children: []
+- id: b6a46b42-c2a2-430f-a494-615113bed6b9
+  type: paragraph
+  props:
+    backgroundColor: default
+    textColor: default
+    textAlignment: left
+  content: []
+  children: []

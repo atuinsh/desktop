@@ -18,20 +18,34 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  rust-checks:
+  rust-tests:
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         include:
           - name: Test (Ubuntu)
-            command: test
-            components: ""
             os: depot-ubuntu-22.04-4
-          - name: Test (macOS ARM)
-            command: test
-            components: ""
-            os: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install atuin-run
+        run: |
+          wget https://atuin-binary.t3.storage.dev/bin/main/x86_64-unknown-linux-gnu/atuin-run
+          sudo mv atuin-run /usr/bin/atuin-run
+          sudo chmod +x /usr/bin/atuin-run
+
+      - name: ${{ matrix.name }}
+        run: |
+          atuin-run ./runbooks/Run\ Rust\ tests.atrb
+
+
+  rust-checks:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
           - name: Check
             command: check
             components: ""
