@@ -244,17 +244,9 @@ impl WorkspaceManager {
         forked_from: Option<&str>,
     ) -> Result<String, WorkspaceError> {
         let workspace = self.get_workspace_mut(workspace_id)?;
-        let result = workspace
+        workspace
             .create_runbook(parent_folder_id, name, content, forked_from)
-            .await?;
-
-        // Force a rescan to ensure the new runbook appears in state immediately.
-        // This works around potential race conditions with inotify on Linux where
-        // the file creation event might not be detected if the parent directory's
-        // watcher wasn't fully registered yet.
-        self.rescan_and_notify(workspace_id, None).await;
-
-        Ok(result)
+            .await
     }
 
     pub async fn save_runbook(
@@ -291,12 +283,7 @@ impl WorkspaceManager {
         runbook_id: &str,
     ) -> Result<(), WorkspaceError> {
         let workspace = self.get_workspace_mut(workspace_id)?;
-        workspace.delete_runbook(runbook_id).await?;
-
-        // Force a rescan to ensure the deletion is reflected in state immediately.
-        self.rescan_and_notify(workspace_id, None).await;
-
-        Ok(())
+        workspace.delete_runbook(runbook_id).await
     }
 
     pub async fn get_runbook(
@@ -326,15 +313,9 @@ impl WorkspaceManager {
         name: &str,
     ) -> Result<PathBuf, WorkspaceError> {
         let workspace = self.get_workspace_mut(workspace_id)?;
-        let result = workspace
+        workspace
             .create_folder(parent_path.map(Path::new), name)
-            .await?;
-
-        // Force a rescan to ensure the new folder is tracked and watched immediately.
-        // This works around potential race conditions with inotify on Linux.
-        self.rescan_and_notify(workspace_id, None).await;
-
-        Ok(result)
+            .await
     }
 
     pub async fn rename_folder(
@@ -353,12 +334,7 @@ impl WorkspaceManager {
         folder_id: &str,
     ) -> Result<(), WorkspaceError> {
         let workspace = self.get_workspace_mut(workspace_id)?;
-        workspace.delete_folder(folder_id).await?;
-
-        // Force a rescan to ensure the deletion is reflected in state immediately.
-        self.rescan_and_notify(workspace_id, None).await;
-
-        Ok(())
+        workspace.delete_folder(folder_id).await
     }
 
     pub async fn move_items(
@@ -368,12 +344,7 @@ impl WorkspaceManager {
         new_parent: Option<&str>,
     ) -> Result<(), WorkspaceError> {
         let workspace = self.get_workspace_mut(workspace_id)?;
-        workspace.move_items(item_ids, new_parent).await?;
-
-        // Force a rescan to ensure the moved items are reflected in state immediately.
-        self.rescan_and_notify(workspace_id, None).await;
-
-        Ok(())
+        workspace.move_items(item_ids, new_parent).await
     }
 
     pub async fn move_items_between_workspaces(
