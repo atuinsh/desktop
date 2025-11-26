@@ -26,14 +26,18 @@ jobs:
         include:
           - name: Test (Ubuntu)
             os: depot-ubuntu-22.04-4
+            atuin_run_url: https://atuin-binary.t3.storage.dev/bin/main/x86_64-unknown-linux-gnu/atuin-run
+          - name: Test (macOS)
+            os: macos-latest
+            atuin_run_url: https://atuin-binary.t3.storage.dev/bin/main/aarch64-apple-darwin/atuin-run
     steps:
       - uses: actions/checkout@v4
 
       - name: Install atuin-run
         run: |
-          wget https://atuin-binary.t3.storage.dev/bin/main/x86_64-unknown-linux-gnu/atuin-run
-          sudo mv atuin-run /usr/bin/atuin-run
-          sudo chmod +x /usr/bin/atuin-run
+          curl -L -o atuin-run ${{ matrix.atuin_run_url }}
+          sudo mv atuin-run /usr/local/bin/atuin-run
+          sudo chmod +x /usr/local/bin/atuin-run
 
       - name: ${{ matrix.name }}
         run: |
