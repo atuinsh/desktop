@@ -16,7 +16,7 @@ fn visual_width(s: &str) -> usize {
             // Skip ANSI escape sequence
             if chars.peek() == Some(&'[') {
                 chars.next(); // consume '['
-                // Skip until we hit a letter (the command character)
+                              // Skip until we hit a letter (the command character)
                 while let Some(c) = chars.next() {
                     if c.is_ascii_alphabetic() {
                         break;
@@ -122,7 +122,9 @@ impl BlockViewport {
 
     fn render_internal(&self, stdout: &mut io::Stdout, should_flush: bool) -> io::Result<()> {
         // Use terminal_width if set (for terminal blocks with PTY), otherwise use actual terminal size
-        let term_width = self.terminal_width.unwrap_or_else(|| terminal::size().map(|(w, _)| w as usize).unwrap_or(80));
+        let term_width = self
+            .terminal_width
+            .unwrap_or_else(|| terminal::size().map(|(w, _)| w as usize).unwrap_or(80));
 
         // Account for padding (2 spaces on each side + outer border)
         let inner_width = term_width.saturating_sub(6);
@@ -156,7 +158,9 @@ impl BlockViewport {
                     // Line is too long, truncate it
                     // This is complex with ANSI codes, so just print as-is and let it wrap
                     stdout.queue(Print(line))?;
-                    stdout.queue(Print(" ".repeat(content_width.saturating_sub(vis_width.min(content_width)))))?;
+                    stdout.queue(Print(
+                        " ".repeat(content_width.saturating_sub(vis_width.min(content_width))),
+                    ))?;
                 } else {
                     // Line fits, print it and pad with spaces
                     stdout.queue(Print(line))?;

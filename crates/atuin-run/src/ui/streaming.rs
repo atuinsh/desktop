@@ -52,11 +52,8 @@ impl StreamingRenderer {
         self.stdout.flush()?;
 
         self.blocks.push(block);
-        self.last_terminal_lines.push(if is_terminal {
-            Some(Vec::new())
-        } else {
-            None
-        });
+        self.last_terminal_lines
+            .push(if is_terminal { Some(Vec::new()) } else { None });
 
         Ok(number - 1) // Return 0-indexed
     }
