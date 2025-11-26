@@ -1,0 +1,52 @@
+name: Build atuin-run
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "crates/atuin-run/**"
+      - "crates/atuin-desktop-runtime/**"
+      - ".github/workflows/atuin-run-release.yaml"
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: Build and Upload
+    runs-on: depot-ubuntu-22.04-4
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Determine target triple
+        id: target
+        run: |
+          ARCH=$(uname -m)
+          case "${{ runner.os }}" in
+            Linux) OS="unknown-linux-gnu" ;;
+            macOS) OS="apple-darwin" ;;
+            Windows) OS="pc-windows-msvc" ;;
+          esac
+          echo "triple=${ARCH}-${OS}" >> $GITHUB_OUTPUT
+
+      - name: Install latest rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+
+      - name: Run sccache-cache
+        uses: mozilla-actions/sccache-action@v0.0.7
+
+      - name: Build atuin-run
+        env:
+          RUSTC_WRAPPER: sccache
+        run: cargo build --release --package atuin-run
+
+      - name: Upload to S3
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.S3_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET_ACCESS_KEY }}
+          AWS_ENDPOINT_URL: ${{ vars.S3_ENDPOINT_URL }}
+        run: |
+          aws s3 cp target/release/atuin-run s3://${{ vars.S3_BUCKET }}/bin/main/${{ steps.target.outputs.triple }}/atuin-run
