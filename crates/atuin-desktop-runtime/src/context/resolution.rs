@@ -259,7 +259,15 @@ impl ContextResolver {
 }
 
 fn default_cwd() -> String {
-    // Defaults to home directory because placeholder in directory blocks is `~`
+    // Check for PWD env var first (set by shell, reflects current directory)
+    // This allows CLI tools to inherit the user's current working directory
+    // Falls back to home directory for desktop app / GUI contexts
+    if let Ok(pwd) = std::env::var("PWD") {
+        if !pwd.is_empty() {
+            return pwd;
+        }
+    }
+
     dirs::home_dir()
         .or(std::env::current_dir().ok())
         .unwrap_or("/".into())
