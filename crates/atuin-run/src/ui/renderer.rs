@@ -9,6 +9,7 @@ use std::io;
 ///
 /// This is implemented by both ViewportManager (interactive TUI) and
 /// StreamingRenderer (CI/non-interactive).
+#[allow(dead_code)]
 pub trait Renderer {
     /// Add a new block with the given title and content height
     /// Returns the block index

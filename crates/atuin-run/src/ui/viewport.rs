@@ -17,7 +17,7 @@ fn visual_width(s: &str) -> usize {
             if chars.peek() == Some(&'[') {
                 chars.next(); // consume '['
                               // Skip until we hit a letter (the command character)
-                while let Some(c) = chars.next() {
+                for c in chars.by_ref() {
                     if c.is_ascii_alphabetic() {
                         break;
                     }
@@ -56,6 +56,7 @@ pub struct BlockViewport {
     pub terminal_width: Option<usize>,
 }
 
+#[allow(dead_code)]
 impl BlockViewport {
     pub fn new(number: usize, title: String, content_height: usize) -> Self {
         Self {

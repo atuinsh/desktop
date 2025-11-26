@@ -248,6 +248,7 @@ impl Executor {
         result
     }
 
+    #[allow(clippy::too_many_arguments)]
     async fn execute_block_with_io(
         &mut self,
         block_id: uuid::Uuid,
@@ -310,113 +311,110 @@ impl Executor {
 
                 // Handle PTY output messages
                 Some(message) = receiver.recv() => {
-                match message {
-                    DocumentBridgeMessage::BlockOutput { output, .. } => {
-                        // Handle PTY metadata message - resize PTY when it's created
-                        if is_terminal {
-                            if let Some(ref obj) = output.object {
-                                if obj.get("pty").is_some() {
-                                    let term_width = terminal::size().map(|(w, _)| w as usize).unwrap_or(80);
-                                    let inner_width = term_width.saturating_sub(6);
-                                    let content_width = inner_width.saturating_sub(2);
-                                    let resize_cols = content_width as u16;
-                                    let resize_rows = viewport_height as u16;
+                if let DocumentBridgeMessage::BlockOutput { output, .. } = message {
+                    // Handle PTY metadata message - resize PTY when it's created
+                    if is_terminal {
+                        if let Some(ref obj) = output.object {
+                            if obj.get("pty").is_some() {
+                                let term_width = terminal::size().map(|(w, _)| w as usize).unwrap_or(80);
+                                let inner_width = term_width.saturating_sub(6);
+                                let content_width = inner_width.saturating_sub(2);
+                                let resize_cols = content_width as u16;
+                                let resize_rows = viewport_height as u16;
 
-                                    let _ = self.pty_store.resize_pty(block_id, resize_rows, resize_cols).await;
-                                }
-                            }
-                        }
-
-                        // Handle binary output for terminal blocks
-                        if let Some(binary) = output.binary {
-                            // Only process non-empty binary output
-                            if !binary.is_empty() {
-                                if let Some(ref mut term_viewport) = terminal_viewport {
-                                    // Always feed raw PTY bytes to terminal parser (keep internal state up-to-date)
-                                    term_viewport.process_output(&binary);
-
-                                    // Mark that we have pending changes to render
-                                    pending_viewport_update = true;
-                                }
-                            }
-                        }
-
-                        // Handle stdout/stderr output for non-terminal blocks
-                        if let Some(stdout) = output.stdout {
-                            full_output.push_str(&stdout);
-                            if terminal_viewport.is_none() {
-                                self.renderer
-                                    .add_line(viewport, stdout.trim_end())?;
-                            }
-                        }
-                        if let Some(stderr) = output.stderr {
-                            full_output.push_str(&stderr);
-                            if terminal_viewport.is_none() {
-                                self.renderer
-                                    .add_line(viewport, stderr.trim_end())?;
-                            }
-                        }
-
-                        // Handle lifecycle events - only break on these
-                        if let Some(lifecycle) = output.lifecycle {
-                            match lifecycle {
-                                BlockLifecycleEvent::Started(_) => {}
-                                BlockLifecycleEvent::Finished(data) => {
-                                    // Flush any pending viewport updates before completing
-                                    if pending_viewport_update && is_terminal {
-                                        if let Some(ref term_viewport) = terminal_viewport {
-                                            let lines = term_viewport.get_visible_lines();
-                                            if last_visible_lines.as_ref() != Some(&lines) {
-                                                self.renderer.replace_lines(viewport, lines.clone())?;
-                                                *last_visible_lines = Some(lines);
-                                            }
-                                        }
-                                    }
-
-                                    if let Some(exit_code) = data.exit_code {
-                                        if exit_code == 0 {
-                                            self.renderer.mark_complete(viewport)?;
-                                            // Drop keyboard receiver to unblock the spawned task
-                                            break;
-                                        } else {
-                                            return Err(ExecutorError::BlockFailed(block_id, full_output.clone(), Some(exit_code)));
-                                        }
-                                    } else {
-                                        self.renderer.mark_complete(viewport)?;
-                                        // Drop keyboard receiver to unblock the spawned task
-                                        break;
-                                    }
-                                }
-                                BlockLifecycleEvent::Cancelled => {
-                                    // Flush any pending viewport updates before cancelling
-                                    if pending_viewport_update && is_terminal {
-                                        if let Some(ref term_viewport) = terminal_viewport {
-                                            let lines = term_viewport.get_visible_lines();
-                                            if last_visible_lines.as_ref() != Some(&lines) {
-                                                let _ = self.renderer.replace_lines(viewport, lines.clone());
-                                                *last_visible_lines = Some(lines);
-                                            }
-                                        }
-                                    }
-                                    return Err(ExecutorError::BlockCancelled(block_id));
-                                }
-                                BlockLifecycleEvent::Error(data) => {
-                                    // Flush any pending viewport updates before erroring
-                                    if pending_viewport_update && is_terminal {
-                                        if let Some(ref term_viewport) = terminal_viewport {
-                                            let lines = term_viewport.get_visible_lines();
-                                            if last_visible_lines.as_ref() != Some(&lines) {
-                                                let _ = self.renderer.replace_lines(viewport, lines.clone());
-                                                *last_visible_lines = Some(lines);
-                                            }
-                                        }
-                                    }
-                                    return Err(ExecutorError::BlockError(block_id, data.message));
-                                }
+                                let _ = self.pty_store.resize_pty(block_id, resize_rows, resize_cols).await;
                             }
                         }
                     }
-                    _ => {}
+
+                    // Handle binary output for terminal blocks
+                    if let Some(binary) = output.binary {
+                        // Only process non-empty binary output
+                        if !binary.is_empty() {
+                            if let Some(ref mut term_viewport) = terminal_viewport {
+                                // Always feed raw PTY bytes to terminal parser (keep internal state up-to-date)
+                                term_viewport.process_output(&binary);
+
+                                // Mark that we have pending changes to render
+                                pending_viewport_update = true;
+                            }
+                        }
+                    }
+
+                    // Handle stdout/stderr output for non-terminal blocks
+                    if let Some(stdout) = output.stdout {
+                        full_output.push_str(&stdout);
+                        if terminal_viewport.is_none() {
+                            self.renderer
+                                .add_line(viewport, stdout.trim_end())?;
+                        }
+                    }
+                    if let Some(stderr) = output.stderr {
+                        full_output.push_str(&stderr);
+                        if terminal_viewport.is_none() {
+                            self.renderer
+                                .add_line(viewport, stderr.trim_end())?;
+                        }
+                    }
+
+                    // Handle lifecycle events - only break on these
+                    if let Some(lifecycle) = output.lifecycle {
+                        match lifecycle {
+                            BlockLifecycleEvent::Started(_) => {}
+                            BlockLifecycleEvent::Finished(data) => {
+                                // Flush any pending viewport updates before completing
+                                if pending_viewport_update && is_terminal {
+                                    if let Some(ref term_viewport) = terminal_viewport {
+                                        let lines = term_viewport.get_visible_lines();
+                                        if last_visible_lines.as_ref() != Some(&lines) {
+                                            self.renderer.replace_lines(viewport, lines.clone())?;
+                                            *last_visible_lines = Some(lines);
+                                        }
+                                    }
+                                }
+
+                                if let Some(exit_code) = data.exit_code {
+                                    if exit_code == 0 {
+                                        self.renderer.mark_complete(viewport)?;
+                                        // Drop keyboard receiver to unblock the spawned task
+                                        break;
+                                    } else {
+                                        return Err(ExecutorError::BlockFailed(block_id, full_output.clone(), Some(exit_code)));
+                                    }
+                                } else {
+                                    self.renderer.mark_complete(viewport)?;
+                                    // Drop keyboard receiver to unblock the spawned task
+                                    break;
+                                }
+                            }
+                            BlockLifecycleEvent::Cancelled => {
+                                // Flush any pending viewport updates before cancelling
+                                if pending_viewport_update && is_terminal {
+                                    if let Some(ref term_viewport) = terminal_viewport {
+                                        let lines = term_viewport.get_visible_lines();
+                                        if last_visible_lines.as_ref() != Some(&lines) {
+                                            let _ = self.renderer.replace_lines(viewport, lines.clone());
+                                            *last_visible_lines = Some(lines);
+                                        }
+                                    }
+                                }
+                                return Err(ExecutorError::BlockCancelled(block_id));
+                            }
+                            BlockLifecycleEvent::Error(data) => {
+                                // Flush any pending viewport updates before erroring
+                                if pending_viewport_update && is_terminal {
+                                    if let Some(ref term_viewport) = terminal_viewport {
+                                        let lines = term_viewport.get_visible_lines();
+                                        if last_visible_lines.as_ref() != Some(&lines) {
+                                            let _ = self.renderer.replace_lines(viewport, lines.clone());
+                                            *last_visible_lines = Some(lines);
+                                        }
+                                    }
+                                }
+                                return Err(ExecutorError::BlockError(block_id, data.message));
+                            }
+                        }
+                    }
                 }
                 }
             }

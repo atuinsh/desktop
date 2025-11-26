@@ -22,12 +22,14 @@ pub struct StreamingRenderer {
 }
 
 #[derive(Clone)]
+#[allow(dead_code)]
 struct BlockInfo {
     number: usize,
     title: String,
     is_complete: bool,
 }
 
+#[allow(dead_code)]
 impl StreamingRenderer {
     pub fn new() -> Self {
         Self {

@@ -9,6 +9,7 @@ use super::renderer::Renderer;
 use super::viewport::BlockViewport;
 
 /// Manager for coordinating multiple block viewports
+#[allow(dead_code)]
 pub struct ViewportManager {
     viewports: Vec<BlockViewport>,
     viewport_positions: Vec<u16>,   // Relative line offsets from start
@@ -18,6 +19,7 @@ pub struct ViewportManager {
     is_terminal: Vec<bool>,         // Track which viewports are terminal viewports
 }
 
+#[allow(dead_code)]
 impl ViewportManager {
     pub fn new() -> Self {
         Self {

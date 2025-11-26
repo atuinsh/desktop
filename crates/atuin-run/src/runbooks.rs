@@ -35,7 +35,7 @@ pub async fn load_runbook(path_or_id: &str) -> Result<Runbook> {
     if path.is_file() {
         load_runbook_from_file(&path).await
     } else {
-        load_runbook_from_id(&path_or_id).await
+        load_runbook_from_id(path_or_id).await
     }
 }
 
@@ -48,7 +48,7 @@ async fn load_runbook_from_file(path: impl AsRef<Path>) -> Result<Runbook> {
 }
 
 // TODO: handle API credentials
-async fn load_runbook_from_id(id: &str) -> Result<Runbook> {
+async fn load_runbook_from_id(_id: &str) -> Result<Runbook> {
     todo!()
 }
 

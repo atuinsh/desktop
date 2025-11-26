@@ -8,4 +8,3 @@ pub use manager::ViewportManager;
 pub use renderer::Renderer;
 pub use streaming::StreamingRenderer;
 pub use terminal_viewport::TerminalViewport;
-pub use viewport::BlockViewport;

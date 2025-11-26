@@ -7,6 +7,7 @@ pub struct TerminalViewport {
     viewport_height: usize,
 }
 
+#[allow(dead_code)]
 impl TerminalViewport {
     /// Create a new terminal viewport
     ///
@@ -54,7 +55,7 @@ impl TerminalViewport {
         // We can't use contents_formatted() because it includes screen control codes
         // like cursor positioning that shouldn't be in the rendered output
         for row in start_row..rows {
-            let line = self.format_row_with_ansi(&screen, row, cols);
+            let line = self.format_row_with_ansi(screen, row, cols);
             lines.push(line.trim_end().to_string());
         }
 
@@ -88,7 +89,7 @@ impl TerminalViewport {
                     any_styling_emitted = true;
                 }
 
-                line.push_str(&cell.contents());
+                line.push_str(cell.contents());
                 prev_cell = Some(cell);
             }
         }
@@ -110,7 +111,7 @@ impl TerminalViewport {
 
         // Read each row cell by cell with ANSI formatting
         for row in 0..rows {
-            let line = self.format_row_with_ansi(&screen, row, cols);
+            let line = self.format_row_with_ansi(screen, row, cols);
             lines.push(line.trim_end().to_string());
         }
 
