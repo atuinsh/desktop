@@ -5,6 +5,7 @@ use crossterm::{
 };
 use std::io;
 
+use super::renderer::Renderer;
 use super::viewport::BlockViewport;
 
 /// Manager for coordinating multiple block viewports
@@ -319,5 +320,36 @@ impl ViewportManager {
     /// Get the number of viewports
     pub fn len(&self) -> usize {
         self.viewports.len()
+    }
+}
+
+impl Renderer for ViewportManager {
+    fn add_block(&mut self, title: String, content_height: usize) -> io::Result<usize> {
+        ViewportManager::add_block(self, title, content_height)
+    }
+
+    fn add_terminal_block(
+        &mut self,
+        title: String,
+        content_height: usize,
+        terminal_width: usize,
+    ) -> io::Result<usize> {
+        ViewportManager::add_terminal_block(self, title, content_height, terminal_width)
+    }
+
+    fn add_line(&mut self, index: usize, line: &str) -> io::Result<()> {
+        ViewportManager::add_line(self, index, line)
+    }
+
+    fn replace_lines(&mut self, index: usize, lines: Vec<String>) -> io::Result<()> {
+        ViewportManager::replace_lines(self, index, lines)
+    }
+
+    fn mark_complete(&mut self, index: usize) -> io::Result<()> {
+        ViewportManager::mark_complete(self, index)
+    }
+
+    fn is_interactive(&self) -> bool {
+        true
     }
 }

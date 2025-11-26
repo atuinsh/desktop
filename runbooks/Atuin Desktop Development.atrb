@@ -1,12 +1,13 @@
 id: 01997ccb-a5d5-76f2-af09-5a5131d86582
 name: Atuin Desktop Development
 version: 1
+forkedFrom: null
 content:
 - id: f6596d68-4414-48f3-b502-eb54c9a00b17
   type: heading
   props:
-    textColor: default
     backgroundColor: default
+    textColor: default
     textAlignment: left
     level: 1
     isToggleable: false
@@ -18,8 +19,8 @@ content:
 - id: 8c274860-0918-485c-8366-8182fd56ec63
   type: paragraph
   props:
-    textColor: default
     backgroundColor: default
+    textColor: default
     textAlignment: left
   content:
   - type: text
@@ -33,16 +34,16 @@ content:
 - id: e1e209e2-a436-463f-a8b1-f1937e223ea4
   type: paragraph
   props:
-    textColor: default
     backgroundColor: default
+    textColor: default
     textAlignment: left
   content: []
   children: []
 - id: d50ec704-8687-4732-9522-e98b47104e1c
   type: paragraph
   props:
-    textColor: default
     backgroundColor: default
+    textColor: default
     textAlignment: left
   content:
   - type: text
@@ -61,8 +62,8 @@ content:
 - id: 04c4a3d4-6cd3-4449-a845-60fe11f03066
   type: heading
   props:
-    textColor: default
     backgroundColor: default
+    textColor: default
     textAlignment: left
     level: 2
     isToggleable: false
@@ -74,8 +75,8 @@ content:
 - id: 45e75266-b94c-4cda-ae20-b7763dcc7db6
   type: paragraph
   props:
-    textColor: default
     backgroundColor: default
+    textColor: default
     textAlignment: left
   content:
   - type: text
@@ -119,20 +120,21 @@ content:
     global: false
     outputVisible: true
     dependency: '{}'
+    terminalRows: 20
   children: []
 - id: bb30519d-9d25-4526-b87f-22214e316603
   type: paragraph
   props:
-    textColor: default
     backgroundColor: default
+    textColor: default
     textAlignment: left
   content: []
   children: []
 - id: 30bd3f34-0288-43fe-9045-c58b71305e9d
   type: heading
   props:
-    textColor: default
     backgroundColor: default
+    textColor: default
     textAlignment: left
     level: 2
     isToggleable: false
@@ -151,20 +153,21 @@ content:
     global: false
     outputVisible: true
     dependency: '{}'
+    terminalRows: 20
   children: []
 - id: 51b26691-3a80-4c0a-b420-149d839d394b
   type: paragraph
   props:
-    textColor: default
     backgroundColor: default
+    textColor: default
     textAlignment: left
   content: []
   children: []
 - id: 04047a62-c42e-461f-9c18-8a2cbe7334c3
   type: heading
   props:
-    textColor: default
     backgroundColor: default
+    textColor: default
     textAlignment: left
     level: 2
     isToggleable: false
@@ -183,20 +186,21 @@ content:
     global: false
     outputVisible: true
     dependency: '{}'
+    terminalRows: 20
   children: []
 - id: b534a45a-c2fd-49d4-aaca-025682d093b3
   type: paragraph
   props:
-    textColor: default
     backgroundColor: default
+    textColor: default
     textAlignment: left
   content: []
   children: []
 - id: 487d88bf-d2fc-41fd-bf07-3755ec2d0c73
   type: heading
   props:
-    textColor: default
     backgroundColor: default
+    textColor: default
     textAlignment: left
     level: 2
     isToggleable: false
@@ -215,20 +219,21 @@ content:
     global: false
     outputVisible: true
     dependency: '{}'
+    terminalRows: 20
   children: []
 - id: 01fb8fdf-62bb-4070-85ed-02ac21bb1fab
   type: paragraph
   props:
-    textColor: default
     backgroundColor: default
+    textColor: default
     textAlignment: left
   content: []
   children: []
 - id: 38947d27-a48b-4e4b-86ab-5cb235993a6e
   type: paragraph
   props:
-    textColor: default
     backgroundColor: default
+    textColor: default
     textAlignment: left
   content: []
   children: []

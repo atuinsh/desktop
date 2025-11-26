@@ -19,7 +19,7 @@ use crate::{
         ChannelDocumentBridge, NullDocumentBridge, NullEventBus, TempNullContextStorage,
         TempNullLocalValueProvider,
     },
-    ui::{TerminalViewport, ViewportManager},
+    ui::{Renderer, StreamingRenderer, TerminalViewport, ViewportManager},
 };
 
 type Result<T> = std::result::Result<T, ExecutorError>;
@@ -48,11 +48,10 @@ pub enum ExecutorError {
 pub struct Executor {
     runbook: Runbook,
     document: Arc<DocumentHandle>,
-    // TODO
     interactive: bool,
     pty_store: PtyStoreHandle,
     ssh_pool: SshPoolHandle,
-    viewport_manager: ViewportManager,
+    renderer: Box<dyn Renderer>,
 }
 
 impl Executor {
@@ -65,13 +64,20 @@ impl Executor {
             Some(Box::new(TempNullContextStorage)),
         );
 
+        // Choose renderer based on interactive mode
+        let renderer: Box<dyn Renderer> = if interactive {
+            Box::new(ViewportManager::new())
+        } else {
+            Box::new(StreamingRenderer::new())
+        };
+
         Self {
             runbook,
             document,
             interactive,
             pty_store: PtyStoreHandle::new(),
             ssh_pool: SshPoolHandle::new(),
-            viewport_manager: ViewportManager::new(),
+            renderer,
         }
     }
 
@@ -113,10 +119,10 @@ impl Executor {
         let viewport = if is_terminal {
             // Get terminal width for sizing the viewport
             let term_width = terminal::size().map(|(w, _)| w as usize).unwrap_or(80);
-            self.viewport_manager
+            self.renderer
                 .add_terminal_block(title, viewport_height, term_width)?
         } else {
-            self.viewport_manager.add_block(title, viewport_height)?
+            self.renderer.add_block(title, viewport_height)?
         };
 
         self.do_execute_block(block, viewport, &mut receiver, is_terminal, viewport_height)
@@ -153,8 +159,8 @@ impl Executor {
             .await
             .map_err(|e| ExecutorError::GenericError(e.to_string()))?;
 
-        // Enable raw mode for terminal blocks to capture keyboard input
-        if is_terminal {
+        // Enable raw mode for terminal blocks to capture keyboard input (only in interactive mode)
+        if is_terminal && self.interactive {
             crossterm::terminal::enable_raw_mode()?;
         }
 
@@ -178,8 +184,8 @@ impl Executor {
         };
         let mut last_visible_lines: Option<Vec<String>> = None;
 
-        // Create keyboard input channel for terminal blocks
-        let (mut key_rx, keyboard_task_handle) = if is_terminal {
+        // Create keyboard input channel for terminal blocks (only in interactive mode)
+        let (mut key_rx, keyboard_task_handle) = if is_terminal && self.interactive {
             let (tx, rx) = tokio::sync::mpsc::channel::<crossterm::event::Event>(32);
 
             // Spawn task to read keyboard events
@@ -223,9 +229,9 @@ impl Executor {
         } else {
             let lines = self.get_output_lines(block_clone, &resolver);
             for line in lines {
-                self.viewport_manager.add_line(viewport, &line)?;
+                self.renderer.add_line(viewport, &line)?;
             }
-            self.viewport_manager.mark_complete(viewport)?;
+            self.renderer.mark_complete(viewport)?;
             Ok(())
         };
 
@@ -235,7 +241,7 @@ impl Executor {
         }
 
         // Always disable raw mode if it was enabled
-        if is_terminal {
+        if is_terminal && self.interactive {
             let _ = crossterm::terminal::disable_raw_mode();
         }
 
@@ -278,7 +284,7 @@ impl Executor {
                             };
 
                             if should_update {
-                                self.viewport_manager.replace_lines(viewport, lines.clone())?;
+                                self.renderer.replace_lines(viewport, lines.clone())?;
                                 *last_visible_lines = Some(lines);
                             }
                         }
@@ -339,14 +345,14 @@ impl Executor {
                         if let Some(stdout) = output.stdout {
                             full_output.push_str(&stdout);
                             if terminal_viewport.is_none() {
-                                self.viewport_manager
+                                self.renderer
                                     .add_line(viewport, stdout.trim_end())?;
                             }
                         }
                         if let Some(stderr) = output.stderr {
                             full_output.push_str(&stderr);
                             if terminal_viewport.is_none() {
-                                self.viewport_manager
+                                self.renderer
                                     .add_line(viewport, stderr.trim_end())?;
                             }
                         }
@@ -361,7 +367,7 @@ impl Executor {
                                         if let Some(ref term_viewport) = terminal_viewport {
                                             let lines = term_viewport.get_visible_lines();
                                             if last_visible_lines.as_ref() != Some(&lines) {
-                                                self.viewport_manager.replace_lines(viewport, lines.clone())?;
+                                                self.renderer.replace_lines(viewport, lines.clone())?;
                                                 *last_visible_lines = Some(lines);
                                             }
                                         }
@@ -369,14 +375,14 @@ impl Executor {
 
                                     if let Some(exit_code) = data.exit_code {
                                         if exit_code == 0 {
-                                            self.viewport_manager.mark_complete(viewport)?;
+                                            self.renderer.mark_complete(viewport)?;
                                             // Drop keyboard receiver to unblock the spawned task
                                             break;
                                         } else {
                                             return Err(ExecutorError::BlockFailed(block_id, full_output.clone(), Some(exit_code)));
                                         }
                                     } else {
-                                        self.viewport_manager.mark_complete(viewport)?;
+                                        self.renderer.mark_complete(viewport)?;
                                         // Drop keyboard receiver to unblock the spawned task
                                         break;
                                     }
@@ -387,7 +393,7 @@ impl Executor {
                                         if let Some(ref term_viewport) = terminal_viewport {
                                             let lines = term_viewport.get_visible_lines();
                                             if last_visible_lines.as_ref() != Some(&lines) {
-                                                let _ = self.viewport_manager.replace_lines(viewport, lines.clone());
+                                                let _ = self.renderer.replace_lines(viewport, lines.clone());
                                                 *last_visible_lines = Some(lines);
                                             }
                                         }
@@ -400,7 +406,7 @@ impl Executor {
                                         if let Some(ref term_viewport) = terminal_viewport {
                                             let lines = term_viewport.get_visible_lines();
                                             if last_visible_lines.as_ref() != Some(&lines) {
-                                                let _ = self.viewport_manager.replace_lines(viewport, lines.clone());
+                                                let _ = self.renderer.replace_lines(viewport, lines.clone());
                                                 *last_visible_lines = Some(lines);
                                             }
                                         }
@@ -422,6 +428,7 @@ impl Executor {
     fn get_output_lines(&self, block: Block, resolver: &ContextResolver) -> Vec<String> {
         match block {
             Block::Directory(dir) => {
+                log::error!("dir block: {dir:?}");
                 vec![format!(
                     "Directory set to: {}",
                     resolver.resolve_template(&dir.path).unwrap_or_default()
