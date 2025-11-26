@@ -56,7 +56,7 @@ pub enum ExecLogMessage {
         reply_to: oneshot::Sender<Result<ExecLogBlock>>,
     },
     LogExecution {
-        block: Block,
+        block_id: Uuid,
         start_time: u64,
         end_time: u64,
         output: String,
@@ -128,7 +128,7 @@ impl ExecLogHandle {
     ) -> Result<()> {
         let (reply_to, receiver) = oneshot::channel();
         let msg = ExecLogMessage::LogExecution {
-            block,
+            block_id: block.id(),
             start_time,
             end_time,
             output,
@@ -201,14 +201,14 @@ impl ExecLog {
                     let _ = reply_to.send(result);
                 }
                 ExecLogMessage::LogExecution {
-                    block,
+                    block_id,
                     start_time,
                     end_time,
                     output,
                     reply_to,
                 } => {
                     let result = self
-                        .log_execution(block, start_time, end_time, output)
+                        .log_execution(block_id, start_time, end_time, output)
                         .await;
                     let _ = reply_to.send(result);
                 }
@@ -264,20 +264,17 @@ impl ExecLog {
 
     async fn log_execution(
         &self,
-        block: Block,
+        block_id: Uuid,
         start_time: u64,
         end_time: u64,
         output: String,
     ) -> Result<()> {
         debug!(
             "logging execution for block {:?}, start_time: {}, end_time: {}, output: {}",
-            block.id(),
-            start_time,
-            end_time,
-            output
+            block_id, start_time, end_time, output
         );
 
-        let block = self.get_or_create_block(block.id()).await?;
+        let block = self.get_or_create_block(block_id).await?;
 
         sqlx::query(
             "INSERT INTO exec_log (block_id, start_time, end_time, output) VALUES (?, ?, ?, ?)",
