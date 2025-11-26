@@ -653,28 +653,28 @@ impl WorkspaceManager {
                             continue;
                         }
 
-                        let parent_path = entry.path.parent().unwrap_or(&workspace.path);
-                        if watched_dirs.contains(&parent_path) {
+                        if watched_dirs.contains(&entry.path) {
                             continue;
                         }
 
+                        let parent_path = entry.path.parent().unwrap_or(&workspace.path);
                         let gitignore = create_ignore_matcher(parent_path).ok();
                         if !should_ignore_path(&entry.path, &workspace.path, gitignore.as_ref()) {
                             log::debug!(
                                 "Adding watcher for directory found during rescan: {}",
-                                parent_path.display()
+                                entry.path.display()
                             );
                             if let Err(e) = workspace
                                 ._debouncer
-                                .watch(parent_path, RecursiveMode::NonRecursive)
+                                .watch(entry.path.clone(), RecursiveMode::NonRecursive)
                             {
                                 log::warn!(
                                     "Failed to watch new directory {}: {}",
-                                    parent_path.display(),
+                                    entry.path.display(),
                                     e
                                 );
                             } else {
-                                watched_dirs.insert(parent_path);
+                                watched_dirs.insert(&entry.path);
                             }
                         }
                     }
