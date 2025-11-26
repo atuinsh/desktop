@@ -1664,24 +1664,88 @@ mod tests {
         drop(temp_dir);
     }
 
+    /// Tests that subdirectories existing before watching starts are correctly watched.
+    /// This verifies that `setup_selective_watching` properly walks and watches all
+    /// existing directories in the workspace.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_preexisting_subdirectories_are_watched() {
+        let (temp_dir, workspace_path) = setup_test_workspace().await;
+        let collector = TestEventCollector::new();
+        let manager = WorkspaceManager::new();
+        let manager_arc = Arc::new(Mutex::new(Some(manager)));
+
+        // Create a nested folder structure BEFORE watching starts
+        let folder1 = workspace_path.join("folder1");
+        let folder2 = folder1.join("folder2");
+        tokio::fs::create_dir_all(&folder2).await.unwrap();
+
+        // Start watching the workspace
+        {
+            let mut manager_guard = manager_arc.lock().await;
+            let manager = manager_guard.as_mut().unwrap();
+            manager
+                .watch_workspace(
+                    &workspace_path,
+                    "test-workspace",
+                    collector.create_handler(),
+                    manager_arc.clone(),
+                )
+                .await
+                .unwrap();
+        }
+
+        // Wait for initial state event
+        let initial_events = collector.wait_for_events(1, 1000).await;
+        assert!(!initial_events.is_empty());
+        collector.clear_events().await;
+
+        // Give the workspace manager time to set up file watching
+        sleep(Duration::from_millis(250)).await;
+
+        // Create a runbook in the deepest preexisting folder
+        // This should be detected because setup_selective_watching should have
+        // walked and watched all existing directories
+        create_test_runbook(&folder2, "preexisting_deep_runbook", "preexisting-deep-runbook-id").await;
+
+        // Wait for the runbook creation to be detected
+        let runbook_events = collector.wait_for_events(1, 3000).await;
+        assert!(
+            !runbook_events.is_empty(),
+            "Runbook creation in preexisting nested subdirectory should trigger events. \
+             This indicates setup_selective_watching is not correctly watching all directories."
+        );
+
+        // Verify the runbook appears in the workspace state
+        assert!(
+            wait_for_state_condition(
+                &manager_arc,
+                "test-workspace",
+                |state| state.runbooks.contains_key("preexisting-deep-runbook-id"),
+                3000
+            )
+            .await,
+            "Runbook created in preexisting nested subdirectory should appear in workspace state"
+        );
+
+        // Clean up
+        {
+            let mut manager_guard = manager_arc.lock().await;
+            let manager = manager_guard.as_mut().unwrap();
+            manager.unwatch_workspace("test-workspace").await.unwrap();
+        }
+
+        drop(temp_dir);
+    }
+
     /// Regression test for https://github.com/atuinsh/desktop/issues/232
     ///
-    /// This test specifically targets the bug in `rescan_and_notify` where the code
-    /// watches `parent_path` instead of `entry.path`, causing subdirectories discovered
-    /// during rescan to not be watched properly.
-    ///
-    /// The scenario:
-    /// 1. Start watching a workspace
-    /// 2. Create a nested folder structure (folder + subfolder) in a single batch
-    ///    that triggers a rescan
-    /// 3. The rescan discovers the new folders but due to the bug, only watches
-    ///    the parent paths, not the folders themselves
-    /// 4. Creating a runbook in the deepest folder is never detected
-    ///
-    /// The fix: In rescan_and_notify, watch `entry.path` (the directory itself)
-    /// instead of `parent_path`.
+    /// This test reproduces the exact user flow from the bug report:
+    /// 1. Create an empty workspace (done in setup)
+    /// 2. Create an empty folder in the workspace via the API
+    /// 3. Create a runbook in that folder via the API (simulating right-click -> New Runbook)
+    /// 4. Verify the runbook is created and detected
     #[tokio::test(flavor = "multi_thread")]
-    async fn test_rescan_watches_subdirectories_correctly() {
+    async fn test_create_folder_then_runbook_via_api() {
         let (temp_dir, workspace_path) = setup_test_workspace().await;
         let collector = TestEventCollector::new();
         let manager = WorkspaceManager::new();
@@ -1707,18 +1771,17 @@ mod tests {
         assert!(!initial_events.is_empty());
         collector.clear_events().await;
 
-        // Give the workspace manager time to set up file watching
-        sleep(Duration::from_millis(250)).await;
+        // Step 2: Create an empty folder via the API (simulates UI "New Folder")
+        let folder_path = {
+            let mut manager_guard = manager_arc.lock().await;
+            let manager = manager_guard.as_mut().unwrap();
+            manager
+                .create_folder("test-workspace", None, "My Folder")
+                .await
+                .expect("Should create folder successfully")
+        };
 
-        // Create a nested folder structure: folder1/folder2
-        // We create both quickly so they're discovered together during the rescan
-        // triggered by the first folder creation.
-        let folder1 = workspace_path.join("folder1");
-        let folder2 = folder1.join("folder2");
-        tokio::fs::create_dir(&folder1).await.unwrap();
-        tokio::fs::create_dir(&folder2).await.unwrap();
-
-        // Wait for the folder creation events and rescan to complete
+        // Wait for folder creation to be detected
         let folder_events = collector.wait_for_events(1, 2000).await;
         assert!(
             !folder_events.is_empty(),
@@ -1726,35 +1789,65 @@ mod tests {
         );
         collector.clear_events().await;
 
-        // Give time for watchers to be set up after rescan
-        // This is where the bug manifests: folder2 won't be watched because
-        // rescan_and_notify watches parent_path (folder1) instead of entry.path (folder2)
-        sleep(Duration::from_millis(300)).await;
+        // Step 3: Create a runbook in the folder via the API
+        // (simulates right-click folder -> "New Runbook")
+        // The parent_folder_id is the full path to the folder, as the UI would pass it
+        let runbook_result = {
+            let mut manager_guard = manager_arc.lock().await;
+            let manager = manager_guard.as_mut().unwrap();
+            manager
+                .create_runbook(
+                    "test-workspace",
+                    Some(folder_path.to_str().unwrap()),
+                    "Test Runbook",
+                    &serde_yaml::Value::Sequence(vec![]),
+                    None,
+                )
+                .await
+        };
 
-        // Now create a runbook in folder2
-        // With the bug, this file creation is never detected because folder2 isn't watched
-        create_test_runbook(&folder2, "deep_runbook", "deep-runbook-id").await;
-
-        // Wait for the runbook creation to be detected
-        // This will timeout with the bug because folder2 isn't being watched
-        let runbook_events = collector.wait_for_events(1, 3000).await;
+        // Step 4: Verify the runbook was created successfully
         assert!(
-            !runbook_events.is_empty(),
-            "Runbook creation in nested subdirectory should trigger events. \
-             If this fails, the rescan is not correctly setting up watchers for subdirectories."
+            runbook_result.is_ok(),
+            "create_runbook should succeed, but got error: {:?}",
+            runbook_result.err()
         );
+
+        let runbook_id = runbook_result.unwrap();
 
         // Verify the runbook appears in the workspace state
         assert!(
             wait_for_state_condition(
                 &manager_arc,
                 "test-workspace",
-                |state| state.runbooks.contains_key("deep-runbook-id"),
+                |state| state.runbooks.contains_key(&runbook_id),
                 3000
             )
             .await,
-            "Runbook created in nested subdirectory should appear in workspace state"
+            "Runbook created via API should appear in workspace state"
         );
+
+        // Verify the runbook is in the correct location (inside the folder)
+        {
+            let manager_guard = manager_arc.lock().await;
+            let manager = manager_guard.as_ref().unwrap();
+            if let Some(workspace) = manager.workspaces.get("test-workspace") {
+                if let Ok(state) = &workspace.state {
+                    let runbook = state.runbooks.get(&runbook_id).unwrap();
+                    assert_eq!(runbook.name, "Test Runbook");
+                    assert!(
+                        runbook.path.starts_with(&folder_path),
+                        "Runbook path {:?} should be inside folder {:?}",
+                        runbook.path,
+                        folder_path
+                    );
+                } else {
+                    panic!("Workspace state should be Ok");
+                }
+            } else {
+                panic!("Workspace should exist");
+            }
+        }
 
         // Clean up
         {
