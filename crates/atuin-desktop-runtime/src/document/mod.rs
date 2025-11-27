@@ -23,7 +23,7 @@ use crate::templates::DocumentTemplateState;
 
 use crate::{
     blocks::{Block, KNOWN_UNSUPPORTED_BLOCKS},
-    client::{DocumentBridgeMessage, LocalValueProvider, MessageChannel},
+    client::{DocumentBridgeMessage, LocalValueProvider, MessageChannel, RunbookContentLoader},
     context::{
         BlockContext, BlockContextStorage, BlockState, ContextResolver, DocumentBlock,
         ResolvedContext,
@@ -44,6 +44,8 @@ pub(crate) struct Document {
     pub(crate) known_unsupported_blocks: HashSet<String>,
     pub(crate) block_local_value_provider: Option<Box<dyn LocalValueProvider>>,
     pub(crate) context_storage: Option<Box<dyn BlockContextStorage>>,
+    /// Loader for sub-runbook content (optional - sub-runbooks won't work without this)
+    pub(crate) runbook_loader: Option<Arc<dyn RunbookContentLoader>>,
     /// Tracks the last ResolvedContext sent to the frontend for each block.
     /// Used to avoid sending redundant BlockContextUpdate messages when the
     /// resolved context hasn't actually changed.
@@ -57,6 +59,7 @@ impl Document {
         document_bridge: Arc<dyn MessageChannel<DocumentBridgeMessage>>,
         block_local_value_provider: Option<Box<dyn LocalValueProvider>>,
         context_storage: Option<Box<dyn BlockContextStorage>>,
+        runbook_loader: Option<Arc<dyn RunbookContentLoader>>,
     ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         let mut doc = Self {
             id,
@@ -66,6 +69,7 @@ impl Document {
             known_unsupported_blocks: HashSet::new(),
             block_local_value_provider,
             context_storage,
+            runbook_loader,
             last_sent_contexts: HashMap::new(),
         };
         doc.put_document(document).await?;
@@ -375,6 +379,7 @@ impl Document {
             .pty_store_opt(pty_store)
             .gc_event_bus(event_bus)
             .handle(ExecutionHandle::new(*block_id))
+            .runbook_loader_opt(self.runbook_loader.clone())
             .build())
     }
 

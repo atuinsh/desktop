@@ -347,6 +347,22 @@ impl Default for ContextResolver {
     }
 }
 
+impl ContextResolver {
+    /// Create a context resolver pre-populated with values from another resolver
+    ///
+    /// This is used for sub-runbook execution where the sub-runbook inherits
+    /// the parent's context but maintains isolation (changes don't propagate back)
+    pub fn from_parent(parent: &ContextResolver) -> Self {
+        Self {
+            vars: parent.vars.clone(),
+            cwd: parent.cwd.clone(),
+            env_vars: parent.env_vars.clone(),
+            ssh_host: parent.ssh_host.clone(),
+            extra_template_context: parent.extra_template_context.clone(),
+        }
+    }
+}
+
 #[cfg(test)]
 pub struct ContextResolverBuilder {
     vars: Option<HashMap<String, DocumentVar>>,

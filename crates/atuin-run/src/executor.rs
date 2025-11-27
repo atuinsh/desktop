@@ -16,7 +16,7 @@ use uuid::Uuid;
 use crate::{
     runbooks::Runbook,
     runtime::{
-        ChannelDocumentBridge, NullDocumentBridge, NullEventBus, TempNullContextStorage,
+        ChannelDocumentBridge, FileRunbookLoader, NullDocumentBridge, NullEventBus, TempNullContextStorage,
         TempNullLocalValueProvider,
     },
     ui::{Renderer, StreamingRenderer, TerminalViewport, ViewportManager},
@@ -59,12 +59,19 @@ pub struct Executor {
 
 impl Executor {
     pub fn new(runbook: Runbook, interactive: bool) -> Self {
+        // Create runbook loader based on source path
+        let runbook_loader = runbook.source_path.as_ref().map(|path| {
+            Arc::new(FileRunbookLoader::from_runbook_path(path))
+                as Arc<dyn atuin_desktop_runtime::client::RunbookContentLoader>
+        });
+
         let document = DocumentHandle::new(
             runbook.id.to_string(),
             Arc::new(NullEventBus),
             Arc::new(NullDocumentBridge),
             Some(Box::new(TempNullLocalValueProvider)),
             Some(Box::new(TempNullContextStorage)),
+            runbook_loader,
         );
 
         // Choose renderer based on interactive mode
@@ -503,6 +510,7 @@ impl Executor {
             Block::Kubernetes(_) => "Kubernetes".to_string(),
             Block::Dropdown(_) => "Dropdown".to_string(),
             Block::Pause(_) => "Pause".to_string(),
+            Block::SubRunbook(_) => "Sub-Runbook".to_string(),
         }
     }
 }

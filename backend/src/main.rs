@@ -556,6 +556,7 @@ fn main() {
             commands::blocks::remove_stored_context_for_document,
             commands::blocks::start_serial_execution,
             commands::blocks::stop_serial_execution,
+            commands::blocks::get_runbook_content,
             commands::events::subscribe_to_events,
             commands::updates::check_for_updates,
             commands::workspaces::copy_welcome_workspace,

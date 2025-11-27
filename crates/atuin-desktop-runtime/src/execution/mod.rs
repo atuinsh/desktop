@@ -17,13 +17,16 @@ use ts_rs::TS;
 use typed_builder::TypedBuilder;
 use uuid::Uuid;
 
-use crate::client::{ClientPrompt, ClientPromptResult, DocumentBridgeMessage, MessageChannel};
-use crate::context::{BlockContext, BlockExecutionOutput, BlockState, ContextResolver};
+use crate::client::{
+    ClientPrompt, ClientPromptResult, DocumentBridgeMessage, MessageChannel, RunbookContentLoader,
+};
+use crate::context::{BlockContext, BlockState, ContextResolver};
 use crate::document::{DocumentError, DocumentHandle};
 use crate::events::{EventBus, GCEvent};
 use crate::pty::PtyStoreHandle;
 use crate::ssh::SshPoolHandle;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ExecutionResult {
     Success,
     Failure,
@@ -54,6 +57,12 @@ pub struct ExecutionContext {
     #[builder(default, setter(strip_option(fallback = event_bus_opt)))]
     pub(crate) gc_event_bus: Option<Arc<dyn EventBus>>,
     handle: ExecutionHandle,
+    /// Stack of runbook IDs currently being executed (for sub-runbook recursion detection)
+    #[builder(default)]
+    execution_stack: Vec<String>,
+    /// Loader for sub-runbook content (optional - sub-runbooks won't work without this)
+    #[builder(default, setter(strip_option(fallback = runbook_loader_opt)))]
+    runbook_loader: Option<Arc<dyn RunbookContentLoader>>,
 }
 
 impl std::fmt::Debug for ExecutionContext {
@@ -352,7 +361,100 @@ impl ExecutionContext {
 
         Ok(result)
     }
+
+    /// Check if a runbook is already in the execution stack (recursion detection)
+    pub fn is_in_execution_stack(&self, runbook_id: &str) -> bool {
+        self.execution_stack.contains(&runbook_id.to_string())
+    }
+
+    /// Get the current execution stack (for error reporting)
+    pub fn execution_stack(&self) -> &[String] {
+        &self.execution_stack
+    }
+
+    /// Create a new execution context for a sub-runbook with the current runbook pushed onto the stack
+    ///
+    /// Returns an error if the sub-runbook ID is already in the execution stack (recursion detected)
+    pub fn with_sub_runbook(
+        &self,
+        sub_runbook_id: String,
+        sub_runbook_block_id: Uuid,
+        sub_context_resolver: Arc<ContextResolver>,
+    ) -> Result<Self, SubRunbookRecursionError> {
+        if self.execution_stack.contains(&sub_runbook_id) {
+            return Err(SubRunbookRecursionError {
+                runbook_id: sub_runbook_id,
+                stack: self.execution_stack.clone(),
+            });
+        }
+
+        let mut new_stack = self.execution_stack.clone();
+        new_stack.push(sub_runbook_id.clone());
+
+        Ok(Self {
+            block_id: sub_runbook_block_id,
+            runbook_id: self.runbook_id, // Keep parent runbook_id for event tracking
+            document_handle: self.document_handle.clone(),
+            context_resolver: sub_context_resolver,
+            output_channel: self.output_channel.clone(),
+            ssh_pool: self.ssh_pool.clone(),
+            pty_store: self.pty_store.clone(),
+            gc_event_bus: self.gc_event_bus.clone(),
+            handle: ExecutionHandle::new(sub_runbook_block_id),
+            execution_stack: new_stack,
+            runbook_loader: self.runbook_loader.clone(),
+        })
+    }
+
+    /// Get the runbook content loader (if available)
+    pub fn runbook_loader(&self) -> Option<&Arc<dyn RunbookContentLoader>> {
+        self.runbook_loader.as_ref()
+    }
+
+    /// Get the SSH pool (if available)
+    pub fn ssh_pool(&self) -> Option<SshPoolHandle> {
+        self.ssh_pool.clone()
+    }
+
+    /// Get the PTY store (if available)
+    pub fn pty_store(&self) -> Option<PtyStoreHandle> {
+        self.pty_store.clone()
+    }
+
+    /// Create a new context with different resource handles
+    pub fn with_resources(
+        mut self,
+        ssh_pool: Option<SshPoolHandle>,
+        pty_store: Option<PtyStoreHandle>,
+    ) -> Self {
+        if let Some(pool) = ssh_pool {
+            self.ssh_pool = Some(pool);
+        }
+        if let Some(store) = pty_store {
+            self.pty_store = Some(store);
+        }
+        self
+    }
 }
+
+/// Error when recursion is detected in sub-runbook execution
+#[derive(Debug, Clone)]
+pub struct SubRunbookRecursionError {
+    pub runbook_id: String,
+    pub stack: Vec<String>,
+}
+
+impl std::fmt::Display for SubRunbookRecursionError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Recursion detected: runbook '{}' is already in execution stack: {:?}",
+            self.runbook_id, self.stack
+        )
+    }
+}
+
+impl std::error::Error for SubRunbookRecursionError {}
 
 /// Token for cancelling block execution
 ///

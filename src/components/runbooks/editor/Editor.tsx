@@ -69,6 +69,7 @@ import {
 } from "@/utils/scroll-position";
 import { insertDropdown } from "./blocks/Dropdown/Dropdown";
 import { insertPause } from "./blocks/Pause";
+import { insertSubRunbook } from "./blocks/SubRunbook";
 import { insertTerminal } from "@/lib/blocks/terminal";
 import { insertKubernetes } from "@/lib/blocks/kubernetes";
 import { insertLocalDirectory } from "@/lib/blocks/localdirectory";
@@ -911,6 +912,7 @@ export default function Editor({ runbook, editable, runbookEditor }: EditorProps
                 insertLocalDirectory(editor as any),
                 insertDropdown(schema)(editor),
                 insertPause(schema)(editor),
+                insertSubRunbook(editor as any),
 
                 // Content group
                 insertMarkdownRender(editor as any),

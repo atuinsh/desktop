@@ -5,7 +5,7 @@ use tokio::sync::{mpsc, oneshot};
 use uuid::Uuid;
 
 use crate::blocks::Block;
-use crate::client::{DocumentBridgeMessage, LocalValueProvider, MessageChannel};
+use crate::client::{DocumentBridgeMessage, LocalValueProvider, MessageChannel, RunbookContentLoader};
 use crate::context::{
     BlockContext, BlockContextStorage, BlockExecutionOutput, BlockState, BlockStateUpdater,
     ResolvedContext,
@@ -184,6 +184,7 @@ impl DocumentHandle {
         document_bridge: Arc<dyn MessageChannel<DocumentBridgeMessage>>,
         block_local_value_provider: Option<Box<dyn LocalValueProvider>>,
         context_storage: Option<Box<dyn BlockContextStorage>>,
+        runbook_loader: Option<Arc<dyn RunbookContentLoader>>,
     ) -> Arc<Self> {
         let (tx, rx) = mpsc::unbounded_channel();
 
@@ -206,6 +207,7 @@ impl DocumentHandle {
                 document_bridge,
                 block_local_value_provider,
                 context_storage,
+                runbook_loader,
                 instance_clone,
             )
             .await;
@@ -559,6 +561,7 @@ impl DocumentActor {
         document_bridge: Arc<dyn MessageChannel<DocumentBridgeMessage>>,
         block_local_value_provider: Option<Box<dyn LocalValueProvider>>,
         context_storage: Option<Box<dyn BlockContextStorage>>,
+        runbook_loader: Option<Arc<dyn RunbookContentLoader>>,
         handle: Arc<DocumentHandle>,
     ) -> Self {
         let document = Document::new(
@@ -567,6 +570,7 @@ impl DocumentActor {
             document_bridge,
             block_local_value_provider,
             context_storage,
+            runbook_loader,
         )
         .await
         .unwrap();
