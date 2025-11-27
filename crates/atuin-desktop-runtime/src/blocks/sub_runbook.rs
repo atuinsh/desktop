@@ -383,18 +383,7 @@ impl BlockBehavior for SubRunbook {
 
                 // Wait for block to complete
                 if let Some(handle) = execution_handle {
-                    let mut finished_channel = handle.finished_channel();
-
-                    let result = loop {
-                        if finished_channel.changed().await.is_err() {
-                            break ExecutionResult::Success;
-                        }
-                        let result = *finished_channel.borrow_and_update();
-                        match result {
-                            Some(r) => break r,
-                            None => continue,
-                        }
-                    };
+                    let result = handle.wait_for_completion().await;
 
                     match result {
                         ExecutionResult::Success => {
@@ -639,15 +628,7 @@ mod tests {
 
         // Wait for execution to complete
         if let Some(handle) = handle {
-            let mut finished = handle.finished_channel();
-            loop {
-                if finished.changed().await.is_err() {
-                    break;
-                }
-                if finished.borrow().is_some() {
-                    break;
-                }
-            }
+            let _ = handle.wait_for_completion().await;
         }
 
         // Verify the file was created by the sub-runbook
@@ -676,15 +657,7 @@ mod tests {
 
         // Wait for cat to complete
         if let Some(handle) = cat_handle {
-            let mut finished = handle.finished_channel();
-            loop {
-                if finished.changed().await.is_err() {
-                    break;
-                }
-                if finished.borrow().is_some() {
-                    break;
-                }
-            }
+            let _ = handle.wait_for_completion().await;
         }
 
         // Verify events were emitted
@@ -776,15 +749,7 @@ mod tests {
 
         // Wait for completion
         if let Some(handle) = handle {
-            let mut finished = handle.finished_channel();
-            loop {
-                if finished.changed().await.is_err() {
-                    break;
-                }
-                if finished.borrow().is_some() {
-                    break;
-                }
-            }
+            let _ = handle.wait_for_completion().await;
         }
 
         // Verify both markers were created (blocks executed in order)

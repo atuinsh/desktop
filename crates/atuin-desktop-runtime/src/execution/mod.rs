@@ -563,6 +563,23 @@ impl ExecutionHandle {
     pub fn finished_channel(&self) -> watch::Receiver<Option<ExecutionResult>> {
         self.on_finish.1.clone()
     }
+
+    /// Wait for execution to complete and return the result
+    ///
+    /// This helper encapsulates the common pattern of waiting on a watch channel
+    /// for execution completion. Returns `Success` if the channel closes unexpectedly.
+    pub async fn wait_for_completion(&self) -> ExecutionResult {
+        let mut finished_channel = self.finished_channel();
+        loop {
+            if finished_channel.changed().await.is_err() {
+                // Channel closed without sending a result - treat as success
+                return ExecutionResult::Success;
+            }
+            if let Some(result) = *finished_channel.borrow_and_update() {
+                return result;
+            }
+        }
+    }
 }
 
 /// Current status of block execution
