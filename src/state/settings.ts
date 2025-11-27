@@ -17,12 +17,24 @@ const SHELLCHECK_PATH = "settings.editor.shellcheck.path";
 
 // Notification settings
 const NOTIFICATIONS_ENABLED = "settings.notifications.enabled";
-const NOTIFICATIONS_OS_ENABLED = "settings.notifications.os.enabled";
-const NOTIFICATIONS_SOUND_ENABLED = "settings.notifications.sound.enabled";
-const NOTIFICATIONS_TOAST_ENABLED = "settings.notifications.toast.enabled";
-const NOTIFICATIONS_MIN_DURATION_SECS = "settings.notifications.min_duration_secs";
-const NOTIFICATIONS_ONLY_WHEN_UNFOCUSED = "settings.notifications.only_when_unfocused";
-const NOTIFICATIONS_ON_FAILURE = "settings.notifications.on_failure";
+
+// Block notification settings
+const NOTIFICATIONS_BLOCK_FINISHED_DURATION = "settings.notifications.block.finished.duration";
+const NOTIFICATIONS_BLOCK_FINISHED_SOUND = "settings.notifications.block.finished.sound";
+const NOTIFICATIONS_BLOCK_FINISHED_OS = "settings.notifications.block.finished.os";
+
+const NOTIFICATIONS_BLOCK_FAILED_DURATION = "settings.notifications.block.failed.duration";
+const NOTIFICATIONS_BLOCK_FAILED_SOUND = "settings.notifications.block.failed.sound";
+const NOTIFICATIONS_BLOCK_FAILED_OS = "settings.notifications.block.failed.os";
+
+// Serial execution notification settings
+const NOTIFICATIONS_SERIAL_FINISHED_DURATION = "settings.notifications.serial.finished.duration";
+const NOTIFICATIONS_SERIAL_FINISHED_SOUND = "settings.notifications.serial.finished.sound";
+const NOTIFICATIONS_SERIAL_FINISHED_OS = "settings.notifications.serial.finished.os";
+
+const NOTIFICATIONS_SERIAL_FAILED_DURATION = "settings.notifications.serial.failed.duration";
+const NOTIFICATIONS_SERIAL_FAILED_SOUND = "settings.notifications.serial.failed.sound";
+const NOTIFICATIONS_SERIAL_FAILED_OS = "settings.notifications.serial.failed.os";
 
 export class Settings {
   public static DEFAULT_FONT = "FiraCode";
@@ -192,76 +204,142 @@ export class Settings {
       return val;
     }
 
-    // Default to true
     return (await store.get(NOTIFICATIONS_ENABLED)) ?? true;
   }
 
-  public static async notificationsOsEnabled(val: boolean | null = null): Promise<boolean> {
+  // Block finished settings
+  public static async notificationsBlockFinishedDuration(val: number | null = null): Promise<number> {
     let store = await KVStore.open_default();
 
     if (val !== null) {
-      await store.set(NOTIFICATIONS_OS_ENABLED, val);
+      await store.set(NOTIFICATIONS_BLOCK_FINISHED_DURATION, val);
       return val;
     }
 
-    return (await store.get(NOTIFICATIONS_OS_ENABLED)) ?? true;
+    return (await store.get(NOTIFICATIONS_BLOCK_FINISHED_DURATION)) ?? 5;
   }
 
-  public static async notificationsSoundEnabled(val: boolean | null = null): Promise<boolean> {
+  public static async notificationsBlockFinishedSound(val: "none" | "chime" | null = null): Promise<"none" | "chime"> {
     let store = await KVStore.open_default();
 
     if (val !== null) {
-      await store.set(NOTIFICATIONS_SOUND_ENABLED, val);
+      await store.set(NOTIFICATIONS_BLOCK_FINISHED_SOUND, val);
       return val;
     }
 
-    return (await store.get(NOTIFICATIONS_SOUND_ENABLED)) ?? false;
+    return (await store.get(NOTIFICATIONS_BLOCK_FINISHED_SOUND)) ?? "none";
   }
 
-  public static async notificationsToastEnabled(val: boolean | null = null): Promise<boolean> {
+  public static async notificationsBlockFinishedOs(val: "always" | "not_focused" | "never" | null = null): Promise<"always" | "not_focused" | "never"> {
     let store = await KVStore.open_default();
 
     if (val !== null) {
-      await store.set(NOTIFICATIONS_TOAST_ENABLED, val);
+      await store.set(NOTIFICATIONS_BLOCK_FINISHED_OS, val);
       return val;
     }
 
-    return (await store.get(NOTIFICATIONS_TOAST_ENABLED)) ?? true;
+    return (await store.get(NOTIFICATIONS_BLOCK_FINISHED_OS)) ?? "not_focused";
   }
 
-  public static async notificationsMinDurationSecs(val: number | null = null): Promise<number> {
+  // Block failed settings
+  public static async notificationsBlockFailedDuration(val: number | null = null): Promise<number> {
     let store = await KVStore.open_default();
 
     if (val !== null) {
-      await store.set(NOTIFICATIONS_MIN_DURATION_SECS, val);
+      await store.set(NOTIFICATIONS_BLOCK_FAILED_DURATION, val);
       return val;
     }
 
-    // Default to 5 seconds
-    return (await store.get(NOTIFICATIONS_MIN_DURATION_SECS)) ?? 5;
+    return (await store.get(NOTIFICATIONS_BLOCK_FAILED_DURATION)) ?? 0;
   }
 
-  public static async notificationsOnlyWhenUnfocused(val: boolean | null = null): Promise<boolean> {
+  public static async notificationsBlockFailedSound(val: "none" | "chime" | null = null): Promise<"none" | "chime"> {
     let store = await KVStore.open_default();
 
     if (val !== null) {
-      await store.set(NOTIFICATIONS_ONLY_WHEN_UNFOCUSED, val);
+      await store.set(NOTIFICATIONS_BLOCK_FAILED_SOUND, val);
       return val;
     }
 
-    // Default to true - only notify when app is not focused
-    return (await store.get(NOTIFICATIONS_ONLY_WHEN_UNFOCUSED)) ?? true;
+    return (await store.get(NOTIFICATIONS_BLOCK_FAILED_SOUND)) ?? "chime";
   }
 
-  public static async notificationsOnFailure(val: "always" | "after_duration" | "never" | null = null): Promise<"always" | "after_duration" | "never"> {
+  public static async notificationsBlockFailedOs(val: "always" | "not_focused" | "never" | null = null): Promise<"always" | "not_focused" | "never"> {
     let store = await KVStore.open_default();
 
     if (val !== null) {
-      await store.set(NOTIFICATIONS_ON_FAILURE, val);
+      await store.set(NOTIFICATIONS_BLOCK_FAILED_OS, val);
       return val;
     }
 
-    // Default to always notify on failure
-    return (await store.get(NOTIFICATIONS_ON_FAILURE)) ?? "always";
+    return (await store.get(NOTIFICATIONS_BLOCK_FAILED_OS)) ?? "always";
+  }
+
+  // Serial finished settings
+  public static async notificationsSerialFinishedDuration(val: number | null = null): Promise<number> {
+    let store = await KVStore.open_default();
+
+    if (val !== null) {
+      await store.set(NOTIFICATIONS_SERIAL_FINISHED_DURATION, val);
+      return val;
+    }
+
+    return (await store.get(NOTIFICATIONS_SERIAL_FINISHED_DURATION)) ?? 0;
+  }
+
+  public static async notificationsSerialFinishedSound(val: "none" | "chime" | null = null): Promise<"none" | "chime"> {
+    let store = await KVStore.open_default();
+
+    if (val !== null) {
+      await store.set(NOTIFICATIONS_SERIAL_FINISHED_SOUND, val);
+      return val;
+    }
+
+    return (await store.get(NOTIFICATIONS_SERIAL_FINISHED_SOUND)) ?? "chime";
+  }
+
+  public static async notificationsSerialFinishedOs(val: "always" | "not_focused" | "never" | null = null): Promise<"always" | "not_focused" | "never"> {
+    let store = await KVStore.open_default();
+
+    if (val !== null) {
+      await store.set(NOTIFICATIONS_SERIAL_FINISHED_OS, val);
+      return val;
+    }
+
+    return (await store.get(NOTIFICATIONS_SERIAL_FINISHED_OS)) ?? "not_focused";
+  }
+
+  // Serial failed settings
+  public static async notificationsSerialFailedDuration(val: number | null = null): Promise<number> {
+    let store = await KVStore.open_default();
+
+    if (val !== null) {
+      await store.set(NOTIFICATIONS_SERIAL_FAILED_DURATION, val);
+      return val;
+    }
+
+    return (await store.get(NOTIFICATIONS_SERIAL_FAILED_DURATION)) ?? 0;
+  }
+
+  public static async notificationsSerialFailedSound(val: "none" | "chime" | null = null): Promise<"none" | "chime"> {
+    let store = await KVStore.open_default();
+
+    if (val !== null) {
+      await store.set(NOTIFICATIONS_SERIAL_FAILED_SOUND, val);
+      return val;
+    }
+
+    return (await store.get(NOTIFICATIONS_SERIAL_FAILED_SOUND)) ?? "chime";
+  }
+
+  public static async notificationsSerialFailedOs(val: "always" | "not_focused" | "never" | null = null): Promise<"always" | "not_focused" | "never"> {
+    let store = await KVStore.open_default();
+
+    if (val !== null) {
+      await store.set(NOTIFICATIONS_SERIAL_FAILED_OS, val);
+      return val;
+    }
+
+    return (await store.get(NOTIFICATIONS_SERIAL_FAILED_OS)) ?? "always";
   }
 }

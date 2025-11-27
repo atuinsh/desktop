@@ -734,6 +734,77 @@ const AuthTokenModal = (props: AuthTokenModalProps) => {
   );
 };
 
+type SoundOption = "none" | "chime";
+type OsOption = "always" | "not_focused" | "never";
+
+interface NotificationRowProps {
+  label: string;
+  durationLabel: string;
+  duration: number;
+  onDurationChange: (val: number) => void;
+  sound: SoundOption;
+  onSoundChange: (val: SoundOption) => void;
+  os: OsOption;
+  onOsChange: (val: OsOption) => void;
+}
+
+const NotificationRow = ({
+  label,
+  durationLabel,
+  duration,
+  onDurationChange,
+  sound,
+  onSoundChange,
+  os,
+  onOsChange,
+}: NotificationRowProps) => (
+  <div className="flex flex-col gap-2 py-3 border-b last:border-b-0">
+    <div className="flex items-center gap-2 flex-wrap">
+      <span className="text-sm">{label}</span>
+      <Input
+        type="number"
+        size="sm"
+        className="w-16"
+        value={duration.toString()}
+        onChange={(e) => onDurationChange(parseInt(e.target.value) || 0)}
+        min={0}
+        max={3600}
+        aria-label={durationLabel}
+      />
+      <span className="text-sm text-default-500">seconds</span>
+    </div>
+    <div className="flex items-center gap-4 pl-4">
+      <Select
+        label="Sound"
+        size="sm"
+        className="w-40"
+        selectedKeys={[sound]}
+        onSelectionChange={(keys) => {
+          const key = keys.currentKey as SoundOption;
+          if (key) onSoundChange(key);
+        }}
+      >
+        <SelectItem key="none">None</SelectItem>
+        <SelectItem key="chime">Chime</SelectItem>
+      </Select>
+      <Select
+        label="System Notification"
+        size="sm"
+        className="w-52"
+        selectedKeys={[os]}
+        onSelectionChange={(keys) => {
+          const key = keys.currentKey as OsOption;
+          if (key) onOsChange(key);
+        }}
+      >
+        <SelectItem key="always">Always</SelectItem>
+        <SelectItem key="not_focused">When app not focused</SelectItem>
+        <SelectItem key="never">Never</SelectItem>
+      </Select>
+    </div>
+  </div>
+);
+
 const NotificationSettings = () => {
   const [notificationsEnabled, setNotificationsEnabled, enabledLoading] = useSettingsState(
     "notifications_enabled",
@@ -742,134 +813,164 @@ const NotificationSettings = () => {
     Settings.notificationsEnabled,
   );
 
-  const [osEnabled, setOsEnabled, osLoading] = useSettingsState(
-    "notifications_os_enabled",
-    true,
-    Settings.notificationsOsEnabled,
-    Settings.notificationsOsEnabled,
-  );
-
-  const [soundEnabled, setSoundEnabled, soundLoading] = useSettingsState(
-    "notifications_sound_enabled",
-    false,
-    Settings.notificationsSoundEnabled,
-    Settings.notificationsSoundEnabled,
-  );
-
-  const [toastEnabled, setToastEnabled, toastLoading] = useSettingsState(
-    "notifications_toast_enabled",
-    true,
-    Settings.notificationsToastEnabled,
-    Settings.notificationsToastEnabled,
-  );
-
-  const [minDurationSecs, setMinDurationSecs, durationLoading] = useSettingsState(
-    "notifications_min_duration_secs",
+  // Block finished settings
+  const [blockFinishedDuration, setBlockFinishedDuration, bfDurationLoading] = useSettingsState(
+    "block_finished_duration",
     5,
-    Settings.notificationsMinDurationSecs,
-    Settings.notificationsMinDurationSecs,
+    Settings.notificationsBlockFinishedDuration,
+    Settings.notificationsBlockFinishedDuration,
+  );
+  const [blockFinishedSound, setBlockFinishedSound, bfSoundLoading] = useSettingsState(
+    "block_finished_sound",
+    "none",
+    Settings.notificationsBlockFinishedSound,
+    Settings.notificationsBlockFinishedSound,
+  );
+  const [blockFinishedOs, setBlockFinishedOs, bfOsLoading] = useSettingsState(
+    "block_finished_os",
+    "not_focused",
+    Settings.notificationsBlockFinishedOs,
+    Settings.notificationsBlockFinishedOs,
   );
 
-  const [onlyWhenUnfocused, setOnlyWhenUnfocused, unfocusedLoading] = useSettingsState(
-    "notifications_only_when_unfocused",
-    true,
-    Settings.notificationsOnlyWhenUnfocused,
-    Settings.notificationsOnlyWhenUnfocused,
+  // Block failed settings
+  const [blockFailedDuration, setBlockFailedDuration, bxDurationLoading] = useSettingsState(
+    "block_failed_duration",
+    0,
+    Settings.notificationsBlockFailedDuration,
+    Settings.notificationsBlockFailedDuration,
   );
-
-  const [onFailure, setOnFailure, failureLoading] = useSettingsState(
-    "notifications_on_failure",
+  const [blockFailedSound, setBlockFailedSound, bxSoundLoading] = useSettingsState(
+    "block_failed_sound",
+    "chime",
+    Settings.notificationsBlockFailedSound,
+    Settings.notificationsBlockFailedSound,
+  );
+  const [blockFailedOs, setBlockFailedOs, bxOsLoading] = useSettingsState(
+    "block_failed_os",
     "always",
-    Settings.notificationsOnFailure,
-    Settings.notificationsOnFailure,
+    Settings.notificationsBlockFailedOs,
+    Settings.notificationsBlockFailedOs,
   );
 
-  if (
+  // Serial finished settings
+  const [serialFinishedDuration, setSerialFinishedDuration, sfDurationLoading] = useSettingsState(
+    "serial_finished_duration",
+    0,
+    Settings.notificationsSerialFinishedDuration,
+    Settings.notificationsSerialFinishedDuration,
+  );
+  const [serialFinishedSound, setSerialFinishedSound, sfSoundLoading] = useSettingsState(
+    "serial_finished_sound",
+    "chime",
+    Settings.notificationsSerialFinishedSound,
+    Settings.notificationsSerialFinishedSound,
+  );
+  const [serialFinishedOs, setSerialFinishedOs, sfOsLoading] = useSettingsState(
+    "serial_finished_os",
+    "not_focused",
+    Settings.notificationsSerialFinishedOs,
+    Settings.notificationsSerialFinishedOs,
+  );
+
+  // Serial failed settings
+  const [serialFailedDuration, setSerialFailedDuration, sxDurationLoading] = useSettingsState(
+    "serial_failed_duration",
+    0,
+    Settings.notificationsSerialFailedDuration,
+    Settings.notificationsSerialFailedDuration,
+  );
+  const [serialFailedSound, setSerialFailedSound, sxSoundLoading] = useSettingsState(
+    "serial_failed_sound",
+    "chime",
+    Settings.notificationsSerialFailedSound,
+    Settings.notificationsSerialFailedSound,
+  );
+  const [serialFailedOs, setSerialFailedOs, sxOsLoading] = useSettingsState(
+    "serial_failed_os",
+    "always",
+    Settings.notificationsSerialFailedOs,
+    Settings.notificationsSerialFailedOs,
+  );
+
+  const isLoading =
     enabledLoading ||
-    osLoading ||
-    soundLoading ||
-    toastLoading ||
-    durationLoading ||
-    unfocusedLoading ||
-    failureLoading
-  )
-    return <Spinner />;
+    bfDurationLoading ||
+    bfSoundLoading ||
+    bfOsLoading ||
+    bxDurationLoading ||
+    bxSoundLoading ||
+    bxOsLoading ||
+    sfDurationLoading ||
+    sfSoundLoading ||
+    sfOsLoading ||
+    sxDurationLoading ||
+    sxSoundLoading ||
+    sxOsLoading;
+
+  if (isLoading) return <Spinner />;
 
   return (
     <Card shadow="sm">
       <CardBody className="flex flex-col gap-4">
         <h2 className="text-xl font-semibold">Notifications</h2>
-        <p className="text-sm text-default-500">
-          Get notified when long-running blocks complete
-        </p>
+        <p className="text-sm text-default-500">Get notified when blocks and workflows complete</p>
 
         <SettingSwitch
           label="Enable notifications"
           isSelected={notificationsEnabled}
           onValueChange={setNotificationsEnabled}
-          description="Master toggle for all block completion notifications"
+          description="Master toggle for all notifications"
         />
 
         {notificationsEnabled && (
           <>
             <div className="border-t pt-4 mt-2">
-              <p className="text-sm font-medium mb-3">Notification channels</p>
-              <div className="flex flex-col gap-3">
-                <SettingSwitch
-                  label="OS notifications"
-                  isSelected={osEnabled}
-                  onValueChange={setOsEnabled}
-                  description="Show system notifications"
-                />
-                <SettingSwitch
-                  label="In-app toasts"
-                  isSelected={toastEnabled}
-                  onValueChange={setToastEnabled}
-                  description="Show toast notifications within the app"
-                />
-                <SettingSwitch
-                  label="Sound"
-                  isSelected={soundEnabled}
-                  onValueChange={setSoundEnabled}
-                  description="Play a sound when blocks complete"
-                />
-              </div>
+              <p className="text-sm font-medium mb-2">Block Notifications</p>
+              <NotificationRow
+                label="Finished after running at least"
+                durationLabel="Block finished minimum duration"
+                duration={blockFinishedDuration}
+                onDurationChange={setBlockFinishedDuration}
+                sound={blockFinishedSound}
+                onSoundChange={setBlockFinishedSound}
+                os={blockFinishedOs}
+                onOsChange={setBlockFinishedOs}
+              />
+              <NotificationRow
+                label="Failed after running at least"
+                durationLabel="Block failed minimum duration"
+                duration={blockFailedDuration}
+                onDurationChange={setBlockFailedDuration}
+                sound={blockFailedSound}
+                onSoundChange={setBlockFailedSound}
+                os={blockFailedOs}
+                onOsChange={setBlockFailedOs}
+              />
             </div>
 
             <div className="border-t pt-4 mt-2">
-              <p className="text-sm font-medium mb-3">Filtering</p>
-              <div className="flex flex-col gap-4">
-                <SettingSwitch
-                  label="Only when app is unfocused"
-                  isSelected={onlyWhenUnfocused}
-                  onValueChange={setOnlyWhenUnfocused}
-                  description="Don't notify if Atuin is in the foreground"
-                />
-
-                <Input
-                  type="number"
-                  label="Minimum duration (seconds)"
-                  value={minDurationSecs?.toString() || "5"}
-                  onChange={(e) => setMinDurationSecs(parseInt(e.target.value) || 5)}
-                  description="Only notify for blocks that run longer than this"
-                  min={0}
-                  max={3600}
-                />
-
-                <Select
-                  label="On failure"
-                  selectedKeys={[onFailure]}
-                  onSelectionChange={(keys) => {
-                    const key = keys.currentKey as "always" | "after_duration" | "never";
-                    if (key) setOnFailure(key);
-                  }}
-                  description="When to notify about failed blocks"
-                >
-                  <SelectItem key="always">Always notify on failure</SelectItem>
-                  <SelectItem key="after_duration">Only after minimum duration</SelectItem>
-                  <SelectItem key="never">Never notify on failure</SelectItem>
-                </Select>
-              </div>
+              <p className="text-sm font-medium mb-2">Serial Execution Notifications</p>
+              <NotificationRow
+                label="Workflow finishes after running at least"
+                durationLabel="Serial finished minimum duration"
+                duration={serialFinishedDuration}
+                onDurationChange={setSerialFinishedDuration}
+                sound={serialFinishedSound}
+                onSoundChange={setSerialFinishedSound}
+                os={serialFinishedOs}
+                onOsChange={setSerialFinishedOs}
+              />
+              <NotificationRow
+                label="Workflow fails after running at least"
+                durationLabel="Serial failed minimum duration"
+                duration={serialFailedDuration}
+                onDurationChange={setSerialFailedDuration}
+                sound={serialFailedSound}
+                onSoundChange={setSerialFailedSound}
+                os={serialFailedOs}
+                onOsChange={setSerialFailedOs}
+              />
             </div>
           </>
         )}
