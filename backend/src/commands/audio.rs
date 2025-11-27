@@ -63,7 +63,11 @@ pub async fn list_sounds(app: AppHandle) -> Result<Vec<SoundInfo>, String> {
 
 #[tauri::command]
 pub async fn play_sound(app: AppHandle, sound_id: String, volume: f32) -> Result<(), String> {
-    log::info!("play_sound called with sound_id={}, volume={}", sound_id, volume);
+    log::info!(
+        "play_sound called with sound_id={}, volume={}",
+        sound_id,
+        volume
+    );
 
     let sounds_dir = app
         .path()
