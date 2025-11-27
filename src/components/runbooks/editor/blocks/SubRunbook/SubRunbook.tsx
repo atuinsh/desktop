@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { BookOpenIcon, XCircleIcon, AlertTriangleIcon, ChevronDownIcon, GlobeIcon, FileIcon } from "lucide-react";
+import { BookOpenIcon, ChevronDownIcon, GlobeIcon, FileIcon } from "lucide-react";
 import { Button, Input, Tooltip, Select, SelectItem, Spinner } from "@heroui/react";
 import { cn, exportPropMatter } from "@/lib/utils";
 import { createReactBlockSpec } from "@blocknote/react";
@@ -424,15 +424,6 @@ const SubRunbook = ({
     if (!runbookId) return;
     await execution.execute();
   };
-
-  const [hasRun, setHasRun] = useState(false);
-
-  // Track when execution starts
-  useEffect(() => {
-    if (execution.isRunning) {
-      setHasRun(true);
-    }
-  }, [execution.isRunning]);
 
   return (
     <div ref={containerRef} className="relative w-full">
