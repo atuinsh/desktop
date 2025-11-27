@@ -168,7 +168,9 @@ impl BlockBehavior for SubRunbook {
                     };
                 })
                 .await;
-            let _ = context.block_failed("No runbook selected".to_string()).await;
+            let _ = context
+                .block_failed("No runbook selected".to_string())
+                .await;
             return Ok(Some(context.handle()));
         }
 
@@ -185,7 +187,10 @@ impl BlockBehavior for SubRunbook {
                     })
                     .await;
                 let _ = context
-                    .block_failed("Sub-runbook execution not available (no runbook loader configured)".to_string())
+                    .block_failed(
+                        "Sub-runbook execution not available (no runbook loader configured)"
+                            .to_string(),
+                    )
                     .await;
                 return Ok(Some(context.handle()));
             }
@@ -195,7 +200,10 @@ impl BlockBehavior for SubRunbook {
         let block_id = self.id;
         let runbook_ref = self.runbook_ref.clone();
         // Use runbook_name if set, otherwise fall back to display_id
-        let runbook_name = self.runbook_name.clone().unwrap_or_else(|| self.runbook_ref.display_id());
+        let runbook_name = self
+            .runbook_name
+            .clone()
+            .unwrap_or_else(|| self.runbook_ref.display_id());
 
         tokio::spawn(async move {
             // Mark block as started
@@ -248,13 +256,14 @@ impl BlockBehavior for SubRunbook {
                     let error_msg = message.clone();
                     let _ = context
                         .update_block_state::<SubRunbookState, _>(block_id, move |state| {
-                            state.status = SubRunbookStatus::Failed {
-                                error: error_msg,
-                            };
+                            state.status = SubRunbookStatus::Failed { error: error_msg };
                         })
                         .await;
                     let _ = context
-                        .block_failed(format!("Failed to load runbook '{}': {}", runbook_name, message))
+                        .block_failed(format!(
+                            "Failed to load runbook '{}': {}",
+                            runbook_name, message
+                        ))
                         .await;
                     return;
                 }
@@ -295,7 +304,9 @@ impl BlockBehavior for SubRunbook {
             }
 
             // Create isolated context resolver from parent's context
-            let sub_resolver = Arc::new(Mutex::new(ContextResolver::from_parent(&context.context_resolver)));
+            let sub_resolver = Arc::new(Mutex::new(ContextResolver::from_parent(
+                &context.context_resolver,
+            )));
 
             // Execute blocks sequentially
             for (index, block) in blocks.iter().enumerate() {
@@ -352,10 +363,8 @@ impl BlockBehavior for SubRunbook {
                 };
 
                 // Apply SSH pool and PTY store from parent
-                let sub_context = sub_context.with_resources(
-                    context.ssh_pool(),
-                    context.pty_store(),
-                );
+                let sub_context =
+                    sub_context.with_resources(context.ssh_pool(), context.pty_store());
 
                 // Execute the block
                 let execution_handle = match block.clone().execute(sub_context).await {
@@ -402,7 +411,9 @@ impl BlockBehavior for SubRunbook {
                                     state.status = SubRunbookStatus::Failed { error };
                                 })
                                 .await;
-                            let _ = context.block_failed(format!("Block '{}' failed", block.name())).await;
+                            let _ = context
+                                .block_failed(format!("Block '{}' failed", block.name()))
+                                .await;
                             return;
                         }
                         ExecutionResult::Cancelled => {
