@@ -51,7 +51,8 @@
     },
     "resources": {
       "../resources/welcome/": "resources/welcome/",
-      "../resources/images/": "resources/images/"
+      "../resources/images/": "resources/images/",
+      "../resources/sounds/": "resources/sounds/"
     }
   },
   "identifier": "sh.atuin.app",

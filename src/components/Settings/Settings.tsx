@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { open } from "@tauri-apps/plugin-shell";
-import { PlusIcon, TrashIcon } from "lucide-react";
+import { PlusIcon, TrashIcon, PlayIcon } from "lucide-react";
 import {
   Autocomplete,
   AutocompleteItem,
@@ -23,6 +23,7 @@ import {
   Link,
   useDisclosure,
   addToast,
+  Slider,
 } from "@heroui/react";
 import { Settings } from "@/state/settings";
 import { KVStore } from "@/state/kv";
@@ -734,6 +735,334 @@ const AuthTokenModal = (props: AuthTokenModalProps) => {
   );
 };
 
+// Sound types and helpers
+interface SoundInfo {
+  id: string;
+  name: string;
+}
+
+async function loadSounds(): Promise<SoundInfo[]> {
+  try {
+    return await invoke<SoundInfo[]>("list_sounds");
+  } catch (e) {
+    console.warn("Failed to load sounds:", e);
+    return [];
+  }
+}
+
+type SoundOption = "none" | "chime" | string;
+type OsOption = "always" | "not_focused" | "never";
+
+interface NotificationRowProps {
+  label: string;
+  durationLabel: string;
+  duration: number;
+  onDurationChange: (val: number) => void;
+  sound: SoundOption;
+  onSoundChange: (val: SoundOption) => void;
+  os: OsOption;
+  onOsChange: (val: OsOption) => void;
+  sounds: SoundInfo[];
+  volume: number;
+}
+
+const NotificationRow = ({
+  label,
+  durationLabel,
+  duration,
+  onDurationChange,
+  sound,
+  onSoundChange,
+  os,
+  onOsChange,
+  sounds,
+  volume,
+}: NotificationRowProps) => {
+  const playSound = (soundId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    if (soundId === "none") return;
+
+    console.log("Playing sound", soundId, "at volume", volume, "->", volume / 100);
+    invoke("play_sound", { soundId, volume: volume / 100 }).catch((err) => {
+      console.error("Failed to play sound:", err);
+    });
+  };
+
+  const allSounds = [{ id: "none", name: "None" }, ...sounds];
+
+  return (
+    <div className="flex flex-col gap-2 py-3 border-b last:border-b-0">
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-sm">{label}</span>
+        <Input
+          type="number"
+          size="sm"
+          className="w-16"
+          value={duration.toString()}
+          onChange={(e) => onDurationChange(parseInt(e.target.value) || 0)}
+          min={0}
+          max={3600}
+          aria-label={durationLabel}
+        />
+        <span className="text-sm text-default-500">seconds</span>
+      </div>
+      <div className="flex items-center gap-4 pl-4">
+        <Select
+          label="Sound"
+          size="sm"
+          className="w-48"
+          selectedKeys={[sound]}
+          onSelectionChange={(keys) => {
+            const key = keys.currentKey as SoundOption;
+            if (key) onSoundChange(key);
+          }}
+          items={allSounds}
+        >
+          {(item) => (
+            <SelectItem
+              key={item.id}
+              endContent={
+                item.id !== "none" ? (
+                  <button
+                    className="p-1 hover:bg-default-200 rounded"
+                    onClick={(e) => playSound(item.id, e)}
+                  >
+                    <PlayIcon size={14} />
+                  </button>
+                ) : null
+              }
+            >
+              {item.name}
+            </SelectItem>
+          )}
+        </Select>
+        <Select
+          label="System Notification"
+          size="sm"
+          className="w-52"
+          selectedKeys={[os]}
+          onSelectionChange={(keys) => {
+            const key = keys.currentKey as OsOption;
+            if (key) onOsChange(key);
+          }}
+        >
+          <SelectItem key="always">Always</SelectItem>
+          <SelectItem key="not_focused">When app not focused</SelectItem>
+          <SelectItem key="never">Never</SelectItem>
+        </Select>
+      </div>
+    </div>
+  );
+};
+
+const NotificationSettings = () => {
+  const sounds = useAsyncData(loadSounds);
+
+  const [notificationsEnabled, setNotificationsEnabled, enabledLoading] = useSettingsState(
+    "notifications_enabled",
+    true,
+    Settings.notificationsEnabled,
+    Settings.notificationsEnabled,
+  );
+
+  const [volume, setVolume, volumeLoading] = useSettingsState(
+    "notifications_volume",
+    80,
+    Settings.notificationsVolume,
+    Settings.notificationsVolume,
+  );
+
+  // Block finished settings
+  const [blockFinishedDuration, setBlockFinishedDuration, bfDurationLoading] = useSettingsState(
+    "block_finished_duration",
+    5,
+    Settings.notificationsBlockFinishedDuration,
+    Settings.notificationsBlockFinishedDuration,
+  );
+  const [blockFinishedSound, setBlockFinishedSound, bfSoundLoading] = useSettingsState(
+    "block_finished_sound",
+    "that_was_quick",
+    Settings.notificationsBlockFinishedSound,
+    Settings.notificationsBlockFinishedSound,
+  );
+  const [blockFinishedOs, setBlockFinishedOs, bfOsLoading] = useSettingsState(
+    "block_finished_os",
+    "not_focused",
+    Settings.notificationsBlockFinishedOs,
+    Settings.notificationsBlockFinishedOs,
+  );
+
+  // Block failed settings
+  const [blockFailedDuration, setBlockFailedDuration, bxDurationLoading] = useSettingsState(
+    "block_failed_duration",
+    1,
+    Settings.notificationsBlockFailedDuration,
+    Settings.notificationsBlockFailedDuration,
+  );
+  const [blockFailedSound, setBlockFailedSound, bxSoundLoading] = useSettingsState(
+    "block_failed_sound",
+    "out_of_nowhere",
+    Settings.notificationsBlockFailedSound,
+    Settings.notificationsBlockFailedSound,
+  );
+  const [blockFailedOs, setBlockFailedOs, bxOsLoading] = useSettingsState(
+    "block_failed_os",
+    "always",
+    Settings.notificationsBlockFailedOs,
+    Settings.notificationsBlockFailedOs,
+  );
+
+  // Serial finished settings
+  const [serialFinishedDuration, setSerialFinishedDuration, sfDurationLoading] = useSettingsState(
+    "serial_finished_duration",
+    0,
+    Settings.notificationsSerialFinishedDuration,
+    Settings.notificationsSerialFinishedDuration,
+  );
+  const [serialFinishedSound, setSerialFinishedSound, sfSoundLoading] = useSettingsState(
+    "serial_finished_sound",
+    "gracefully",
+    Settings.notificationsSerialFinishedSound,
+    Settings.notificationsSerialFinishedSound,
+  );
+  const [serialFinishedOs, setSerialFinishedOs, sfOsLoading] = useSettingsState(
+    "serial_finished_os",
+    "not_focused",
+    Settings.notificationsSerialFinishedOs,
+    Settings.notificationsSerialFinishedOs,
+  );
+
+  // Serial failed settings
+  const [serialFailedDuration, setSerialFailedDuration, sxDurationLoading] = useSettingsState(
+    "serial_failed_duration",
+    0,
+    Settings.notificationsSerialFailedDuration,
+    Settings.notificationsSerialFailedDuration,
+  );
+  const [serialFailedSound, setSerialFailedSound, sxSoundLoading] = useSettingsState(
+    "serial_failed_sound",
+    "unexpected",
+    Settings.notificationsSerialFailedSound,
+    Settings.notificationsSerialFailedSound,
+  );
+  const [serialFailedOs, setSerialFailedOs, sxOsLoading] = useSettingsState(
+    "serial_failed_os",
+    "always",
+    Settings.notificationsSerialFailedOs,
+    Settings.notificationsSerialFailedOs,
+  );
+
+  const isLoading =
+    sounds === null ||
+    enabledLoading ||
+    volumeLoading ||
+    bfDurationLoading ||
+    bfSoundLoading ||
+    bfOsLoading ||
+    bxDurationLoading ||
+    bxSoundLoading ||
+    bxOsLoading ||
+    sfDurationLoading ||
+    sfSoundLoading ||
+    sfOsLoading ||
+    sxDurationLoading ||
+    sxSoundLoading ||
+    sxOsLoading;
+
+  if (isLoading) return <Spinner />;
+
+  return (
+    <Card shadow="sm">
+      <CardBody className="flex flex-col gap-4">
+        <h2 className="text-xl font-semibold">Notifications</h2>
+        <p className="text-sm text-default-500">Get notified when blocks and workflows complete</p>
+
+        <SettingSwitch
+          label="Enable notifications"
+          isSelected={notificationsEnabled}
+          onValueChange={setNotificationsEnabled}
+          description="Master toggle for all notifications"
+        />
+
+        {notificationsEnabled && (
+          <>
+            <Slider
+              label="Volume"
+              size="sm"
+              step={1}
+              minValue={0}
+              maxValue={100}
+              value={volume}
+              onChange={(val: number | number[]) => {
+                const numVal = Array.isArray(val) ? val[0] : val;
+                setVolume(numVal);
+              }}
+              className="max-w-md"
+            />
+
+            <div className="border-t pt-4 mt-2">
+              <p className="text-sm font-medium mb-2">Block Notifications</p>
+              <NotificationRow
+                label="Finished after running at least"
+                durationLabel="Block finished minimum duration"
+                duration={blockFinishedDuration}
+                onDurationChange={setBlockFinishedDuration}
+                sound={blockFinishedSound}
+                onSoundChange={setBlockFinishedSound}
+                os={blockFinishedOs}
+                onOsChange={setBlockFinishedOs}
+                sounds={sounds}
+                volume={volume}
+              />
+              <NotificationRow
+                label="Failed after running at least"
+                durationLabel="Block failed minimum duration"
+                duration={blockFailedDuration}
+                onDurationChange={setBlockFailedDuration}
+                sound={blockFailedSound}
+                onSoundChange={setBlockFailedSound}
+                os={blockFailedOs}
+                onOsChange={setBlockFailedOs}
+                sounds={sounds}
+                volume={volume}
+              />
+            </div>
+
+            <div className="border-t pt-4 mt-2">
+              <p className="text-sm font-medium mb-2">Serial Execution Notifications</p>
+              <NotificationRow
+                label="Workflow finishes after running at least"
+                durationLabel="Serial finished minimum duration"
+                duration={serialFinishedDuration}
+                onDurationChange={setSerialFinishedDuration}
+                sound={serialFinishedSound}
+                onSoundChange={setSerialFinishedSound}
+                os={serialFinishedOs}
+                onOsChange={setSerialFinishedOs}
+                sounds={sounds}
+                volume={volume}
+              />
+              <NotificationRow
+                label="Workflow fails after running at least"
+                durationLabel="Serial failed minimum duration"
+                duration={serialFailedDuration}
+                onDurationChange={setSerialFailedDuration}
+                sound={serialFailedSound}
+                onSoundChange={setSerialFailedSound}
+                os={serialFailedOs}
+                onOsChange={setSerialFailedOs}
+                sounds={sounds}
+                volume={volume}
+              />
+            </div>
+          </>
+        )}
+      </CardBody>
+    </Card>
+  );
+};
+
 const AISettings = () => {
   const [aiEnabled, setAiEnabled, enabledLoading] = useSettingsState(
     "ai_enabled",
@@ -900,6 +1229,7 @@ const SettingsPanel = () => {
       <div className="flex flex-col gap-4">
         <GeneralSettings />
         <RunbookSettings />
+        <NotificationSettings />
         <AISettings />
         <UserSettings />
       </div>

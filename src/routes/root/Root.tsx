@@ -81,6 +81,7 @@ import SavedBlock from "@/state/runbooks/saved_block";
 import { uuidv7 } from "uuidv7";
 import DesktopImportModal from "./DesktopImportModal";
 import RuntimeUpdateNotice from "./RuntimeUpdateNotice";
+import NotificationManager from "@/lib/notifications/NotificationManager";
 
 const globalOptions = getGlobalOptions();
 const UPDATE_CHECK_INTERVAL = globalOptions.channel === "edge" ? 1000 * 60 * 5 : 1000 * 60 * 60;
@@ -962,6 +963,7 @@ function App() {
         <RunbookSearchIndex index={runbookIndex} />
         <UpdateNotifier />
         <RuntimeUpdateNotice openRunbookImport={handleOpenRuntimeExplainerRunbook} />
+        <NotificationManager />
         <>
           {workspaces?.map((workspace) => (
             <WorkspaceWatcher key={workspace.get("id")} workspace={workspace} />

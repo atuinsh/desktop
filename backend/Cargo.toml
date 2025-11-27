@@ -48,7 +48,9 @@ tauri-plugin-process = "2.3.0"
 tauri-plugin-fs = "2.4.2"
 tauri-plugin-opener = "2.5.0"
 tauri-plugin-log = { version = "2.7.0", features = ["colored"] }
+tauri-plugin-notification = "2.2.1"
 
+rodio = { version = "0.19", default-features = false, features = ["vorbis"] }
 humantime = "2.3.0"
 keyring = { version = "3", features = [
     "apple-native",
