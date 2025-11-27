@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { BookOpenIcon, CheckCircleIcon, XCircleIcon, AlertTriangleIcon, ChevronDownIcon, GlobeIcon, FileIcon } from "lucide-react";
+import { BookOpenIcon, XCircleIcon, AlertTriangleIcon, ChevronDownIcon, GlobeIcon, FileIcon } from "lucide-react";
 import { Button, Input, Tooltip, Select, SelectItem, Spinner } from "@heroui/react";
 import { cn, exportPropMatter } from "@/lib/utils";
 import { createReactBlockSpec } from "@blocknote/react";
@@ -434,19 +434,6 @@ const SubRunbook = ({
     }
   }, [execution.isRunning]);
 
-  const getStatusIcon = () => {
-    if (status === "success" && hasRun) {
-      return <CheckCircleIcon className="h-4 w-4 text-green-500" />;
-    }
-    if (isErrorStatus(status)) {
-      return <XCircleIcon className="h-4 w-4 text-red-500" />;
-    }
-    if (status === "cancelled") {
-      return <AlertTriangleIcon className="h-4 w-4 text-yellow-500" />;
-    }
-    return null;
-  };
-
   return (
     <div ref={containerRef} className="relative w-full">
       <Tooltip
@@ -467,13 +454,6 @@ const SubRunbook = ({
             disabled={!runbookId}
             tooltip={!runbookId ? "Select a runbook first" : undefined}
           />
-
-          {/* Status icon (when not running) */}
-          {!execution.isRunning && getStatusIcon() && (
-            <div className="flex items-center">
-              {getStatusIcon()}
-            </div>
-          )}
 
           {/* Runbook selector button */}
           <div className="flex-1 min-w-0">
