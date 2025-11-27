@@ -389,7 +389,7 @@ impl BlockBehavior for SubRunbook {
                         if finished_channel.changed().await.is_err() {
                             break ExecutionResult::Success;
                         }
-                        let result = finished_channel.borrow_and_update().clone();
+                        let result = *finished_channel.borrow_and_update();
                         match result {
                             Some(r) => break r,
                             None => continue,
