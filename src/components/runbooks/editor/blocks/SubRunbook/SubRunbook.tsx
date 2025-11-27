@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { BookOpenIcon, CheckCircleIcon, XCircleIcon, AlertTriangleIcon, ChevronDownIcon, GlobeIcon, FileIcon } from "lucide-react";
-import { Button, Input, Tooltip, Select, SelectItem } from "@heroui/react";
+import { Button, Input, Tooltip, Select, SelectItem, Spinner } from "@heroui/react";
 import { cn, exportPropMatter } from "@/lib/utils";
 import { createReactBlockSpec } from "@blocknote/react";
 import useDocumentBridge, { useBlockExecution, useBlockState } from "@/lib/hooks/useDocumentBridge";
@@ -468,18 +468,6 @@ const SubRunbook = ({
             tooltip={!runbookId ? "Select a runbook first" : undefined}
           />
 
-          {/* Progress indicator */}
-          {(status === "running" || status === "loading") && (
-            <div className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
-              {status === "loading" ? "Loading..." : progress}
-              {currentBlock && (
-                <span className="ml-1 text-gray-400 dark:text-gray-500 truncate max-w-[100px] inline-block align-bottom">
-                  ({currentBlock})
-                </span>
-              )}
-            </div>
-          )}
-
           {/* Status icon (when not running) */}
           {!execution.isRunning && getStatusIcon() && (
             <div className="flex items-center">
@@ -520,16 +508,30 @@ const SubRunbook = ({
                 </Select>
               )}
             </div>
-            {/* Show URI or path reference */}
-            {(runbookUri || runbookPath) && (
-              <span className="text-[10px] font-mono text-gray-400 dark:text-gray-500 mt-1 truncate flex items-center gap-1">
-                {runbookUri ? (
-                  <GlobeIcon className="h-3 w-3 shrink-0" />
-                ) : (
-                  <FileIcon className="h-3 w-3 shrink-0" />
+            {/* Show URI or path reference and progress */}
+            {(runbookUri || runbookPath || status === "running" || status === "loading") && (
+              <div className="flex items-center justify-between mt-1">
+                <span className="text-[10px] font-mono text-gray-400 dark:text-gray-500 truncate flex items-center gap-1">
+                  {runbookUri ? (
+                    <GlobeIcon className="h-3 w-3 shrink-0" />
+                  ) : runbookPath ? (
+                    <FileIcon className="h-3 w-3 shrink-0" />
+                  ) : null}
+                  {runbookUri || runbookPath}
+                </span>
+                {/* Progress indicator */}
+                {(status === "running" || status === "loading") && (
+                  <span className="flex items-center gap-1.5 text-[10px] font-mono text-gray-400 dark:text-gray-500 whitespace-nowrap ml-2">
+                    <Spinner size="sm" classNames={{ wrapper: "h-3 w-3" }} />
+                    {status === "loading" ? "Loading..." : (
+                      <>
+                        {progress}
+                        {currentBlock && <span className="truncate max-w-[120px]">({currentBlock})</span>}
+                      </>
+                    )}
+                  </span>
                 )}
-                {runbookUri || runbookPath}
-              </span>
+              </div>
             )}
           </div>
           </div>
