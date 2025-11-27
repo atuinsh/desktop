@@ -76,6 +76,72 @@ impl LocalValueProvider for KvBlockLocalValueProvider {
     }
 }
 
+/// Runbook content loader that uses the workspace manager to load runbook content
+#[derive(Clone)]
+struct WorkspaceRunbookContentLoader {
+    workspaces: Arc<tokio::sync::Mutex<Option<crate::workspaces::manager::WorkspaceManager>>>,
+}
+
+impl WorkspaceRunbookContentLoader {
+    pub fn new(
+        workspaces: Arc<tokio::sync::Mutex<Option<crate::workspaces::manager::WorkspaceManager>>>,
+    ) -> Self {
+        Self { workspaces }
+    }
+}
+
+#[async_trait]
+impl atuin_desktop_runtime::client::RunbookContentLoader for WorkspaceRunbookContentLoader {
+    async fn load_runbook_content(
+        &self,
+        runbook_ref: &atuin_desktop_runtime::client::SubRunbookRef,
+    ) -> Result<Vec<serde_json::Value>, atuin_desktop_runtime::client::RunbookLoadError> {
+        let display_id = runbook_ref.display_id();
+
+        // Desktop app primarily uses ID for workspace lookup
+        let lookup_id = runbook_ref.id.as_ref().ok_or_else(|| {
+            atuin_desktop_runtime::client::RunbookLoadError::LoadFailed {
+                runbook_id: display_id.clone(),
+                message: "No runbook ID provided for workspace lookup".to_string(),
+            }
+        })?;
+
+        let mut manager = self.workspaces.lock().await;
+        let manager = manager.as_mut().ok_or_else(|| {
+            atuin_desktop_runtime::client::RunbookLoadError::LoadFailed {
+                runbook_id: display_id.clone(),
+                message: "Workspace manager not initialized".to_string(),
+            }
+        })?;
+
+        let runbook = manager.get_runbook(lookup_id).await.map_err(|e| {
+            // Check if the error indicates not found
+            let err_str = e.to_string();
+            if err_str.contains("not found") || err_str.contains("NotFound") {
+                atuin_desktop_runtime::client::RunbookLoadError::NotFound {
+                    runbook_id: display_id.clone(),
+                }
+            } else {
+                atuin_desktop_runtime::client::RunbookLoadError::LoadFailed {
+                    runbook_id: display_id.clone(),
+                    message: err_str,
+                }
+            }
+        })?;
+
+        // Extract content from the runbook - it's a serde_json::Value array
+        let content = runbook
+            .file
+            .internal
+            .content
+            .as_array()
+            .cloned()
+            .unwrap_or_default();
+
+        Ok(content)
+    }
+}
+
 #[tauri::command]
 pub async fn execute_block(
     state: State<'_, AtuinState>,
@@ -196,12 +262,17 @@ pub async fn open_document(
     )
     .await
     .map_err(|e| format!("Failed to create context storage: {}", e))?;
+
+    // Create runbook loader for sub-runbook support
+    let runbook_loader = Arc::new(WorkspaceRunbookContentLoader::new(state.workspaces.clone()));
+
     let document_handle = DocumentHandle::new(
         document_id.clone(),
         event_bus,
         document_bridge,
         Some(Box::new(KvBlockLocalValueProvider::new(app.clone()))),
         Some(Box::new(context_storage)),
+        Some(runbook_loader),
     );
 
     document_handle
@@ -565,6 +636,35 @@ pub async fn stop_serial_execution(
             .map_err(|_| "Failed to send stop signal to serial execution")?;
     }
     Ok(())
+}
+
+/// Get the content of a runbook by ID for sub-runbook execution
+///
+/// This command loads the runbook content from the workspace manager.
+/// It's used by the SubRunbook block to load referenced runbooks.
+#[tauri::command]
+pub async fn get_runbook_content(
+    state: State<'_, AtuinState>,
+    runbook_id: String,
+) -> Result<Vec<serde_json::Value>, String> {
+    let mut manager = state.workspaces.lock().await;
+    let manager = manager.as_mut().ok_or("Workspace manager not initialized")?;
+
+    let runbook = manager
+        .get_runbook(&runbook_id)
+        .await
+        .map_err(|e| format!("Failed to load runbook: {}", e))?;
+
+    // Extract content from the runbook - it's a serde_json::Value array
+    let content = runbook
+        .file
+        .internal
+        .content
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+
+    Ok(content)
 }
 
 async fn execute_single_block(
