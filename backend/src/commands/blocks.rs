@@ -648,7 +648,9 @@ pub async fn get_runbook_content(
     runbook_id: String,
 ) -> Result<Vec<serde_json::Value>, String> {
     let mut manager = state.workspaces.lock().await;
-    let manager = manager.as_mut().ok_or("Workspace manager not initialized")?;
+    let manager = manager
+        .as_mut()
+        .ok_or("Workspace manager not initialized")?;
 
     let runbook = manager
         .get_runbook(&runbook_id)
