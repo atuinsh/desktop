@@ -21,6 +21,7 @@ import { LocalDirectoryBlockSpec } from "@/lib/blocks/localdirectory";
 import Script from "./blocks/Script/Script";
 import SshConnect from "./blocks/ssh/SshConnect";
 import HostSelect from "./blocks/Host";
+import SubRunbook from "./blocks/SubRunbook";
 
 import { randomColor } from "@/lib/colors";
 import PhoenixProvider from "@/lib/phoenix_provider";
@@ -52,6 +53,7 @@ export const schema = BlockNoteSchema.create({
     var_display: VarDisplay(),
     "local-var": LocalVar(),
     dropdown: Dropdown(),
+    "sub-runbook": SubRunbook(),
 
     // Monitoring
     prometheus: Prometheus(),
