@@ -734,6 +734,150 @@ const AuthTokenModal = (props: AuthTokenModalProps) => {
   );
 };
 
+const NotificationSettings = () => {
+  const [notificationsEnabled, setNotificationsEnabled, enabledLoading] = useSettingsState(
+    "notifications_enabled",
+    true,
+    Settings.notificationsEnabled,
+    Settings.notificationsEnabled,
+  );
+
+  const [osEnabled, setOsEnabled, osLoading] = useSettingsState(
+    "notifications_os_enabled",
+    true,
+    Settings.notificationsOsEnabled,
+    Settings.notificationsOsEnabled,
+  );
+
+  const [soundEnabled, setSoundEnabled, soundLoading] = useSettingsState(
+    "notifications_sound_enabled",
+    false,
+    Settings.notificationsSoundEnabled,
+    Settings.notificationsSoundEnabled,
+  );
+
+  const [toastEnabled, setToastEnabled, toastLoading] = useSettingsState(
+    "notifications_toast_enabled",
+    true,
+    Settings.notificationsToastEnabled,
+    Settings.notificationsToastEnabled,
+  );
+
+  const [minDurationSecs, setMinDurationSecs, durationLoading] = useSettingsState(
+    "notifications_min_duration_secs",
+    5,
+    Settings.notificationsMinDurationSecs,
+    Settings.notificationsMinDurationSecs,
+  );
+
+  const [onlyWhenUnfocused, setOnlyWhenUnfocused, unfocusedLoading] = useSettingsState(
+    "notifications_only_when_unfocused",
+    true,
+    Settings.notificationsOnlyWhenUnfocused,
+    Settings.notificationsOnlyWhenUnfocused,
+  );
+
+  const [onFailure, setOnFailure, failureLoading] = useSettingsState(
+    "notifications_on_failure",
+    "always",
+    Settings.notificationsOnFailure,
+    Settings.notificationsOnFailure,
+  );
+
+  if (
+    enabledLoading ||
+    osLoading ||
+    soundLoading ||
+    toastLoading ||
+    durationLoading ||
+    unfocusedLoading ||
+    failureLoading
+  )
+    return <Spinner />;
+
+  return (
+    <Card shadow="sm">
+      <CardBody className="flex flex-col gap-4">
+        <h2 className="text-xl font-semibold">Notifications</h2>
+        <p className="text-sm text-default-500">
+          Get notified when long-running blocks complete
+        </p>
+
+        <SettingSwitch
+          label="Enable notifications"
+          isSelected={notificationsEnabled}
+          onValueChange={setNotificationsEnabled}
+          description="Master toggle for all block completion notifications"
+        />
+
+        {notificationsEnabled && (
+          <>
+            <div className="border-t pt-4 mt-2">
+              <p className="text-sm font-medium mb-3">Notification channels</p>
+              <div className="flex flex-col gap-3">
+                <SettingSwitch
+                  label="OS notifications"
+                  isSelected={osEnabled}
+                  onValueChange={setOsEnabled}
+                  description="Show system notifications"
+                />
+                <SettingSwitch
+                  label="In-app toasts"
+                  isSelected={toastEnabled}
+                  onValueChange={setToastEnabled}
+                  description="Show toast notifications within the app"
+                />
+                <SettingSwitch
+                  label="Sound"
+                  isSelected={soundEnabled}
+                  onValueChange={setSoundEnabled}
+                  description="Play a sound when blocks complete"
+                />
+              </div>
+            </div>
+
+            <div className="border-t pt-4 mt-2">
+              <p className="text-sm font-medium mb-3">Filtering</p>
+              <div className="flex flex-col gap-4">
+                <SettingSwitch
+                  label="Only when app is unfocused"
+                  isSelected={onlyWhenUnfocused}
+                  onValueChange={setOnlyWhenUnfocused}
+                  description="Don't notify if Atuin is in the foreground"
+                />
+
+                <Input
+                  type="number"
+                  label="Minimum duration (seconds)"
+                  value={minDurationSecs?.toString() || "5"}
+                  onChange={(e) => setMinDurationSecs(parseInt(e.target.value) || 5)}
+                  description="Only notify for blocks that run longer than this"
+                  min={0}
+                  max={3600}
+                />
+
+                <Select
+                  label="On failure"
+                  selectedKeys={[onFailure]}
+                  onSelectionChange={(keys) => {
+                    const key = keys.currentKey as "always" | "after_duration" | "never";
+                    if (key) setOnFailure(key);
+                  }}
+                  description="When to notify about failed blocks"
+                >
+                  <SelectItem key="always">Always notify on failure</SelectItem>
+                  <SelectItem key="after_duration">Only after minimum duration</SelectItem>
+                  <SelectItem key="never">Never notify on failure</SelectItem>
+                </Select>
+              </div>
+            </div>
+          </>
+        )}
+      </CardBody>
+    </Card>
+  );
+};
+
 const AISettings = () => {
   const [aiEnabled, setAiEnabled, enabledLoading] = useSettingsState(
     "ai_enabled",
@@ -900,6 +1044,7 @@ const SettingsPanel = () => {
       <div className="flex flex-col gap-4">
         <GeneralSettings />
         <RunbookSettings />
+        <NotificationSettings />
         <AISettings />
         <UserSettings />
       </div>

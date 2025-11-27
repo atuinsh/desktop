@@ -1,6 +1,11 @@
 import { useEffect, useRef, useCallback } from "react";
 import { addToast } from "@heroui/react";
 import {
+  isPermissionGranted,
+  requestPermission,
+  sendNotification,
+} from "@tauri-apps/plugin-notification";
+import {
   grandCentral,
   GrandCentralEvents,
 } from "@/lib/events/grand_central";
@@ -76,26 +81,25 @@ function playNotificationSound(success: boolean) {
 }
 
 async function sendOsNotification(payload: NotificationPayload): Promise<void> {
-  if (!("Notification" in window)) {
-    console.warn("OS notifications not supported");
-    return;
-  }
+  try {
+    let hasPermission = await isPermissionGranted();
 
-  if (Notification.permission === "denied") {
-    return;
-  }
+    if (!hasPermission) {
+      const permission = await requestPermission();
+      hasPermission = permission === "granted";
+    }
 
-  if (Notification.permission !== "granted") {
-    const permission = await Notification.requestPermission();
-    if (permission !== "granted") {
+    if (!hasPermission) {
       return;
     }
-  }
 
-  new Notification(payload.title, {
-    body: payload.body,
-    silent: true, // We handle sound separately
-  });
+    sendNotification({
+      title: payload.title,
+      body: payload.body,
+    });
+  } catch (e) {
+    console.warn("Failed to send OS notification:", e);
+  }
 }
 
 function sendToast(payload: NotificationPayload) {
