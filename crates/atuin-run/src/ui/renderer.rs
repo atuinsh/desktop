@@ -34,4 +34,13 @@ pub trait Renderer {
 
     /// Check if this renderer is interactive (TUI mode)
     fn is_interactive(&self) -> bool;
+
+    /// Set the current indentation level for nested sub-runbook output
+    /// Default implementation does nothing (for interactive mode)
+    fn set_indent_level(&mut self, _level: usize) {}
+
+    /// Get the current indentation level
+    fn indent_level(&self) -> usize {
+        0
+    }
 }

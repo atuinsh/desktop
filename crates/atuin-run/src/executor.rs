@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 use atuin_desktop_runtime::{
     blocks::Block,
@@ -117,6 +117,11 @@ impl Executor {
         block: Block,
         mut receiver: mpsc::Receiver<DocumentBridgeMessage>,
     ) -> Result<()> {
+        // Handle SubRunbook blocks specially to show nested output (non-interactive only)
+        if matches!(block, Block::SubRunbook(_)) && !self.interactive {
+            return self.execute_sub_runbook_block(block, &mut receiver).await;
+        }
+
         let title = self.get_viewport_title(&block);
         let is_terminal = matches!(block, Block::Terminal(_));
 
@@ -454,6 +459,157 @@ impl Executor {
                 }
             }
         }
+
+        Ok(())
+    }
+
+    /// Execute a SubRunbook block, handling its child block outputs with indentation
+    async fn execute_sub_runbook_block(
+        &mut self,
+        block: Block,
+        receiver: &mut mpsc::Receiver<DocumentBridgeMessage>,
+    ) -> Result<()> {
+        let parent_block_id = block.id();
+        let title = self.get_viewport_title(&block);
+
+        // Print sub-runbook header
+        let current_indent = self.renderer.indent_level();
+        self.renderer.add_block(title.clone(), 1)?;
+
+        // Increase indent level for child blocks
+        self.renderer.set_indent_level(current_indent + 1);
+
+        // Start execution
+        let context = self
+            .document
+            .create_execution_context(
+                parent_block_id,
+                Some(self.ssh_pool.clone()),
+                Some(self.pty_store.clone()),
+                None,
+            )
+            .await?;
+
+        let execution_handle = block
+            .execute(context)
+            .await
+            .map_err(|e| ExecutorError::GenericError(e.to_string()))?;
+
+        if execution_handle.is_none() {
+            // No execution to wait for
+            self.renderer.set_indent_level(current_indent);
+            return Ok(());
+        }
+
+        // Track viewports for child blocks by their block_id
+        let mut child_viewports: HashMap<Uuid, usize> = HashMap::new();
+        let mut child_outputs: HashMap<Uuid, String> = HashMap::new();
+
+        // Process messages from child blocks
+        loop {
+            let Some(message) = receiver.recv().await else {
+                break;
+            };
+
+            match message {
+                DocumentBridgeMessage::BlockOutput { block_id, output } => {
+                    // Check if this is the parent's lifecycle event
+                    if block_id == parent_block_id {
+                        if let Some(lifecycle) = output.lifecycle {
+                            match lifecycle {
+                                BlockLifecycleEvent::Started(_) => {
+                                    // Parent started, continue processing
+                                }
+                                BlockLifecycleEvent::Finished(data) => {
+                                    // Sub-runbook finished
+                                    self.renderer.set_indent_level(current_indent);
+                                    if let Some(exit_code) = data.exit_code {
+                                        if exit_code != 0 {
+                                            return Err(ExecutorError::BlockFailed(
+                                                parent_block_id,
+                                                String::new(),
+                                                Some(exit_code),
+                                            ));
+                                        }
+                                    }
+                                    break;
+                                }
+                                BlockLifecycleEvent::Cancelled => {
+                                    self.renderer.set_indent_level(current_indent);
+                                    return Err(ExecutorError::BlockCancelled(parent_block_id));
+                                }
+                                BlockLifecycleEvent::Error(data) => {
+                                    self.renderer.set_indent_level(current_indent);
+                                    return Err(ExecutorError::BlockError(
+                                        parent_block_id,
+                                        data.message,
+                                    ));
+                                }
+                            }
+                        }
+                        continue;
+                    }
+
+                    // This is output from a child block
+                    // Check for lifecycle events first
+                    if let Some(lifecycle) = &output.lifecycle {
+                        match lifecycle {
+                            BlockLifecycleEvent::Started(_) => {
+                                // Get block info from the output's object field if available
+                                let block_title = output
+                                    .object
+                                    .as_ref()
+                                    .and_then(|obj| obj.get("blockName"))
+                                    .and_then(|v| v.as_str())
+                                    .map(|s| s.to_string())
+                                    .unwrap_or_else(|| format!("Block {}", block_id));
+
+                                let viewport = self.renderer.add_block(block_title, 8)?;
+                                child_viewports.insert(block_id, viewport);
+                                child_outputs.insert(block_id, String::new());
+                            }
+                            BlockLifecycleEvent::Finished(_) => {
+                                // Mark child viewport as complete
+                                if let Some(&viewport) = child_viewports.get(&block_id) {
+                                    let _ = self.renderer.mark_complete(viewport);
+                                }
+                            }
+                            BlockLifecycleEvent::Cancelled | BlockLifecycleEvent::Error(_) => {
+                                // Nothing to clean up
+                            }
+                        }
+                    }
+
+                    // Handle stdout/stderr output (skip binary/terminal output in streaming mode)
+                    if let Some(&viewport) = child_viewports.get(&block_id) {
+                        if let Some(stdout) = output.stdout {
+                            if let Some(full_output) = child_outputs.get_mut(&block_id) {
+                                full_output.push_str(&stdout);
+                            }
+                            let _ = self.renderer.add_line(viewport, stdout.trim_end());
+                        }
+                        if let Some(stderr) = output.stderr {
+                            if let Some(full_output) = child_outputs.get_mut(&block_id) {
+                                full_output.push_str(&stderr);
+                            }
+                            let _ = self.renderer.add_line(viewport, stderr.trim_end());
+                        }
+                    }
+                }
+                DocumentBridgeMessage::BlockStateChanged { .. } => {
+                    // State changes can be ignored for now
+                }
+                DocumentBridgeMessage::BlockContextUpdate { .. } => {
+                    // Context updates can be ignored for now
+                }
+                DocumentBridgeMessage::ClientPrompt { .. } => {
+                    // Prompts not supported in CLI mode for now
+                }
+            }
+        }
+
+        // Restore indent level
+        self.renderer.set_indent_level(current_indent);
 
         Ok(())
     }

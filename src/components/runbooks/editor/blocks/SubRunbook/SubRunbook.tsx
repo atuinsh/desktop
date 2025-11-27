@@ -1,17 +1,103 @@
 import { useState, useEffect, useRef } from "react";
-import { BookOpenIcon, CheckCircleIcon, XCircleIcon, AlertTriangleIcon, ChevronDownIcon } from "lucide-react";
-import { Button, Input, Tooltip } from "@heroui/react";
+import { BookOpenIcon, CheckCircleIcon, XCircleIcon, AlertTriangleIcon, ChevronDownIcon, GlobeIcon, FileIcon } from "lucide-react";
+import { Button, Input, Tooltip, Select, SelectItem } from "@heroui/react";
 import { cn, exportPropMatter } from "@/lib/utils";
 import { createReactBlockSpec } from "@blocknote/react";
-import { useBlockExecution, useBlockState } from "@/lib/hooks/useDocumentBridge";
+import useDocumentBridge, { useBlockExecution, useBlockState } from "@/lib/hooks/useDocumentBridge";
 import track_event from "@/tracking";
 import RunbookIndexService from "@/state/runbooks/search";
-import Runbook from "@/state/runbooks/runbook";
+import Runbook, { OnlineRunbook } from "@/state/runbooks/runbook";
 import { useStore } from "@/state/store";
 import PlayButton from "@/lib/blocks/common/PlayButton";
+import WorkspaceManager from "@/lib/workspaces/manager";
+import { RemoteRunbook } from "@/state/models";
 
 // Create a search index instance
 const searchIndex = new RunbookIndexService();
+
+// Helper to calculate relative path from one runbook to another
+function getRelativePath(fromPath: string, toPath: string): string {
+  // Split paths into segments
+  const fromParts = fromPath.split('/').filter(Boolean);
+  const toParts = toPath.split('/').filter(Boolean);
+
+  // Remove filename from source path to get directory
+  fromParts.pop();
+
+  // Find common prefix length
+  let commonLength = 0;
+  while (
+    commonLength < fromParts.length &&
+    commonLength < toParts.length &&
+    fromParts[commonLength] === toParts[commonLength]
+  ) {
+    commonLength++;
+  }
+
+  // Build relative path: ".." for each directory we need to go up
+  const upCount = fromParts.length - commonLength;
+  const relativeParts = Array(upCount).fill('..');
+
+  // Add the path from common ancestor to target
+  relativeParts.push(...toParts.slice(commonLength));
+
+  // If in same directory, use "./"
+  if (relativeParts.length === 0) {
+    return './' + toParts[toParts.length - 1];
+  }
+
+  return relativeParts.join('/');
+}
+
+// Helper to get runbook path from workspace
+function getRunbookPathFromWorkspace(runbookId: string): string | null {
+  const manager = WorkspaceManager.getInstance();
+  const workspaces = manager.getWorkspaces();
+
+  for (const workspace of workspaces) {
+    const runbook = workspace.runbooks[runbookId];
+    if (runbook) {
+      return runbook.path;
+    }
+  }
+  return null;
+}
+
+// Helper to get hub URI and available tags from online runbook's remoteInfo
+function getHubInfoFromRunbook(runbook: Runbook): { uri: string | null; tags: string[] } {
+  if (!runbook.isOnline()) {
+    return { uri: null, tags: [] };
+  }
+
+  const onlineRunbook = runbook as OnlineRunbook;
+  if (!onlineRunbook.remoteInfo) {
+    return { uri: null, tags: [] };
+  }
+
+  try {
+    const remoteInfo: RemoteRunbook = JSON.parse(onlineRunbook.remoteInfo);
+    const uri = remoteInfo.nwo || null;
+    const tags = remoteInfo.snapshots?.map((s) => s.tag) || [];
+    return { uri, tags };
+  } catch {
+    // Failed to parse remoteInfo
+  }
+  return { uri: null, tags: [] };
+}
+
+// Helper to extract tag from URI (e.g., "ellie/foo:v1" -> "v1")
+function getTagFromUri(uri: string): string {
+  const colonIndex = uri.lastIndexOf(':');
+  if (colonIndex === -1) return 'latest';
+  return uri.substring(colonIndex + 1) || 'latest';
+}
+
+// Helper to get base URI without tag (e.g., "ellie/foo:v1" -> "ellie/foo")
+function getBaseUri(uri: string): string {
+  const colonIndex = uri.lastIndexOf(':');
+  if (colonIndex === -1) return uri;
+  return uri.substring(0, colonIndex);
+}
 
 // SubRunbook state from backend
 interface SubRunbookState {
@@ -51,12 +137,23 @@ function isErrorStatus(status: SubRunbookStatus): boolean {
   );
 }
 
+interface RunbookSelection {
+  runbookId: string;
+  runbookName: string;
+  runbookPath: string | null;
+  runbookUri: string | null;
+}
+
 interface SubRunbookProps {
   id: string;
   runbookId: string;
   runbookName: string;
+  runbookPath: string;
+  runbookUri: string;
   isEditable: boolean;
-  onRunbookSelect: (runbookId: string, runbookName: string) => void;
+  onRunbookSelect: (selection: RunbookSelection) => void;
+  onTagChange: (tag: string) => void;
+  currentRunbookId: string | null;
 }
 
 function RunbookSelector({
@@ -65,18 +162,50 @@ function RunbookSelector({
   onSelect,
   onClose,
   anchorRef,
+  currentRunbookId,
 }: {
   isVisible: boolean;
   position: { x: number; y: number };
-  onSelect: (runbookId: string, runbookName: string) => void;
+  onSelect: (selection: RunbookSelection) => void;
   onClose: () => void;
   anchorRef: React.RefObject<HTMLDivElement | null>;
+  currentRunbookId: string | null;
 }) {
   const [query, setQuery] = useState("");
   const [runbooks, setRunbooks] = useState<Runbook[]>([]);
   const [filteredRunbooks, setFilteredRunbooks] = useState<Runbook[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Helper to select a runbook and calculate relative path or URI
+  const selectRunbook = (runbook: Runbook) => {
+    const runbookName = runbook.name || "Untitled Runbook";
+    let relativePath: string | null = null;
+    let runbookUri: string | null = null;
+
+    if (runbook.isOnline()) {
+      // For online runbooks, get the hub URI (owner/slug) from remoteInfo
+      const hubInfo = getHubInfoFromRunbook(runbook);
+      // Default to latest tag
+      runbookUri = hubInfo.uri ? `${hubInfo.uri}:latest` : null;
+    } else {
+      // For offline (file-based) runbooks, calculate relative path
+      const selectedPath = getRunbookPathFromWorkspace(runbook.id);
+      if (selectedPath && currentRunbookId) {
+        const currentPath = getRunbookPathFromWorkspace(currentRunbookId);
+        if (currentPath) {
+          relativePath = getRelativePath(currentPath, selectedPath);
+        }
+      }
+    }
+
+    onSelect({
+      runbookId: runbook.id,
+      runbookName,
+      runbookPath: relativePath,
+      runbookUri,
+    });
+  };
 
   // Load runbooks when popup opens
   useEffect(() => {
@@ -147,8 +276,7 @@ function RunbookSelector({
         case "Enter":
           e.preventDefault();
           if (filteredRunbooks[selectedIndex]) {
-            const runbook = filteredRunbooks[selectedIndex];
-            onSelect(runbook.id, runbook.name || "Untitled Runbook");
+            selectRunbook(filteredRunbooks[selectedIndex]);
           }
           break;
         case "Escape":
@@ -214,7 +342,7 @@ function RunbookSelector({
                   ? "bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400"
                   : "hover:bg-gray-50 dark:hover:bg-gray-700",
               )}
-              onClick={() => onSelect(runbook.id, runbook.name || "Untitled Runbook")}
+              onClick={() => selectRunbook(runbook)}
             >
               <BookOpenIcon size={14} />
               <span className="truncate">{runbook.name || "Untitled Runbook"}</span>
@@ -234,16 +362,40 @@ const SubRunbook = ({
   id,
   runbookId,
   runbookName,
+  runbookPath,
+  runbookUri,
   isEditable,
   onRunbookSelect,
+  onTagChange,
+  currentRunbookId,
 }: SubRunbookProps) => {
   const [selectorVisible, setSelectorVisible] = useState(false);
   const [selectorPosition, setSelectorPosition] = useState({ x: 0, y: 0 });
+  const [availableTags, setAvailableTags] = useState<string[]>([]);
   const selectButtonRef = useRef<HTMLButtonElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const execution = useBlockExecution(id);
   const state = useBlockState<SubRunbookState>(id);
+
+  // Fetch available tags when runbookId or runbookUri changes (for online runbooks)
+  useEffect(() => {
+    if (!runbookId) {
+      setAvailableTags([]);
+      return;
+    }
+
+    Runbook.load(runbookId).then((runbook) => {
+      if (runbook && runbook.isOnline()) {
+        const hubInfo = getHubInfoFromRunbook(runbook);
+        setAvailableTags(hubInfo.tags);
+      } else {
+        setAvailableTags([]);
+      }
+    }).catch(() => {
+      setAvailableTags([]);
+    });
+  }, [runbookId, runbookUri]);
 
   const status = state?.status || "idle";
   const progress = state ? `${state.completedBlocks}/${state.totalBlocks}` : "0/0";
@@ -263,8 +415,8 @@ const SubRunbook = ({
     setSelectorVisible(true);
   };
 
-  const handleRunbookSelected = (selectedId: string, selectedName: string) => {
-    onRunbookSelect(selectedId, selectedName);
+  const handleRunbookSelected = (selection: RunbookSelection) => {
+    onRunbookSelect(selection);
     setSelectorVisible(false);
   };
 
@@ -303,7 +455,7 @@ const SubRunbook = ({
       >
         <div className="flex flex-col w-full bg-white dark:bg-slate-800 rounded-lg p-3 border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow-md transition-all duration-200">
           <span className="text-[10px] font-mono text-gray-400 dark:text-gray-500 mb-2">subrunbook</span>
-          <div className="flex flex-row items-center space-x-3">
+          <div className="flex flex-row items-start space-x-3">
           {/* Play button */}
           <PlayButton
             eventName="runbooks.block.execute"
@@ -337,16 +489,48 @@ const SubRunbook = ({
 
           {/* Runbook selector button */}
           <div className="flex-1 min-w-0">
-            <Button
-              ref={selectButtonRef}
-              variant="flat"
-              className="w-full justify-between bg-default-100"
-              onPress={handleSelectClick}
-              isDisabled={!isEditable}
-              endContent={<ChevronDownIcon className="h-4 w-4 shrink-0" />}
-            >
-              <span className="truncate text-sm">{runbookId ? runbookName : "Select Runbook"}</span>
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                ref={selectButtonRef}
+                variant="flat"
+                className="flex-1 justify-between bg-default-100"
+                onPress={handleSelectClick}
+                isDisabled={!isEditable}
+                endContent={<ChevronDownIcon className="h-4 w-4 shrink-0" />}
+              >
+                <span className="truncate text-sm">{runbookId ? runbookName : "Select Runbook"}</span>
+              </Button>
+              {/* Tag selector - only show for online runbooks with available tags */}
+              {runbookUri && availableTags.length > 0 && (
+                <Select
+                  size="md"
+                  className="w-28"
+                  selectedKeys={[getTagFromUri(runbookUri)]}
+                  onSelectionChange={(keys) => {
+                    const selectedTag = Array.from(keys)[0] as string;
+                    if (selectedTag) {
+                      onTagChange(selectedTag);
+                    }
+                  }}
+                  isDisabled={!isEditable}
+                  aria-label="Select tag"
+                  items={[{ key: 'latest', label: 'latest' }, ...availableTags.map(tag => ({ key: tag, label: tag }))]}
+                >
+                  {(item) => <SelectItem key={item.key}>{item.label}</SelectItem>}
+                </Select>
+              )}
+            </div>
+            {/* Show URI or path reference */}
+            {(runbookUri || runbookPath) && (
+              <span className="text-[10px] font-mono text-gray-400 dark:text-gray-500 mt-1 truncate flex items-center gap-1">
+                {runbookUri ? (
+                  <GlobeIcon className="h-3 w-3 shrink-0" />
+                ) : (
+                  <FileIcon className="h-3 w-3 shrink-0" />
+                )}
+                {runbookUri || runbookPath}
+              </span>
+            )}
           </div>
           </div>
         </div>
@@ -366,6 +550,7 @@ const SubRunbook = ({
         onSelect={handleRunbookSelected}
         onClose={() => setSelectorVisible(false)}
         anchorRef={containerRef}
+        currentRunbookId={currentRunbookId}
       />
     </div>
   );
@@ -396,11 +581,37 @@ export default createReactBlockSpec(
     },
     // @ts-ignore
     render: ({ block, editor }) => {
-      const onRunbookSelect = (runbookId: string, runbookName: string): void => {
-        // Desktop app sets ID - this is the primary reference
+      const documentBridge = useDocumentBridge();
+      const currentRunbookId = documentBridge?.runbookId ?? null;
+
+      const onRunbookSelect = (selection: RunbookSelection): void => {
+        // Desktop app sets ID as primary reference, plus path/uri for CLI portability
         editor.updateBlock(block, {
           // @ts-ignore
-          props: { ...block.props, runbookId, runbookName },
+          props: {
+            ...block.props,
+            runbookId: selection.runbookId,
+            runbookName: selection.runbookName,
+            runbookPath: selection.runbookPath || "",
+            runbookUri: selection.runbookUri || "",
+          },
+        });
+      };
+
+      const onTagChange = (tag: string): void => {
+        // Update the URI with the new tag
+        const currentUri = block.props.runbookUri;
+        if (!currentUri) return;
+
+        const baseUri = getBaseUri(currentUri);
+        const newUri = `${baseUri}:${tag}`;
+
+        editor.updateBlock(block, {
+          // @ts-ignore
+          props: {
+            ...block.props,
+            runbookUri: newUri,
+          },
         });
       };
 
@@ -409,8 +620,12 @@ export default createReactBlockSpec(
           id={block.id}
           runbookId={block.props.runbookId}
           runbookName={block.props.runbookName}
+          runbookPath={block.props.runbookPath}
+          runbookUri={block.props.runbookUri}
           isEditable={editor.isEditable}
           onRunbookSelect={onRunbookSelect}
+          onTagChange={onTagChange}
+          currentRunbookId={currentRunbookId}
         />
       );
     },
