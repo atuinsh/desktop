@@ -15,6 +15,15 @@ const AI_MODEL = "settings.ai.model";
 const SHELLCHECK_ENABLED = "settings.editor.shellcheck.enabled";
 const SHELLCHECK_PATH = "settings.editor.shellcheck.path";
 
+// Notification settings
+const NOTIFICATIONS_ENABLED = "settings.notifications.enabled";
+const NOTIFICATIONS_OS_ENABLED = "settings.notifications.os.enabled";
+const NOTIFICATIONS_SOUND_ENABLED = "settings.notifications.sound.enabled";
+const NOTIFICATIONS_TOAST_ENABLED = "settings.notifications.toast.enabled";
+const NOTIFICATIONS_MIN_DURATION_SECS = "settings.notifications.min_duration_secs";
+const NOTIFICATIONS_ONLY_WHEN_UNFOCUSED = "settings.notifications.only_when_unfocused";
+const NOTIFICATIONS_ON_FAILURE = "settings.notifications.on_failure";
+
 export class Settings {
   public static DEFAULT_FONT = "FiraCode";
   public static DEFAULT_FONT_SIZE = 14;
@@ -171,5 +180,88 @@ export class Settings {
     }
 
     return await store.get(SHELLCHECK_PATH);
+  }
+
+  // Notification settings
+
+  public static async notificationsEnabled(val: boolean | null = null): Promise<boolean> {
+    let store = await KVStore.open_default();
+
+    if (val !== null) {
+      await store.set(NOTIFICATIONS_ENABLED, val);
+      return val;
+    }
+
+    // Default to true
+    return (await store.get(NOTIFICATIONS_ENABLED)) ?? true;
+  }
+
+  public static async notificationsOsEnabled(val: boolean | null = null): Promise<boolean> {
+    let store = await KVStore.open_default();
+
+    if (val !== null) {
+      await store.set(NOTIFICATIONS_OS_ENABLED, val);
+      return val;
+    }
+
+    return (await store.get(NOTIFICATIONS_OS_ENABLED)) ?? true;
+  }
+
+  public static async notificationsSoundEnabled(val: boolean | null = null): Promise<boolean> {
+    let store = await KVStore.open_default();
+
+    if (val !== null) {
+      await store.set(NOTIFICATIONS_SOUND_ENABLED, val);
+      return val;
+    }
+
+    return (await store.get(NOTIFICATIONS_SOUND_ENABLED)) ?? false;
+  }
+
+  public static async notificationsToastEnabled(val: boolean | null = null): Promise<boolean> {
+    let store = await KVStore.open_default();
+
+    if (val !== null) {
+      await store.set(NOTIFICATIONS_TOAST_ENABLED, val);
+      return val;
+    }
+
+    return (await store.get(NOTIFICATIONS_TOAST_ENABLED)) ?? true;
+  }
+
+  public static async notificationsMinDurationSecs(val: number | null = null): Promise<number> {
+    let store = await KVStore.open_default();
+
+    if (val !== null) {
+      await store.set(NOTIFICATIONS_MIN_DURATION_SECS, val);
+      return val;
+    }
+
+    // Default to 5 seconds
+    return (await store.get(NOTIFICATIONS_MIN_DURATION_SECS)) ?? 5;
+  }
+
+  public static async notificationsOnlyWhenUnfocused(val: boolean | null = null): Promise<boolean> {
+    let store = await KVStore.open_default();
+
+    if (val !== null) {
+      await store.set(NOTIFICATIONS_ONLY_WHEN_UNFOCUSED, val);
+      return val;
+    }
+
+    // Default to true - only notify when app is not focused
+    return (await store.get(NOTIFICATIONS_ONLY_WHEN_UNFOCUSED)) ?? true;
+  }
+
+  public static async notificationsOnFailure(val: "always" | "after_duration" | "never" | null = null): Promise<"always" | "after_duration" | "never"> {
+    let store = await KVStore.open_default();
+
+    if (val !== null) {
+      await store.set(NOTIFICATIONS_ON_FAILURE, val);
+      return val;
+    }
+
+    // Default to always notify on failure
+    return (await store.get(NOTIFICATIONS_ON_FAILURE)) ?? "always";
   }
 }

@@ -10,6 +10,10 @@ export interface GrandCentralEvents {
   "serial-execution-completed": { runbook_id: string };
   "serial-execution-cancelled": { runbook_id: string };
   "serial-execution-failed": { runbook_id: string; error: string };
+  "block-started": { block_id: string; runbook_id: string };
+  "block-finished": { block_id: string; runbook_id: string; success: boolean };
+  "block-failed": { block_id: string; runbook_id: string; error: string };
+  "block-cancelled": { block_id: string; runbook_id: string };
 }
 
 /**
@@ -126,6 +130,36 @@ export class GrandCentral extends Emittery<GrandCentralEvents> {
           });
           break;
 
+        case "blockStarted":
+          this.emit("block-started", {
+            block_id: event.data.block_id,
+            runbook_id: event.data.runbook_id,
+          });
+          break;
+
+        case "blockFinished":
+          this.emit("block-finished", {
+            block_id: event.data.block_id,
+            runbook_id: event.data.runbook_id,
+            success: event.data.success,
+          });
+          break;
+
+        case "blockFailed":
+          this.emit("block-failed", {
+            block_id: event.data.block_id,
+            runbook_id: event.data.runbook_id,
+            error: event.data.error,
+          });
+          break;
+
+        case "blockCancelled":
+          this.emit("block-cancelled", {
+            block_id: event.data.block_id,
+            runbook_id: event.data.runbook_id,
+          });
+          break;
+
         default:
           console.warn("Grand Central: Unhandled event type:", event);
       }
@@ -167,3 +201,19 @@ export const onSerialExecutionCancelled = (
 export const onSerialExecutionFailed = (
   handler: (data: GrandCentralEvents["serial-execution-failed"]) => void,
 ) => grandCentral.on("serial-execution-failed", handler);
+
+export const onBlockStarted = (
+  handler: (data: GrandCentralEvents["block-started"]) => void,
+) => grandCentral.on("block-started", handler);
+
+export const onBlockFinished = (
+  handler: (data: GrandCentralEvents["block-finished"]) => void,
+) => grandCentral.on("block-finished", handler);
+
+export const onBlockFailed = (
+  handler: (data: GrandCentralEvents["block-failed"]) => void,
+) => grandCentral.on("block-failed", handler);
+
+export const onBlockCancelled = (
+  handler: (data: GrandCentralEvents["block-cancelled"]) => void,
+) => grandCentral.on("block-cancelled", handler);
