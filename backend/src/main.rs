@@ -573,6 +573,8 @@ fn main() {
             commands::workspaces::delete_folder,
             commands::workspaces::move_items,
             commands::workspaces::move_items_between_workspaces,
+            commands::audio::list_sounds,
+            commands::audio::play_sound,
             shared_state::get_shared_state_document,
             shared_state::push_optimistic_update,
             shared_state::update_shared_state_document,

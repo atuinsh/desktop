@@ -1,4 +1,5 @@
 import { useEffect, useRef, useCallback } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import {
   isPermissionGranted,
   requestPermission,
@@ -29,7 +30,7 @@ interface SerialExecution {
   startTime: number;
 }
 
-type SoundOption = "none" | "chime";
+type SoundOption = string;
 type OsOption = "always" | "not_focused" | "never";
 
 interface EventNotificationConfig {
@@ -40,6 +41,7 @@ interface EventNotificationConfig {
 
 interface NotificationSettings {
   enabled: boolean;
+  volume: number;
   blockFinished: EventNotificationConfig;
   blockFailed: EventNotificationConfig;
   serialFinished: EventNotificationConfig;
@@ -56,6 +58,7 @@ type NotificationPayload = {
 async function loadSettings(): Promise<NotificationSettings> {
   const [
     enabled,
+    volume,
     blockFinishedDuration,
     blockFinishedSound,
     blockFinishedOs,
@@ -70,6 +73,7 @@ async function loadSettings(): Promise<NotificationSettings> {
     serialFailedOs,
   ] = await Promise.all([
     Settings.notificationsEnabled(),
+    Settings.notificationsVolume(),
     Settings.notificationsBlockFinishedDuration(),
     Settings.notificationsBlockFinishedSound(),
     Settings.notificationsBlockFinishedOs(),
@@ -86,6 +90,7 @@ async function loadSettings(): Promise<NotificationSettings> {
 
   return {
     enabled,
+    volume,
     blockFinished: {
       duration: blockFinishedDuration,
       sound: blockFinishedSound,
@@ -101,34 +106,12 @@ async function loadSettings(): Promise<NotificationSettings> {
   };
 }
 
-function playNotificationSound(success: boolean) {
-  try {
-    const audioContext = new AudioContext();
-    const oscillator = audioContext.createOscillator();
-    const gainNode = audioContext.createGain();
+function playNotificationSound(soundId: string, volume: number) {
+  if (soundId === "none") return;
 
-    oscillator.connect(gainNode);
-    gainNode.connect(audioContext.destination);
-
-    if (success) {
-      // Pleasant two-tone chime for success
-      oscillator.frequency.setValueAtTime(523.25, audioContext.currentTime); // C5
-      oscillator.frequency.setValueAtTime(659.25, audioContext.currentTime + 0.1); // E5
-    } else {
-      // Lower tone for failure
-      oscillator.frequency.setValueAtTime(220, audioContext.currentTime); // A3
-      oscillator.frequency.setValueAtTime(196, audioContext.currentTime + 0.15); // G3
-    }
-
-    oscillator.type = "sine";
-    gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
-    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
-
-    oscillator.start(audioContext.currentTime);
-    oscillator.stop(audioContext.currentTime + 0.3);
-  } catch (e) {
-    console.warn("Failed to play notification sound:", e);
-  }
+  invoke("play_sound", { soundId, volume: volume / 100 }).catch((e) => {
+    logger.warn("Failed to play notification sound:", e);
+  });
 }
 
 async function sendOsNotification(payload: NotificationPayload): Promise<void> {
@@ -242,7 +225,7 @@ export default function NotificationManager() {
       }
 
       if (config.sound !== "none") {
-        playNotificationSound(payload.success);
+        playNotificationSound(config.sound, settings.volume);
       }
     },
     [],

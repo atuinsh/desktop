@@ -17,6 +17,7 @@ const SHELLCHECK_PATH = "settings.editor.shellcheck.path";
 
 // Notification settings
 const NOTIFICATIONS_ENABLED = "settings.notifications.enabled";
+const NOTIFICATIONS_VOLUME = "settings.notifications.volume";
 
 // Block notification settings
 const NOTIFICATIONS_BLOCK_FINISHED_DURATION = "settings.notifications.block.finished.duration";
@@ -106,13 +107,17 @@ export class Settings {
     return await store.get(SCRIPT_SHELL);
   }
 
-  public static async scriptInterpreters(): Promise<Array<{command: string; name: string}>> {
+  public static async scriptInterpreters(): Promise<Array<{ command: string; name: string }>> {
     let store = await KVStore.open_default();
-    const interpreters = await store.get<Array<{command: string; name: string}>>(SCRIPT_INTERPRETERS);
+    const interpreters = await store.get<Array<{ command: string; name: string }>>(
+      SCRIPT_INTERPRETERS,
+    );
     return interpreters || [];
   }
 
-  public static async setScriptInterpreters(interpreters: Array<{command: string; name: string}>): Promise<void> {
+  public static async setScriptInterpreters(
+    interpreters: Array<{ command: string; name: string }>,
+  ): Promise<void> {
     let store = await KVStore.open_default();
     await store.set(SCRIPT_INTERPRETERS, interpreters);
   }
@@ -207,8 +212,21 @@ export class Settings {
     return (await store.get(NOTIFICATIONS_ENABLED)) ?? true;
   }
 
+  public static async notificationsVolume(val: number | null = null): Promise<number> {
+    let store = await KVStore.open_default();
+
+    if (val !== null) {
+      await store.set(NOTIFICATIONS_VOLUME, val);
+      return val;
+    }
+
+    return (await store.get(NOTIFICATIONS_VOLUME)) ?? 80;
+  }
+
   // Block finished settings
-  public static async notificationsBlockFinishedDuration(val: number | null = null): Promise<number> {
+  public static async notificationsBlockFinishedDuration(
+    val: number | null = null,
+  ): Promise<number> {
     let store = await KVStore.open_default();
 
     if (val !== null) {
@@ -219,7 +237,7 @@ export class Settings {
     return (await store.get(NOTIFICATIONS_BLOCK_FINISHED_DURATION)) ?? 5;
   }
 
-  public static async notificationsBlockFinishedSound(val: "none" | "chime" | null = null): Promise<"none" | "chime"> {
+  public static async notificationsBlockFinishedSound(val: string | null = null): Promise<string> {
     let store = await KVStore.open_default();
 
     if (val !== null) {
@@ -227,10 +245,12 @@ export class Settings {
       return val;
     }
 
-    return (await store.get(NOTIFICATIONS_BLOCK_FINISHED_SOUND)) ?? "none";
+    return (await store.get(NOTIFICATIONS_BLOCK_FINISHED_SOUND)) ?? "that_was_quick";
   }
 
-  public static async notificationsBlockFinishedOs(val: "always" | "not_focused" | "never" | null = null): Promise<"always" | "not_focused" | "never"> {
+  public static async notificationsBlockFinishedOs(
+    val: "always" | "not_focused" | "never" | null = null,
+  ): Promise<"always" | "not_focused" | "never"> {
     let store = await KVStore.open_default();
 
     if (val !== null) {
@@ -250,10 +270,10 @@ export class Settings {
       return val;
     }
 
-    return (await store.get(NOTIFICATIONS_BLOCK_FAILED_DURATION)) ?? 0;
+    return (await store.get(NOTIFICATIONS_BLOCK_FAILED_DURATION)) ?? 1;
   }
 
-  public static async notificationsBlockFailedSound(val: "none" | "chime" | null = null): Promise<"none" | "chime"> {
+  public static async notificationsBlockFailedSound(val: string | null = null): Promise<string> {
     let store = await KVStore.open_default();
 
     if (val !== null) {
@@ -261,10 +281,12 @@ export class Settings {
       return val;
     }
 
-    return (await store.get(NOTIFICATIONS_BLOCK_FAILED_SOUND)) ?? "chime";
+    return (await store.get(NOTIFICATIONS_BLOCK_FAILED_SOUND)) ?? "out_of_nowhere";
   }
 
-  public static async notificationsBlockFailedOs(val: "always" | "not_focused" | "never" | null = null): Promise<"always" | "not_focused" | "never"> {
+  public static async notificationsBlockFailedOs(
+    val: "always" | "not_focused" | "never" | null = null,
+  ): Promise<"always" | "not_focused" | "never"> {
     let store = await KVStore.open_default();
 
     if (val !== null) {
@@ -276,7 +298,9 @@ export class Settings {
   }
 
   // Serial finished settings
-  public static async notificationsSerialFinishedDuration(val: number | null = null): Promise<number> {
+  public static async notificationsSerialFinishedDuration(
+    val: number | null = null,
+  ): Promise<number> {
     let store = await KVStore.open_default();
 
     if (val !== null) {
@@ -287,7 +311,7 @@ export class Settings {
     return (await store.get(NOTIFICATIONS_SERIAL_FINISHED_DURATION)) ?? 0;
   }
 
-  public static async notificationsSerialFinishedSound(val: "none" | "chime" | null = null): Promise<"none" | "chime"> {
+  public static async notificationsSerialFinishedSound(val: string | null = null): Promise<string> {
     let store = await KVStore.open_default();
 
     if (val !== null) {
@@ -295,10 +319,12 @@ export class Settings {
       return val;
     }
 
-    return (await store.get(NOTIFICATIONS_SERIAL_FINISHED_SOUND)) ?? "chime";
+    return (await store.get(NOTIFICATIONS_SERIAL_FINISHED_SOUND)) ?? "gracefully";
   }
 
-  public static async notificationsSerialFinishedOs(val: "always" | "not_focused" | "never" | null = null): Promise<"always" | "not_focused" | "never"> {
+  public static async notificationsSerialFinishedOs(
+    val: "always" | "not_focused" | "never" | null = null,
+  ): Promise<"always" | "not_focused" | "never"> {
     let store = await KVStore.open_default();
 
     if (val !== null) {
@@ -310,7 +336,9 @@ export class Settings {
   }
 
   // Serial failed settings
-  public static async notificationsSerialFailedDuration(val: number | null = null): Promise<number> {
+  public static async notificationsSerialFailedDuration(
+    val: number | null = null,
+  ): Promise<number> {
     let store = await KVStore.open_default();
 
     if (val !== null) {
@@ -321,7 +349,7 @@ export class Settings {
     return (await store.get(NOTIFICATIONS_SERIAL_FAILED_DURATION)) ?? 0;
   }
 
-  public static async notificationsSerialFailedSound(val: "none" | "chime" | null = null): Promise<"none" | "chime"> {
+  public static async notificationsSerialFailedSound(val: string | null = null): Promise<string> {
     let store = await KVStore.open_default();
 
     if (val !== null) {
@@ -329,10 +357,12 @@ export class Settings {
       return val;
     }
 
-    return (await store.get(NOTIFICATIONS_SERIAL_FAILED_SOUND)) ?? "chime";
+    return (await store.get(NOTIFICATIONS_SERIAL_FAILED_SOUND)) ?? "unexpected";
   }
 
-  public static async notificationsSerialFailedOs(val: "always" | "not_focused" | "never" | null = null): Promise<"always" | "not_focused" | "never"> {
+  public static async notificationsSerialFailedOs(
+    val: "always" | "not_focused" | "never" | null = null,
+  ): Promise<"always" | "not_focused" | "never"> {
     let store = await KVStore.open_default();
 
     if (val !== null) {

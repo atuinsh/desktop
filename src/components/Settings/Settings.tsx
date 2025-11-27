@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { open } from "@tauri-apps/plugin-shell";
-import { PlusIcon, TrashIcon } from "lucide-react";
+import { PlusIcon, TrashIcon, PlayIcon } from "lucide-react";
 import {
   Autocomplete,
   AutocompleteItem,
@@ -23,6 +23,7 @@ import {
   Link,
   useDisclosure,
   addToast,
+  Slider,
 } from "@heroui/react";
 import { Settings } from "@/state/settings";
 import { KVStore } from "@/state/kv";
@@ -734,7 +735,22 @@ const AuthTokenModal = (props: AuthTokenModalProps) => {
   );
 };
 
-type SoundOption = "none" | "chime";
+// Sound types and helpers
+interface SoundInfo {
+  id: string;
+  name: string;
+}
+
+async function loadSounds(): Promise<SoundInfo[]> {
+  try {
+    return await invoke<SoundInfo[]>("list_sounds");
+  } catch (e) {
+    console.warn("Failed to load sounds:", e);
+    return [];
+  }
+}
+
+type SoundOption = "none" | "chime" | string;
 type OsOption = "always" | "not_focused" | "never";
 
 interface NotificationRowProps {
@@ -746,6 +762,8 @@ interface NotificationRowProps {
   onSoundChange: (val: SoundOption) => void;
   os: OsOption;
   onOsChange: (val: OsOption) => void;
+  sounds: SoundInfo[];
+  volume: number;
 }
 
 const NotificationRow = ({
@@ -757,60 +775,102 @@ const NotificationRow = ({
   onSoundChange,
   os,
   onOsChange,
-}: NotificationRowProps) => (
-  <div className="flex flex-col gap-2 py-3 border-b last:border-b-0">
-    <div className="flex items-center gap-2 flex-wrap">
-      <span className="text-sm">{label}</span>
-      <Input
-        type="number"
-        size="sm"
-        className="w-16"
-        value={duration.toString()}
-        onChange={(e) => onDurationChange(parseInt(e.target.value) || 0)}
-        min={0}
-        max={3600}
-        aria-label={durationLabel}
-      />
-      <span className="text-sm text-default-500">seconds</span>
+  sounds,
+  volume,
+}: NotificationRowProps) => {
+  const playSound = (soundId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    if (soundId === "none") return;
+
+    console.log("Playing sound", soundId, "at volume", volume, "->", volume / 100);
+    invoke("play_sound", { soundId, volume: volume / 100 }).catch((err) => {
+      console.error("Failed to play sound:", err);
+    });
+  };
+
+  const allSounds = [{ id: "none", name: "None" }, ...sounds];
+
+  return (
+    <div className="flex flex-col gap-2 py-3 border-b last:border-b-0">
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-sm">{label}</span>
+        <Input
+          type="number"
+          size="sm"
+          className="w-16"
+          value={duration.toString()}
+          onChange={(e) => onDurationChange(parseInt(e.target.value) || 0)}
+          min={0}
+          max={3600}
+          aria-label={durationLabel}
+        />
+        <span className="text-sm text-default-500">seconds</span>
+      </div>
+      <div className="flex items-center gap-4 pl-4">
+        <Select
+          label="Sound"
+          size="sm"
+          className="w-48"
+          selectedKeys={[sound]}
+          onSelectionChange={(keys) => {
+            const key = keys.currentKey as SoundOption;
+            if (key) onSoundChange(key);
+          }}
+          items={allSounds}
+        >
+          {(item) => (
+            <SelectItem
+              key={item.id}
+              endContent={
+                item.id !== "none" ? (
+                  <button
+                    className="p-1 hover:bg-default-200 rounded"
+                    onClick={(e) => playSound(item.id, e)}
+                  >
+                    <PlayIcon size={14} />
+                  </button>
+                ) : null
+              }
+            >
+              {item.name}
+            </SelectItem>
+          )}
+        </Select>
+        <Select
+          label="System Notification"
+          size="sm"
+          className="w-52"
+          selectedKeys={[os]}
+          onSelectionChange={(keys) => {
+            const key = keys.currentKey as OsOption;
+            if (key) onOsChange(key);
+          }}
+        >
+          <SelectItem key="always">Always</SelectItem>
+          <SelectItem key="not_focused">When app not focused</SelectItem>
+          <SelectItem key="never">Never</SelectItem>
+        </Select>
+      </div>
     </div>
-    <div className="flex items-center gap-4 pl-4">
-      <Select
-        label="Sound"
-        size="sm"
-        className="w-40"
-        selectedKeys={[sound]}
-        onSelectionChange={(keys) => {
-          const key = keys.currentKey as SoundOption;
-          if (key) onSoundChange(key);
-        }}
-      >
-        <SelectItem key="none">None</SelectItem>
-        <SelectItem key="chime">Chime</SelectItem>
-      </Select>
-      <Select
-        label="System Notification"
-        size="sm"
-        className="w-52"
-        selectedKeys={[os]}
-        onSelectionChange={(keys) => {
-          const key = keys.currentKey as OsOption;
-          if (key) onOsChange(key);
-        }}
-      >
-        <SelectItem key="always">Always</SelectItem>
-        <SelectItem key="not_focused">When app not focused</SelectItem>
-        <SelectItem key="never">Never</SelectItem>
-      </Select>
-    </div>
-  </div>
-);
+  );
+};
 
 const NotificationSettings = () => {
+  const sounds = useAsyncData(loadSounds);
+
   const [notificationsEnabled, setNotificationsEnabled, enabledLoading] = useSettingsState(
     "notifications_enabled",
     true,
     Settings.notificationsEnabled,
     Settings.notificationsEnabled,
+  );
+
+  const [volume, setVolume, volumeLoading] = useSettingsState(
+    "notifications_volume",
+    80,
+    Settings.notificationsVolume,
+    Settings.notificationsVolume,
   );
 
   // Block finished settings
@@ -822,7 +882,7 @@ const NotificationSettings = () => {
   );
   const [blockFinishedSound, setBlockFinishedSound, bfSoundLoading] = useSettingsState(
     "block_finished_sound",
-    "none",
+    "that_was_quick",
     Settings.notificationsBlockFinishedSound,
     Settings.notificationsBlockFinishedSound,
   );
@@ -836,13 +896,13 @@ const NotificationSettings = () => {
   // Block failed settings
   const [blockFailedDuration, setBlockFailedDuration, bxDurationLoading] = useSettingsState(
     "block_failed_duration",
-    0,
+    1,
     Settings.notificationsBlockFailedDuration,
     Settings.notificationsBlockFailedDuration,
   );
   const [blockFailedSound, setBlockFailedSound, bxSoundLoading] = useSettingsState(
     "block_failed_sound",
-    "chime",
+    "out_of_nowhere",
     Settings.notificationsBlockFailedSound,
     Settings.notificationsBlockFailedSound,
   );
@@ -862,7 +922,7 @@ const NotificationSettings = () => {
   );
   const [serialFinishedSound, setSerialFinishedSound, sfSoundLoading] = useSettingsState(
     "serial_finished_sound",
-    "chime",
+    "gracefully",
     Settings.notificationsSerialFinishedSound,
     Settings.notificationsSerialFinishedSound,
   );
@@ -882,7 +942,7 @@ const NotificationSettings = () => {
   );
   const [serialFailedSound, setSerialFailedSound, sxSoundLoading] = useSettingsState(
     "serial_failed_sound",
-    "chime",
+    "unexpected",
     Settings.notificationsSerialFailedSound,
     Settings.notificationsSerialFailedSound,
   );
@@ -894,7 +954,9 @@ const NotificationSettings = () => {
   );
 
   const isLoading =
+    sounds === null ||
     enabledLoading ||
+    volumeLoading ||
     bfDurationLoading ||
     bfSoundLoading ||
     bfOsLoading ||
@@ -925,6 +987,20 @@ const NotificationSettings = () => {
 
         {notificationsEnabled && (
           <>
+            <Slider
+              label="Volume"
+              size="sm"
+              step={1}
+              minValue={0}
+              maxValue={100}
+              value={volume}
+              onChange={(val: number | number[]) => {
+                const numVal = Array.isArray(val) ? val[0] : val;
+                setVolume(numVal);
+              }}
+              className="max-w-md"
+            />
+
             <div className="border-t pt-4 mt-2">
               <p className="text-sm font-medium mb-2">Block Notifications</p>
               <NotificationRow
@@ -936,6 +1012,8 @@ const NotificationSettings = () => {
                 onSoundChange={setBlockFinishedSound}
                 os={blockFinishedOs}
                 onOsChange={setBlockFinishedOs}
+                sounds={sounds}
+                volume={volume}
               />
               <NotificationRow
                 label="Failed after running at least"
@@ -946,6 +1024,8 @@ const NotificationSettings = () => {
                 onSoundChange={setBlockFailedSound}
                 os={blockFailedOs}
                 onOsChange={setBlockFailedOs}
+                sounds={sounds}
+                volume={volume}
               />
             </div>
 
@@ -960,6 +1040,8 @@ const NotificationSettings = () => {
                 onSoundChange={setSerialFinishedSound}
                 os={serialFinishedOs}
                 onOsChange={setSerialFinishedOs}
+                sounds={sounds}
+                volume={volume}
               />
               <NotificationRow
                 label="Workflow fails after running at least"
@@ -970,6 +1052,8 @@ const NotificationSettings = () => {
                 onSoundChange={setSerialFailedSound}
                 os={serialFailedOs}
                 onOsChange={setSerialFailedOs}
+                sounds={sounds}
+                volume={volume}
               />
             </div>
           </>
