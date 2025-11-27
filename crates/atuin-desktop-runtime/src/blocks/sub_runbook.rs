@@ -449,6 +449,358 @@ mod tests {
     use super::*;
     use serde_json::json;
 
+    use std::collections::HashMap;
+    use std::sync::Arc;
+
+    use async_trait::async_trait;
+
+    use crate::client::{DocumentBridgeMessage, MemoryRunbookContentLoader, MessageChannel};
+    use crate::context::{BlockContext, BlockContextStorage};
+    use crate::document::DocumentHandle;
+    use crate::events::MemoryEventBus;
+
+    /// In-memory storage for block contexts (test-only)
+    struct MemoryBlockContextStorage {
+        contexts: std::sync::Mutex<HashMap<String, BlockContext>>,
+    }
+
+    impl MemoryBlockContextStorage {
+        fn new() -> Self {
+            Self {
+                contexts: std::sync::Mutex::new(HashMap::new()),
+            }
+        }
+    }
+
+    #[async_trait]
+    impl BlockContextStorage for MemoryBlockContextStorage {
+        async fn save(
+            &self,
+            document_id: &str,
+            block_id: &Uuid,
+            context: &BlockContext,
+        ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+            let key = format!("{}:{}", document_id, block_id);
+            self.contexts.lock().unwrap().insert(key, context.clone());
+            Ok(())
+        }
+
+        async fn load(
+            &self,
+            document_id: &str,
+            block_id: &Uuid,
+        ) -> Result<Option<BlockContext>, Box<dyn std::error::Error + Send + Sync>> {
+            let key = format!("{}:{}", document_id, block_id);
+            Ok(self.contexts.lock().unwrap().get(&key).cloned())
+        }
+
+        async fn delete(
+            &self,
+            document_id: &str,
+            block_id: &Uuid,
+        ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+            let key = format!("{}:{}", document_id, block_id);
+            self.contexts.lock().unwrap().remove(&key);
+            Ok(())
+        }
+
+        async fn delete_for_document(
+            &self,
+            runbook_id: &str,
+        ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+            let prefix = format!("{}:", runbook_id);
+            self.contexts
+                .lock()
+                .unwrap()
+                .retain(|k, _| !k.starts_with(&prefix));
+            Ok(())
+        }
+    }
+
+    /// No-op message channel for tests
+    struct NoOpMessageChannel;
+
+    #[async_trait]
+    impl MessageChannel<DocumentBridgeMessage> for NoOpMessageChannel {
+        async fn send(
+            &self,
+            _message: DocumentBridgeMessage,
+        ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+            Ok(())
+        }
+    }
+
+    /// Helper to set up test infrastructure for sub-runbook execution
+    async fn setup_test_document(
+        runbook_loader: Arc<MemoryRunbookContentLoader>,
+    ) -> (Arc<DocumentHandle>, Arc<MemoryEventBus>) {
+        let event_bus = Arc::new(MemoryEventBus::new());
+        let message_channel: Arc<dyn MessageChannel<DocumentBridgeMessage>> =
+            Arc::new(NoOpMessageChannel);
+        let context_storage = Box::new(MemoryBlockContextStorage::new());
+
+        let document_handle = DocumentHandle::new(
+            Uuid::new_v4().to_string(),
+            event_bus.clone(),
+            message_channel,
+            None, // block_local_value_provider
+            Some(context_storage),
+            Some(runbook_loader),
+        );
+
+        (document_handle, event_bus)
+    }
+
+    /// Test: Sub-runbook creates a file, parent runbook reads it
+    ///
+    /// Runbook A: Creates file with "test content"
+    /// Runbook B: Calls A as sub-runbook, then cats the file
+    #[tokio::test]
+    async fn test_sub_runbook_creates_file_parent_reads_it() {
+        // Create a temp file path for the test
+        let test_file = std::env::temp_dir().join(format!("sub_runbook_test_{}", Uuid::new_v4()));
+        let test_file_path = test_file.to_string_lossy().to_string();
+
+        // Clean up any existing file
+        let _ = std::fs::remove_file(&test_file);
+
+        // Define runbook A: creates the file
+        let runbook_a_id = "runbook-a";
+        let script_block_id = Uuid::new_v4();
+        let runbook_a_content = vec![json!({
+            "id": script_block_id.to_string(),
+            "type": "script",
+            "props": {
+                "name": "Create File",
+                "code": format!("echo -n 'test content' > {}", test_file_path),
+                "interpreter": "bash"
+            }
+        })];
+
+        // Define runbook B: calls A, then cats the file
+        let sub_runbook_block_id = Uuid::new_v4();
+        let cat_script_block_id = Uuid::new_v4();
+        let runbook_b_content = vec![
+            json!({
+                "id": sub_runbook_block_id.to_string(),
+                "type": "sub-runbook",
+                "props": {
+                    "name": "Run Setup",
+                    "runbookPath": runbook_a_id,
+                    "runbookName": "Setup Runbook"
+                }
+            }),
+            json!({
+                "id": cat_script_block_id.to_string(),
+                "type": "script",
+                "props": {
+                    "name": "Read File",
+                    "code": format!("cat {}", test_file_path),
+                    "interpreter": "bash",
+                    "outputVariable": "file_content"
+                }
+            }),
+        ];
+
+        // Set up the runbook loader with both runbooks
+        let runbook_loader = Arc::new(
+            MemoryRunbookContentLoader::new().with_runbook(runbook_a_id, runbook_a_content),
+        );
+
+        let (document_handle, event_bus) = setup_test_document(runbook_loader.clone()).await;
+
+        // Load runbook B into the document
+        document_handle
+            .update_document(runbook_b_content)
+            .await
+            .expect("Should load document");
+
+        // Execute the sub-runbook block
+        let exec_context = document_handle
+            .create_execution_context(sub_runbook_block_id, None, None, None)
+            .await
+            .expect("Should create execution context");
+
+        let sub_runbook_block = SubRunbook::builder()
+            .id(sub_runbook_block_id)
+            .name("Run Setup")
+            .runbook_ref(SubRunbookRef {
+                id: None,
+                uri: None,
+                path: Some(runbook_a_id.to_string()),
+            })
+            .runbook_name(Some("Setup Runbook".to_string()))
+            .build();
+
+        let handle = sub_runbook_block
+            .execute(exec_context)
+            .await
+            .expect("Should execute sub-runbook");
+
+        // Wait for execution to complete
+        if let Some(handle) = handle {
+            let mut finished = handle.finished_channel();
+            loop {
+                if finished.changed().await.is_err() {
+                    break;
+                }
+                if finished.borrow().is_some() {
+                    break;
+                }
+            }
+        }
+
+        // Verify the file was created by the sub-runbook
+        let file_contents = std::fs::read_to_string(&test_file)
+            .expect("File should exist after sub-runbook execution");
+        assert_eq!(file_contents, "test content");
+
+        // Now execute the cat script block to verify reading works
+        let cat_exec_context = document_handle
+            .create_execution_context(cat_script_block_id, None, None, None)
+            .await
+            .expect("Should create execution context for cat");
+
+        let cat_block = crate::blocks::script::Script::builder()
+            .id(cat_script_block_id)
+            .name("Read File")
+            .code(format!("cat {}", test_file_path))
+            .interpreter("bash")
+            .output_variable(Some("file_content".to_string()))
+            .build();
+
+        let cat_handle = cat_block
+            .execute(cat_exec_context)
+            .await
+            .expect("Should execute cat script");
+
+        // Wait for cat to complete
+        if let Some(handle) = cat_handle {
+            let mut finished = handle.finished_channel();
+            loop {
+                if finished.changed().await.is_err() {
+                    break;
+                }
+                if finished.borrow().is_some() {
+                    break;
+                }
+            }
+        }
+
+        // Verify events were emitted
+        let events = event_bus.events();
+        assert!(!events.is_empty(), "Should have emitted events");
+
+        // Clean up
+        let _ = std::fs::remove_file(&test_file);
+    }
+
+    /// Simpler test: verify sub-runbook executes child blocks and reports correct progress
+    #[tokio::test]
+    async fn test_sub_runbook_executes_multiple_blocks() {
+        // Create temp files to track execution order
+        let marker_dir =
+            std::env::temp_dir().join(format!("sub_runbook_markers_{}", Uuid::new_v4()));
+        std::fs::create_dir_all(&marker_dir).expect("Should create marker dir");
+
+        let marker1 = marker_dir.join("marker1");
+        let marker2 = marker_dir.join("marker2");
+
+        // Define a sub-runbook with two script blocks
+        let sub_runbook_id = "multi-block-runbook";
+        let block1_id = Uuid::new_v4();
+        let block2_id = Uuid::new_v4();
+
+        let sub_runbook_content = vec![
+            json!({
+                "id": block1_id.to_string(),
+                "type": "script",
+                "props": {
+                    "name": "Create Marker 1",
+                    "code": format!("echo 'first' > {}", marker1.to_string_lossy()),
+                    "interpreter": "bash"
+                }
+            }),
+            json!({
+                "id": block2_id.to_string(),
+                "type": "script",
+                "props": {
+                    "name": "Create Marker 2",
+                    "code": format!("echo 'second' > {}", marker2.to_string_lossy()),
+                    "interpreter": "bash"
+                }
+            }),
+        ];
+
+        // Parent runbook just calls the sub-runbook
+        let parent_sub_block_id = Uuid::new_v4();
+        let parent_content = vec![json!({
+            "id": parent_sub_block_id.to_string(),
+            "type": "sub-runbook",
+            "props": {
+                "name": "Run Multi-Block",
+                "runbookPath": sub_runbook_id
+            }
+        })];
+
+        let runbook_loader = Arc::new(
+            MemoryRunbookContentLoader::new().with_runbook(sub_runbook_id, sub_runbook_content),
+        );
+
+        let (document_handle, _event_bus) = setup_test_document(runbook_loader).await;
+
+        document_handle
+            .update_document(parent_content)
+            .await
+            .expect("Should load document");
+
+        let exec_context = document_handle
+            .create_execution_context(parent_sub_block_id, None, None, None)
+            .await
+            .expect("Should create execution context");
+
+        let sub_runbook_block = SubRunbook::builder()
+            .id(parent_sub_block_id)
+            .name("Run Multi-Block")
+            .runbook_ref(SubRunbookRef {
+                id: None,
+                uri: None,
+                path: Some(sub_runbook_id.to_string()),
+            })
+            .build();
+
+        let handle = sub_runbook_block
+            .execute(exec_context)
+            .await
+            .expect("Should execute");
+
+        // Wait for completion
+        if let Some(handle) = handle {
+            let mut finished = handle.finished_channel();
+            loop {
+                if finished.changed().await.is_err() {
+                    break;
+                }
+                if finished.borrow().is_some() {
+                    break;
+                }
+            }
+        }
+
+        // Verify both markers were created (blocks executed in order)
+        assert!(marker1.exists(), "First marker should exist");
+        assert!(marker2.exists(), "Second marker should exist");
+
+        let content1 = std::fs::read_to_string(&marker1).expect("Should read marker1");
+        let content2 = std::fs::read_to_string(&marker2).expect("Should read marker2");
+
+        assert_eq!(content1.trim(), "first");
+        assert_eq!(content2.trim(), "second");
+
+        // Clean up
+        let _ = std::fs::remove_dir_all(&marker_dir);
+    }
+
     #[test]
     fn test_from_document() {
         let block_data = json!({

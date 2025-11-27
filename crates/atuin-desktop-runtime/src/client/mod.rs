@@ -20,3 +20,6 @@ pub use bridge::{
 pub use local::LocalValueProvider;
 pub use message_channel::MessageChannel;
 pub use runbook_loader::{RunbookContentLoader, RunbookLoadError, SubRunbookRef};
+
+#[cfg(test)]
+pub use runbook_loader::MemoryRunbookContentLoader;
