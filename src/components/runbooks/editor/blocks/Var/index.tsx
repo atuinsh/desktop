@@ -30,47 +30,50 @@ const Var = ({ name = "", value = "", onUpdate, isEditable }: VarProps) => {
   };
 
   return (
-    <div className="flex flex-row items-center space-x-3 w-full bg-gradient-to-r from-green-50 to-emerald-50 dark:from-slate-800 dark:to-emerald-950 rounded-lg p-3 border border-green-200 dark:border-green-900 shadow-sm hover:shadow-md transition-all duration-200">
-      <div className="flex items-center">
-        <Button
-          isIconOnly
-          variant="light"
-          className="bg-green-100 dark:bg-green-800 text-green-600 dark:text-green-300"
-        >
-          <TextCursorInputIcon className="h-4 w-4" />
-        </Button>
-      </div>
+    <div className="flex flex-col w-full bg-gradient-to-r from-green-50 to-emerald-50 dark:from-slate-800 dark:to-emerald-950 rounded-lg p-3 border border-green-200 dark:border-green-900 shadow-sm hover:shadow-md transition-all duration-200">
+      <span className="text-[10px] font-mono text-gray-400 dark:text-gray-500 mb-2">var</span>
+      <div className="flex flex-row items-center space-x-3">
+        <div className="flex items-center">
+          <Button
+            isIconOnly
+            variant="light"
+            className="bg-green-100 dark:bg-green-800 text-green-600 dark:text-green-300"
+          >
+            <TextCursorInputIcon className="h-4 w-4" />
+          </Button>
+        </div>
 
-      <Input
-        placeholder="Name"
-        value={name}
-        onChange={handleKeyChange}
-        autoComplete="off"
-        autoCapitalize="off"
-        autoCorrect="off"
-        spellCheck="false"
-        className={`flex-1 ${
-          hasNameError
-            ? "border-red-400 dark:border-red-400 focus:ring-red-500"
-            : "border-green-200 dark:border-green-800 focus:ring-green-500"
-        }`}
-        disabled={!isEditable}
-        isInvalid={hasNameError}
-        errorMessage={"Variable names can only contain letters, numbers, and underscores"}
-      />
-
-      <div className="flex-1">
         <Input
-          placeholder="Value"
-          value={value}
-          onChange={handleValueChange}
+          placeholder="Name"
+          value={name}
+          onChange={handleKeyChange}
           autoComplete="off"
           autoCapitalize="off"
           autoCorrect="off"
           spellCheck="false"
-          className="flex-1 border-green-200 dark:border-green-800 focus:ring-green-500"
+          className={`flex-1 ${
+            hasNameError
+              ? "border-red-400 dark:border-red-400 focus:ring-red-500"
+              : "border-green-200 dark:border-green-800 focus:ring-green-500"
+          }`}
           disabled={!isEditable}
+          isInvalid={hasNameError}
+          errorMessage={"Variable names can only contain letters, numbers, and underscores"}
         />
+
+        <div className="flex-1">
+          <Input
+            placeholder="Value"
+            value={value}
+            onChange={handleValueChange}
+            autoComplete="off"
+            autoCapitalize="off"
+            autoCorrect="off"
+            spellCheck="false"
+            className="flex-1 border-green-200 dark:border-green-800 focus:ring-green-500"
+            disabled={!isEditable}
+          />
+        </div>
       </div>
     </div>
   );

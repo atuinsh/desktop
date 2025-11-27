@@ -21,29 +21,32 @@ const SshConnect = ({ userHost, onUserHostChange, isEditable }: SshConnectProps)
       delay={1000}
       className="outline-none"
     >
-      <div className="flex flex-row items-center space-x-3 w-full bg-gradient-to-r from-slate-50 to-gray-50 dark:from-slate-800 dark:to-slate-900 rounded-lg p-3 border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-md transition-all duration-200">
-        <div className="flex items-center">
-          <Button
-            isIconOnly
-            variant="light"
-            className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300"
-          >
-            <GlobeIcon className="h-4 w-4" />
-          </Button>
-        </div>
+      <div className="flex flex-col w-full bg-gradient-to-r from-slate-50 to-gray-50 dark:from-slate-800 dark:to-slate-900 rounded-lg p-3 border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-md transition-all duration-200">
+        <span className="text-[10px] font-mono text-gray-400 dark:text-gray-500 mb-2">ssh-connect</span>
+        <div className="flex flex-row items-center space-x-3">
+          <div className="flex items-center">
+            <Button
+              isIconOnly
+              variant="light"
+              className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300"
+            >
+              <GlobeIcon className="h-4 w-4" />
+            </Button>
+          </div>
 
-        <div className="flex-1">
-          <Input
-            placeholder="myserver or user@host:port"
-            value={userHost}
-            autoComplete="off"
-            autoCapitalize="off"
-            autoCorrect="off"
-            spellCheck="false"
-            className="flex-1 border-slate-200 dark:border-slate-700 focus:ring-slate-500"
-            onValueChange={onUserHostChange}
-            disabled={!isEditable}
-          />
+          <div className="flex-1">
+            <Input
+              placeholder="myserver or user@host:port"
+              value={userHost}
+              autoComplete="off"
+              autoCapitalize="off"
+              autoCorrect="off"
+              spellCheck="false"
+              className="flex-1 border-slate-200 dark:border-slate-700 focus:ring-slate-500"
+              onValueChange={onUserHostChange}
+              disabled={!isEditable}
+            />
+          </div>
         </div>
       </div>
     </Tooltip>

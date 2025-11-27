@@ -25,47 +25,50 @@ const LocalVar = (props: LocalVarProps) => {
   }, [props.name]);
 
   return (
-    <div className="flex flex-row items-center space-x-3 w-full bg-gradient-to-r from-purple-50 to-indigo-50 dark:from-slate-800 dark:to-purple-950 rounded-lg p-3 border border-purple-200 dark:border-purple-900 shadow-sm hover:shadow-md transition-all duration-200">
-      <div className="flex items-center">
-        <Button
-          isIconOnly
-          variant="light"
-          className="bg-purple-100 dark:bg-purple-800 text-purple-600 dark:text-purple-300"
-        >
-          <CloudOffIcon className="h-4 w-4" />
-        </Button>
+    <div className="flex flex-col w-full bg-gradient-to-r from-purple-50 to-indigo-50 dark:from-slate-800 dark:to-purple-950 rounded-lg p-3 border border-purple-200 dark:border-purple-900 shadow-sm hover:shadow-md transition-all duration-200">
+      <span className="text-[10px] font-mono text-gray-400 dark:text-gray-500 mb-2">local-var</span>
+      <div className="flex flex-row items-center space-x-3">
+        <div className="flex items-center">
+          <Button
+            isIconOnly
+            variant="light"
+            className="bg-purple-100 dark:bg-purple-800 text-purple-600 dark:text-purple-300"
+          >
+            <CloudOffIcon className="h-4 w-4" />
+          </Button>
+        </div>
+
+        <Input
+          placeholder="Name (shared)"
+          value={props.name}
+          onValueChange={props.onNameUpdate}
+          autoComplete="off"
+          autoCapitalize="off"
+          autoCorrect="off"
+          spellCheck="false"
+          className={`flex-1 ${
+            hasNameError
+              ? "border-red-400 dark:border-red-400 focus:ring-red-500"
+              : "border-purple-200 dark:border-purple-800 focus:ring-purple-500"
+          }`}
+          disabled={!props.isEditable}
+          isInvalid={hasNameError}
+          errorMessage={"Variable names can only contain letters, numbers, and underscores"}
+        />
+
+        <Input
+          placeholder="Value (private and ephemeral - only stored on your device)"
+          value={value}
+          onValueChange={setValue}
+          autoComplete="off"
+          autoCapitalize="off"
+          autoCorrect="off"
+          spellCheck="false"
+          className="flex-1 border-purple-200 dark:border-purple-800 focus:ring-purple-500"
+          disabled={!props.isEditable}
+          type="password"
+        />
       </div>
-
-      <Input
-        placeholder="Name (shared)"
-        value={props.name}
-        onValueChange={props.onNameUpdate}
-        autoComplete="off"
-        autoCapitalize="off"
-        autoCorrect="off"
-        spellCheck="false"
-        className={`flex-1 ${
-          hasNameError
-            ? "border-red-400 dark:border-red-400 focus:ring-red-500"
-            : "border-purple-200 dark:border-purple-800 focus:ring-purple-500"
-        }`}
-        disabled={!props.isEditable}
-        isInvalid={hasNameError}
-        errorMessage={"Variable names can only contain letters, numbers, and underscores"}
-      />
-
-      <Input
-        placeholder="Value (private and ephemeral - only stored on your device)"
-        value={value}
-        onValueChange={setValue}
-        autoComplete="off"
-        autoCapitalize="off"
-        autoCorrect="off"
-        spellCheck="false"
-        className="flex-1 border-purple-200 dark:border-purple-800 focus:ring-purple-500"
-        disabled={!props.isEditable}
-        type="password"
-      />
     </div>
   );
 };

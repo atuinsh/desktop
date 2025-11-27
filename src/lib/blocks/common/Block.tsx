@@ -63,7 +63,7 @@ export default function Block({
     <Card className={cn("w-full !max-w-full !outline-none", className)} shadow="sm" ref={ref}>
       <CardHeader className="p-3 gap-2 bg-default-50 flex flex-col items-start justify-start z-auto">
         <div className="flex flex-row justify-between w-full">
-          <span className="text-default-700 font-semibold text-xs">{type}</span>
+          <span className="text-[10px] font-mono text-gray-400 dark:text-gray-500">{type.toLowerCase()}</span>
           <div className="flex items-center gap-2">
             {topRightElement}
             {hasDependency && parentBlock && (
