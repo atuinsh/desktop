@@ -146,7 +146,12 @@ impl Renderer for StreamingRenderer {
         if let Some(block) = self.blocks.get_mut(index) {
             let indent = "    ".repeat(block.indent_level);
             block.is_complete = true;
-            writeln!(self.stdout, "{indent}  ✓ [{}] {} complete", index + 1, block.title)?;
+            writeln!(
+                self.stdout,
+                "{indent}  ✓ [{}] {} complete",
+                index + 1,
+                block.title
+            )?;
             writeln!(self.stdout)?;
             self.stdout.flush()?;
         }

@@ -28,7 +28,11 @@ pub struct Runbook {
 
 impl Runbook {
     pub fn new(id: Uuid, content: Vec<serde_json::Value>, source_path: Option<PathBuf>) -> Self {
-        Self { id, content, source_path }
+        Self {
+            id,
+            content,
+            source_path,
+        }
     }
 }
 

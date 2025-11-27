@@ -115,8 +115,6 @@ impl RunbookContentLoader for MemoryRunbookContentLoader {
         self.runbooks
             .get(&id)
             .cloned()
-            .ok_or_else(|| RunbookLoadError::NotFound {
-                runbook_id: id,
-            })
+            .ok_or_else(|| RunbookLoadError::NotFound { runbook_id: id })
     }
 }

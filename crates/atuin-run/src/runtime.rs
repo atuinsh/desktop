@@ -1,7 +1,10 @@
 use std::path::PathBuf;
 
 use atuin_desktop_runtime::{
-    client::{DocumentBridgeMessage, LocalValueProvider, MessageChannel, RunbookContentLoader, RunbookLoadError, SubRunbookRef},
+    client::{
+        DocumentBridgeMessage, LocalValueProvider, MessageChannel, RunbookContentLoader,
+        RunbookLoadError, SubRunbookRef,
+    },
     context::{BlockContext, BlockContextStorage},
     events::{EventBus, GCEvent},
 };
@@ -144,24 +147,29 @@ impl FileRunbookLoader {
     }
 
     /// Load runbook content from a file path
-    async fn load_from_path(&self, path: &PathBuf, display_id: &str) -> Result<Vec<serde_json::Value>, RunbookLoadError> {
+    async fn load_from_path(
+        &self,
+        path: &PathBuf,
+        display_id: &str,
+    ) -> Result<Vec<serde_json::Value>, RunbookLoadError> {
         // Read and parse the file
-        let content = tokio::fs::read_to_string(path)
-            .await
-            .map_err(|e| RunbookLoadError::LoadFailed {
-                runbook_id: display_id.to_string(),
-                message: format!("Failed to read file: {}", e),
-            })?;
+        let content =
+            tokio::fs::read_to_string(path)
+                .await
+                .map_err(|e| RunbookLoadError::LoadFailed {
+                    runbook_id: display_id.to_string(),
+                    message: format!("Failed to read file: {}", e),
+                })?;
 
         // Parse YAML (which is a superset of JSON)
-        let yaml_value: serde_yaml::Value = serde_yaml::from_str(&content)
-            .map_err(|e| RunbookLoadError::LoadFailed {
+        let yaml_value: serde_yaml::Value =
+            serde_yaml::from_str(&content).map_err(|e| RunbookLoadError::LoadFailed {
                 runbook_id: display_id.to_string(),
                 message: format!("Failed to parse YAML: {}", e),
             })?;
 
-        let json_value: serde_json::Value = serde_yaml::from_value(yaml_value)
-            .map_err(|e| RunbookLoadError::LoadFailed {
+        let json_value: serde_json::Value =
+            serde_yaml::from_value(yaml_value).map_err(|e| RunbookLoadError::LoadFailed {
                 runbook_id: display_id.to_string(),
                 message: format!("Failed to convert to JSON: {}", e),
             })?;

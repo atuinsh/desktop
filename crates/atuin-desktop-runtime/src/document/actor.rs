@@ -5,7 +5,9 @@ use tokio::sync::{mpsc, oneshot};
 use uuid::Uuid;
 
 use crate::blocks::Block;
-use crate::client::{DocumentBridgeMessage, LocalValueProvider, MessageChannel, RunbookContentLoader};
+use crate::client::{
+    DocumentBridgeMessage, LocalValueProvider, MessageChannel, RunbookContentLoader,
+};
 use crate::context::{
     BlockContext, BlockContextStorage, BlockExecutionOutput, BlockState, BlockStateUpdater,
     ResolvedContext,
