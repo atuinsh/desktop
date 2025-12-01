@@ -119,7 +119,7 @@ export const insertKubernetes = (editor: any) => ({
     let kubernetesBlocks = editor.document.filter((block: any) => block.type === "kubernetes-get");
     let name = `Kubernetes Get ${kubernetesBlocks.length + 1}`;
 
-    Settings.scriptShell().then((shell) => {
+    Settings.getEffectiveScriptShell().then((interpreter) => {
       editor.insertBlocks(
         [
           {
@@ -128,7 +128,7 @@ export const insertKubernetes = (editor: any) => ({
               name,
               command: "kubectl get pods -o json",
               mode: "preset",
-              interpreter: shell || "zsh",
+              interpreter,
             },
           },
         ],

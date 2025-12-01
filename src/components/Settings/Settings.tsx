@@ -476,11 +476,15 @@ const RunbookSettings = () => {
   >([]);
   const [newInterpreterName, setNewInterpreterName] = useState("");
   const [newInterpreterCommand, setNewInterpreterCommand] = useState("");
+  const [systemDefaultShell, setSystemDefaultShell] = useState<string>("bash");
 
-  // Load script interpreters
+  // Load script interpreters and system default shell
   useEffect(() => {
     Settings.scriptInterpreters().then((interpreters) => {
       setScriptInterpreters(interpreters);
+    });
+    Settings.getSystemDefaultShell().then((shell) => {
+      setSystemDefaultShell(shell);
     });
   }, []);
 
@@ -614,7 +618,7 @@ const RunbookSettings = () => {
                 </p>
               </div>
               <InterpreterSelector
-                interpreter={scriptShell || "zsh"}
+                interpreter={scriptShell || systemDefaultShell}
                 onInterpreterChange={setScriptShell}
                 size="sm"
                 variant="flat"

@@ -1,4 +1,6 @@
+import { invoke } from "@tauri-apps/api/core";
 import { KVStore } from "./kv";
+import { supportedShells } from "@/lib/blocks/common/InterpreterSelector";
 
 const PROMETHEUS_URL_KEY = "settings.runbooks.prometheus_url";
 const TERMINAL_FONT = "settings.runbooks.terminal.font";
@@ -371,5 +373,32 @@ export class Settings {
     }
 
     return (await store.get(NOTIFICATIONS_SERIAL_FAILED_OS)) ?? "always";
+  }
+
+  public static async getSystemDefaultShell(): Promise<string> {
+    try {
+      const shellPath = await invoke<string>("get_default_shell");
+
+      // Check if this path matches one of our supported shells
+      for (const shell of supportedShells) {
+        if (shell.paths.includes(shellPath)) {
+          return shell.name;
+        }
+      }
+
+      // If not a known shell, return the full path
+      return shellPath;
+    } catch (e) {
+      console.error("Failed to get system default shell:", e);
+      return "bash";
+    }
+  }
+
+  public static async getEffectiveScriptShell(): Promise<string> {
+    const userShell = await this.scriptShell();
+    if (userShell) {
+      return userShell;
+    }
+    return await this.getSystemDefaultShell();
   }
 }

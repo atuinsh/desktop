@@ -507,6 +507,7 @@ fn main() {
             install::install_cli,
             install::is_cli_installed,
             install::setup_cli,
+            install::get_default_shell,
             blocks::postgres::command::postgres_query,
             blocks::postgres::command::postgres_execute,
             dotfiles::aliases::import_aliases,

@@ -11,6 +11,11 @@ use tokio::{
 use atuin_common::shell::Shell;
 
 #[tauri::command]
+pub(crate) async fn get_default_shell() -> Result<String, String> {
+    crate::util::get_user_shell().map_err(|e| format!("Failed to get default shell: {e}"))
+}
+
+#[tauri::command]
 pub(crate) async fn install_cli() -> Result<(), String> {
     let _= Command::new("sh")
         .arg("-c")
