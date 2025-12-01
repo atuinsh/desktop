@@ -18,6 +18,7 @@ import { cn, exportPropMatter } from "@/lib/utils";
 import { createReactBlockSpec } from "@blocknote/react";
 
 import { useStore } from "@/state/store";
+import { Settings } from "@/state/settings";
 import track_event from "@/tracking";
 import CodeEditor, { TabAutoComplete } from "@/lib/blocks/common/CodeEditor/CodeEditor.tsx";
 import InterpreterSelector from "@/lib/blocks/common/InterpreterSelector.tsx";
@@ -584,13 +585,18 @@ export default createReactBlockSpec(
 export const insertDropdown = (schema: any) => (editor: typeof schema.BlockNoteEditor) => ({
   title: "Dropdown",
   subtext: "Select from a list of options, sourced from a variable, command or fixed list",
-  onItemClick: () => {
+  onItemClick: async () => {
     track_event("runbooks.block.create", { type: "dropdown" });
+
+    const interpreter = await Settings.getEffectiveScriptShell();
 
     editor.insertBlocks(
       [
         {
           type: "dropdown",
+          props: {
+            interpreter,
+          },
         },
       ],
       editor.getTextCursorPosition().block.id,
