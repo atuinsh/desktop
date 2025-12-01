@@ -251,6 +251,12 @@ export default function NotificationManager() {
         return;
       }
 
+      // Skip block notification if this block is part of an active workflow
+      if (serialExecutionsRef.current.has(execution.runbookId)) {
+        logger.debug("skipping block notification - part of active workflow");
+        return;
+      }
+
       const durationMs = Date.now() - execution.startTime;
       const durationSecs = durationMs / 1000;
       const settings = settingsRef.current;
@@ -305,6 +311,12 @@ export default function NotificationManager() {
       executionsRef.current.delete(data.block_id);
 
       if (!execution) return;
+
+      // Skip block notification if this block is part of an active workflow
+      if (serialExecutionsRef.current.has(execution.runbookId)) {
+        logger.debug("skipping block-failed notification - part of active workflow");
+        return;
+      }
 
       const durationMs = Date.now() - execution.startTime;
       const durationSecs = durationMs / 1000;
