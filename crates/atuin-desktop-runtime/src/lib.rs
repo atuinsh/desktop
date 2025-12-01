@@ -99,7 +99,6 @@ pub fn init_tracing() {
 ///
 /// If you want to use tracing's native output (e.g., for a CLI tool),
 /// call [`init_tracing()`] instead.
-
 pub mod blocks;
 pub mod client;
 pub mod context;

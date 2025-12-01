@@ -500,7 +500,9 @@ impl SshPool {
                             || error_str.contains("connection")
                             || error_str.contains("broken pipe")
                         {
-                            tracing::debug!("Removing SSH connection due to connection error: {key}");
+                            tracing::debug!(
+                                "Removing SSH connection due to connection error: {key}"
+                            );
                             pool.write().await.connections.remove(&key);
                         } else if let Some(session) = pool.read().await.connections.get(&key) {
                             if !session.send_keepalive().await {
