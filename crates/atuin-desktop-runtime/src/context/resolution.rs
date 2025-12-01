@@ -131,7 +131,7 @@ impl ContextResolver {
                         DocumentVar::new(var.name.clone(), resolved_value, var.source.clone()),
                     );
                 } else {
-                    log::warn!("Failed to resolve template for variable {}", var.name);
+                    tracing::warn!("Failed to resolve template for variable {}", var.name);
                 }
             }
 
@@ -140,7 +140,7 @@ impl ContextResolver {
                 if let Ok(resolved_value) = self.resolve_template(&env.1) {
                     self.env_vars.insert(env.0.clone(), resolved_value);
                 } else {
-                    log::warn!(
+                    tracing::warn!(
                         "Failed to resolve template for environment variable {}",
                         env.0
                     );
@@ -168,7 +168,7 @@ impl ContextResolver {
 
                     self.cwd = normalized_path.to_string_lossy().to_string();
                 } else {
-                    log::warn!("Failed to resolve template for directory {}", dir.0);
+                    tracing::warn!("Failed to resolve template for directory {}", dir.0);
                 }
             }
 
@@ -177,7 +177,7 @@ impl ContextResolver {
                     if let Ok(resolved_value) = self.resolve_template(host) {
                         self.ssh_host = Some(resolved_value);
                     } else {
-                        log::warn!("Failed to resolve template for SSH host {}", host);
+                        tracing::warn!("Failed to resolve template for SSH host {}", host);
                     }
                 }
             }

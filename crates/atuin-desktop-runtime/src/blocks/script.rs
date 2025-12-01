@@ -114,9 +114,9 @@ impl BlockBehavior for Script {
         self,
         context: ExecutionContext,
     ) -> Result<Option<ExecutionHandle>, Box<dyn std::error::Error + Send + Sync>> {
-        log::trace!("Executing script block {id}", id = self.id);
+        tracing::trace!("Executing script block {id}", id = self.id);
 
-        log::trace!(
+        tracing::trace!(
             "Script block {id} execution handle created; ID = {handle_id}",
             id = self.id,
             handle_id = context.handle().id
@@ -136,7 +136,7 @@ impl BlockBehavior for Script {
                 .run_script(context.clone(), context.cancellation_token())
                 .await;
 
-            log::trace!(
+            tracing::trace!(
                 "Script block {id} execution completed; Exit code = {exit_code}",
                 id = self.id,
                 exit_code = exit_code
@@ -161,7 +161,7 @@ impl BlockBehavior for Script {
 
                         let _ = context
                             .update_active_context(block_id, move |ctx| {
-                                log::trace!(
+                                tracing::trace!(
                                     "Storing output variable {var_name} for script block {block_id}",
                                     var_name = var_name,
                                     block_id = block_id
@@ -284,7 +284,7 @@ impl Script {
         String,
     ) {
         // Send started lifecycle event to output channel
-        log::trace!(
+        tracing::trace!(
             "Sending started lifecycle event to output channel for script block {id}",
             id = self.id
         );
@@ -296,14 +296,14 @@ impl Script {
             .context_resolver
             .resolve_template(&self.code)
             .unwrap_or_else(|e| {
-                log::warn!("Templating error in script {id}: {e}", id = self.id, e = e);
+                tracing::warn!("Templating error in script {id}: {e}", id = self.id, e = e);
                 self.code.clone()
             });
 
         // Check if SSH execution is needed
         let ssh_host = context.context_resolver.ssh_host().cloned();
         if let Some(ssh_host) = ssh_host {
-            log::trace!(
+            tracing::trace!(
                 "Executing SSH script for script block {id} with SSH host {ssh_host}",
                 id = self.id,
                 ssh_host = ssh_host
@@ -361,7 +361,7 @@ impl Script {
             cmd.process_group(0);
         }
 
-        log::trace!("Spawning process for script block {id}", id = self.id,);
+        tracing::trace!("Spawning process for script block {id}", id = self.id,);
 
         let mut child = match cmd.spawn() {
             Ok(child) => child,
@@ -389,7 +389,7 @@ impl Script {
                     if n == 0 {
                         break;
                     }
-                    log::trace!(
+                    tracing::trace!(
                         "Sending stdout line to output channel for script block {id}",
                         id = block_id
                     );
@@ -421,7 +421,7 @@ impl Script {
                     if n == 0 {
                         break;
                     }
-                    log::trace!(
+                    tracing::trace!(
                         "Sending stderr line to output channel for script block {id}",
                         id = block_id
                     );
@@ -444,7 +444,7 @@ impl Script {
         let exit_code = if let Some(cancel_rx) = cancellation_receiver {
             tokio::select! {
                 _ = cancel_rx => {
-                    log::trace!("Process for script block {id} cancelled", id = self.id);
+                    tracing::trace!("Process for script block {id} cancelled", id = self.id);
 
                     // Kill the process
                     if let Some(pid) = pid {
@@ -452,7 +452,7 @@ impl Script {
                         {
                             use nix::sys::signal::{self, Signal};
                             use nix::unistd::Pid;
-                            log::trace!("Sending SIGTERM to process {pid}", pid = pid);
+                            tracing::trace!("Sending SIGTERM to process {pid}", pid = pid);
                             // Send SIGTERM to the process group
                             let _ = signal::kill(Pid::from_raw(-(pid as i32)), Signal::SIGTERM);
                         }
@@ -550,7 +550,7 @@ impl Script {
                 result
             }
             _ = &mut cancel_rx => {
-                log::trace!("Sending cancel to SSH execution for channel {channel_id}");
+                tracing::trace!("Sending cancel to SSH execution for channel {channel_id}");
                 let _ = ssh_pool.exec_cancel(&channel_id).await;
                 let _ = context.block_cancelled().await;
                 return (Err("SSH script execution cancelled before start".into()), String::new());

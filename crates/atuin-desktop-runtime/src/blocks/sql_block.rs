@@ -223,7 +223,7 @@ where
             }
 
             for statement in statements.iter() {
-                log::info!("Statement: {:?}", statement);
+                tracing::info!("Statement: {:?}", statement);
             }
 
             statements

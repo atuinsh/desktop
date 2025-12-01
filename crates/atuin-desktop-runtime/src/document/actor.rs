@@ -168,7 +168,7 @@ impl DocumentHandle {
         });
 
         // Spawn the document actor
-        log::trace!(
+        tracing::trace!(
             "Spawning document actor for runbook {runbook_id}",
             runbook_id = runbook_id
         );
@@ -441,7 +441,7 @@ impl DocumentHandle {
 
 impl Drop for DocumentHandle {
     fn drop(&mut self) {
-        log::trace!(
+        tracing::trace!(
             "Shutting down document actor for runbook {runbook_id}",
             runbook_id = self.runbook_id
         );
@@ -592,7 +592,7 @@ impl DocumentActor {
         &mut self,
         document: Vec<serde_json::Value>,
     ) -> Result<(), DocumentError> {
-        log::trace!("Updating document {} with new content", self.document.id);
+        tracing::trace!("Updating document {} with new content", self.document.id);
         // Update the document using put_document, which returns the index to rebuild from
         let rebuild_from = self
             .document
@@ -610,7 +610,7 @@ impl DocumentActor {
             if let Err(errors) = result {
                 // Log errors but don't fail the entire operation
                 for error in errors {
-                    log::error!("Error rebuilding passive context: {:?}", error);
+                    tracing::error!("Error rebuilding passive context: {:?}", error);
                 }
             }
         }
@@ -711,7 +711,7 @@ impl DocumentActor {
         block_id: Uuid,
         update_fn: BlockStateUpdater,
     ) -> Result<(), DocumentError> {
-        log::trace!(
+        tracing::trace!(
             "Updating block state for block {block_id} in document {doc_id}",
             doc_id = self.document.id
         );
@@ -747,7 +747,7 @@ impl DocumentActor {
         };
 
         if let Some(state) = state {
-            log::trace!("Emitting state changed for block {block_id}");
+            tracing::trace!("Emitting state changed for block {block_id}");
             let _ = self.document.emit_state_changed(block_id, state).await;
         }
 
@@ -758,7 +758,7 @@ impl DocumentActor {
         &mut self,
         block_id: Uuid,
     ) -> Result<(), DocumentError> {
-        log::trace!(
+        tracing::trace!(
             "Block local value changed for block {block_id} in document {}",
             self.document.id
         );
@@ -766,7 +766,7 @@ impl DocumentActor {
             .document
             .get_block_index(&block_id)
             .ok_or(DocumentError::BlockNotFound(block_id))?;
-        log::trace!("Rebuilding document from index {rebuild_from}");
+        tracing::trace!("Rebuilding document from index {rebuild_from}");
 
         // Rebuild passive contexts only for affected blocks
         let result = self
@@ -777,7 +777,7 @@ impl DocumentActor {
         if let Err(errors) = result {
             // Log errors but don't fail the entire operation
             for error in errors {
-                log::error!("Error rebuilding passive context: {:?}", error);
+                tracing::error!("Error rebuilding passive context: {:?}", error);
             }
         }
 
@@ -785,7 +785,7 @@ impl DocumentActor {
     }
 
     async fn handle_reset_state(&mut self) -> Result<(), DocumentError> {
-        log::trace!("Resetting document state for document {}", self.document.id);
+        tracing::trace!("Resetting document state for document {}", self.document.id);
         self.document.reset_state().await?;
 
         let result = self
@@ -795,7 +795,7 @@ impl DocumentActor {
 
         if let Err(errors) = result {
             for error in errors {
-                log::error!("Error rebuilding passive context: {:?}", error);
+                tracing::error!("Error rebuilding passive context: {:?}", error);
             }
         }
 

@@ -18,6 +18,29 @@
 //! 3. Executing blocks and managing their lifecycle
 //! 4. Collecting execution results and context updates
 
+use tracing_subscriber::{fmt, prelude::*, EnvFilter};
+
+/// Initialize the tracing subscriber for logging.
+///
+/// This sets up tracing to output to the terminal with the log level
+/// controlled by the `RUST_LOG` environment variable.
+///
+/// # Examples
+///
+/// ```ignore
+/// // Set RUST_LOG=debug before running to see debug logs
+/// // Set RUST_LOG=atuin_desktop_runtime=trace for trace-level logs in this crate
+/// atuin_desktop_runtime::init_tracing();
+/// ```
+pub fn init_tracing() {
+    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
+
+    tracing_subscriber::registry()
+        .with(fmt::layer())
+        .with(filter)
+        .init();
+}
+
 pub mod blocks;
 pub mod client;
 pub mod context;

@@ -42,18 +42,18 @@ impl Pool {
         let username = username.unwrap_or(&current_user);
         let key = format!("{username}@{host}");
 
-        log::debug!("connecting to {key}");
+        tracing::debug!("connecting to {key}");
 
         // Check if we have an existing connection
         if let Some(session) = self.get(host, username) {
-            log::debug!("found existing ssh session in pool");
+            tracing::debug!("found existing ssh session in pool");
             // Test if the connection is still alive
             if session.send_keepalive().await {
-                log::debug!("session keepalive success");
+                tracing::debug!("session keepalive success");
                 return Ok(session);
             } else {
                 // Connection is dead, remove it from the pool
-                log::debug!("Removing dead SSH connection for {key}");
+                tracing::debug!("Removing dead SSH connection for {key}");
                 self.connections.remove(&key);
             }
         }
@@ -65,14 +65,14 @@ impl Pool {
         };
 
         // Create a new connection
-        log::debug!("Creating new SSH connection for {key}");
+        tracing::debug!("Creating new SSH connection for {key}");
         let session = if let Some(mut cancellation_rx) = cancellation_rx {
             tokio::select! {
                 result = async_session => {
                     result?
                 }
                 _ = &mut cancellation_rx => {
-                    log::debug!("SSH connection {key} cancelled");
+                    tracing::debug!("SSH connection {key} cancelled");
                     return Err(eyre::eyre!("SSH connection cancelled"));
                 }
             }

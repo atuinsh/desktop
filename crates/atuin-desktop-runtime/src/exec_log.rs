@@ -3,7 +3,7 @@
 //! This module provides a SQLite-based logging system for tracking block execution
 //! history, including timestamps and outputs.
 
-use log::debug;
+use tracing::debug;
 use serde::{Deserialize, Serialize};
 use sqlx::{
     sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions, SqliteSynchronous},

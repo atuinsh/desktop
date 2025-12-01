@@ -86,7 +86,7 @@ impl Session {
             Ok(Some(_)) => true,
             Ok(None) => false,
             Err(_) => {
-                log::debug!("SSH keepalive timed out");
+                tracing::debug!("SSH keepalive timed out");
                 false
             }
         }
@@ -246,7 +246,7 @@ impl Session {
                     // Parse IdentityAgent manually since russh-config doesn't support it
                     let identity_agent = Self::parse_identity_agent(&hostname);
 
-                    log::debug!(
+                    tracing::debug!(
                         "Resolved SSH config for {host}: hostname={hostname}, port={port}, username={username:?}, identity_files={identity_files:?}, proxy_command={proxy_command:?}, proxy_jump={proxy_jump:?}"
                     );
 
@@ -261,12 +261,12 @@ impl Session {
                     };
                 }
                 Err(e) => {
-                    log::warn!("Failed to parse SSH config: {e}");
+                    tracing::warn!("Failed to parse SSH config: {e}");
                 }
             }
         }
 
-        log::debug!("No SSH config found for {host}, using defaults");
+        tracing::debug!("No SSH config found for {host}, using defaults");
         default_config
     }
 
@@ -282,7 +282,7 @@ impl Session {
 
         // Handle ProxyCommand and ProxyJump
         let session = if ssh_config.proxy_command.is_some() || ssh_config.proxy_jump.is_some() {
-            log::debug!(
+            tracing::debug!(
                 "Using proxy for connection to {} (proxy_command: {:?}, proxy_jump: {:?})",
                 host,
                 ssh_config.proxy_command,
@@ -296,17 +296,17 @@ impl Session {
                     russh::client::connect_stream(Arc::new(config), stream, sh).await?
                 }
                 Err(e) => {
-                    log::warn!("Failed to create proxy stream: {e}");
+                    tracing::warn!("Failed to create proxy stream: {e}");
                     // Fallback to direct connection
                     let address = format!("{}:{}", ssh_config.hostname, ssh_config.port);
-                    log::debug!("Falling back to direct connection: {address}");
+                    tracing::debug!("Falling back to direct connection: {address}");
                     russh::client::connect(Arc::new(config), address.as_str(), sh).await?
                 }
             }
         } else {
             // Direct connection
             let address = format!("{}:{}", ssh_config.hostname, ssh_config.port);
-            log::debug!("Connecting directly to: {address}");
+            tracing::debug!("Connecting directly to: {address}");
             russh::client::connect(Arc::new(config), address.as_str(), sh).await?
         };
 
@@ -367,7 +367,7 @@ impl Session {
 
     /// Public key authentication
     pub async fn key_auth(&mut self, username: &str, key_path: PathBuf) -> Result<()> {
-        log::info!(
+        tracing::info!(
             "Attempting public key authentication with {}",
             key_path.display()
         );
@@ -375,12 +375,12 @@ impl Session {
         let key_pair = match russh::keys::load_secret_key(&key_path, None) {
             Ok(kp) => kp,
             Err(e) => {
-                log::warn!("Failed to load key {}: {e}", key_path.display());
+                tracing::warn!("Failed to load key {}: {e}", key_path.display());
                 return Err(e.into());
             }
         };
 
-        log::debug!("Key loaded successfully, authenticating...");
+        tracing::debug!("Key loaded successfully, authenticating...");
 
         // Query the server for the best RSA hash algorithm it supports
         // This ensures compatibility with both modern (SHA-256/SHA-512) and legacy (SHA-1) servers
@@ -394,14 +394,14 @@ impl Session {
 
         match auth_res {
             russh::client::AuthResult::Success => {
-                log::info!("✓ Authentication successful with {}", key_path.display());
+                tracing::info!("✓ Authentication successful with {}", key_path.display());
                 Ok(())
             }
             russh::client::AuthResult::Failure {
                 remaining_methods,
                 partial_success,
             } => {
-                log::warn!(
+                tracing::warn!(
                     "Server rejected key {} (remaining methods: {:?}, partial: {})",
                     key_path.display(),
                     remaining_methods,
@@ -415,15 +415,15 @@ impl Session {
     }
 
     pub async fn agent_auth(&mut self, username: &str) -> Result<bool> {
-        log::info!("Attempting SSH agent authentication for {username}");
+        tracing::info!("Attempting SSH agent authentication for {username}");
 
         // Try to connect to SSH agent, using custom IdentityAgent if specified
         let agent_result = if let Some(ref identity_agent) = self.ssh_config.identity_agent {
-            log::info!("Using custom IdentityAgent: {identity_agent}");
+            tracing::info!("Using custom IdentityAgent: {identity_agent}");
             // Connect to custom agent socket
             russh::keys::agent::client::AgentClient::connect_uds(identity_agent).await
         } else {
-            log::info!("Using default SSH agent from environment");
+            tracing::info!("Using default SSH agent from environment");
             // Use default SSH agent from environment
             russh::keys::agent::client::AgentClient::connect_env().await
         };
@@ -431,41 +431,41 @@ impl Session {
         match agent_result {
             Ok(mut agent) => match agent.request_identities().await {
                 Ok(keys) => {
-                    log::info!("SSH agent has {} keys available", keys.len());
+                    tracing::info!("SSH agent has {} keys available", keys.len());
                     for (i, key) in keys.iter().enumerate() {
-                        log::debug!("Trying SSH agent key #{}", i + 1);
+                        tracing::debug!("Trying SSH agent key #{}", i + 1);
                         match self
                             .session
                             .authenticate_publickey_with(username, key.clone(), None, &mut agent)
                             .await
                         {
                             Ok(russh::client::AuthResult::Success) => {
-                                log::info!(
+                                tracing::info!(
                                     "✓ Successfully authenticated with SSH agent key #{}",
                                     i + 1
                                 );
                                 return Ok(true);
                             }
                             Ok(_) => {
-                                log::debug!("SSH agent key #{} rejected by server", i + 1);
+                                tracing::debug!("SSH agent key #{} rejected by server", i + 1);
                                 continue;
                             }
                             Err(e) => {
-                                log::debug!("Error trying SSH agent key #{}: {e:?}", i + 1);
+                                tracing::debug!("Error trying SSH agent key #{}: {e:?}", i + 1);
                                 continue;
                             }
                         }
                     }
-                    log::info!("No SSH agent keys worked for authentication");
+                    tracing::info!("No SSH agent keys worked for authentication");
                     Ok(false)
                 }
                 Err(e) => {
-                    log::info!("Failed to request identities from SSH agent: {e}");
+                    tracing::info!("Failed to request identities from SSH agent: {e}");
                     Ok(false)
                 }
             },
             Err(e) => {
-                log::info!("Cannot connect to SSH agent: {e}");
+                tracing::info!("Cannot connect to SSH agent: {e}");
                 Ok(false)
             }
         }
@@ -493,25 +493,25 @@ impl Session {
             .or(config_username.as_deref())
             .unwrap_or(&current_user);
 
-        log::info!(
+        tracing::info!(
             "Starting SSH authentication for {username}@{}",
             self.ssh_config.hostname
         );
-        log::debug!("SSH config identity files: {identity_files:?}");
+        tracing::debug!("SSH config identity files: {identity_files:?}");
 
         let default_keys = Self::default_ssh_keys();
-        log::debug!("Available default SSH keys: {default_keys:?}");
+        tracing::debug!("Available default SSH keys: {default_keys:?}");
 
         // 1. attempt ssh agent auth
-        log::info!("Step 1/4: Trying SSH agent authentication");
+        tracing::info!("Step 1/4: Trying SSH agent authentication");
         if self.agent_auth(username).await? {
-            log::info!("✓ SSH authentication successful with agent");
+            tracing::info!("✓ SSH authentication successful with agent");
             return Ok(());
         }
-        log::info!("✗ SSH agent authentication failed or unavailable");
+        tracing::info!("✗ SSH agent authentication failed or unavailable");
 
         // 2. Try SSH config identity files
-        log::info!(
+        tracing::info!(
             "Step 2/4: Trying SSH config identity files ({} files)",
             identity_files.len()
         );
@@ -522,14 +522,14 @@ impl Session {
         }
 
         // 3. Try default SSH keys if not already tried via config
-        log::info!(
+        tracing::info!(
             "Step 3/4: Trying default SSH keys ({} keys found)",
             default_keys.len()
         );
         for key_path in &default_keys {
             // Skip if this key was already tried from config
             if identity_files.contains(key_path) {
-                log::debug!(
+                tracing::debug!(
                     "Skipping {} (already tried via SSH config)",
                     key_path.display()
                 );
@@ -541,25 +541,25 @@ impl Session {
                     return Ok(());
                 }
                 Err(e) => {
-                    log::debug!("Default SSH key failed: {e}");
+                    tracing::debug!("Default SSH key failed: {e}");
                 }
             }
         }
 
         // 4. whatever the user provided
-        log::info!("Step 4/4: Trying explicitly provided authentication");
+        tracing::info!("Step 4/4: Trying explicitly provided authentication");
         match auth {
             Some(Authentication::Password(_user, password)) => {
-                log::info!("Trying password authentication");
+                tracing::info!("Trying password authentication");
                 self.password_auth(username, &password).await?
             }
             Some(Authentication::Key(key_path)) => {
-                log::info!("Trying explicitly provided key: {}", key_path.display());
+                tracing::info!("Trying explicitly provided key: {}", key_path.display());
                 self.key_auth(username, key_path).await?
             }
             None => {
-                log::warn!("All SSH authentication methods exhausted");
-                log::warn!(
+                tracing::warn!("All SSH authentication methods exhausted");
+                tracing::warn!(
                     "Tried: SSH agent, {} config keys, {} default keys",
                     identity_files.len(),
                     default_keys.len()
@@ -661,14 +661,14 @@ impl Session {
 
         let full_command = full_command_parts.join(" ");
 
-        log::debug!("Executing command on remote: {full_command}");
+        tracing::debug!("Executing command on remote: {full_command}");
 
         let channel_id_clone = channel_id.clone();
         let output_stream_clone = output_stream.clone();
 
         tokio::task::spawn(async move {
             if let Err(e) = channel.exec(true, full_command.as_str()).await {
-                log::error!("Failed to execute command: {e}");
+                tracing::error!("Failed to execute command: {e}");
                 let _ = output_stream_clone.send(e.to_string()).await;
                 return;
             }
@@ -680,7 +680,7 @@ impl Session {
                 tokio::select! {
                     // Check if we've been asked to cancel
                     _ = &mut cancel_rx => {
-                        log::debug!("SSH command execution cancelled");
+                        tracing::debug!("SSH command execution cancelled");
                         break;
                     }
 
@@ -744,7 +744,7 @@ impl Session {
                 }
             }
 
-            log::debug!("Sending exec finished for channel {channel_id_clone}");
+            tracing::debug!("Sending exec finished for channel {channel_id_clone}");
             let _ = handle.exec_finished(&channel_id_clone).await;
         });
 
@@ -795,7 +795,7 @@ impl Session {
                 tokio::select! {
                     // Check if we've been asked to cancel
                     _ = &mut cancel_rx => {
-                        log::debug!("SSH PTY session cancelled");
+                        tracing::debug!("SSH PTY session cancelled");
                         break;
                     }
 
@@ -805,7 +805,7 @@ impl Session {
                                 let _ = channel.window_change(width as u32, height as u32, 0, 0).await;
                             }
                             None => {
-                                log::debug!("SSH resize stream closed");
+                                tracing::debug!("SSH resize stream closed");
                                 break;
                             }
                         }
@@ -817,12 +817,12 @@ impl Session {
                             Some(input) => {
                                 let cursor = std::io::Cursor::new(input.as_ref());
                                 if let Err(e) = channel.data(cursor).await {
-                                    log::error!("Failed to write to channel: {e}");
+                                    tracing::error!("Failed to write to channel: {e}");
                                     break;
                                 }
                             }
                             None => {
-                                log::debug!("SSH input stream closed");
+                                tracing::debug!("SSH input stream closed");
                                 break;
                             }
                         }
@@ -837,16 +837,16 @@ impl Session {
                         match msg {
                             ChannelMsg::Data { data } => {
                                 if let Err(e) = output_stream.send(String::from_utf8_lossy(&data).to_string()).await {
-                                    log::error!("Failed to send output to stream: {e}");
+                                    tracing::error!("Failed to send output to stream: {e}");
                                     break;
                                 }
                             }
                             ChannelMsg::Close => {
-                                log::debug!("SSH channel closed");
+                                tracing::debug!("SSH channel closed");
                                 break;
                             }
                             ChannelMsg::Eof => {
-                                log::debug!("SSH channel EOF");
+                                tracing::debug!("SSH channel EOF");
                                 break;
                             }
                             _ => {}

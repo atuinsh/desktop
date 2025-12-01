@@ -134,7 +134,7 @@ impl BlockBehavior for Kubernetes {
         self,
         context: ExecutionContext,
     ) -> Result<Option<ExecutionHandle>, Box<dyn std::error::Error + Send + Sync>> {
-        log::trace!("Executing Kubernetes block {id}", id = self.id);
+        tracing::trace!("Executing Kubernetes block {id}", id = self.id);
 
         let _ = context.block_started().await;
 
@@ -142,7 +142,7 @@ impl BlockBehavior for Kubernetes {
         let result = self.execute_kubectl_command(&context).await;
 
         if let Err(e) = result {
-            log::error!("{e}");
+            tracing::error!("{e}");
             let error_message = e.to_string();
             let _ = context.block_failed(error_message).await;
             return Err(e.into());
