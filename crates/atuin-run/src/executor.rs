@@ -426,7 +426,7 @@ impl Executor {
     fn get_output_lines(&self, block: Block, resolver: &ContextResolver) -> Vec<String> {
         match block {
             Block::Directory(dir) => {
-                log::error!("dir block: {dir:?}");
+                tracing::debug!("dir block: {dir:?}");
                 vec![format!(
                     "Directory set to: {}",
                     resolver.resolve_template(&dir.path).unwrap_or_default()
