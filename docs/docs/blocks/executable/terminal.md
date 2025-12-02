@@ -22,6 +22,41 @@ The terminal processes your input just as if you had typed it directly into your
 Everything within the input box is fed as input for the terminal, so interactive sessions can be nested as deep as you'd like. There is much more flexibility here than a normal bash script, with the following caveats
 
 1. We cannot detect when a command within a terminal ends - we hope to have this resolved soon, but there's an additional layer of complexity here
-2. Output cannot be captured. As we are emulating a terminal, the output contains a multitude of control codes, prompt output, etc. If you'd like to work with the output of a shell command, we recommend using a [script](script.md "mention") block.
+2. Standard output cannot be captured directly. As we are emulating a terminal, the output contains a multitude of control codes, prompt output, etc. However, you can set template variables using `$ATUIN_OUTPUT_VARS` (see Variables section below). If you need to work with stdout directly, we recommend using a [script](script.md "mention") block.
 3. Terminals are slower than scripts. Because we're spinning up a new pseudo-terminal in the background, startup time and resource usage will be a bit higher than a script
 4. Interactive input can sometimes feel unnatural, and the scripting process is different than writing a bash script
+
+## Variables
+
+While terminal blocks don't support capturing stdout directly, they can set template variables when the terminal session exits. This is done by writing to the `$ATUIN_OUTPUT_VARS` file.
+
+**Usage:**
+
+```bash
+echo "name=value" >> $ATUIN_OUTPUT_VARS
+echo "another_var=another_value" >> $ATUIN_OUTPUT_VARS
+```
+
+- Format: `KEY=VALUE` entries, one per line
+- Variables are captured when the terminal exits
+- Works with both local and remote (SSH) terminal sessions
+
+**Example:**
+
+```bash
+# Set variables during an interactive session
+echo "session_id=$(uuidgen)" >> $ATUIN_OUTPUT_VARS
+echo "current_dir=$(pwd)" >> $ATUIN_OUTPUT_VARS
+
+# Continue with other terminal commands
+ls -la
+```
+
+These variables can then be referenced in other blocks:
+
+```handlebars
+{{var.session_id}}
+{{var.current_dir}}
+```
+
+See the [templating](../../templating.md) section for full information on template variables.

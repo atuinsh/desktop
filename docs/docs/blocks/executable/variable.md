@@ -22,6 +22,22 @@ Local variables are **not synced** and remain private to each user's session.
 - **Scope**: Available throughout the runbook for that user only
 - **Use case**: User-specific settings, temporary calculations, private credentials
 
+## Setting Variables from Script and Terminal Blocks
+
+[Script](script.md) and [Terminal](terminal.md) blocks can set multiple template variables by writing to the `$ATUIN_OUTPUT_VARS` file. This provides a programmatic way to create variables based on command execution.
+
+**Usage:**
+
+```bash
+echo "name=value" >> $ATUIN_OUTPUT_VARS
+```
+
+- **Format**: `KEY=VALUE` entries, one per line
+- **Timing**: Variables are captured when scripts exit successfully or terminals close
+- **Location**: Works with both local and remote (SSH) execution
+
+See the [Script](script.md#setting-variables-via-atuin_output_vars) and [Terminal](terminal.md#variables) documentation for detailed examples.
+
 ## Variable Display
 
 Use the Variable Display block to view all currently set variables and their values. This shows both template (synced) and local (not synced) variables for debugging and state inspection.
