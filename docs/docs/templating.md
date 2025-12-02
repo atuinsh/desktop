@@ -37,12 +37,14 @@ echo "{{ remote }}"
 - `length(list)`: Gets list length → `{{ length(users) }}`
 - `default(value, fallback)`: Uses fallback if `None` → `{{ user.name | default("Guest") }}`
 
+See [Built-In Filters Reference](#built-in-filters-reference) for more.
+
 **Custom Filters**
 
 - `shellquote`: Escapes a string for safe use in shell commands → `{{ var.text | shellquote }}`
-  - Uses POSIX single-quote escaping to handle special characters like quotes, backticks, dollar signs, etc.
-  - Example: `echo {{ var.message | shellquote }}` safely handles any characters in the message variable
-  - Particularly useful when passing variables that might contain user input or special characters
+    - Uses POSIX single-quote escaping to handle special characters like quotes, backticks, dollar signs, etc.
+    - Example: `echo {{ var.message | shellquote }}` safely handles any characters in the message variable
+    - Particularly useful when passing variables that might contain user input or special characters
 
 **Example Usage**
 
