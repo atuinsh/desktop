@@ -123,6 +123,24 @@ pub enum SshPoolMessage {
     HealthCheck {
         reply_to: oneshot::Sender<Result<()>>,
     },
+    CreateTempFile {
+        host: String,
+        username: Option<String>,
+        prefix: String,
+        reply_to: oneshot::Sender<Result<String>>,
+    },
+    ReadFile {
+        host: String,
+        username: Option<String>,
+        path: String,
+        reply_to: oneshot::Sender<Result<String>>,
+    },
+    DeleteFile {
+        host: String,
+        username: Option<String>,
+        path: String,
+        reply_to: oneshot::Sender<Result<()>>,
+    },
 }
 
 #[derive(Clone, Debug)]
@@ -282,6 +300,63 @@ impl SshPoolHandle {
         };
         let _ = self.sender.send(msg).await;
         Ok(())
+    }
+
+    /// Create a temporary file on the remote system
+    pub async fn create_temp_file(
+        &self,
+        host: &str,
+        username: Option<&str>,
+        prefix: &str,
+    ) -> Result<String> {
+        let (sender, receiver) = oneshot::channel();
+        let msg = SshPoolMessage::CreateTempFile {
+            host: host.to_string(),
+            username: username.map(|u| u.to_string()),
+            prefix: prefix.to_string(),
+            reply_to: sender,
+        };
+
+        let _ = self.sender.send(msg).await;
+        receiver.await?
+    }
+
+    /// Read a file from the remote system
+    pub async fn read_file(
+        &self,
+        host: &str,
+        username: Option<&str>,
+        path: &str,
+    ) -> Result<String> {
+        let (sender, receiver) = oneshot::channel();
+        let msg = SshPoolMessage::ReadFile {
+            host: host.to_string(),
+            username: username.map(|u| u.to_string()),
+            path: path.to_string(),
+            reply_to: sender,
+        };
+
+        let _ = self.sender.send(msg).await;
+        receiver.await?
+    }
+
+    /// Delete a file on the remote system
+    pub async fn delete_file(
+        &self,
+        host: &str,
+        username: Option<&str>,
+        path: &str,
+    ) -> Result<()> {
+        let (sender, receiver) = oneshot::channel();
+        let msg = SshPoolMessage::DeleteFile {
+            host: host.to_string(),
+            username: username.map(|u| u.to_string()),
+            path: path.to_string(),
+            reply_to: sender,
+        };
+
+        let _ = self.sender.send(msg).await;
+        receiver.await?
     }
 }
 
@@ -685,6 +760,72 @@ impl SshPool {
                 }
 
                 let _ = reply_to.send(Ok(()));
+            }
+            SshPoolMessage::CreateTempFile {
+                host,
+                username,
+                prefix,
+                reply_to,
+            } => {
+                let mut pool_guard = self.pool.write().await;
+                let session = match pool_guard
+                    .connect(&host, username.as_deref(), None, None)
+                    .await
+                {
+                    Ok(session) => session,
+                    Err(e) => {
+                        let _ = reply_to.send(Err(e.into()));
+                        return;
+                    }
+                };
+                drop(pool_guard);
+
+                let result = session.create_temp_file(&prefix).await;
+                let _ = reply_to.send(result);
+            }
+            SshPoolMessage::ReadFile {
+                host,
+                username,
+                path,
+                reply_to,
+            } => {
+                let mut pool_guard = self.pool.write().await;
+                let session = match pool_guard
+                    .connect(&host, username.as_deref(), None, None)
+                    .await
+                {
+                    Ok(session) => session,
+                    Err(e) => {
+                        let _ = reply_to.send(Err(e.into()));
+                        return;
+                    }
+                };
+                drop(pool_guard);
+
+                let result = session.read_file(&path).await;
+                let _ = reply_to.send(result);
+            }
+            SshPoolMessage::DeleteFile {
+                host,
+                username,
+                path,
+                reply_to,
+            } => {
+                let mut pool_guard = self.pool.write().await;
+                let session = match pool_guard
+                    .connect(&host, username.as_deref(), None, None)
+                    .await
+                {
+                    Ok(session) => session,
+                    Err(e) => {
+                        let _ = reply_to.send(Err(e.into()));
+                        return;
+                    }
+                };
+                drop(pool_guard);
+
+                let result = session.delete_file(&path).await;
+                let _ = reply_to.send(result);
             }
         }
     }

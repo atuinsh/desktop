@@ -16,6 +16,14 @@ use russh_config::*;
 
 use crate::ssh::SshPoolHandle;
 
+/// Result of executing a simple command on the remote system
+#[derive(Debug, Clone)]
+pub struct CommandResult {
+    pub stdout: String,
+    pub stderr: String,
+    pub exit_code: i32,
+}
+
 /// An ssh session, wrapping the underlying russh with async-safe primitives
 pub struct Session {
     session: Handle<Client>,
@@ -57,6 +65,130 @@ impl russh::client::Handler for Client {
 }
 
 impl Session {
+    /// Execute a simple command and capture its output
+    /// This opens a new channel, runs the command through a shell, and returns stdout, stderr, and exit code
+    /// Used for simple utility commands like mktemp, cat, rm
+    async fn exec_and_capture(&self, command: &str) -> Result<CommandResult> {
+        let mut channel = self.session.channel_open_session().await?;
+
+        // Run through shell to ensure proper PATH and environment
+        let shell_command = format!("sh -c '{}'", command.replace('\'', "'\"'\"'"));
+        channel.exec(true, shell_command.as_str()).await?;
+
+        let mut stdout = String::new();
+        let mut stderr = String::new();
+        let mut exit_code = 0;
+
+        loop {
+            let Some(msg) = channel.wait().await else {
+                break;
+            };
+
+            match msg {
+                ChannelMsg::Data { data } => {
+                    if let Ok(data_str) = std::str::from_utf8(&data) {
+                        stdout.push_str(data_str);
+                    }
+                }
+                ChannelMsg::ExtendedData { data, ext: 1 } => {
+                    // stderr
+                    if let Ok(data_str) = std::str::from_utf8(&data) {
+                        stderr.push_str(data_str);
+                    }
+                }
+                ChannelMsg::ExitStatus { exit_status } => {
+                    exit_code = exit_status as i32;
+                }
+                ChannelMsg::Eof | ChannelMsg::Close => {
+                    break;
+                }
+                _ => {}
+            }
+        }
+
+        let _ = channel.close().await;
+
+        Ok(CommandResult {
+            stdout,
+            stderr,
+            exit_code,
+        })
+    }
+
+    /// Create a temporary file on the remote system
+    /// Returns the path to the created file
+    pub async fn create_temp_file(&self, prefix: &str) -> Result<String> {
+        // Use more portable mktemp syntax without file extension
+        let result = self
+            .exec_and_capture(&format!("mktemp /tmp/{}-XXXXXXXX", prefix))
+            .await?;
+
+        if result.exit_code != 0 {
+            return Err(eyre::eyre!(
+                "Failed to create temp file (exit code {}): stdout='{}' stderr='{}'",
+                result.exit_code,
+                result.stdout.trim(),
+                result.stderr.trim()
+            ));
+        }
+
+        let path = result.stdout.trim().to_string();
+
+        // Validate that we got a non-empty path
+        if path.is_empty() {
+            return Err(eyre::eyre!(
+                "mktemp returned empty path: stdout='{}' stderr='{}' exit_code={}",
+                result.stdout,
+                result.stderr,
+                result.exit_code
+            ));
+        }
+
+        log::debug!("Created remote temp file: {}", path);
+        Ok(path)
+    }
+
+    /// Read the contents of a file on the remote system
+    pub async fn read_file(&self, path: &str) -> Result<String> {
+        // Escape the path for shell safety
+        let escaped_path = path.replace('\'', "'\"'\"'");
+        let result = self
+            .exec_and_capture(&format!("cat '{}'", escaped_path))
+            .await?;
+
+        if result.exit_code != 0 {
+            return Err(eyre::eyre!(
+                "Failed to read file: {} {}",
+                result.stdout.trim(),
+                result.stderr.trim()
+            ));
+        }
+
+        Ok(result.stdout)
+    }
+
+    /// Delete a file on the remote system
+    /// Uses rm -f so it doesn't fail if the file doesn't exist
+    pub async fn delete_file(&self, path: &str) -> Result<()> {
+        // Escape the path for shell safety
+        let escaped_path = path.replace('\'', "'\"'\"'");
+        let result = self
+            .exec_and_capture(&format!("rm -f '{}'", escaped_path))
+            .await?;
+
+        // rm -f returns 0 even if file doesn't exist, but log if there's an error
+        if result.exit_code != 0 {
+            log::warn!(
+                "Failed to delete file {}: {} {}",
+                path,
+                result.stdout.trim(),
+                result.stderr.trim()
+            );
+        }
+
+        Ok(())
+    }
+
     /// Send a keepalive to test if the SSH connection is still active and responsive
     /// Uses a lightweight exec command that actually tests network connectivity
     pub async fn send_keepalive(&self) -> bool {
