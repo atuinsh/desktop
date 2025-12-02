@@ -183,161 +183,167 @@ impl Terminal {
 
             remote_var_path = Some((hostname, username, remote_path));
         } else {
-            fs_var_handle = Some(crate::context::fs_var::setup()
-                .map_err(|e| format!("Failed to setup temp file for output variables: {}", e))?);
+            fs_var_handle =
+                Some(crate::context::fs_var::setup().map_err(|e| {
+                    format!("Failed to setup temp file for output variables: {}", e)
+                })?);
             remote_var_path = None;
         }
 
         // Open PTY based on context (local or SSH)
         let cancellation_token_clone = cancellation_token.clone();
-        let pty: Box<dyn PtyLike + Send> =
-            if let Some((ref hostname, ref username, ref remote_path)) = remote_var_path {
-                // Get SSH pool from context
-                let ssh_pool = context
-                    .ssh_pool
-                    .clone()
-                    .ok_or("SSH pool not available in execution context")?;
+        let pty: Box<dyn PtyLike + Send> = if let Some((
+            ref hostname,
+            ref username,
+            ref remote_path,
+        )) = remote_var_path
+        {
+            // Get SSH pool from context
+            let ssh_pool = context
+                .ssh_pool
+                .clone()
+                .ok_or("SSH pool not available in execution context")?;
 
-                // Create SSH PTY with cancellation support
-                let (output_sender, mut output_receiver) = tokio::sync::mpsc::channel(100);
-                let hostname_clone = hostname.clone();
-                let username_clone = username.clone();
-                let pty_id_str = self.id.to_string();
-                let ssh_pool_clone = ssh_pool.clone();
+            // Create SSH PTY with cancellation support
+            let (output_sender, mut output_receiver) = tokio::sync::mpsc::channel(100);
+            let hostname_clone = hostname.clone();
+            let username_clone = username.clone();
+            let pty_id_str = self.id.to_string();
+            let ssh_pool_clone = ssh_pool.clone();
 
-                // Open SSH PTY with cancellation support - use the receiver we took earlier
-                let ssh_result = tokio::select! {
-                    result = ssh_pool_clone.open_pty(
-                        &hostname_clone,
-                        username_clone.as_deref(),
-                        &pty_id_str,
-                        output_sender.clone(),
-                        80,
-                        24,
-                    ) => {
-                        result.map_err(|e| format!("Failed to open SSH PTY: {}", e))
-                    }
-                    _ = &mut cancel_rx => {
-                        let _ = ssh_pool_clone.close_pty(&pty_id_str).await;
-                        let _ = context.block_cancelled().await;
-                        // Cleanup remote temp file if it was created
-                        let _ = ssh_pool_clone.delete_file(&hostname_clone, username_clone.as_deref(), remote_path).await;
-                        return Err("SSH PTY connection cancelled".into());
-                    }
-                };
+            // Open SSH PTY with cancellation support - use the receiver we took earlier
+            let ssh_result = tokio::select! {
+                result = ssh_pool_clone.open_pty(
+                    &hostname_clone,
+                    username_clone.as_deref(),
+                    &pty_id_str,
+                    output_sender.clone(),
+                    80,
+                    24,
+                ) => {
+                    result.map_err(|e| format!("Failed to open SSH PTY: {}", e))
+                }
+                _ = &mut cancel_rx => {
+                    let _ = ssh_pool_clone.close_pty(&pty_id_str).await;
+                    let _ = context.block_cancelled().await;
+                    // Cleanup remote temp file if it was created
+                    let _ = ssh_pool_clone.delete_file(&hostname_clone, username_clone.as_deref(), remote_path).await;
+                    return Err("SSH PTY connection cancelled".into());
+                }
+            };
 
-                let (pty_tx, resize_tx) = ssh_result?;
+            let (pty_tx, resize_tx) = ssh_result?;
 
-                // Forward SSH output to binary channel
-                let context_clone = context.clone();
-                let block_id = self.id;
-                tokio::spawn(async move {
-                    while let Some(output) = output_receiver.recv().await {
-                        let _ = context_clone
-                            .send_output(
-                                BlockOutput::builder()
-                                    .block_id(block_id)
-                                    .binary(output.as_bytes().to_vec())
-                                    .build(),
-                            )
-                            .await;
-                    }
-
-                    cancellation_token_clone.cancel();
-                });
-
-                // Create SshPty wrapper
-                Box::new(SshPty {
-                    tx: pty_tx,
-                    resize_tx,
-                    metadata: metadata.clone(),
-                    ssh_pool: ssh_pool.clone(),
-                })
-            } else {
-                // Open local PTY
-                let cwd = context.context_resolver.cwd();
-                let mut env_vars = context.context_resolver.env_vars().clone();
-
-                // Add ATUIN_OUTPUT_VARS to environment if we have a handle
-                if let Some(ref handle) = fs_var_handle {
-                    let var_path = handle.path().to_string_lossy().to_string();
-                    env_vars.insert("ATUIN_OUTPUT_VARS".to_string(), var_path);
+            // Forward SSH output to binary channel
+            let context_clone = context.clone();
+            let block_id = self.id;
+            tokio::spawn(async move {
+                while let Some(output) = output_receiver.recv().await {
+                    let _ = context_clone
+                        .send_output(
+                            BlockOutput::builder()
+                                .block_id(block_id)
+                                .binary(output.as_bytes().to_vec())
+                                .build(),
+                        )
+                        .await;
                 }
 
-                let pty = Pty::open(
-                    24,
-                    80,
-                    Some(cwd.to_string()),
-                    env_vars,
-                    metadata.clone(),
-                    None, // Use default shell
-                )
-                .await
-                .map_err(|e| format!("Failed to open local PTY: {}", e))?;
+                cancellation_token_clone.cancel();
+            });
 
-                // Clone reader before moving PTY
-                let reader = pty.reader.clone();
+            // Create SshPty wrapper
+            Box::new(SshPty {
+                tx: pty_tx,
+                resize_tx,
+                metadata: metadata.clone(),
+                ssh_pool: ssh_pool.clone(),
+            })
+        } else {
+            // Open local PTY
+            let cwd = context.context_resolver.cwd();
+            let mut env_vars = context.context_resolver.env_vars().clone();
 
-                // Spawn reader task for local PTY
-                let context_clone = context.clone();
-                let block_id = self.id;
+            // Add ATUIN_OUTPUT_VARS to environment if we have a handle
+            if let Some(ref handle) = fs_var_handle {
+                let var_path = handle.path().to_string_lossy().to_string();
+                env_vars.insert("ATUIN_OUTPUT_VARS".to_string(), var_path);
+            }
 
-                let cancellation_token_clone = cancellation_token_clone.clone();
-                tokio::spawn(async move {
-                    loop {
-                        // Use blocking read in a blocking task
-                        let read_result = tokio::task::spawn_blocking({
-                            let reader = reader.clone();
-                            move || {
-                                let mut buf = [0u8; 8192];
-                                match reader.lock().unwrap().read(&mut buf) {
-                                    Ok(n) => Ok((n, buf)),
-                                    Err(e) => Err(e),
-                                }
-                            }
-                        })
-                        .await;
+            let pty = Pty::open(
+                24,
+                80,
+                Some(cwd.to_string()),
+                env_vars,
+                metadata.clone(),
+                None, // Use default shell
+            )
+            .await
+            .map_err(|e| format!("Failed to open local PTY: {}", e))?;
 
-                        match read_result {
-                            Ok(Ok((0, _))) => {
-                                // EOF - PTY terminated naturally
-                                let _ = context_clone.block_finished(Some(0), true).await;
-                                cancellation_token_clone.cancel();
-                                break;
-                            }
-                            Ok(Ok((n, buf))) => {
-                                // Send raw binary data
-                                let _ = context_clone
-                                    .send_output(
-                                        BlockOutput::builder()
-                                            .block_id(block_id)
-                                            .binary(buf[..n].to_vec())
-                                            .build(),
-                                    )
-                                    .await;
-                            }
-                            Ok(Err(e)) => {
-                                // Send error
-                                let _ = context_clone
-                                    .block_failed(format!("PTY read error: {}", e))
-                                    .await;
-                                cancellation_token_clone.cancel();
-                                break;
-                            }
-                            Err(e) => {
-                                // Task join error
-                                let _ = context_clone
-                                    .block_failed(format!("Task error: {}", e))
-                                    .await;
-                                cancellation_token_clone.cancel();
-                                break;
+            // Clone reader before moving PTY
+            let reader = pty.reader.clone();
+
+            // Spawn reader task for local PTY
+            let context_clone = context.clone();
+            let block_id = self.id;
+
+            let cancellation_token_clone = cancellation_token_clone.clone();
+            tokio::spawn(async move {
+                loop {
+                    // Use blocking read in a blocking task
+                    let read_result = tokio::task::spawn_blocking({
+                        let reader = reader.clone();
+                        move || {
+                            let mut buf = [0u8; 8192];
+                            match reader.lock().unwrap().read(&mut buf) {
+                                Ok(n) => Ok((n, buf)),
+                                Err(e) => Err(e),
                             }
                         }
-                    }
-                });
+                    })
+                    .await;
 
-                Box::new(pty)
-            };
+                    match read_result {
+                        Ok(Ok((0, _))) => {
+                            // EOF - PTY terminated naturally
+                            let _ = context_clone.block_finished(Some(0), true).await;
+                            cancellation_token_clone.cancel();
+                            break;
+                        }
+                        Ok(Ok((n, buf))) => {
+                            // Send raw binary data
+                            let _ = context_clone
+                                .send_output(
+                                    BlockOutput::builder()
+                                        .block_id(block_id)
+                                        .binary(buf[..n].to_vec())
+                                        .build(),
+                                )
+                                .await;
+                        }
+                        Ok(Err(e)) => {
+                            // Send error
+                            let _ = context_clone
+                                .block_failed(format!("PTY read error: {}", e))
+                                .await;
+                            cancellation_token_clone.cancel();
+                            break;
+                        }
+                        Err(e) => {
+                            // Task join error
+                            let _ = context_clone
+                                .block_failed(format!("Task error: {}", e))
+                                .await;
+                            cancellation_token_clone.cancel();
+                            break;
+                        }
+                    }
+                }
+            });
+
+            Box::new(pty)
+        };
 
         // Add to PTY store
         pty_store
@@ -414,7 +420,10 @@ impl Terminal {
             // SSH terminal
             let ssh_pool = context.ssh_pool.clone().unwrap();
 
-            match ssh_pool.read_file(&hostname, username.as_deref(), &remote_path).await {
+            match ssh_pool
+                .read_file(&hostname, username.as_deref(), &remote_path)
+                .await
+            {
                 Ok(contents) => {
                     let vars = crate::context::fs_var::parse_vars(&contents);
                     if !vars.is_empty() {
@@ -422,7 +431,11 @@ impl Terminal {
                         let _ = context
                             .update_active_context(block_id, move |ctx| {
                                 for (key, value) in vars.into_iter() {
-                                    ctx.add_var(key, value, "(terminal variable output)".to_string());
+                                    ctx.add_var(
+                                        key,
+                                        value,
+                                        "(terminal variable output)".to_string(),
+                                    );
                                 }
                             })
                             .await;
@@ -434,7 +447,9 @@ impl Terminal {
             }
 
             // Cleanup remote temp file
-            let _ = ssh_pool.delete_file(&hostname, username.as_deref(), &remote_path).await;
+            let _ = ssh_pool
+                .delete_file(&hostname, username.as_deref(), &remote_path)
+                .await;
         }
 
         // Remove PTY from store (this will also kill it)

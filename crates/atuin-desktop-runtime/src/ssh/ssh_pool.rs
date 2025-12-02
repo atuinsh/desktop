@@ -341,12 +341,7 @@ impl SshPoolHandle {
     }
 
     /// Delete a file on the remote system
-    pub async fn delete_file(
-        &self,
-        host: &str,
-        username: Option<&str>,
-        path: &str,
-    ) -> Result<()> {
+    pub async fn delete_file(&self, host: &str, username: Option<&str>, path: &str) -> Result<()> {
         let (sender, receiver) = oneshot::channel();
         let msg = SshPoolMessage::DeleteFile {
             host: host.to_string(),
