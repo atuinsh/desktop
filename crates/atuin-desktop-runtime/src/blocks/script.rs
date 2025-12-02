@@ -553,6 +553,22 @@ impl Script {
             }
         };
 
+        // Create remote temp file for variable output
+        let remote_temp_path = match ssh_pool
+            .create_temp_file(&hostname, username.as_deref(), "atuin-desktop-vars")
+            .await
+        {
+            Ok(path) => path,
+            Err(e) => {
+                let error_msg = format!("Failed to create remote temp file: {}", e);
+                let _ = context.block_failed(error_msg.clone()).await;
+                return (Err(error_msg.into()), String::new(), None);
+            }
+        };
+
+        // Prepend environment variable export to the code
+        let code_with_vars = format!("export ATUIN_OUTPUT_VARS='{}'\n{}", remote_temp_path, code);
+
         let channel_id = self.id.to_string();
         let (output_sender, mut output_receiver) = mpsc::channel::<String>(100);
         let (result_tx, result_rx) = oneshot::channel::<()>();
@@ -566,6 +582,8 @@ impl Script {
             None => {
                 let error_msg = "Cancellation receiver already taken";
                 let _ = context.block_failed(error_msg.to_string()).await;
+                // Cleanup remote temp file
+                let _ = ssh_pool.delete_file(&hostname, username.as_deref(), &remote_temp_path).await;
                 return (Err(error_msg.into()), String::new(), None);
             }
         };
@@ -576,7 +594,7 @@ impl Script {
                 &hostname,
                 username.as_deref(),
                 &self.interpreter,
-                code,
+                &code_with_vars,
                 &channel_id,
                 output_sender,
                 result_tx,
@@ -587,6 +605,8 @@ impl Script {
                 log::trace!("Sending cancel to SSH execution for channel {channel_id}");
                 let _ = ssh_pool.exec_cancel(&channel_id).await;
                 let _ = context.block_cancelled().await;
+                // Cleanup remote temp file
+                let _ = ssh_pool.delete_file(&hostname, username.as_deref(), &remote_temp_path).await;
                 return (Err("SSH script execution cancelled before start".into()), String::new(), None);
             }
         };
@@ -594,6 +614,8 @@ impl Script {
         if let Err(e) = exec_result {
             let error_msg = format!("Failed to start SSH execution: {}", e);
             let _ = context.block_failed(error_msg.to_string()).await;
+            // Cleanup remote temp file
+            let _ = ssh_pool.delete_file(&hostname, username.as_deref(), &remote_temp_path).await;
             return (Err(error_msg.into()), String::new(), None);
         }
         let context_clone = context.clone();
@@ -626,6 +648,8 @@ impl Script {
                 let captured = captured_output.read().await.clone();
 
                 let _ = context.block_cancelled().await;
+                // Cleanup remote temp file
+                let _ = ssh_pool.delete_file(&hostname, username.as_deref(), &remote_temp_path).await;
                 return (Err("SSH script execution cancelled".into()), captured, None);
             }
             _ = result_rx => {
@@ -634,7 +658,23 @@ impl Script {
         };
 
         let captured = captured_output.read().await.clone();
-        (Ok(exit_code), captured, None)
+
+        // Read variables from remote temp file
+        let vars = match ssh_pool.read_file(&hostname, username.as_deref(), &remote_temp_path).await {
+            Ok(contents) => {
+                // Parse the file contents using fs_var::parse_vars
+                Some(fs_var::parse_vars(&contents))
+            }
+            Err(e) => {
+                log::warn!("Failed to read remote temp file for variables: {}", e);
+                None
+            }
+        };
+
+        // Cleanup remote temp file
+        let _ = ssh_pool.delete_file(&hostname, username.as_deref(), &remote_temp_path).await;
+
+        (Ok(exit_code), captured, vars)
     }
 }
 

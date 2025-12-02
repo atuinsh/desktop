@@ -25,23 +25,33 @@ pub fn setup() -> Result<FsVarHandle, Box<dyn std::error::Error + Send + Sync>> 
     Ok(FsVarHandle { file })
 }
 
+/// Parses variable content from a string in the format `key=value`, one per line.
+/// Returns a HashMap of the parsed variables.
+pub fn parse_vars(content: &str) -> HashMap<String, String> {
+    let mut vars = HashMap::new();
+    for line in content.lines() {
+        let parts = line.splitn(2, '=').collect::<Vec<&str>>();
+        if parts.len() == 2 {
+            vars.insert(parts[0].to_string(), parts[1].to_string());
+        }
+    }
+    vars
+}
+
 /// Reads the variables from the temporary file and returns them as a HashMap.
 /// The file is expected to contain lines in the format `key=value`.
 pub async fn finalize(
     handle: FsVarHandle,
 ) -> Result<HashMap<String, String>, Box<dyn std::error::Error + Send + Sync>> {
-    let mut vars = HashMap::new();
     let file = tokio::fs::File::open(handle.path()).await?;
     let reader = tokio::io::BufReader::new(file);
+    let mut content = String::new();
     let mut lines = reader.lines();
     while let Some(line) = lines.next_line().await? {
-        let parts = line.splitn(2, '=').collect::<Vec<&str>>();
-        if parts.len() != 2 {
-            continue;
-        }
-        vars.insert(parts[0].to_string(), parts[1].to_string());
+        content.push_str(&line);
+        content.push('\n');
     }
-    Ok(vars)
+    Ok(parse_vars(&content))
 }
 
 #[cfg(test)]
