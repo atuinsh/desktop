@@ -418,6 +418,102 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#built-in-filters-reference" class="md-nav__link">
+    <span class="md-ellipsis">
+      Built-in Filters Reference
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Built-in Filters Reference">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#type-conversion" class="md-nav__link">
+    <span class="md-ellipsis">
+      Type Conversion
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#string-manipulation" class="md-nav__link">
+    <span class="md-ellipsis">
+      String Manipulation
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sequence-operations" class="md-nav__link">
+    <span class="md-ellipsis">
+      Sequence Operations
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#aggregation" class="md-nav__link">
+    <span class="md-ellipsis">
+      Aggregation
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#filtering-selection" class="md-nav__link">
+    <span class="md-ellipsis">
+      Filtering &amp; Selection
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#dictionary-operations" class="md-nav__link">
+    <span class="md-ellipsis">
+      Dictionary Operations
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#numeric-operations" class="md-nav__link">
+    <span class="md-ellipsis">
+      Numeric Operations
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#data-serialization" class="md-nav__link">
+    <span class="md-ellipsis">
+      Data Serialization
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#control-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      Control Flow
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#document-access" class="md-nav__link">
     <span class="md-ellipsis">
       Document access
@@ -1290,6 +1386,102 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#built-in-filters-reference" class="md-nav__link">
+    <span class="md-ellipsis">
+      Built-in Filters Reference
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Built-in Filters Reference">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#type-conversion" class="md-nav__link">
+    <span class="md-ellipsis">
+      Type Conversion
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#string-manipulation" class="md-nav__link">
+    <span class="md-ellipsis">
+      String Manipulation
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sequence-operations" class="md-nav__link">
+    <span class="md-ellipsis">
+      Sequence Operations
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#aggregation" class="md-nav__link">
+    <span class="md-ellipsis">
+      Aggregation
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#filtering-selection" class="md-nav__link">
+    <span class="md-ellipsis">
+      Filtering &amp; Selection
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#dictionary-operations" class="md-nav__link">
+    <span class="md-ellipsis">
+      Dictionary Operations
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#numeric-operations" class="md-nav__link">
+    <span class="md-ellipsis">
+      Numeric Operations
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#data-serialization" class="md-nav__link">
+    <span class="md-ellipsis">
+      Data Serialization
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#control-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      Control Flow
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#document-access" class="md-nav__link">
     <span class="md-ellipsis">
       Document access
@@ -1359,12 +1551,15 @@
 <li><code>length(list)</code>: Gets list length → <code>{{ length(users) }}</code></li>
 <li><code>default(value, fallback)</code>: Uses fallback if <code>None</code> → <code>{{ user.name | default("Guest") }}</code></li>
 </ul>
+<p>See <a href="#built-in-filters-reference">Built-In Filters Reference</a> for more.</p>
 <p><strong>Custom Filters</strong></p>
 <ul>
-<li><code>shellquote</code>: Escapes a string for safe use in shell commands → <code>{{ var.text | shellquote }}</code></li>
+<li><code>shellquote</code>: Escapes a string for safe use in shell commands → <code>{{ var.text | shellquote }}</code><ul>
 <li>Uses POSIX single-quote escaping to handle special characters like quotes, backticks, dollar signs, etc.</li>
 <li>Example: <code>echo {{ var.message | shellquote }}</code> safely handles any characters in the message variable</li>
 <li>Particularly useful when passing variables that might contain user input or special characters</li>
+</ul>
+</li>
 </ul>
 <p><strong>Example Usage</strong></p>
 <p>Before (verbose manual escaping):
@@ -1379,6 +1574,265 @@
 - Backticks (<code>`</code>)
 - Dollar signs (<code>$</code>)
 - And other shell metacharacters</p>
+<h3 id="built-in-filters-reference">Built-in Filters Reference</h3>
+<p>MiniJinja provides 50+ built-in filters for data transformation and formatting. Below is a comprehensive reference:</p>
+<h4 id="type-conversion">Type Conversion</h4>
+<ul>
+<li>
+<p><strong><code>abs</code></strong>: Returns absolute value of a number
+  </p><div class="language-django highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="cp">{{</span> <span class="o">-</span><span class="m">42</span> <span class="o">|</span> <span class="nf">abs</span> <span class="cp">}}</span><span class="x">  → 42</span>
+</span></code></pre></div><p></p>
+</li>
+<li>
+<p><strong><code>int</code></strong>: Converts value to integer
+  </p><div class="language-django highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="cp">{{</span> <span class="s2">"42"</span> <span class="o">|</span> <span class="nf">int</span> <span class="cp">}}</span><span class="x">  → 42</span>
+</span></code></pre></div><p></p>
+</li>
+<li>
+<p><strong><code>float</code></strong>: Converts value to floating-point number
+  </p><div class="language-django highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="cp">{{</span> <span class="s2">"3.14"</span> <span class="o">|</span> <span class="nf">float</span> <span class="cp">}}</span><span class="x">  → 3.14</span>
+</span></code></pre></div><p></p>
+</li>
+<li>
+<p><strong><code>bool</code></strong>: Converts value to boolean
+  </p><div class="language-django highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="cp">{{</span> <span class="s2">"yes"</span> <span class="o">|</span> <span class="nf">bool</span> <span class="cp">}}</span><span class="x">  → true</span>
+</span></code></pre></div><p></p>
+</li>
+<li>
+<p><strong><code>string</code></strong>: Converts value to string
+  </p><div class="language-django highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="cp">{{</span> <span class="m">42</span> <span class="o">|</span> <span class="nf">string</span> <span class="cp">}}</span><span class="x">  → "42"</span>
+</span></code></pre></div><p></p>
+</li>
+<li>
+<p><strong><code>list</code></strong>: Converts value to list
+  </p><div class="language-django highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="cp">{{</span> <span class="s2">"abc"</span> <span class="o">|</span> <span class="nf">list</span> <span class="cp">}}</span><span class="x">  → ["a", "b", "c"]</span>
+</span></code></pre></div><p></p>
+</li>
+</ul>
+<h4 id="string-manipulation">String Manipulation</h4>
+<ul>
+<li>
+<p><strong><code>upper</code></strong>: Converts string to uppercase
+  </p><div class="language-django highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="cp">{{</span> <span class="s2">"hello"</span> <span class="o">|</span> <span class="nf">upper</span> <span class="cp">}}</span><span class="x">  → HELLO</span>
+</span></code></pre></div><p></p>
+</li>
+<li>
+<p><strong><code>lower</code></strong>: Converts string to lowercase
+  </p><div class="language-django highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="cp">{{</span> <span class="s2">"HELLO"</span> <span class="o">|</span> <span class="nf">lower</span> <span class="cp">}}</span><span class="x">  → hello</span>
+</span></code></pre></div><p></p>
+</li>
+<li>
+<p><strong><code>capitalize</code></strong>: Capitalizes first character, lowercases rest
+  </p><div class="language-django highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="cp">{{</span> <span class="s2">"hELLO"</span> <span class="o">|</span> <span class="nf">capitalize</span> <span class="cp">}}</span><span class="x">  → Hello</span>
+</span></code></pre></div><p></p>
+</li>
+<li>
+<p><strong><code>title</code></strong>: Converts to title case
+  </p><div class="language-django highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="cp">{{</span> <span class="s2">"hello world"</span> <span class="o">|</span> <span class="nf">title</span> <span class="cp">}}</span><span class="x">  → Hello World</span>
+</span></code></pre></div><p></p>
+</li>
+<li>
+<p><strong><code>trim</code></strong>: Removes leading and trailing whitespace
+  </p><div class="language-django highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="cp">{{</span> <span class="s2">"  hello  "</span> <span class="o">|</span> <span class="nf">trim</span> <span class="cp">}}</span><span class="x">  → hello</span>
+</span></code></pre></div><p></p>
+</li>
+<li>
+<p><strong><code>replace</code></strong>: Replaces substring with another
+  </p><div class="language-django highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="cp">{{</span> <span class="s2">"Hello World"</span> <span class="o">|</span> <span class="nf">replace</span><span class="o">(</span><span class="s2">"World"</span><span class="o">,</span> <span class="s2">"MiniJinja"</span><span class="o">)</span> <span class="cp">}}</span><span class="x">  → Hello MiniJinja</span>
+</span></code></pre></div><p></p>
+</li>
+<li>
+<p><strong><code>split</code></strong>: Splits string into list
+  </p><div class="language-django highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="cp">{{</span> <span class="s2">"a,b,c"</span> <span class="o">|</span> <span class="nf">split</span><span class="o">(</span><span class="s2">","</span><span class="o">)</span> <span class="cp">}}</span><span class="x">  → ["a", "b", "c"]</span>
+</span></code></pre></div><p></p>
+</li>
+<li>
+<p><strong><code>lines</code></strong>: Splits string into lines
+  </p><div class="language-django highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="cp">{{</span> <span class="s2">"line1\nline2"</span> <span class="o">|</span> <span class="nf">lines</span> <span class="cp">}}</span><span class="x">  → ["line1", "line2"]</span>
+</span></code></pre></div><p></p>
+</li>
+<li>
+<p><strong><code>indent</code></strong>: Indents text with spaces
+  </p><div class="language-django highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="cp">{{</span> <span class="s2">"text"</span> <span class="o">|</span> <span class="nf">indent</span><span class="o">(</span><span class="m">4</span><span class="o">)</span> <span class="cp">}}</span><span class="x">  → "    text"</span>
+</span></code></pre></div><p></p>
+</li>
+<li>
+<p><strong><code>escape</code></strong>: Escapes HTML special characters
+  </p><div class="language-django highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="cp">{{</span> <span class="s2">"&lt;script&gt;"</span> <span class="o">|</span> <span class="nf">escape</span> <span class="cp">}}</span><span class="x">  → &amp;lt;script&amp;gt;</span>
+</span></code></pre></div><p></p>
+</li>
+<li>
+<p><strong><code>safe</code></strong>: Marks string as safe (no escaping)
+  </p><div class="language-django highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="cp">{{</span> <span class="nv">html_content</span> <span class="o">|</span> <span class="nf">safe</span> <span class="cp">}}</span>
+</span></code></pre></div><p></p>
+</li>
+<li>
+<p><strong><code>urlencode</code></strong>: URL encodes value
+  </p><div class="language-django highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="cp">{{</span> <span class="s2">"hello world"</span> <span class="o">|</span> <span class="nf">urlencode</span> <span class="cp">}}</span><span class="x">  → hello%20world</span>
+</span></code></pre></div><p></p>
+</li>
+<li>
+<p><strong><code>format</code></strong>: Apply printf-style formatting
+  </p><div class="language-django highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="cp">{{</span> <span class="s2">"Hello %s"</span> <span class="o">|</span> <span class="nf">format</span><span class="o">(</span><span class="s2">"World"</span><span class="o">)</span> <span class="cp">}}</span><span class="x">  → Hello World</span>
+</span></code></pre></div><p></p>
+</li>
+</ul>
+<h4 id="sequence-operations">Sequence Operations</h4>
+<ul>
+<li>
+<p><strong><code>first</code></strong>: Returns first item from sequence
+  </p><div class="language-django highlight"><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="cp">{{</span> <span class="o">[</span><span class="m">1</span><span class="o">,</span> <span class="m">2</span><span class="o">,</span> <span class="m">3</span><span class="o">]</span> <span class="o">|</span> <span class="nf">first</span> <span class="cp">}}</span><span class="x">  → 1</span>
+</span></code></pre></div><p></p>
+</li>
+<li>
+<p><strong><code>last</code></strong>: Returns last item from sequence
+  </p><div class="language-django highlight"><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a><span class="cp">{{</span> <span class="o">[</span><span class="m">1</span><span class="o">,</span> <span class="m">2</span><span class="o">,</span> <span class="m">3</span><span class="o">]</span> <span class="o">|</span> <span class="nf">last</span> <span class="cp">}}</span><span class="x">  → 3</span>
+</span></code></pre></div><p></p>
+</li>
+<li>
+<p><strong><code>length</code></strong>: Returns length of sequence or string
+  </p><div class="language-django highlight"><pre><span></span><code><span id="__span-25-1"><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a><span class="cp">{{</span> <span class="o">[</span><span class="m">1</span><span class="o">,</span> <span class="m">2</span><span class="o">,</span> <span class="m">3</span><span class="o">]</span> <span class="o">|</span> <span class="nf">length</span> <span class="cp">}}</span><span class="x">  → 3</span>
+</span></code></pre></div><p></p>
+</li>
+<li>
+<p><strong><code>reverse</code></strong>: Reverses sequence or string
+  </p><div class="language-django highlight"><pre><span></span><code><span id="__span-26-1"><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a><span class="cp">{{</span> <span class="o">[</span><span class="m">1</span><span class="o">,</span> <span class="m">2</span><span class="o">,</span> <span class="m">3</span><span class="o">]</span> <span class="o">|</span> <span class="nf">reverse</span> <span class="cp">}}</span><span class="x">  → [3, 2, 1]</span>
+</span></code></pre></div><p></p>
+</li>
+<li>
+<p><strong><code>sort</code></strong>: Sorts sequence
+  </p><div class="language-django highlight"><pre><span></span><code><span id="__span-27-1"><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a><span class="cp">{{</span> <span class="o">[</span><span class="m">3</span><span class="o">,</span> <span class="m">1</span><span class="o">,</span> <span class="m">2</span><span class="o">]</span> <span class="o">|</span> <span class="nf">sort</span> <span class="cp">}}</span><span class="x">  → [1, 2, 3]</span>
+</span></code></pre></div><p></p>
+</li>
+<li>
+<p><strong><code>unique</code></strong>: Returns unique items from sequence
+  </p><div class="language-django highlight"><pre><span></span><code><span id="__span-28-1"><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a><span class="cp">{{</span> <span class="o">[</span><span class="m">1</span><span class="o">,</span> <span class="m">2</span><span class="o">,</span> <span class="m">2</span><span class="o">,</span> <span class="m">3</span><span class="o">]</span> <span class="o">|</span> <span class="nf">unique</span> <span class="cp">}}</span><span class="x">  → [1, 2, 3]</span>
+</span></code></pre></div><p></p>
+</li>
+<li>
+<p><strong><code>join</code></strong>: Joins sequence with separator
+  </p><div class="language-django highlight"><pre><span></span><code><span id="__span-29-1"><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a><span class="cp">{{</span> <span class="o">[</span><span class="s2">"a"</span><span class="o">,</span> <span class="s2">"b"</span><span class="o">,</span> <span class="s2">"c"</span><span class="o">]</span> <span class="o">|</span> <span class="nf">join</span><span class="o">(</span><span class="s2">", "</span><span class="o">)</span> <span class="cp">}}</span><span class="x">  → a, b, c</span>
+</span></code></pre></div><p></p>
+</li>
+<li>
+<p><strong><code>slice</code></strong>: Slices sequence into sublists
+  </p><div class="language-django highlight"><pre><span></span><code><span id="__span-30-1"><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a><span class="cp">{{</span> <span class="o">[</span><span class="m">1</span><span class="o">,</span> <span class="m">2</span><span class="o">,</span> <span class="m">3</span><span class="o">,</span> <span class="m">4</span><span class="o">]</span> <span class="o">|</span> <span class="nf">slice</span><span class="o">(</span><span class="m">2</span><span class="o">)</span> <span class="cp">}}</span><span class="x">  → [[1, 2], [3, 4]]</span>
+</span></code></pre></div><p></p>
+</li>
+<li>
+<p><strong><code>batch</code></strong>: Groups items into batches of given size
+  </p><div class="language-django highlight"><pre><span></span><code><span id="__span-31-1"><a id="__codelineno-31-1" name="__codelineno-31-1" href="#__codelineno-31-1"></a><span class="cp">{{</span> <span class="o">[</span><span class="m">1</span><span class="o">,</span> <span class="m">2</span><span class="o">,</span> <span class="m">3</span><span class="o">,</span> <span class="m">4</span><span class="o">,</span> <span class="m">5</span><span class="o">]</span> <span class="o">|</span> <span class="nf">batch</span><span class="o">(</span><span class="m">2</span><span class="o">)</span> <span class="cp">}}</span><span class="x">  → [[1, 2], [3, 4], [5]]</span>
+</span></code></pre></div><p></p>
+</li>
+<li>
+<p><strong><code>chain</code></strong>: Chains multiple iterables together
+  </p><div class="language-django highlight"><pre><span></span><code><span id="__span-32-1"><a id="__codelineno-32-1" name="__codelineno-32-1" href="#__codelineno-32-1"></a><span class="cp">{{</span> <span class="o">[</span><span class="m">1</span><span class="o">,</span> <span class="m">2</span><span class="o">]</span> <span class="o">|</span> <span class="nf">chain</span><span class="o">([</span><span class="m">3</span><span class="o">,</span> <span class="m">4</span><span class="o">])</span> <span class="cp">}}</span><span class="x">  → [1, 2, 3, 4]</span>
+</span></code></pre></div><p></p>
+</li>
+<li>
+<p><strong><code>zip</code></strong>: Zips multiple iterables into tuples
+  </p><div class="language-django highlight"><pre><span></span><code><span id="__span-33-1"><a id="__codelineno-33-1" name="__codelineno-33-1" href="#__codelineno-33-1"></a><span class="cp">{%</span> <span class="k">for</span> <span class="nv">pair</span> <span class="k">in</span> <span class="o">[</span><span class="m">1</span><span class="o">,</span> <span class="m">2</span><span class="o">]</span> <span class="o">|</span> <span class="nf">zip</span><span class="o">([</span><span class="s2">"a"</span><span class="o">,</span> <span class="s2">"b"</span><span class="o">])</span> <span class="cp">%}{{</span> <span class="nv">pair</span> <span class="cp">}}{%</span> <span class="k">endfor</span> <span class="cp">%}</span><span class="x">  → (1, "a")(2, "b")</span>
+</span></code></pre></div><p></p>
+</li>
+</ul>
+<h4 id="aggregation">Aggregation</h4>
+<ul>
+<li>
+<p><strong><code>sum</code></strong>: Sums all values in sequence
+  </p><div class="language-django highlight"><pre><span></span><code><span id="__span-34-1"><a id="__codelineno-34-1" name="__codelineno-34-1" href="#__codelineno-34-1"></a><span class="cp">{{</span> <span class="o">[</span><span class="m">1</span><span class="o">,</span> <span class="m">2</span><span class="o">,</span> <span class="m">3</span><span class="o">]</span> <span class="o">|</span> <span class="nf">sum</span> <span class="cp">}}</span><span class="x">  → 6</span>
+</span></code></pre></div><p></p>
+</li>
+<li>
+<p><strong><code>min</code></strong>: Returns smallest item
+  </p><div class="language-django highlight"><pre><span></span><code><span id="__span-35-1"><a id="__codelineno-35-1" name="__codelineno-35-1" href="#__codelineno-35-1"></a><span class="cp">{{</span> <span class="o">[</span><span class="m">3</span><span class="o">,</span> <span class="m">1</span><span class="o">,</span> <span class="m">2</span><span class="o">]</span> <span class="o">|</span> <span class="nf">min</span> <span class="cp">}}</span><span class="x">  → 1</span>
+</span></code></pre></div><p></p>
+</li>
+<li>
+<p><strong><code>max</code></strong>: Returns largest item
+  </p><div class="language-django highlight"><pre><span></span><code><span id="__span-36-1"><a id="__codelineno-36-1" name="__codelineno-36-1" href="#__codelineno-36-1"></a><span class="cp">{{</span> <span class="o">[</span><span class="m">3</span><span class="o">,</span> <span class="m">1</span><span class="o">,</span> <span class="m">2</span><span class="o">]</span> <span class="o">|</span> <span class="nf">max</span> <span class="cp">}}</span><span class="x">  → 3</span>
+</span></code></pre></div><p></p>
+</li>
+</ul>
+<h4 id="filtering-selection">Filtering &amp; Selection</h4>
+<ul>
+<li>
+<p><strong><code>select</code></strong>: Filters items that pass a test
+  </p><div class="language-django highlight"><pre><span></span><code><span id="__span-37-1"><a id="__codelineno-37-1" name="__codelineno-37-1" href="#__codelineno-37-1"></a><span class="cp">{{</span> <span class="o">[</span><span class="m">1</span><span class="o">,</span> <span class="m">2</span><span class="o">,</span> <span class="m">3</span><span class="o">,</span> <span class="m">4</span><span class="o">]</span> <span class="o">|</span> <span class="nf">select</span><span class="o">(</span><span class="s2">"odd"</span><span class="o">)</span> <span class="cp">}}</span><span class="x">  → [1, 3]</span>
+</span></code></pre></div><p></p>
+</li>
+<li>
+<p><strong><code>reject</code></strong>: Filters items that fail a test
+  </p><div class="language-django highlight"><pre><span></span><code><span id="__span-38-1"><a id="__codelineno-38-1" name="__codelineno-38-1" href="#__codelineno-38-1"></a><span class="cp">{{</span> <span class="o">[</span><span class="m">1</span><span class="o">,</span> <span class="m">2</span><span class="o">,</span> <span class="m">3</span><span class="o">,</span> <span class="m">4</span><span class="o">]</span> <span class="o">|</span> <span class="nf">reject</span><span class="o">(</span><span class="s2">"odd"</span><span class="o">)</span> <span class="cp">}}</span><span class="x">  → [2, 4]</span>
+</span></code></pre></div><p></p>
+</li>
+<li>
+<p><strong><code>selectattr</code></strong>: Filters by attribute value
+  </p><div class="language-django highlight"><pre><span></span><code><span id="__span-39-1"><a id="__codelineno-39-1" name="__codelineno-39-1" href="#__codelineno-39-1"></a><span class="cp">{{</span> <span class="nv">users</span> <span class="o">|</span> <span class="nf">selectattr</span><span class="o">(</span><span class="s2">"active"</span><span class="o">)</span> <span class="cp">}}</span>
+</span></code></pre></div><p></p>
+</li>
+<li>
+<p><strong><code>rejectattr</code></strong>: Rejects by attribute value
+  </p><div class="language-django highlight"><pre><span></span><code><span id="__span-40-1"><a id="__codelineno-40-1" name="__codelineno-40-1" href="#__codelineno-40-1"></a><span class="cp">{{</span> <span class="nv">users</span> <span class="o">|</span> <span class="nf">rejectattr</span><span class="o">(</span><span class="s2">"admin"</span><span class="o">)</span> <span class="cp">}}</span>
+</span></code></pre></div><p></p>
+</li>
+<li>
+<p><strong><code>map</code></strong>: Applies filter or gets attribute from each item
+  </p><div class="language-django highlight"><pre><span></span><code><span id="__span-41-1"><a id="__codelineno-41-1" name="__codelineno-41-1" href="#__codelineno-41-1"></a><span class="cp">{{</span> <span class="nv">users</span> <span class="o">|</span> <span class="nf">map</span><span class="o">(</span><span class="nv">attribute</span><span class="o">=</span><span class="s2">"name"</span><span class="o">)</span> <span class="o">|</span> <span class="nf">join</span><span class="o">(</span><span class="s2">", "</span><span class="o">)</span> <span class="cp">}}</span>
+</span></code></pre></div><p></p>
+</li>
+<li>
+<p><strong><code>groupby</code></strong>: Groups items by attribute
+  </p><div class="language-django highlight"><pre><span></span><code><span id="__span-42-1"><a id="__codelineno-42-1" name="__codelineno-42-1" href="#__codelineno-42-1"></a><span class="cp">{%</span> <span class="k">for</span> <span class="nv">group</span> <span class="k">in</span> <span class="nv">users</span> <span class="o">|</span> <span class="nf">groupby</span><span class="o">(</span><span class="s2">"department"</span><span class="o">)</span> <span class="cp">%}</span>
+</span><span id="__span-42-2"><a id="__codelineno-42-2" name="__codelineno-42-2" href="#__codelineno-42-2"></a><span class="x">  </span><span class="cp">{{</span> <span class="nv">group.grouper</span> <span class="cp">}}</span><span class="x">: </span><span class="cp">{{</span> <span class="nv">group.list</span> <span class="o">|</span> <span class="nf">length</span> <span class="cp">}}</span><span class="x"> users</span>
+</span><span id="__span-42-3"><a id="__codelineno-42-3" name="__codelineno-42-3" href="#__codelineno-42-3"></a><span class="cp">{%</span> <span class="k">endfor</span> <span class="cp">%}</span>
+</span></code></pre></div><p></p>
+</li>
+</ul>
+<h4 id="dictionary-operations">Dictionary Operations</h4>
+<ul>
+<li>
+<p><strong><code>items</code></strong>: Returns key-value pairs from dictionary
+  </p><div class="language-django highlight"><pre><span></span><code><span id="__span-43-1"><a id="__codelineno-43-1" name="__codelineno-43-1" href="#__codelineno-43-1"></a><span class="cp">{%</span> <span class="k">for</span> <span class="nv">key</span><span class="o">,</span> <span class="nv">value</span> <span class="k">in</span> <span class="nv">config</span> <span class="o">|</span> <span class="nf">items</span> <span class="cp">%}</span>
+</span><span id="__span-43-2"><a id="__codelineno-43-2" name="__codelineno-43-2" href="#__codelineno-43-2"></a><span class="x">  </span><span class="cp">{{</span> <span class="nv">key</span> <span class="cp">}}</span><span class="x">: </span><span class="cp">{{</span> <span class="nv">value</span> <span class="cp">}}</span>
+</span><span id="__span-43-3"><a id="__codelineno-43-3" name="__codelineno-43-3" href="#__codelineno-43-3"></a><span class="cp">{%</span> <span class="k">endfor</span> <span class="cp">%}</span>
+</span></code></pre></div><p></p>
+</li>
+<li>
+<p><strong><code>dictsort</code></strong>: Sorts dictionary by keys
+  </p><div class="language-django highlight"><pre><span></span><code><span id="__span-44-1"><a id="__codelineno-44-1" name="__codelineno-44-1" href="#__codelineno-44-1"></a><span class="cp">{{</span> <span class="o">{</span><span class="s2">"z"</span><span class="o">:</span> <span class="m">1</span><span class="o">,</span> <span class="s2">"a"</span><span class="o">:</span> <span class="m">2</span><span class="o">}</span> <span class="o">|</span> <span class="nf">dictsort</span> <span class="cp">}}</span><span class="x">  → [("a", 2), ("z", 1)]</span>
+</span></code></pre></div><p></p>
+</li>
+<li>
+<p><strong><code>attr</code></strong>: Gets attribute from object
+  </p><div class="language-django highlight"><pre><span></span><code><span id="__span-45-1"><a id="__codelineno-45-1" name="__codelineno-45-1" href="#__codelineno-45-1"></a><span class="cp">{{</span> <span class="nv">user</span> <span class="o">|</span> <span class="nf">attr</span><span class="o">(</span><span class="s2">"name"</span><span class="o">)</span> <span class="cp">}}</span>
+</span></code></pre></div><p></p>
+</li>
+</ul>
+<h4 id="numeric-operations">Numeric Operations</h4>
+<ul>
+<li><strong><code>round</code></strong>: Rounds number to precision
+  <div class="language-django highlight"><pre><span></span><code><span id="__span-46-1"><a id="__codelineno-46-1" name="__codelineno-46-1" href="#__codelineno-46-1"></a><span class="cp">{{</span> <span class="m">3.14159</span> <span class="o">|</span> <span class="nf">round</span><span class="o">(</span><span class="m">2</span><span class="o">)</span> <span class="cp">}}</span><span class="x">  → 3.14</span>
+</span></code></pre></div></li>
+</ul>
+<h4 id="data-serialization">Data Serialization</h4>
+<ul>
+<li>
+<p><strong><code>tojson</code></strong>: Converts value to JSON string
+  </p><div class="language-django highlight"><pre><span></span><code><span id="__span-47-1"><a id="__codelineno-47-1" name="__codelineno-47-1" href="#__codelineno-47-1"></a><span class="cp">{{</span> <span class="o">{</span><span class="s2">"key"</span><span class="o">:</span> <span class="s2">"value"</span><span class="o">}</span> <span class="o">|</span> <span class="nf">tojson</span> <span class="cp">}}</span><span class="x">  → {"key":"value"}</span>
+</span></code></pre></div><p></p>
+</li>
+<li>
+<p><strong><code>pprint</code></strong>: Pretty prints value for debugging
+  </p><div class="language-django highlight"><pre><span></span><code><span id="__span-48-1"><a id="__codelineno-48-1" name="__codelineno-48-1" href="#__codelineno-48-1"></a><span class="cp">{{</span> <span class="nv">complex_data</span> <span class="o">|</span> <span class="nf">pprint</span> <span class="cp">}}</span>
+</span></code></pre></div><p></p>
+</li>
+</ul>
+<h4 id="control-flow">Control Flow</h4>
+<ul>
+<li><strong><code>default</code></strong>: Returns default if value is undefined or falsy
+  <div class="language-django highlight"><pre><span></span><code><span id="__span-49-1"><a id="__codelineno-49-1" name="__codelineno-49-1" href="#__codelineno-49-1"></a><span class="cp">{{</span> <span class="nv">var.missing</span> <span class="o">|</span> <span class="nf">default</span><span class="o">(</span><span class="s2">"fallback"</span><span class="o">)</span> <span class="cp">}}</span><span class="x">  → fallback</span>
+</span></code></pre></div></li>
+</ul>
 <h3 id="document-access">Document access</h3>
 <p>The template system has full access to the entire document - blocks, text, etc.</p>
 <div class="admonition warning">
@@ -1421,7 +1875,7 @@
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"></path></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-timeago" title="October 2, 2025 15:07:07 UTC"><span class="timeago" datetime="2025-10-02T15:07:07+00:00" locale="en"></span></span><span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-iso_date" title="October 2, 2025 15:07:07 UTC">2025-10-02</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-timeago" title="December 2, 2025 23:21:36 UTC"><span class="timeago" datetime="2025-12-02T23:21:36+00:00" locale="en"></span></span><span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-iso_date" title="December 2, 2025 23:21:36 UTC">2025-12-02</span>
   </span>
 
     
