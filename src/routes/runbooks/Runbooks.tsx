@@ -208,12 +208,18 @@ export default function Runbooks() {
   }, [currentRunbook?.name]);
 
   useEffect(() => {
-    if (currentRunbook && documentBridge) {
-      invoke("open_document", {
-        documentId: currentRunbook.id,
-        document: currentRunbook.content ? JSON.parse(currentRunbook.content) : "[]",
-        documentBridge: documentBridge.channel,
-      })
+    if (currentRunbook && documentBridge && runbookEditor) {
+      // Wait for the editor to be ready, then use its live document content
+      // This ensures we use the actual ydoc-synced content, not stale DB content
+      runbookEditor
+        .getEditor()
+        .then((editor) => {
+          return invoke("open_document", {
+            documentId: currentRunbook.id,
+            document: editor.document,
+            documentBridge: documentBridge.channel,
+          });
+        })
         .then(() => {
           setDocumentOpened(true);
         })
@@ -221,7 +227,7 @@ export default function Runbooks() {
           console.error("Error opening document in runtime backend", err);
         });
     }
-  }, [currentRunbook?.id, documentBridge?.channel]);
+  }, [currentRunbook?.id, documentBridge?.channel, runbookEditor]);
 
   useMarkRunbookRead(currentRunbook || null, refreshRunbooks);
 
@@ -343,12 +349,19 @@ export default function Runbooks() {
     if (!currentRunbook) {
       throw new Error("Tried to create a new tag with no runbook selected");
     }
+    if (!runbookEditor) {
+      throw new Error("Tried to create a new tag with no editor available");
+    }
+
+    // Use the live editor content instead of stale DB content
+    const editor = await runbookEditor.getEditor();
+    const content = JSON.stringify(editor.document);
 
     let snapshot = await Snapshot.create({
       id: undefined,
       tag,
       runbook_id: currentRunbook.id,
-      content: currentRunbook.content,
+      content,
     });
     queryClient.invalidateQueries({ queryKey: snapshotsByRunbook(currentRunbook.id).queryKey });
 
