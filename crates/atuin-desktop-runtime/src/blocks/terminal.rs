@@ -361,7 +361,7 @@ impl Terminal {
         if let Some((_, _, ref remote_path)) = remote_var_path {
             let export_cmd = format!("export ATUIN_OUTPUT_VARS='{}'\n", remote_path);
             if let Err(e) = pty_store.write_pty(self.id, export_cmd.into()).await {
-                log::warn!("Failed to write export command to SSH PTY: {}", e);
+                tracing::warn!("Failed to write export command to SSH PTY: {}", e);
             }
         }
 
@@ -413,7 +413,7 @@ impl Terminal {
                     // No variables written, that's fine
                 }
                 Err(e) => {
-                    log::warn!("Failed to read terminal output variables: {}", e);
+                    tracing::warn!("Failed to read terminal output variables: {}", e);
                 }
             }
         } else if let Some((hostname, username, remote_path)) = remote_var_path {
@@ -442,7 +442,7 @@ impl Terminal {
                     }
                 }
                 Err(e) => {
-                    log::warn!("Failed to read remote terminal output variables: {}", e);
+                    tracing::warn!("Failed to read remote terminal output variables: {}", e);
                 }
             }
 

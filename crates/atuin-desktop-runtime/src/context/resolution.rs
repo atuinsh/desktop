@@ -146,7 +146,7 @@ impl ContextResolver {
                             DocumentVar::new(var.name.clone(), resolved_value, var.source.clone()),
                         );
                     } else {
-                        log::warn!("Failed to resolve template for variable {}", var.name);
+                        tracing::warn!("Failed to resolve template for variable {}", var.name);
                     }
                 }
             }

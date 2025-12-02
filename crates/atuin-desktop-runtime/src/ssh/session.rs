@@ -144,7 +144,7 @@ impl Session {
             ));
         }
 
-        log::debug!("Created remote temp file: {}", path);
+        tracing::debug!("Created remote temp file: {}", path);
         Ok(path)
     }
 
@@ -178,7 +178,7 @@ impl Session {
 
         // rm -f returns 0 even if file doesn't exist, but log if there's an error
         if result.exit_code != 0 {
-            log::warn!(
+            tracing::warn!(
                 "Failed to delete file {}: {} {}",
                 path,
                 result.stdout.trim(),
