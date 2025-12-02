@@ -51,6 +51,34 @@ impl BlockContext {
             .get(&TypeId::of::<T>())
             .and_then(|boxed| boxed.downcast_ref::<T>())
     }
+
+    /// Get a mutable typed value from this block's context
+    ///
+    /// Returns None if no value of this type exists in the context.
+    pub fn get_mut<T: BlockContextItem + 'static>(&mut self) -> Option<&mut T> {
+        self.entries
+            .get_mut(&TypeId::of::<T>())
+            .and_then(|boxed| boxed.downcast_mut::<T>())
+    }
+}
+
+/// Trait for easily adding variables to a block context
+///
+/// This trait is implemented for `BlockContext` and can be used to add variables to a block context.
+pub trait BlockVars {
+    fn add_var(&mut self, var_name: String, var_value: String, var_source: String);
+}
+
+impl BlockVars for BlockContext {
+    fn add_var(&mut self, var_name: String, var_value: String, var_source: String) {
+        if let Some(vars) = self.get_mut::<DocumentVars>() {
+            vars.push(DocumentVar::new(var_name, var_value, var_source));
+        } else {
+            let mut vars = DocumentVars::new();
+            vars.push(DocumentVar::new(var_name, var_value, var_source));
+            self.insert(vars);
+        }
+    }
 }
 
 impl Clone for BlockContext {
@@ -196,6 +224,64 @@ impl DocumentVar {
 
 #[typetag::serde]
 impl BlockContextItem for DocumentVar {}
+
+/// Container for multiple variables, used when a block produces several variables at once
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DocumentVars {
+    vars: Vec<DocumentVar>,
+}
+
+impl DocumentVars {
+    pub fn new() -> Self {
+        Self { vars: Vec::new() }
+    }
+
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self {
+            vars: Vec::with_capacity(capacity),
+        }
+    }
+
+    pub fn push(&mut self, var: DocumentVar) {
+        self.vars.push(var);
+    }
+
+    pub fn insert(&mut self, name: String, value: String, source: String) {
+        self.vars.push(DocumentVar::new(name, value, source));
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = &DocumentVar> {
+        self.vars.iter()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.vars.is_empty()
+    }
+
+    pub fn len(&self) -> usize {
+        self.vars.len()
+    }
+}
+
+impl FromIterator<DocumentVar> for DocumentVars {
+    fn from_iter<T: IntoIterator<Item = DocumentVar>>(iter: T) -> Self {
+        Self {
+            vars: iter.into_iter().collect(),
+        }
+    }
+}
+
+impl IntoIterator for DocumentVars {
+    type Item = DocumentVar;
+    type IntoIter = std::vec::IntoIter<DocumentVar>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.vars.into_iter()
+    }
+}
+
+#[typetag::serde]
+impl BlockContextItem for DocumentVars {}
 
 /// Current working directory set by directory blocks
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

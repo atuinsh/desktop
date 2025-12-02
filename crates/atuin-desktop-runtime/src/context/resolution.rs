@@ -10,7 +10,9 @@ use ts_rs::TS;
 use crate::{
     blocks::BlockBehavior,
     client::LocalValueProvider,
-    context::{BlockWithContext, DocumentCwd, DocumentEnvVar, DocumentSshHost, DocumentVar},
+    context::{
+        BlockWithContext, DocumentCwd, DocumentEnvVar, DocumentSshHost, DocumentVar, DocumentVars,
+    },
 };
 
 /// A struct representing the resolved context of a block.
@@ -132,6 +134,20 @@ impl ContextResolver {
                     );
                 } else {
                     log::warn!("Failed to resolve template for variable {}", var.name);
+                }
+            }
+
+            // Process multiple variables from DocumentVars container
+            if let Some(vars) = ctx.get::<DocumentVars>() {
+                for var in vars.iter() {
+                    if let Ok(resolved_value) = self.resolve_template(&var.value) {
+                        self.vars.insert(
+                            var.name.clone(),
+                            DocumentVar::new(var.name.clone(), resolved_value, var.source.clone()),
+                        );
+                    } else {
+                        log::warn!("Failed to resolve template for variable {}", var.name);
+                    }
                 }
             }
 
