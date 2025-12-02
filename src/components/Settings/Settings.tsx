@@ -26,8 +26,6 @@ import {
   Slider,
   Tabs,
   Tab,
-  Navbar,
-  NavbarContent,
 } from "@heroui/react";
 import { Settings } from "@/state/settings";
 import { KVStore } from "@/state/kv";
