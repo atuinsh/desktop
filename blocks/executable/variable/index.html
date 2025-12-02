@@ -740,6 +740,15 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#setting-variables-from-script-and-terminal-blocks" class="md-nav__link">
+    <span class="md-ellipsis">
+      Setting Variables from Script and Terminal Blocks
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#variable-display" class="md-nav__link">
     <span class="md-ellipsis">
       Variable Display
@@ -1334,6 +1343,15 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#setting-variables-from-script-and-terminal-blocks" class="md-nav__link">
+    <span class="md-ellipsis">
+      Setting Variables from Script and Terminal Blocks
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#variable-display" class="md-nav__link">
     <span class="md-ellipsis">
       Variable Display
@@ -1417,11 +1435,22 @@
 <li><strong>Scope</strong>: Available throughout the runbook for that user only</li>
 <li><strong>Use case</strong>: User-specific settings, temporary calculations, private credentials</li>
 </ul>
+<h2 id="setting-variables-from-script-and-terminal-blocks">Setting Variables from Script and Terminal Blocks</h2>
+<p><a href="../script/">Script</a> and <a href="../terminal/">Terminal</a> blocks can set multiple template variables by writing to the <code>$ATUIN_OUTPUT_VARS</code> file. This provides a programmatic way to create variables based on command execution.</p>
+<p><strong>Usage:</strong></p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nb">echo</span><span class="w"> </span><span class="s2">"name=value"</span><span class="w"> </span>&gt;&gt;<span class="w"> </span><span class="nv">$ATUIN_OUTPUT_VARS</span>
+</span></code></pre></div>
+<ul>
+<li><strong>Format</strong>: <code>KEY=VALUE</code> entries, one per line</li>
+<li><strong>Timing</strong>: Variables are captured when scripts exit successfully or terminals close</li>
+<li><strong>Location</strong>: Works with both local and remote (SSH) execution</li>
+</ul>
+<p>See the <a href="../script/#setting-variables-via-atuin_output_vars">Script</a> and <a href="../terminal/#variables">Terminal</a> documentation for detailed examples.</p>
 <h2 id="variable-display">Variable Display</h2>
 <p>Use the Variable Display block to view all currently set variables and their values. This shows both template (synced) and local (not synced) variables for debugging and state inspection.</p>
 <h3 id="usage">Usage</h3>
 <p>Both variable types can be referenced using the same template syntax:</p>
-<div class="language-handlebars highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="cp">{{</span><span class="nv">var.variable_name</span><span class="cp">}}</span>
+<div class="language-handlebars highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="cp">{{</span><span class="nv">var.variable_name</span><span class="cp">}}</span>
 </span></code></pre></div>
 <h3 id="template-integration">Template Integration</h3>
 <p>All variable blocks integrate with the <a href="../../../templating/" title="mention">templating</a> system, enabling complex variable manipulation and conditional logic.</p>
@@ -1447,7 +1476,7 @@
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"></path></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-timeago" title="September 19, 2025 00:43:12 UTC"><span class="timeago" datetime="2025-09-19T00:43:12+00:00" locale="en"></span></span><span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-iso_date" title="September 19, 2025 00:43:12 UTC">2025-09-19</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-timeago" title="December 2, 2025 23:21:49 UTC"><span class="timeago" datetime="2025-12-02T23:21:49+00:00" locale="en"></span></span><span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-iso_date" title="December 2, 2025 23:21:49 UTC">2025-12-02</span>
   </span>
 
     
