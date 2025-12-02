@@ -1,5 +1,5 @@
 import * as Y from "yjs";
-import { Block, BlockNoteEditor } from "@blocknote/core";
+import { BlockNoteEditor } from "@blocknote/core";
 import { yXmlFragmentToBlocks } from "@blocknote/core/yjs";
 import { schema } from "@/components/runbooks/editor/create_editor";
 
@@ -14,7 +14,7 @@ function getConversionEditor() {
 }
 
 // Synchronous conversion from Y.Doc to BlockNote blocks
-export function ydocToBlocknote(doc: Y.Doc): Block<any>[] {
+export function ydocToBlocknote(doc: Y.Doc): any[] {
   const fragment = doc.getXmlFragment("document-store");
   const editor = getConversionEditor();
 
@@ -25,7 +25,7 @@ export function ydocToBlocknote(doc: Y.Doc): Block<any>[] {
 }
 
 // Convert raw ydoc bytes to BlockNote blocks
-export function ydocBytesToBlocknote(ydocBytes: Uint8Array): Block<any>[] {
+export function ydocBytesToBlocknote(ydocBytes: Uint8Array): any[] {
   const doc = new Y.Doc();
   Y.applyUpdate(doc, ydocBytes);
   return ydocToBlocknote(doc);
