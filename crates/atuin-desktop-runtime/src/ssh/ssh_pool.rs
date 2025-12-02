@@ -771,7 +771,7 @@ impl SshPool {
                 {
                     Ok(session) => session,
                     Err(e) => {
-                        let _ = reply_to.send(Err(e.into()));
+                        let _ = reply_to.send(Err(e));
                         return;
                     }
                 };
@@ -793,7 +793,7 @@ impl SshPool {
                 {
                     Ok(session) => session,
                     Err(e) => {
-                        let _ = reply_to.send(Err(e.into()));
+                        let _ = reply_to.send(Err(e));
                         return;
                     }
                 };
@@ -815,7 +815,7 @@ impl SshPool {
                 {
                     Ok(session) => session,
                     Err(e) => {
-                        let _ = reply_to.send(Err(e.into()));
+                        let _ = reply_to.send(Err(e));
                         return;
                     }
                 };

@@ -11,7 +11,7 @@ impl FsVarHandle {
     /// Returns the path to the temporary file where variables should be written.
     /// Variables should be written in the format `key=value`, one per line.
     pub fn path(&self) -> &Path {
-        &self.file.path()
+        self.file.path()
     }
 }
 

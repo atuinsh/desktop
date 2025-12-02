@@ -367,7 +367,7 @@ impl Script {
                     e
                 ))
                 .await;
-            return (Err(e.into()), String::new(), None);
+            return (Err(e), String::new(), None);
         }
         let fs_var = fs_var.unwrap();
 
