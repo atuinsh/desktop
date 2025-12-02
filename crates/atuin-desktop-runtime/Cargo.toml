@@ -38,7 +38,8 @@ eyre = { workspace = true }
 time = { workspace = true }
 bytes = { workspace = true }
 minijinja = { workspace = true }
-log = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
 klickhouse = { workspace = true }
 thiserror = { workspace = true }
 nix = { workspace = true, features = ["signal"] }

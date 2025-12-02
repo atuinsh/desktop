@@ -116,6 +116,11 @@ Questions about usage? [Start a discussion](https://forum.atuin.sh)
 
 - **[Atuin CLI](https://github.com/atuinsh/atuin)**: Magical shell history with sync, search, and stats
 
+## Notification Sounds
+
+Included notification sounds provided by [Notification Sounds](https://notificationsounds.com/)
+under the [Creative Commons Attribution License](https://creativecommons.org/licenses/by/4.0/legalcode).
+
 ## License
 
 Copyright 2025 Atuin, Inc

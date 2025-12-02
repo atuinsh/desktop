@@ -592,9 +592,8 @@ export const insertScript = (schema: any) => (editor: typeof schema.BlockNoteEdi
     let scriptBlocks = editor.document.filter((block: any) => block.type === "script");
     let name = `Script ${scriptBlocks.length + 1}`;
 
-    // Get default shell from settings
-    const defaultShell = await Settings.scriptShell();
-    const interpreter = defaultShell || "zsh";
+    // Get default shell from settings, falling back to system default
+    const interpreter = await Settings.getEffectiveScriptShell();
 
     editor.insertBlocks(
       [

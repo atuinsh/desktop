@@ -483,6 +483,7 @@ fn main() {
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_notification::init())
         .invoke_handler(tauri::generate_handler![
             list,
             search,
@@ -506,6 +507,7 @@ fn main() {
             install::install_cli,
             install::is_cli_installed,
             install::setup_cli,
+            install::get_default_shell,
             blocks::postgres::command::postgres_query,
             blocks::postgres::command::postgres_execute,
             dotfiles::aliases::import_aliases,
@@ -572,6 +574,8 @@ fn main() {
             commands::workspaces::delete_folder,
             commands::workspaces::move_items,
             commands::workspaces::move_items_between_workspaces,
+            commands::audio::list_sounds,
+            commands::audio::play_sound,
             shared_state::get_shared_state_document,
             shared_state::push_optimistic_update,
             shared_state::update_shared_state_document,

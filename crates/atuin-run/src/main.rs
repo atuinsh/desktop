@@ -11,6 +11,8 @@ mod ui;
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    atuin_desktop_runtime::init_tracing();
+
     let args = Args::parse();
     let runbook = runbooks::load_runbook(&args.runbook).await?;
 

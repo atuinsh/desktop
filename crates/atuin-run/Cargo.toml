@@ -19,4 +19,4 @@ crossterm = "0.29.0"
 vt100 = "0.16.2"
 textwrap = "0.16.2"
 bytes = { workspace = true }
-log.workspace = true
+tracing = { workspace = true }

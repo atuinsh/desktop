@@ -140,7 +140,7 @@ impl Dropdown {
 
                 let cwd = context.context_resolver.cwd().to_string();
                 let envs = context.context_resolver.env_vars().clone();
-                log::trace!("Running dropdown command in directory {cwd}");
+                tracing::trace!("Running dropdown command in directory {cwd}");
 
                 let output = Command::new(&self.interpreter)
                     .current_dir(cwd)
@@ -272,7 +272,7 @@ impl BlockBehavior for Dropdown {
         let _ = context.block_started().await;
 
         let resolved_options = self.resolve_options(&context).await?;
-        log::trace!(
+        tracing::trace!(
             "Resolved options for dropdown block {id}: {options:?}",
             id = self.id,
             options = resolved_options

@@ -380,14 +380,14 @@ impl Terminal {
         // They stay running until cancelled
         // Natural termination is handled by the PTY reader loop detecting EOF, usually because the
         // user has run 'exit', pressed ctrl-d, or similar.
-        log::trace!(
+        tracing::trace!(
             "Awaiting terminal cancellation for block {id}",
             id = self.id
         );
 
         let _ = cancel_rx.await;
 
-        log::debug!("Cancelling terminal execution for block {id}", id = self.id);
+        tracing::debug!("Cancelling terminal execution for block {id}", id = self.id);
 
         // Read variables from temp file (local) or remote file (SSH)
         if let Some(handle) = fs_var_handle {

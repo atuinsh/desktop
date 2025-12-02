@@ -3,7 +3,6 @@
 //! This module provides a SQLite-based logging system for tracking block execution
 //! history, including timestamps and outputs.
 
-use log::debug;
 use serde::{Deserialize, Serialize};
 use sqlx::{
     sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions, SqliteSynchronous},
@@ -11,6 +10,7 @@ use sqlx::{
 };
 use std::{fs, path::PathBuf, str::FromStr, time::Duration};
 use tokio::sync::{mpsc, oneshot};
+use tracing::debug;
 use uuid::Uuid;
 
 use eyre::Result;

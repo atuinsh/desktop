@@ -3,7 +3,7 @@ members = ["backend", "crates/*"]
 resolver = "2"
 
 [workspace.package]
-version = "0.2.3"                                # NOTE - also update this in backend/Cargo.toml if not using `cargo workspaces`
+version = "0.2.4"                                # NOTE - also update this in backend/Cargo.toml if not using `cargo workspaces`
 edition = "2021"
 authors = ["ellie@atuin.sh", "michelle@atuin.sh"]
 
@@ -44,6 +44,8 @@ thiserror = "2.0.11"
 pretty_assertions = "1.4.1"
 typed-builder = "0.21.0"
 log = "0.4.26"
+tracing = { version = "0.1", features = ["log"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 dirs = "5.0" # For finding home directory
 tempfile = "3.10"
 reqwest = { version = "0.12", features = ["json", "native-tls"] }

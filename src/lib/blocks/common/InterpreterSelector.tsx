@@ -66,6 +66,7 @@ const InterpreterSelector: React.FC<InterpreterSelectorProps> = ({
   const [customValue, setCustomValue] = useState(isCustom ? interpreter : "");
   const [showCustomInput, setShowCustomInput] = useState(false);
   const [scriptInterpreters, setScriptInterpreters] = useState<Array<{command: string; name: string}>>([]);
+  const [systemDefaultShell, setSystemDefaultShell] = useState<string>("bash");
 
   useEffect(() => {
     // Update isCustom state once scriptInterpreters are loaded
@@ -85,9 +86,10 @@ const InterpreterSelector: React.FC<InterpreterSelectorProps> = ({
     }
   }, []);
 
-  // Load script interpreters from settings on mount
+  // Load script interpreters and system default shell on mount
   useEffect(() => {
     loadScriptInterpreters();
+    Settings.getSystemDefaultShell().then(setSystemDefaultShell);
   }, [loadScriptInterpreters]);
 
   // Check which shells are installed
@@ -197,6 +199,11 @@ const InterpreterSelector: React.FC<InterpreterSelectorProps> = ({
                 setShowCustomInput(true);
                 return;
               }
+              if (key === "_system_default") {
+                setIsCustom(false);
+                onInterpreterChange(systemDefaultShell);
+                return;
+              }
               setIsCustom(false);
               onInterpreterChange(key);
             }}
@@ -214,6 +221,15 @@ const InterpreterSelector: React.FC<InterpreterSelectorProps> = ({
             ) : null}
 
             <SelectSection title="System">
+              <SelectItem
+                key="_system_default"
+                classNames={{ base: "py-1", description: "text-xs opacity-70" }}
+                description={`Use system default (${systemDefaultShell})`}
+              >
+                System Default
+              </SelectItem>
+            </SelectSection>
+            <SelectSection title="Shells">
               {supportedShells.map(shell => {
                 // Always show bash and sh, or any shell that's available, or the current selected shell
                 const shouldShow = shell.name === "bash" ||

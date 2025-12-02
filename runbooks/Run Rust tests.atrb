@@ -73,7 +73,7 @@ content:
     name: Linux deps
     code: |-
       if [[ $(uname) == 'Linux' ]]; then
-         sudo apt install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+         sudo apt install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libasound2-dev
 
       fi
     outputVisible: true

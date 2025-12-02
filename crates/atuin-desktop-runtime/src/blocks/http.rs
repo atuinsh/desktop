@@ -147,7 +147,7 @@ impl BlockBehavior for Http {
         self,
         context: ExecutionContext,
     ) -> Result<Option<ExecutionHandle>, Box<dyn std::error::Error + Send + Sync>> {
-        log::trace!("Executing HTTP block {id}", id = self.id);
+        tracing::trace!("Executing HTTP block {id}", id = self.id);
 
         let _ = context.block_started().await;
 
@@ -155,7 +155,7 @@ impl BlockBehavior for Http {
         let response = self.make_http_request(&context).await;
 
         if let Err(e) = response {
-            log::error!("{e}");
+            tracing::error!("{e}");
 
             let error_message = match e {
                 HttpError::Reqwest(ref e) => {
