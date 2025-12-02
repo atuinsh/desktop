@@ -24,6 +24,10 @@ import {
   useDisclosure,
   addToast,
   Slider,
+  Tabs,
+  Tab,
+  Navbar,
+  NavbarContent,
 } from "@heroui/react";
 import { Settings } from "@/state/settings";
 import { KVStore } from "@/state/kv";
@@ -986,7 +990,7 @@ const NotificationSettings = () => {
           label="Enable notifications"
           isSelected={notificationsEnabled}
           onValueChange={setNotificationsEnabled}
-          description="Master toggle for all notifications"
+          description="Enable or disable all notifications"
         />
 
         {notificationsEnabled && (
@@ -1223,20 +1227,50 @@ const UserSettings = () => {
 // Main Settings component
 const SettingsPanel = () => {
   return (
-    <div className="flex flex-col gap-4 p-4 pt-2 w-full overflow-y-auto">
+    <div className="flex flex-col gap-4 p-4 pt-2 w-full">
       <div className="flex flex-col gap-1">
         <h1 className="text-2xl font-bold">Settings</h1>
         <p className="text-small text-default-400 uppercase font-semibold">
           Customize your experience
         </p>
       </div>
-      <div className="flex flex-col gap-4">
-        <GeneralSettings />
-        <RunbookSettings />
-        <NotificationSettings />
-        <AISettings />
-        <UserSettings />
-      </div>
+      <Tabs
+        aria-label="Settings"
+        color="primary"
+        classNames={{
+          base: "sticky top-0 start-0 z-20 pt-2 pb-4 backdrop-blur-sm bg-background/30",
+        }}
+      >
+        <Tab key="general" title="General">
+          <div className="flex flex-col gap-4">
+            <GeneralSettings />
+          </div>
+        </Tab>
+
+        <Tab key="runbook" title="Runbooks">
+          <div className="flex flex-col gap-4">
+            <RunbookSettings />
+          </div>
+        </Tab>
+
+        <Tab key="notification" title="Notifications">
+          <div className="flex flex-col gap-4">
+            <NotificationSettings />
+          </div>
+        </Tab>
+
+        <Tab key="ai" title="AI">
+          <div className="flex flex-col gap-4">
+            <AISettings />
+          </div>
+        </Tab>
+
+        <Tab key="user" title="User">
+          <div className="flex flex-col gap-4">
+            <UserSettings />
+          </div>
+        </Tab>
+      </Tabs>
     </div>
   );
 };
