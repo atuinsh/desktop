@@ -6,7 +6,6 @@ import Snapshot from "@/state/runbooks/snapshot";
 import * as api from "@/api/api";
 import * as Y from "yjs";
 import { PhoenixSynchronizer, SyncType } from "../phoenix_provider";
-import { ydocToBlocknote } from "../ydoc_to_blocknote";
 import AtuinEnv from "@/atuin_env";
 import { Some, usernameFromNwo } from "../utils";
 import Workspace from "@/state/runbooks/workspace";
@@ -205,12 +204,8 @@ export default class RunbookSynchronizer {
         } else {
           this.logger.debug("YJS sync completed with type:", syncType);
           runbook.ydoc = Y.encodeStateAsUpdate(doc);
-          try {
-            const blocks = await ydocToBlocknote(doc);
-            runbook.content = JSON.stringify(blocks);
-          } catch (err) {
-            this.logger.error("Failed to convert YJS document to BlockNote", err);
-          }
+          // Note: We no longer convert ydoc to content here for performance.
+          // The runbook.content getter lazily computes from ydoc when accessed.
         }
       }
 

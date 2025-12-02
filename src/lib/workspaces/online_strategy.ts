@@ -126,7 +126,7 @@ export default class OnlineStrategy implements WorkspaceStrategy {
     if (latestTagContent) {
       Y.applyUpdate(doc, latestTagContent);
     }
-    const blocknoteContent = await ydocToBlocknote(doc);
+    const blocknoteContent = ydocToBlocknote(doc);
 
     const rb = await OnlineRunbook.createUntitled(this.workspace, true);
     if (remoteRunbook.name) {

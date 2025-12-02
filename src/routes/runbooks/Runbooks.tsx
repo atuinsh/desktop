@@ -343,12 +343,19 @@ export default function Runbooks() {
     if (!currentRunbook) {
       throw new Error("Tried to create a new tag with no runbook selected");
     }
+    if (!runbookEditor) {
+      throw new Error("Tried to create a new tag with no editor available");
+    }
+
+    // Use the live editor content instead of stale DB content
+    const editor = await runbookEditor.getEditor();
+    const content = JSON.stringify(editor.document);
 
     let snapshot = await Snapshot.create({
       id: undefined,
       tag,
       runbook_id: currentRunbook.id,
-      content: currentRunbook.content,
+      content,
     });
     queryClient.invalidateQueries({ queryKey: snapshotsByRunbook(currentRunbook.id).queryKey });
 
