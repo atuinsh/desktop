@@ -960,9 +960,7 @@ function App() {
       >
         <CommandMenu index={runbookIndex} />
         <CommandPalette />
-        {/* TODO: Re-enable once search indexing is moved to use Rust ydoc conversion
         <RunbookSearchIndex index={runbookIndex} />
-        */}
         <UpdateNotifier />
         <RuntimeUpdateNotice openRunbookImport={handleOpenRuntimeExplainerRunbook} />
         <NotificationManager />
