@@ -13,7 +13,8 @@ function getConversionEditor() {
   return conversionEditor;
 }
 
-export async function ydocToBlocknote(doc: Y.Doc): Promise<Block<any>[]> {
+// Synchronous conversion from Y.Doc to BlockNote blocks
+export function ydocToBlocknote(doc: Y.Doc): Block<any>[] {
   const fragment = doc.getXmlFragment("document-store");
   const editor = getConversionEditor();
 
@@ -21,4 +22,11 @@ export async function ydocToBlocknote(doc: Y.Doc): Promise<Block<any>[]> {
   const blocks = yXmlFragmentToBlocks(editor, fragment);
 
   return blocks;
+}
+
+// Convert raw ydoc bytes to BlockNote blocks
+export function ydocBytesToBlocknote(ydocBytes: Uint8Array): Block<any>[] {
+  const doc = new Y.Doc();
+  Y.applyUpdate(doc, ydocBytes);
+  return ydocToBlocknote(doc);
 }

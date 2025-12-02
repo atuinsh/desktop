@@ -10,6 +10,7 @@ import Snapshot from "./snapshot";
 import * as commands from "@/lib/workspaces/commands";
 import WorkspaceManager from "@/lib/workspaces/manager";
 import { timeoutPromise } from "@/lib/utils";
+import { ydocBytesToBlocknote } from "@/lib/ydoc_to_blocknote";
 
 const logger = new Logger("Runbook", "green", "green");
 
@@ -168,6 +169,7 @@ export class OnlineRunbook extends Runbook {
   viewed_at: Date | null;
   _ydoc: Uint8Array | null;
   _ydocChanged: boolean = false;
+  _computedContent: string | null = null;
   source: RunbookSource;
   sourceInfo: string | null;
   forkedFrom: string | null;
@@ -180,7 +182,36 @@ export class OnlineRunbook extends Runbook {
 
   set ydoc(value: Uint8Array | null) {
     this._ydocChanged = true;
+    this._computedContent = null; // Invalidate cached content when ydoc changes
     this._ydoc = value;
+  }
+
+  // Override content getter to lazily compute from ydoc when available
+  override get content(): string {
+    // If we have ydoc, compute content from it (cached)
+    if (this._ydoc && this._ydoc.byteLength > 0) {
+      if (this._computedContent === null) {
+        try {
+          const blocks = ydocBytesToBlocknote(this._ydoc);
+          this._computedContent = JSON.stringify(blocks);
+        } catch (err) {
+          logger.error("Failed to compute content from ydoc, falling back to stored content", err);
+          return this._content;
+        }
+      }
+      return this._computedContent;
+    }
+    // Fallback to stored content (legacy runbooks without ydoc)
+    return this._content;
+  }
+
+  // Override content setter to also clear computed cache
+  override set content(value: string) {
+    if (value !== this._content) {
+      this.updated = new Date();
+      this._content = value;
+      this._computedContent = null; // Clear cache since explicit content was set
+    }
   }
 
   constructor(attrs: OnlineRunbookAttrs, persisted: boolean = false) {
