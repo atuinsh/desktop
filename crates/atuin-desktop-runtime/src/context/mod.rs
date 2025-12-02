@@ -13,14 +13,16 @@
 //! active context (produced during execution).
 
 mod block_context;
+pub mod fs_var;
 mod resolution;
 mod storage;
 
 pub use block_context::BlockState;
 pub use block_context::{
-    BlockContext, BlockContextItem, BlockExecutionOutput, BlockStateUpdater, BlockWithContext,
-    DocumentCwd, DocumentEnvVar, DocumentSshHost, DocumentVar,
+    BlockContext, BlockContextItem, BlockExecutionOutput, BlockStateUpdater, BlockVars,
+    BlockWithContext, DocumentCwd, DocumentEnvVar, DocumentSshHost, DocumentVar, DocumentVars,
 };
+
 pub use resolution::{ContextResolver, ResolvedContext};
 pub use storage::BlockContextStorage;
 pub use typetag::serde as typetag_serde;
@@ -654,5 +656,218 @@ mod tests {
             Some(&"/home/alice".to_string())
         );
         assert_eq!(resolved.cwd, "/home/alice/projects");
+    }
+
+    #[test]
+    fn test_document_vars_new_and_insert() {
+        let mut vars = DocumentVars::new();
+        assert!(vars.is_empty());
+
+        vars.insert("VAR1".to_string(), "value1".to_string(), "test".to_string());
+        vars.insert("VAR2".to_string(), "value2".to_string(), "test".to_string());
+
+        assert_eq!(vars.len(), 2);
+        assert!(!vars.is_empty());
+    }
+
+    #[test]
+    fn test_document_vars_push() {
+        let mut vars = DocumentVars::new();
+        vars.push(DocumentVar::new(
+            "VAR1".to_string(),
+            "value1".to_string(),
+            "test".to_string(),
+        ));
+
+        assert_eq!(vars.len(), 1);
+    }
+
+    #[test]
+    fn test_document_vars_iter() {
+        let mut vars = DocumentVars::new();
+        vars.insert("VAR1".to_string(), "value1".to_string(), "test".to_string());
+        vars.insert("VAR2".to_string(), "value2".to_string(), "test".to_string());
+
+        let names: Vec<&str> = vars.iter().map(|v| v.name.as_str()).collect();
+        assert_eq!(names, vec!["VAR1", "VAR2"]);
+    }
+
+    #[test]
+    fn test_document_vars_from_iterator() {
+        let items = vec![
+            DocumentVar::new("VAR1".to_string(), "value1".to_string(), "test".to_string()),
+            DocumentVar::new("VAR2".to_string(), "value2".to_string(), "test".to_string()),
+        ];
+
+        let vars: DocumentVars = items.into_iter().collect();
+        assert_eq!(vars.len(), 2);
+    }
+
+    #[test]
+    fn test_document_vars_into_iterator() {
+        let mut vars = DocumentVars::new();
+        vars.insert("VAR1".to_string(), "value1".to_string(), "test".to_string());
+        vars.insert("VAR2".to_string(), "value2".to_string(), "test".to_string());
+
+        let collected: Vec<DocumentVar> = vars.into_iter().collect();
+        assert_eq!(collected.len(), 2);
+    }
+
+    #[test]
+    fn test_document_vars_in_block_context() {
+        let mut vars = DocumentVars::new();
+        vars.insert("VAR1".to_string(), "value1".to_string(), "test".to_string());
+        vars.insert("VAR2".to_string(), "value2".to_string(), "test".to_string());
+
+        let mut context = BlockContext::new();
+        context.insert(vars.clone());
+
+        let retrieved = context.get::<DocumentVars>();
+        assert!(retrieved.is_some());
+        assert_eq!(retrieved.unwrap().len(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_context_resolver_with_document_vars() {
+        let var_block = Var::builder()
+            .id(Uuid::new_v4())
+            .name("SINGLE")
+            .value("single_value")
+            .build();
+
+        let mut vars = DocumentVars::new();
+        vars.insert("VAR1".to_string(), "value1".to_string(), "test".to_string());
+        vars.insert("VAR2".to_string(), "value2".to_string(), "test".to_string());
+
+        let mut context = BlockContext::new();
+        context.insert(vars);
+
+        let block_with_context = BlockWithContext::new(Block::Var(var_block), context, None, None);
+
+        let resolver = ContextResolver::from_blocks(&[block_with_context]);
+
+        assert_eq!(resolver.get_var("VAR1"), Some(&"value1".to_string()));
+        assert_eq!(resolver.get_var("VAR2"), Some(&"value2".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_context_resolver_document_vars_with_templates() {
+        let var_block = Var::builder()
+            .id(Uuid::new_v4())
+            .name("BASE")
+            .value("hello")
+            .build();
+
+        // First block sets BASE variable
+        let mut context1 = BlockContext::new();
+        context1.insert(DocumentVar::new(
+            "BASE".to_string(),
+            "hello".to_string(),
+            "test".to_string(),
+        ));
+
+        // Second block uses DocumentVars with template referencing BASE
+        let mut vars = DocumentVars::new();
+        vars.insert(
+            "GREETING".to_string(),
+            "{{ var.BASE }} world".to_string(),
+            "test".to_string(),
+        );
+        vars.insert(
+            "OTHER".to_string(),
+            "static value".to_string(),
+            "test".to_string(),
+        );
+
+        let mut context2 = BlockContext::new();
+        context2.insert(vars);
+
+        let var_block2 = Var::builder()
+            .id(Uuid::new_v4())
+            .name("UNUSED")
+            .value("unused")
+            .build();
+
+        let blocks = vec![
+            BlockWithContext::new(Block::Var(var_block), context1, None, None),
+            BlockWithContext::new(Block::Var(var_block2), context2, None, None),
+        ];
+
+        let resolver = ContextResolver::from_blocks(&blocks);
+
+        assert_eq!(resolver.get_var("BASE"), Some(&"hello".to_string()));
+        assert_eq!(
+            resolver.get_var("GREETING"),
+            Some(&"hello world".to_string())
+        );
+        assert_eq!(resolver.get_var("OTHER"), Some(&"static value".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_context_resolver_document_vars_in_active_context() {
+        let var_block = Var::builder()
+            .id(Uuid::new_v4())
+            .name("UNUSED")
+            .value("unused")
+            .build();
+
+        let mut vars = DocumentVars::new();
+        vars.insert(
+            "ACTIVE_VAR1".to_string(),
+            "active1".to_string(),
+            "test".to_string(),
+        );
+        vars.insert(
+            "ACTIVE_VAR2".to_string(),
+            "active2".to_string(),
+            "test".to_string(),
+        );
+
+        let mut active_context = BlockContext::new();
+        active_context.insert(vars);
+
+        let block_with_context = BlockWithContext::new(
+            Block::Var(var_block),
+            BlockContext::new(),
+            Some(active_context),
+            None,
+        );
+
+        let resolver = ContextResolver::from_blocks(&[block_with_context]);
+
+        assert_eq!(
+            resolver.get_var("ACTIVE_VAR1"),
+            Some(&"active1".to_string())
+        );
+        assert_eq!(
+            resolver.get_var("ACTIVE_VAR2"),
+            Some(&"active2".to_string())
+        );
+    }
+
+    #[test]
+    fn test_document_vars_serialization_roundtrip() {
+        let mut vars = DocumentVars::new();
+        vars.insert(
+            "VAR1".to_string(),
+            "value1".to_string(),
+            "source1".to_string(),
+        );
+        vars.insert(
+            "VAR2".to_string(),
+            "value2".to_string(),
+            "source2".to_string(),
+        );
+
+        let mut context = BlockContext::new();
+        context.insert(vars);
+
+        let serialized = serde_json::to_string(&context).unwrap();
+        let deserialized: BlockContext = serde_json::from_str(&serialized).unwrap();
+
+        let retrieved = deserialized.get::<DocumentVars>();
+        assert!(retrieved.is_some());
+        let retrieved_vars = retrieved.unwrap();
+        assert_eq!(retrieved_vars.len(), 2);
     }
 }
