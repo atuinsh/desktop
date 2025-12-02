@@ -170,6 +170,7 @@ export class OnlineRunbook extends Runbook {
   _ydoc: Uint8Array | null;
   _ydocChanged: boolean = false;
   _computedContent: string | null = null;
+  _contentStale: boolean = true; // Start stale so first access computes
   source: RunbookSource;
   sourceInfo: string | null;
   forkedFrom: string | null;
@@ -182,35 +183,43 @@ export class OnlineRunbook extends Runbook {
 
   set ydoc(value: Uint8Array | null) {
     this._ydocChanged = true;
-    this._computedContent = null; // Invalidate cached content when ydoc changes
+    this._contentStale = true; // Mark for recompute on next access
     this._ydoc = value;
   }
 
   // Override content getter to lazily compute from ydoc when available
   override get content(): string {
-    // If we have ydoc, compute content from it (cached)
-    if (this._ydoc && this._ydoc.byteLength > 0) {
-      if (this._computedContent === null) {
-        try {
-          const blocks = ydocBytesToBlocknote(this._ydoc);
-          this._computedContent = JSON.stringify(blocks);
-        } catch (err) {
-          logger.error("Failed to compute content from ydoc, falling back to stored content", err);
-          return this._content;
-        }
-      }
+    // 1. Use cache if exists and not stale
+    if (this._computedContent !== null && !this._contentStale) {
       return this._computedContent;
     }
-    // Fallback to stored content (legacy runbooks without ydoc)
+
+    // 2. Recompute if we have ydoc and (cache is empty OR stale)
+    if (this._ydoc && this._ydoc.byteLength > 0) {
+      try {
+        const blocks = ydocBytesToBlocknote(this._ydoc);
+        this._computedContent = JSON.stringify(blocks);
+        this._contentStale = false;
+        // Write to DB field so next save() persists it
+        this._content = this._computedContent;
+        return this._computedContent;
+      } catch (err) {
+        logger.error("Failed to compute content from ydoc, falling back to stored content", err);
+        return this._content;
+      }
+    }
+
+    // 3. Fallback to stored content (legacy runbooks without ydoc)
     return this._content;
   }
 
-  // Override content setter to also clear computed cache
+  // Override content setter to also update cache
   override set content(value: string) {
     if (value !== this._content) {
       this.updated = new Date();
       this._content = value;
-      this._computedContent = null; // Clear cache since explicit content was set
+      this._computedContent = value; // Cache the explicit value
+      this._contentStale = false; // Explicit content is authoritative
     }
   }
 
