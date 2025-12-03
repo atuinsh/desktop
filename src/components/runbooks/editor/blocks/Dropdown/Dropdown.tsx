@@ -441,20 +441,20 @@ const Dropdown = ({
                     </TabsList>
                     <TabsContent value="fixed" className="flex-1 overflow-auto">
                       <FixedTab
-                        options={options}
+                        options={dropdown.props.fixedOptions}
                         onOptionsUpdate={optionsChangeHandler(OptionType.FIXED)}
                       />
                     </TabsContent>
                     <TabsContent value="variable" className="flex-1 overflow-auto">
                       <VariableTab
-                        options={options}
+                        options={dropdown.props.variableOptions}
                         onOptionsUpdate={optionsChangeHandler(OptionType.VARIABLE)}
                       />
                     </TabsContent>
                     <TabsContent value="command" className="flex-1 overflow-auto">
                       <CommandTab
                         blockId={id}
-                        options={options}
+                        options={dropdown.props.commandOptions}
                         onOptionsUpdate={optionsChangeHandler(OptionType.COMMAND)}
                         interpreter={interpreter}
                         onInterpreterChange={onInterpreterChange}
