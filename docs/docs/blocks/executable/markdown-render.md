@@ -2,12 +2,6 @@
 
 The Markdown Render block displays variable content as rendered markdown. Useful for displaying formatted output from scripts, API responses, or any variable that contains markdown text.
 
-## Usage
-
-1. Type `/markdown` (or `/md`, `/render`, `/display`) to insert a Markdown Render block
-2. Enter the variable name containing your markdown content
-3. Configure the number of visible lines
-
 ## Configuration
 
 ### Variable Name
