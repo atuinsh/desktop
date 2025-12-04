@@ -45,7 +45,6 @@ import Root from "./routes/root/Root";
 import RunbookBus from "./lib/app/runbook_bus";
 import { grandCentral } from "./lib/events/grand_central";
 import { AdvancedSettings } from "./rs-bindings/AdvancedSettings";
-import { captureConsoleIntegration } from "@sentry/react";
 
 (async () => {
   try {
