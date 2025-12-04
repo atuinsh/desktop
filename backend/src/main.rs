@@ -633,25 +633,9 @@ fn main() {
                 .path()
                 .app_config_dir()
                 .expect("Failed to get app config dir")
-                .join("advanced_settings.yaml");
+                .join("advanced_settings");
 
-            // Not using Default::default() here because we want to customize the default values
-            let advanced_settings: AdvancedSettings = if fs::exists(&advanced_settings_path)
-                .expect("Failed to check if advanced settings file exists")
-            {
-                let file = fs::read_to_string(advanced_settings_path)
-                    .expect("Failed to read advanced settings file");
-                match serde_yaml::from_str(&file) {
-                    Ok(advanced_settings) => advanced_settings,
-                    Err(e) => {
-                        log::error!("Failed to load advanced settings: {}", e);
-                        serde_yaml::from_str("").unwrap()
-                    }
-                }
-            } else {
-                serde_yaml::from_str("").unwrap()
-            };
-
+            let advanced_settings = AdvancedSettings::load(&advanced_settings_path)?;
             app.manage(advanced_settings.clone());
 
             // Load login shell environment early in startup

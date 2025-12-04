@@ -82,6 +82,7 @@ pretty_assertions = { workspace = true }
 log = { workspace = true }
 dirs = { workspace = true }
 tempfile = { workspace = true }
+config = "0.15.19"
 
 [dependencies.tauri-plugin-sql]
 features = ["sqlite"] # or "postgres", or "mysql"

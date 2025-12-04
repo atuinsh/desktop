@@ -1,17 +1,30 @@
+use std::path::Path;
+
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 #[derive(Serialize, Deserialize, TS, Clone)]
-#[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct AdvancedSettings {
     /// Whether to copy the login shell environment to the app's environment.
-    #[serde(default = "default_copy_shell_env")]
     pub copy_shell_env: bool,
 }
 
-fn default_copy_shell_env() -> bool {
-    true
+impl AdvancedSettings {
+    pub(crate) fn load(config_path: &Path) -> eyre::Result<Self> {
+        config::Config::builder()
+            .add_source(
+                config::File::with_name(config_path.to_str().ok_or(eyre::eyre!(
+                    "Failed to convert config path '{path}' to string",
+                    path = config_path.display()
+                ))?)
+                .required(false),
+            )
+            .set_default("copy_shell_env", true)?
+            .build()?
+            .try_deserialize::<Self>()
+            .map_err(|e| eyre::eyre!("Failed to deserialize advanced settings: {}", e))
+    }
 }
 
 #[tauri::command]
