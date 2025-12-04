@@ -42,6 +42,8 @@ See the [Script](script.md#setting-variables-via-atuin_output_vars) and [Termina
 
 Use the Variable Display block to view all currently set variables and their values. This shows both template (synced) and local (not synced) variables for debugging and state inspection.
 
+For variables containing markdown content, use the [Markdown Render](markdown-render.md) block to display beautifully formatted output with collapse/expand and fullscreen capabilities.
+
 ### Usage
 
 Both variable types can be referenced using the same template syntax:

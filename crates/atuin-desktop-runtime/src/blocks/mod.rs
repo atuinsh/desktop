@@ -17,6 +17,7 @@ pub(crate) mod http;
 pub(crate) mod kubernetes;
 pub(crate) mod local_directory;
 pub(crate) mod local_var;
+pub(crate) mod markdown_render;
 pub(crate) mod mysql;
 pub(crate) mod postgres;
 pub(crate) mod prometheus;
@@ -152,6 +153,7 @@ pub enum Block {
     SshConnect(ssh_connect::SshConnect),
     Host(host::Host),
     VarDisplay(var_display::VarDisplay),
+    MarkdownRender(markdown_render::MarkdownRender),
     Editor(editor::Editor),
     Dropdown(dropdown::Dropdown),
 }
@@ -178,6 +180,7 @@ impl Block {
             Block::SshConnect(ssh_connect) => ssh_connect.id,
             Block::Host(host) => host.id,
             Block::VarDisplay(var_display) => var_display.id,
+            Block::MarkdownRender(markdown_render) => markdown_render.id,
             Block::Editor(editor) => editor.id,
             Block::Dropdown(dropdown) => dropdown.id,
         }
@@ -207,6 +210,7 @@ impl Block {
             Block::SshConnect(_) => "".to_string(),
             Block::Host(_) => "".to_string(),
             Block::VarDisplay(_) => "".to_string(),
+            Block::MarkdownRender(_) => "".to_string(),
         }
     }
 
@@ -263,6 +267,9 @@ impl Block {
             "var_display" => Ok(Block::VarDisplay(var_display::VarDisplay::from_document(
                 block_data,
             )?)),
+            "markdown_render" => Ok(Block::MarkdownRender(
+                markdown_render::MarkdownRender::from_document(block_data)?,
+            )),
             "editor" => Ok(Block::Editor(editor::Editor::from_document(block_data)?)),
             "dropdown" => Ok(Block::Dropdown(dropdown::Dropdown::from_document(
                 block_data,
@@ -320,6 +327,11 @@ impl Block {
             }
             Block::VarDisplay(var_display) => {
                 var_display
+                    .passive_context(resolver, block_local_value_provider)
+                    .await
+            }
+            Block::MarkdownRender(markdown_render) => {
+                markdown_render
                     .passive_context(resolver, block_local_value_provider)
                     .await
             }
@@ -400,6 +412,7 @@ impl Block {
             Block::SshConnect(ssh_connect) => ssh_connect.create_state(),
             Block::Host(host) => host.create_state(),
             Block::VarDisplay(var_display) => var_display.create_state(),
+            Block::MarkdownRender(markdown_render) => markdown_render.create_state(),
             Block::Editor(editor) => editor.create_state(),
             Block::Dropdown(dropdown) => dropdown.create_state(),
         }
@@ -434,6 +447,7 @@ impl Block {
             Block::SshConnect(ssh_connect) => ssh_connect.execute(context).await,
             Block::Host(host) => host.execute(context).await,
             Block::VarDisplay(var_display) => var_display.execute(context).await,
+            Block::MarkdownRender(markdown_render) => markdown_render.execute(context).await,
             Block::Editor(editor) => editor.execute(context).await,
             Block::Dropdown(dropdown) => dropdown.execute(context).await,
         }

@@ -471,6 +471,7 @@ impl Executor {
             Block::SshConnect(_) => "SSH connect".to_string(),
             Block::Host(_) => "Host".to_string(),
             Block::VarDisplay(_) => "Variable display".to_string(),
+            Block::MarkdownRender(_) => "Markdown render".to_string(),
             Block::Kubernetes(_) => "Kubernetes".to_string(),
             Block::Dropdown(_) => "Dropdown".to_string(),
         }

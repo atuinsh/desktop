@@ -25,6 +25,7 @@ nav:
           - "Dropdown": blocks/executable/dropdown.md
           - "Environment": blocks/executable/env.md
           - "Kubernetes": blocks/executable/kubernetes.md
+          - "Markdown Render": blocks/executable/markdown-render.md
           - "Script": blocks/executable/script.md
           - "Terminal": blocks/executable/terminal.md
           - "Variable": blocks/executable/variable.md
