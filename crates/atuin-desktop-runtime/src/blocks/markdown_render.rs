@@ -1,8 +1,21 @@
 use serde::{Deserialize, Serialize};
+use ts_rs::TS;
 use typed_builder::TypedBuilder;
 use uuid::Uuid;
 
-use crate::blocks::{Block, BlockBehavior, FromDocument};
+use crate::{
+    blocks::{Block, BlockBehavior, FromDocument},
+    context::BlockState,
+    execution::{ExecutionContext, ExecutionHandle},
+};
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, TS)]
+#[ts(export)]
+struct MarkdownRenderState {
+    resolved_variable_name: Option<String>,
+}
+
+impl BlockState for MarkdownRenderState {}
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, TypedBuilder)]
 #[serde(rename_all = "camelCase")]
@@ -40,6 +53,7 @@ impl FromDocument for MarkdownRender {
     }
 }
 
+#[async_trait::async_trait]
 impl BlockBehavior for MarkdownRender {
     fn id(&self) -> Uuid {
         self.id
@@ -47,5 +61,28 @@ impl BlockBehavior for MarkdownRender {
 
     fn into_block(self) -> Block {
         Block::MarkdownRender(self)
+    }
+
+    fn create_state(&self) -> Option<Box<dyn BlockState>> {
+        Some(Box::new(MarkdownRenderState {
+            resolved_variable_name: None,
+        }))
+    }
+
+    async fn execute(
+        self,
+        context: ExecutionContext,
+    ) -> Result<Option<ExecutionHandle>, Box<dyn std::error::Error + Send + Sync>> {
+        let resolved_variable_name = context
+            .context_resolver
+            .resolve_template(&self.variable_name)
+            .unwrap_or_default();
+        context
+            .update_block_state::<MarkdownRenderState, _>(self.id, |state| {
+                state.resolved_variable_name = Some(resolved_variable_name);
+            })
+            .await?;
+
+        Ok(None)
     }
 }

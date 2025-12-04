@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { Tooltip, Button, Input, ButtonGroup } from "@heroui/react";
 import {
   FileTextIcon,
@@ -10,9 +10,10 @@ import {
 import { createReactBlockSpec } from "@blocknote/react";
 import { exportPropMatter } from "@/lib/utils";
 import track_event from "@/tracking";
-import { useBlockContext } from "@/lib/hooks/useDocumentBridge";
+import { useBlockContext, useBlockExecution, useBlockState } from "@/lib/hooks/useDocumentBridge";
 import { useBlockLocalState } from "@/lib/hooks/useBlockLocalState";
 import { cn } from "@/lib/utils";
+import { MarkdownRenderState } from "@/rs-bindings/MarkdownRenderState";
 import Markdown from "../../components/Markdown";
 
 /**
@@ -45,19 +46,37 @@ const MarkdownRender = (props: MarkdownRenderProps) => {
     false,
   );
 
-  // Get variable value
-  let value: string | undefined = undefined;
-  if (props.variableName && Object.hasOwn(context.variables, props.variableName)) {
-    value = context.variables[props.variableName];
-  }
+  const execution = useBlockExecution(props.blockId);
+  const blockState = useBlockState<MarkdownRenderState>(props.blockId);
 
-  // Render markdown to HTML
-  const renderMarkdown = (content: string): string => {
-    return micromark(content, {
-      extensions: [gfm()],
-      htmlExtensions: [gfmHtml()],
-    });
-  };
+  let executionScheduled = useRef(false);
+  useEffect(() => {
+    async function doExecute() {
+      try {
+        await execution.execute();
+      } catch (_err) {
+      } finally {
+        if (executionScheduled.current) {
+          executionScheduled.current = false;
+          doExecute();
+        }
+      }
+    }
+
+    if (execution.isRunning) {
+      executionScheduled.current = true;
+      return;
+    }
+
+    doExecute();
+  }, [props.variableName]);
+
+  // Get variable value
+  let var_name = blockState?.resolved_variable_name || props.variableName;
+  let value: string | undefined = undefined;
+  if (var_name && Object.hasOwn(context.variables, var_name)) {
+    value = context.variables[var_name];
+  }
 
   // Handle ESC key to close fullscreen
   useEffect(() => {
@@ -80,19 +99,11 @@ const MarkdownRender = (props: MarkdownRenderProps) => {
 
   const displayTitle = props.variableName || "Markdown Render";
 
-  // Handle link clicks to open in external browser
-  const handleLinkClick = createLinkClickHandler();
-
-  const renderedContent = value ? (
-    <div
-      className="github-release-notes prose dark:prose-invert max-w-none"
-      dangerouslySetInnerHTML={{ __html: renderMarkdown(value) }}
-    />
-  ) : (
-    <span className="italic text-gray-500 dark:text-gray-400">
-      {props.variableName ? `Variable "${props.variableName}" is empty` : "No variable selected"}
-    </span>
-  );
+  const source = value
+    ? value
+    : var_name
+    ? `Variable "${var_name}" is empty`
+    : "No variable selected";
 
   return (
     <>
