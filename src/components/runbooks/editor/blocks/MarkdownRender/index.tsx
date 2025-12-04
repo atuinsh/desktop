@@ -12,9 +12,8 @@ import { exportPropMatter } from "@/lib/utils";
 import track_event from "@/tracking";
 import { useBlockContext } from "@/lib/hooks/useDocumentBridge";
 import { useBlockLocalState } from "@/lib/hooks/useBlockLocalState";
-import { micromark } from "micromark";
-import { gfm, gfmHtml } from "micromark-extension-gfm";
 import { cn } from "@/lib/utils";
+import Markdown from "../../components/Markdown";
 
 /**
  * Opens a URL in the external browser via Tauri shell API
@@ -23,23 +22,6 @@ export const openExternalLink = (href: string): void => {
   import("@tauri-apps/plugin-shell").then((shell) => {
     shell.open(href);
   });
-};
-
-/**
- * Creates a click handler that intercepts anchor clicks and opens them externally
- */
-export const createLinkClickHandler = (openFn: (href: string) => void = openExternalLink) => {
-  return (e: React.MouseEvent<HTMLDivElement>) => {
-    const target = e.target as HTMLElement;
-    const link = target.closest("a");
-    if (link) {
-      e.preventDefault();
-      const href = link.getAttribute("href");
-      if (href) {
-        openFn(href);
-      }
-    }
-  };
 };
 
 interface MarkdownRenderProps {
@@ -212,9 +194,8 @@ const MarkdownRender = (props: MarkdownRenderProps) => {
               },
             )}
             style={!collapsed ? { maxHeight: `${props.maxLines * 1.5}rem` } : undefined}
-            onClick={handleLinkClick}
           >
-            {renderedContent}
+            <Markdown content={source} />
 
             {/* Gradient fade when collapsed */}
             {collapsed && value && (
@@ -252,15 +233,9 @@ const MarkdownRender = (props: MarkdownRenderProps) => {
             </div>
 
             {/* Fullscreen Content */}
-            <div
-              className="flex-1 overflow-auto p-6 select-text cursor-text"
-              onClick={handleLinkClick}
-            >
+            <div className="flex-1 overflow-auto p-6 select-text cursor-text">
               <div className="max-w-4xl mx-auto">
-                <div
-                  className="github-release-notes prose dark:prose-invert max-w-none select-text"
-                  dangerouslySetInnerHTML={{ __html: renderMarkdown(value || "") }}
-                />
+                <Markdown content={source} />
               </div>
             </div>
           </div>

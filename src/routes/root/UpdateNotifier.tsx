@@ -18,6 +18,7 @@ import { cn, None, Option, Some } from "@/lib/utils";
 import AtuinEnv from "@/atuin_env";
 import { getGlobalOptions } from "@/lib/global_options";
 import { Update } from "@tauri-apps/plugin-updater";
+import Markdown from "@/components/runbooks/editor/components/Markdown";
 
 export default function UpdateNotifier() {
   const [relaunching, setRelaunching] = useState(false);
@@ -153,20 +154,6 @@ export default function UpdateNotifier() {
     setShowingUpdate,
   ]);
 
-  function handleNotesClick(e: React.MouseEvent<HTMLDivElement>) {
-    const target = e.target as HTMLElement;
-    const link = target.closest("a");
-    if (link) {
-      e.preventDefault();
-      const href = link.getAttribute("href");
-      if (href) {
-        import("@tauri-apps/plugin-shell").then((shell) => {
-          shell.open(href);
-        });
-      }
-    }
-  }
-
   function dismiss() {
     setViewUpdateNotes(false);
     setShowingUpdate(false);
@@ -179,12 +166,7 @@ export default function UpdateNotifier() {
           <ModalHeader>Atuin Desktop v{availableUpdate.version} Release Notes</ModalHeader>
           <ModalBody>
             <div className="max-h-[300px] overflow-y-auto bg-gray-100 dark:bg-gray-800 rounded-md p-2">
-              <div
-                className="github-release-notes"
-                // micromark markdown conversion handles HTML sanitization for us
-                dangerouslySetInnerHTML={{ __html: availableUpdate.body! }}
-                onClick={handleNotesClick}
-              />
+              <Markdown content={availableUpdate.body!} />
             </div>
           </ModalBody>
           <ModalFooter>

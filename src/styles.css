@@ -138,11 +138,11 @@ body.resizing, body.resizing a:hover, body.resizing * {
 }
 
 /* Reset all styles to browser default for the release notes so we don't have to implement them all */
-.github-release-notes, .github-release-notes * {
+.markdown-content, .markdown-content * {
     all: revert !important;
 }
 
-.github-release-notes > *:first-child {
+.markdown-content > *:first-child {
     padding-top: 0 !important;
     margin-top: 0 !important;
 }
