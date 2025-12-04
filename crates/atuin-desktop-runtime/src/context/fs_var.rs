@@ -231,7 +231,10 @@ mod tests {
         let vars = parse_vars(content);
 
         assert_eq!(vars.len(), 1);
-        assert_eq!(vars.get("output"), Some(&"line 1\nline 2\nline 3".to_string()));
+        assert_eq!(
+            vars.get("output"),
+            Some(&"line 1\nline 2\nline 3".to_string())
+        );
     }
 
     #[test]
@@ -240,7 +243,10 @@ mod tests {
         let vars = parse_vars(content);
 
         assert_eq!(vars.len(), 1);
-        assert_eq!(vars.get("myvar"), Some(&"some content\nmore content".to_string()));
+        assert_eq!(
+            vars.get("myvar"),
+            Some(&"some content\nmore content".to_string())
+        );
     }
 
     #[test]
@@ -267,7 +273,10 @@ mod tests {
         let vars = parse_vars(content);
 
         assert_eq!(vars.len(), 1);
-        assert_eq!(vars.get("special"), Some(&"$VAR\n`cmd`\n\"quotes\"\n'single'".to_string()));
+        assert_eq!(
+            vars.get("special"),
+            Some(&"$VAR\n`cmd`\n\"quotes\"\n'single'".to_string())
+        );
     }
 
     #[test]
@@ -276,7 +285,10 @@ mod tests {
         let vars = parse_vars(content);
 
         assert_eq!(vars.len(), 1);
-        assert_eq!(vars.get("spaces"), Some(&"  indented\n\ttabbed\n  ".to_string()));
+        assert_eq!(
+            vars.get("spaces"),
+            Some(&"  indented\n\ttabbed\n  ".to_string())
+        );
     }
 
     #[test]
@@ -307,7 +319,10 @@ mod tests {
         let vars = parse_vars(content);
 
         assert_eq!(vars.len(), 1);
-        assert_eq!(vars.get("var"), Some(&"this line has END in it".to_string()));
+        assert_eq!(
+            vars.get("var"),
+            Some(&"this line has END in it".to_string())
+        );
     }
 
     #[test]
@@ -355,7 +370,10 @@ mod tests {
         let vars = parse_vars(content);
 
         assert_eq!(vars.len(), 2);
-        assert_eq!(vars.get("cmd"), Some(&"cat file.txt <<< 'input'".to_string()));
+        assert_eq!(
+            vars.get("cmd"),
+            Some(&"cat file.txt <<< 'input'".to_string())
+        );
         assert_eq!(vars.get("op"), Some(&"test 5<<10".to_string()));
     }
 }
