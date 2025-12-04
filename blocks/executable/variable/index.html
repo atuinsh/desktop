@@ -1438,10 +1438,28 @@
 <h2 id="setting-variables-from-script-and-terminal-blocks">Setting Variables from Script and Terminal Blocks</h2>
 <p><a href="../script/">Script</a> and <a href="../terminal/">Terminal</a> blocks can set multiple template variables by writing to the <code>$ATUIN_OUTPUT_VARS</code> file. This provides a programmatic way to create variables based on command execution.</p>
 <p><strong>Usage:</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nb">echo</span><span class="w"> </span><span class="s2">"name=value"</span><span class="w"> </span>&gt;&gt;<span class="w"> </span><span class="nv">$ATUIN_OUTPUT_VARS</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># Simple format for single-line values</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nb">echo</span><span class="w"> </span><span class="s2">"name=value"</span><span class="w"> </span>&gt;&gt;<span class="w"> </span><span class="nv">$ATUIN_OUTPUT_VARS</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="c1"># Heredoc format for multiline values</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="nb">echo</span><span class="w"> </span><span class="s2">"description&lt;&lt;EOF"</span><span class="w"> </span>&gt;&gt;<span class="w"> </span><span class="nv">$ATUIN_OUTPUT_VARS</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="nb">echo</span><span class="w"> </span><span class="s2">"Line 1 of description"</span><span class="w"> </span>&gt;&gt;<span class="w"> </span><span class="nv">$ATUIN_OUTPUT_VARS</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="nb">echo</span><span class="w"> </span><span class="s2">"Line 2 of description"</span><span class="w"> </span>&gt;&gt;<span class="w"> </span><span class="nv">$ATUIN_OUTPUT_VARS</span>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="nb">echo</span><span class="w"> </span><span class="s2">"EOF"</span><span class="w"> </span>&gt;&gt;<span class="w"> </span><span class="nv">$ATUIN_OUTPUT_VARS</span>
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="c1"># For longer multiline strings, use a command group for efficiency</span>
+</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="o">{</span>
+</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="w">  </span><span class="nb">echo</span><span class="w"> </span><span class="s2">"myvar&lt;&lt;EOF"</span>
+</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="w">  </span><span class="nb">echo</span><span class="w"> </span><span class="s2">"Some"</span>
+</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="w">  </span><span class="nb">echo</span><span class="w"> </span><span class="s2">"Multiline"</span>
+</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="w">  </span><span class="nb">echo</span><span class="w"> </span><span class="s2">"String"</span>
+</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a><span class="w">  </span><span class="nb">echo</span><span class="w"> </span><span class="s2">"EOF"</span>
+</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a><span class="o">}</span><span class="w"> </span>&gt;&gt;<span class="w"> </span><span class="nv">$ATUIN_OUTPUT_VARS</span>
 </span></code></pre></div>
 <ul>
-<li><strong>Format</strong>: <code>KEY=VALUE</code> entries, one per line</li>
+<li><strong>Format</strong>: Two formats supported:</li>
+<li>Simple: <code>KEY=VALUE</code> entries, one per line</li>
+<li>Heredoc: <code>KEY&lt;&lt;DELIMITER</code> followed by content lines until <code>DELIMITER</code> (for multiline values)</li>
 <li><strong>Timing</strong>: Variables are captured when scripts exit successfully or terminals close</li>
 <li><strong>Location</strong>: Works with both local and remote (SSH) execution</li>
 </ul>
@@ -1476,7 +1494,7 @@
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"></path></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-timeago" title="December 2, 2025 23:21:49 UTC"><span class="timeago" datetime="2025-12-02T23:21:49+00:00" locale="en"></span></span><span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-iso_date" title="December 2, 2025 23:21:49 UTC">2025-12-02</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-timeago" title="December 4, 2025 18:32:12 UTC"><span class="timeago" datetime="2025-12-04T18:32:12+00:00" locale="en"></span></span><span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-iso_date" title="December 4, 2025 18:32:12 UTC">2025-12-04</span>
   </span>
 
     

@@ -1426,19 +1426,49 @@
 <h3 id="setting-variables-via-atuin_output_vars">Setting Variables via $ATUIN_OUTPUT_VARS</h3>
 <p>For more flexibility, scripts can set multiple variables by writing to the <code>$ATUIN_OUTPUT_VARS</code> file. This approach mirrors GitHub Actions' output variable syntax and allows a single script to set multiple template variables.</p>
 <p><strong>Usage:</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nb">echo</span><span class="w"> </span><span class="s2">"name=value"</span><span class="w"> </span>&gt;&gt;<span class="w"> </span><span class="nv">$ATUIN_OUTPUT_VARS</span>
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="nb">echo</span><span class="w"> </span><span class="s2">"another_var=another_value"</span><span class="w"> </span>&gt;&gt;<span class="w"> </span><span class="nv">$ATUIN_OUTPUT_VARS</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># Simple format for single-line values</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="nb">echo</span><span class="w"> </span><span class="s2">"name=value"</span><span class="w"> </span>&gt;&gt;<span class="w"> </span><span class="nv">$ATUIN_OUTPUT_VARS</span>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="nb">echo</span><span class="w"> </span><span class="s2">"another_var=another_value"</span><span class="w"> </span>&gt;&gt;<span class="w"> </span><span class="nv">$ATUIN_OUTPUT_VARS</span>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="c1"># Heredoc format for multiline values</span>
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="nb">echo</span><span class="w"> </span><span class="s2">"config&lt;&lt;EOF"</span><span class="w"> </span>&gt;&gt;<span class="w"> </span><span class="nv">$ATUIN_OUTPUT_VARS</span>
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="nb">echo</span><span class="w"> </span><span class="s2">"Line 1"</span><span class="w"> </span>&gt;&gt;<span class="w"> </span><span class="nv">$ATUIN_OUTPUT_VARS</span>
+</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="nb">echo</span><span class="w"> </span><span class="s2">"Line 2"</span><span class="w"> </span>&gt;&gt;<span class="w"> </span><span class="nv">$ATUIN_OUTPUT_VARS</span>
+</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="nb">echo</span><span class="w"> </span><span class="s2">"EOF"</span><span class="w"> </span>&gt;&gt;<span class="w"> </span><span class="nv">$ATUIN_OUTPUT_VARS</span>
+</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>
+</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="c1"># For longer multiline strings, use a command group for efficiency</span>
+</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="o">{</span>
+</span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a><span class="w">  </span><span class="nb">echo</span><span class="w"> </span><span class="s2">"myvar&lt;&lt;EOF"</span>
+</span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a><span class="w">  </span><span class="nb">echo</span><span class="w"> </span><span class="s2">"Some"</span>
+</span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a><span class="w">  </span><span class="nb">echo</span><span class="w"> </span><span class="s2">"Multiline"</span>
+</span><span id="__span-1-16"><a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a><span class="w">  </span><span class="nb">echo</span><span class="w"> </span><span class="s2">"String"</span>
+</span><span id="__span-1-17"><a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a><span class="w">  </span><span class="nb">echo</span><span class="w"> </span><span class="s2">"EOF"</span>
+</span><span id="__span-1-18"><a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a><span class="o">}</span><span class="w"> </span>&gt;&gt;<span class="w"> </span><span class="nv">$ATUIN_OUTPUT_VARS</span>
 </span></code></pre></div>
 <ul>
-<li>Format: <code>KEY=VALUE</code> entries, one per line</li>
-<li>Variables are captured when the script exits successfully (exit code 0)</li>
-<li>Works with both local and remote (SSH) script execution</li>
+<li><strong>Format</strong>: Two formats supported:</li>
+<li>Simple: <code>KEY=VALUE</code> entries, one per line</li>
+<li>Heredoc: <code>KEY&lt;&lt;DELIMITER</code> followed by content lines until <code>DELIMITER</code> (for multiline values)</li>
+<li><strong>Timing</strong>: Variables are captured when the script exits successfully (exit code 0)</li>
+<li><strong>Location</strong>: Works with both local and remote (SSH) script execution</li>
 </ul>
 <p><strong>Example:</strong></p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># Generate multiple outputs from a single script</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="nb">echo</span><span class="w"> </span><span class="s2">"timestamp=</span><span class="k">$(</span>date<span class="w"> </span>+%s<span class="k">)</span><span class="s2">"</span><span class="w"> </span>&gt;&gt;<span class="w"> </span><span class="nv">$ATUIN_OUTPUT_VARS</span>
 </span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="nb">echo</span><span class="w"> </span><span class="s2">"hostname=</span><span class="k">$(</span>hostname<span class="k">)</span><span class="s2">"</span><span class="w"> </span>&gt;&gt;<span class="w"> </span><span class="nv">$ATUIN_OUTPUT_VARS</span>
 </span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="nb">echo</span><span class="w"> </span><span class="s2">"user=</span><span class="k">$(</span>whoami<span class="k">)</span><span class="s2">"</span><span class="w"> </span>&gt;&gt;<span class="w"> </span><span class="nv">$ATUIN_OUTPUT_VARS</span>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="c1"># Capture multiline command output using heredoc</span>
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="nb">echo</span><span class="w"> </span><span class="s2">"disk_usage&lt;&lt;END"</span><span class="w"> </span>&gt;&gt;<span class="w"> </span><span class="nv">$ATUIN_OUTPUT_VARS</span>
+</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>df<span class="w"> </span>-h<span class="w"> </span>&gt;&gt;<span class="w"> </span><span class="nv">$ATUIN_OUTPUT_VARS</span>
+</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="nb">echo</span><span class="w"> </span><span class="s2">"END"</span><span class="w"> </span>&gt;&gt;<span class="w"> </span><span class="nv">$ATUIN_OUTPUT_VARS</span>
+</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>
+</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="c1"># Or build multiline content programmatically</span>
+</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="nb">echo</span><span class="w"> </span><span class="s2">"report&lt;&lt;REPORT"</span><span class="w"> </span>&gt;&gt;<span class="w"> </span><span class="nv">$ATUIN_OUTPUT_VARS</span>
+</span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a><span class="nb">echo</span><span class="w"> </span><span class="s2">"Server: </span><span class="k">$(</span>hostname<span class="k">)</span><span class="s2">"</span><span class="w"> </span>&gt;&gt;<span class="w"> </span><span class="nv">$ATUIN_OUTPUT_VARS</span>
+</span><span id="__span-2-14"><a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a><span class="nb">echo</span><span class="w"> </span><span class="s2">"Status: Running"</span><span class="w"> </span>&gt;&gt;<span class="w"> </span><span class="nv">$ATUIN_OUTPUT_VARS</span>
+</span><span id="__span-2-15"><a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a><span class="nb">echo</span><span class="w"> </span><span class="s2">"Uptime: </span><span class="k">$(</span>uptime<span class="k">)</span><span class="s2">"</span><span class="w"> </span>&gt;&gt;<span class="w"> </span><span class="nv">$ATUIN_OUTPUT_VARS</span>
+</span><span id="__span-2-16"><a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a><span class="nb">echo</span><span class="w"> </span><span class="s2">"REPORT"</span><span class="w"> </span>&gt;&gt;<span class="w"> </span><span class="nv">$ATUIN_OUTPUT_VARS</span>
 </span></code></pre></div>
 <p>These variables can then be referenced in other blocks:</p>
 <div class="language-handlebars highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="cp">{{</span><span class="nv">var.timestamp</span><span class="cp">}}</span>
@@ -1468,7 +1498,7 @@
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"></path></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-timeago" title="December 2, 2025 23:21:49 UTC"><span class="timeago" datetime="2025-12-02T23:21:49+00:00" locale="en"></span></span><span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-iso_date" title="December 2, 2025 23:21:49 UTC">2025-12-02</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-timeago" title="December 4, 2025 18:32:12 UTC"><span class="timeago" datetime="2025-12-04T18:32:12+00:00" locale="en"></span></span><span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-iso_date" title="December 4, 2025 18:32:12 UTC">2025-12-04</span>
   </span>
 
     
