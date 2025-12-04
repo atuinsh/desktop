@@ -3,6 +3,7 @@ import { Update } from "@tauri-apps/plugin-updater";
 import { StateCreator } from "zustand";
 import { None, Option, Some } from "@binarymuse/ts-stdlib";
 import { uuidv7 } from "uuidv7";
+import { AdvancedSettings } from "@/rs-bindings/AdvancedSettings";
 
 export enum TabIcon {
   HISTORY = "history",
@@ -37,6 +38,7 @@ export class TabUri {
 }
 
 export interface AtuinUiState {
+  advancedSettings: AdvancedSettings | null;
   appVersion: Option<string>;
   focused: boolean;
   connectedToHubSocket: boolean;
@@ -75,6 +77,7 @@ export interface AtuinUiState {
   shellCheckEnabled: boolean;
   shellCheckPath: string;
 
+  setAdvancedSettings: (advancedSettings: AdvancedSettings) => void;
   setAppVersion: (version: string) => void;
   setFocused: (focused: boolean) => void;
   setConnectedToHubSocket: (online: boolean) => void;
@@ -146,6 +149,7 @@ export const persistUiKeys: (keyof AtuinUiState)[] = [
 ];
 
 export const createUiState: StateCreator<AtuinUiState> = (set, get, _store): AtuinUiState => ({
+  advancedSettings: null,
   appVersion: None,
   focused: false,
   connectedToHubSocket: false,
@@ -182,6 +186,8 @@ export const createUiState: StateCreator<AtuinUiState> = (set, get, _store): Atu
   shellCheckEnabled: false,
   shellCheckPath: "",
 
+  setAdvancedSettings: (advancedSettings: AdvancedSettings) =>
+    set(() => ({ advancedSettings: advancedSettings })),
   setAppVersion: (version: string) => set(() => ({ appVersion: Some(version) })),
   setFocused: (focused: boolean) => set(() => ({ focused })),
   setConnectedToHubSocket: (online: boolean) => set(() => ({ connectedToHubSocket: online })),

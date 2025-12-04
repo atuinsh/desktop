@@ -44,6 +44,8 @@ import WorkspaceManager from "./lib/workspaces/manager";
 import Root from "./routes/root/Root";
 import RunbookBus from "./lib/app/runbook_bus";
 import { grandCentral } from "./lib/events/grand_central";
+import { AdvancedSettings } from "./rs-bindings/AdvancedSettings";
+import { captureConsoleIntegration } from "@sentry/react";
 
 (async () => {
   try {
@@ -172,6 +174,13 @@ function Application() {
 }
 
 async function setup() {
+  try {
+    const advancedSettings = await invoke<AdvancedSettings>("get_advanced_settings");
+    useStore.getState().setAdvancedSettings(advancedSettings);
+  } catch (err) {
+    console.error("Failed to get advanced settings:", err);
+  }
+
   invoke<void>("reset_workspaces");
   const currentVersion = await invoke<string>("get_app_version");
   useStore.getState().setCurrentVersion(currentVersion);
