@@ -59,13 +59,31 @@ For more flexibility, scripts can set multiple variables by writing to the `$ATU
 **Usage:**
 
 ```bash
+# Simple format for single-line values
 echo "name=value" >> $ATUIN_OUTPUT_VARS
 echo "another_var=another_value" >> $ATUIN_OUTPUT_VARS
+
+# Heredoc format for multiline values
+echo "config<<EOF" >> $ATUIN_OUTPUT_VARS
+echo "Line 1" >> $ATUIN_OUTPUT_VARS
+echo "Line 2" >> $ATUIN_OUTPUT_VARS
+echo "EOF" >> $ATUIN_OUTPUT_VARS
+
+# For longer multiline strings, use a command group for efficiency
+{
+  echo "myvar<<EOF"
+  echo "Some"
+  echo "Multiline"
+  echo "String"
+  echo "EOF"
+} >> $ATUIN_OUTPUT_VARS
 ```
 
-- Format: `KEY=VALUE` entries, one per line
-- Variables are captured when the script exits successfully (exit code 0)
-- Works with both local and remote (SSH) script execution
+- **Format**: Two formats supported:
+  - Simple: `KEY=VALUE` entries, one per line
+  - Heredoc: `KEY<<DELIMITER` followed by content lines until `DELIMITER` (for multiline values)
+- **Timing**: Variables are captured when the script exits successfully (exit code 0)
+- **Location**: Works with both local and remote (SSH) script execution
 
 **Example:**
 
@@ -74,6 +92,18 @@ echo "another_var=another_value" >> $ATUIN_OUTPUT_VARS
 echo "timestamp=$(date +%s)" >> $ATUIN_OUTPUT_VARS
 echo "hostname=$(hostname)" >> $ATUIN_OUTPUT_VARS
 echo "user=$(whoami)" >> $ATUIN_OUTPUT_VARS
+
+# Capture multiline command output using heredoc
+echo "disk_usage<<END" >> $ATUIN_OUTPUT_VARS
+df -h >> $ATUIN_OUTPUT_VARS
+echo "END" >> $ATUIN_OUTPUT_VARS
+
+# Or build multiline content programmatically
+echo "report<<REPORT" >> $ATUIN_OUTPUT_VARS
+echo "Server: $(hostname)" >> $ATUIN_OUTPUT_VARS
+echo "Status: Running" >> $ATUIN_OUTPUT_VARS
+echo "Uptime: $(uptime)" >> $ATUIN_OUTPUT_VARS
+echo "REPORT" >> $ATUIN_OUTPUT_VARS
 ```
 
 These variables can then be referenced in other blocks:

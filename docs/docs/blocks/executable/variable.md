@@ -29,10 +29,28 @@ Local variables are **not synced** and remain private to each user's session.
 **Usage:**
 
 ```bash
+# Simple format for single-line values
 echo "name=value" >> $ATUIN_OUTPUT_VARS
+
+# Heredoc format for multiline values
+echo "description<<EOF" >> $ATUIN_OUTPUT_VARS
+echo "Line 1 of description" >> $ATUIN_OUTPUT_VARS
+echo "Line 2 of description" >> $ATUIN_OUTPUT_VARS
+echo "EOF" >> $ATUIN_OUTPUT_VARS
+
+# For longer multiline strings, use a command group for efficiency
+{
+  echo "myvar<<EOF"
+  echo "Some"
+  echo "Multiline"
+  echo "String"
+  echo "EOF"
+} >> $ATUIN_OUTPUT_VARS
 ```
 
-- **Format**: `KEY=VALUE` entries, one per line
+- **Format**: Two formats supported:
+  - Simple: `KEY=VALUE` entries, one per line
+  - Heredoc: `KEY<<DELIMITER` followed by content lines until `DELIMITER` (for multiline values)
 - **Timing**: Variables are captured when scripts exit successfully or terminals close
 - **Location**: Works with both local and remote (SSH) execution
 

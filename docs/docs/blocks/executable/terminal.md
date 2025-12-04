@@ -33,13 +33,31 @@ While terminal blocks don't support capturing stdout directly, they can set temp
 **Usage:**
 
 ```bash
+# Simple format for single-line values
 echo "name=value" >> $ATUIN_OUTPUT_VARS
 echo "another_var=another_value" >> $ATUIN_OUTPUT_VARS
+
+# Heredoc format for multiline values
+echo "notes<<EOF" >> $ATUIN_OUTPUT_VARS
+echo "This is line 1" >> $ATUIN_OUTPUT_VARS
+echo "This is line 2" >> $ATUIN_OUTPUT_VARS
+echo "EOF" >> $ATUIN_OUTPUT_VARS
+
+# For longer multiline strings, use a command group for efficiency
+{
+  echo "myvar<<EOF"
+  echo "Some"
+  echo "Multiline"
+  echo "String"
+  echo "EOF"
+} >> $ATUIN_OUTPUT_VARS
 ```
 
-- Format: `KEY=VALUE` entries, one per line
-- Variables are captured when the terminal exits
-- Works with both local and remote (SSH) terminal sessions
+- **Format**: Two formats supported:
+  - Simple: `KEY=VALUE` entries, one per line
+  - Heredoc: `KEY<<DELIMITER` followed by content lines until `DELIMITER` (for multiline values)
+- **Timing**: Variables are captured when the terminal exits
+- **Location**: Works with both local and remote (SSH) terminal sessions
 
 **Example:**
 
@@ -47,6 +65,11 @@ echo "another_var=another_value" >> $ATUIN_OUTPUT_VARS
 # Set variables during an interactive session
 echo "session_id=$(uuidgen)" >> $ATUIN_OUTPUT_VARS
 echo "current_dir=$(pwd)" >> $ATUIN_OUTPUT_VARS
+
+# Set a multiline variable with command output
+echo "file_list<<END" >> $ATUIN_OUTPUT_VARS
+ls -la >> $ATUIN_OUTPUT_VARS
+echo "END" >> $ATUIN_OUTPUT_VARS
 
 # Continue with other terminal commands
 ls -la

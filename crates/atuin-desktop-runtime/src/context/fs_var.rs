@@ -25,21 +25,84 @@ pub fn setup() -> Result<FsVarHandle, Box<dyn std::error::Error + Send + Sync>> 
     Ok(FsVarHandle { file })
 }
 
-/// Parses variable content from a string in the format `key=value`, one per line.
+/// Parses variable content from a string supporting two formats:
+/// 1. Simple format: `key=value` (one per line)
+/// 2. Heredoc format: `key<<DELIMITER` followed by lines until `DELIMITER`
+///
+/// The heredoc format allows multiline values:
+/// ```text
+/// myvar<<EOF
+/// line 1
+/// line 2
+/// EOF
+/// ```
+///
 /// Returns a HashMap of the parsed variables.
 pub fn parse_vars(content: &str) -> HashMap<String, String> {
     let mut vars = HashMap::new();
-    for line in content.lines() {
+    let lines: Vec<&str> = content.lines().collect();
+    let mut i = 0;
+
+    while i < lines.len() {
+        let line = lines[i];
+
+        // Check for heredoc syntax: KEY<<DELIMITER
+        // Only treat as heredoc if << appears before any = sign
+        // This prevents "KEY=VALUE<<TEXT" from being parsed as heredoc
+        if let Some(heredoc_pos) = line.find("<<") {
+            let equals_pos = line.find('=');
+
+            // Only treat as heredoc if either:
+            // 1. No = at all, OR
+            // 2. << comes before =
+            let is_heredoc = match equals_pos {
+                None => true,
+                Some(eq_pos) => heredoc_pos < eq_pos,
+            };
+
+            if is_heredoc {
+                let key = line[..heredoc_pos].trim();
+                let delimiter = line[heredoc_pos + 2..].trim();
+
+                if !key.is_empty() && !delimiter.is_empty() {
+                    // Collect lines until we find the delimiter
+                    let mut value_lines = Vec::new();
+                    i += 1;
+
+                    while i < lines.len() {
+                        if lines[i].trim() == delimiter {
+                            // Found the closing delimiter
+                            break;
+                        }
+                        value_lines.push(lines[i]);
+                        i += 1;
+                    }
+
+                    // Join the collected lines with newlines
+                    let value = value_lines.join("\n");
+                    vars.insert(key.to_string(), value);
+                    i += 1; // Move past the delimiter line
+                    continue;
+                }
+            }
+        }
+
+        // Fall back to simple KEY=VALUE parsing
         let parts = line.splitn(2, '=').collect::<Vec<&str>>();
         if parts.len() == 2 {
             vars.insert(parts[0].to_string(), parts[1].to_string());
         }
+
+        i += 1;
     }
+
     vars
 }
 
 /// Reads the variables from the temporary file and returns them as a HashMap.
-/// The file is expected to contain lines in the format `key=value`.
+/// The file supports two formats:
+/// - Simple: `key=value` (one per line)
+/// - Heredoc: `key<<DELIMITER` followed by lines until `DELIMITER` for multiline values
 pub async fn finalize(
     handle: FsVarHandle,
 ) -> Result<HashMap<String, String>, Box<dyn std::error::Error + Send + Sync>> {
@@ -160,5 +223,139 @@ mod tests {
         let vars = finalize(handle).await.expect("finalize should succeed");
         assert_eq!(vars.len(), 1);
         assert_eq!(vars.get("MY_VAR"), Some(&"second".to_string()));
+    }
+
+    #[test]
+    fn test_heredoc_basic_multiline() {
+        let content = "output<<EOF\nline 1\nline 2\nline 3\nEOF\n";
+        let vars = parse_vars(content);
+
+        assert_eq!(vars.len(), 1);
+        assert_eq!(vars.get("output"), Some(&"line 1\nline 2\nline 3".to_string()));
+    }
+
+    #[test]
+    fn test_heredoc_custom_delimiter() {
+        let content = "myvar<<CUSTOM_DELIM\nsome content\nmore content\nCUSTOM_DELIM\n";
+        let vars = parse_vars(content);
+
+        assert_eq!(vars.len(), 1);
+        assert_eq!(vars.get("myvar"), Some(&"some content\nmore content".to_string()));
+    }
+
+    #[test]
+    fn test_heredoc_single_line() {
+        let content = "var<<END\nsingle line\nEND\n";
+        let vars = parse_vars(content);
+
+        assert_eq!(vars.len(), 1);
+        assert_eq!(vars.get("var"), Some(&"single line".to_string()));
+    }
+
+    #[test]
+    fn test_heredoc_empty_content() {
+        let content = "empty<<DELIM\nDELIM\n";
+        let vars = parse_vars(content);
+
+        assert_eq!(vars.len(), 1);
+        assert_eq!(vars.get("empty"), Some(&"".to_string()));
+    }
+
+    #[test]
+    fn test_heredoc_with_special_characters() {
+        let content = "special<<EOF\n$VAR\n`cmd`\n\"quotes\"\n'single'\nEOF\n";
+        let vars = parse_vars(content);
+
+        assert_eq!(vars.len(), 1);
+        assert_eq!(vars.get("special"), Some(&"$VAR\n`cmd`\n\"quotes\"\n'single'".to_string()));
+    }
+
+    #[test]
+    fn test_heredoc_preserves_whitespace() {
+        let content = "spaces<<END\n  indented\n\ttabbed\n  \nEND\n";
+        let vars = parse_vars(content);
+
+        assert_eq!(vars.len(), 1);
+        assert_eq!(vars.get("spaces"), Some(&"  indented\n\ttabbed\n  ".to_string()));
+    }
+
+    #[test]
+    fn test_heredoc_missing_delimiter() {
+        // If delimiter is never found, should consume rest of file
+        let content = "incomplete<<EOF\nline 1\nline 2\n";
+        let vars = parse_vars(content);
+
+        assert_eq!(vars.len(), 1);
+        assert_eq!(vars.get("incomplete"), Some(&"line 1\nline 2".to_string()));
+    }
+
+    #[test]
+    fn test_mixed_heredoc_and_simple() {
+        let content = "simple=value\noutput<<EOF\nmulti\nline\nEOF\nanother=test\n";
+        let vars = parse_vars(content);
+
+        assert_eq!(vars.len(), 3);
+        assert_eq!(vars.get("simple"), Some(&"value".to_string()));
+        assert_eq!(vars.get("output"), Some(&"multi\nline".to_string()));
+        assert_eq!(vars.get("another"), Some(&"test".to_string()));
+    }
+
+    #[test]
+    fn test_heredoc_delimiter_appears_in_content() {
+        // Delimiter must be on its own line (after trim)
+        let content = "var<<END\nthis line has END in it\nEND\n";
+        let vars = parse_vars(content);
+
+        assert_eq!(vars.len(), 1);
+        assert_eq!(vars.get("var"), Some(&"this line has END in it".to_string()));
+    }
+
+    #[test]
+    fn test_heredoc_with_equals_in_content() {
+        // Should not parse equals signs inside heredoc as new variables
+        let content = "config<<DONE\nkey=value\nfoo=bar\nDONE\n";
+        let vars = parse_vars(content);
+
+        assert_eq!(vars.len(), 1);
+        assert_eq!(vars.get("config"), Some(&"key=value\nfoo=bar".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_finalize_with_heredoc() {
+        let handle = setup().expect("setup should succeed");
+
+        let mut file = std::fs::File::create(handle.path()).expect("should open file for writing");
+        writeln!(file, "simple=test").expect("should write to file");
+        writeln!(file, "multi<<EOF").expect("should write to file");
+        writeln!(file, "line 1").expect("should write to file");
+        writeln!(file, "line 2").expect("should write to file");
+        writeln!(file, "EOF").expect("should write to file");
+        drop(file);
+
+        let vars = finalize(handle).await.expect("finalize should succeed");
+        assert_eq!(vars.len(), 2);
+        assert_eq!(vars.get("simple"), Some(&"test".to_string()));
+        assert_eq!(vars.get("multi"), Some(&"line 1\nline 2".to_string()));
+    }
+
+    #[test]
+    fn test_not_heredoc_when_equals_before_double_angle() {
+        // When = appears before <<, should parse as simple KEY=VALUE
+        let content = "redirect=command<<input\n";
+        let vars = parse_vars(content);
+
+        assert_eq!(vars.len(), 1);
+        assert_eq!(vars.get("redirect"), Some(&"command<<input".to_string()));
+    }
+
+    #[test]
+    fn test_not_heredoc_complex_value_with_angles() {
+        // Real-world case: bash redirection or comparison in value
+        let content = "cmd=cat file.txt <<< 'input'\nop=test 5<<10\n";
+        let vars = parse_vars(content);
+
+        assert_eq!(vars.len(), 2);
+        assert_eq!(vars.get("cmd"), Some(&"cat file.txt <<< 'input'".to_string()));
+        assert_eq!(vars.get("op"), Some(&"test 5<<10".to_string()));
     }
 }
