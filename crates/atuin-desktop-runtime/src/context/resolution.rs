@@ -195,6 +195,8 @@ impl ContextResolver {
                     } else {
                         tracing::warn!("Failed to resolve template for SSH host {}", host);
                     }
+                } else {
+                    self.ssh_host = None;
                 }
             }
         }
@@ -955,5 +957,19 @@ mod tests {
 
         resolver.push_block(&block);
         assert_eq!(resolver.cwd(), "/base/myproject/src");
+    }
+
+    #[test]
+    fn test_ssh_host_with_none_resets_ssh() {
+        let mut resolver = ContextResolverBuilder::new()
+            .ssh_host("host.example.com".to_string())
+            .build();
+
+        let mut passive_context = BlockContext::new();
+        passive_context.insert(DocumentSshHost(None));
+        let block = create_block_with_context(passive_context, None);
+
+        resolver.push_block(&block);
+        assert_eq!(resolver.ssh_host(), None);
     }
 }
