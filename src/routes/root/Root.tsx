@@ -43,7 +43,6 @@ import {
   ChartBarBigIcon,
   HistoryIcon,
   MailPlusIcon,
-  MessageCircleHeartIcon,
   PanelLeftCloseIcon,
   PanelLeftOpenIcon,
   SettingsIcon,
@@ -74,7 +73,7 @@ import WorkspaceManager from "@/lib/workspaces/manager";
 import Tabs from "./Tabs";
 import { TabIcon, TabUri } from "@/state/store/ui_state";
 import * as commands from "@/lib/workspaces/commands";
-import FeedbackModal from "./FeedbackModal";
+
 import { getGlobalOptions } from "@/lib/global_options";
 import SaveBlockModal from "./SaveBlockModal";
 import SavedBlock from "@/state/runbooks/saved_block";
@@ -141,7 +140,7 @@ function App() {
   const setOpenInDesktopImport = useStore((state: AtuinState) => state.setOpenInDesktopImport);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [showInviteFriends, setShowInviteFriends] = useState(false);
-  const [showFeedback, setShowFeedback] = useState(false);
+
   const [runbookIdToDelete, setRunbookIdToDelete] = useState<string | null>(null);
   const selectedOrg = useStore((state: AtuinState) => state.selectedOrg);
   const connectionState = useStore((state: AtuinState) => state.connectionState);
@@ -1049,12 +1048,6 @@ function App() {
             <Spacer y={2} />
 
             <div className="flex flex-col items-center gap-4 px-3">
-              <Tooltip content="Share your feedback with us">
-                <Button isIconOnly variant="light" size="lg" onPress={() => setShowFeedback(true)}>
-                  <MessageCircleHeartIcon className="w-6 h-6" size={24} />
-                </Button>
-              </Tooltip>
-
               {isLoggedIn() && (
                 <Tooltip content="Invite friends and colleagues to try Atuin Desktop">
                   <Button
@@ -1202,7 +1195,7 @@ function App() {
             isOpen={showInviteFriends}
             onClose={() => setShowInviteFriends(false)}
           />
-          <FeedbackModal isOpen={showFeedback} onClose={() => setShowFeedback(false)} />
+
         </div>
 
         <DialogManager />
