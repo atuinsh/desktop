@@ -251,7 +251,7 @@ export default class OfflineStrategy implements WorkspaceStrategy {
       if (yjsContent) {
         Y.applyUpdate(doc, yjsContent);
       }
-      tagContent = await ydocToBlocknote(doc);
+      tagContent = ydocToBlocknote(doc);
     } else {
       const snapshot = remoteRunbook.snapshots.find((s) => s.tag === tag);
       if (!snapshot) {

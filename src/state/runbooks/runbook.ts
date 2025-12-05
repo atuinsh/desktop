@@ -10,6 +10,7 @@ import Snapshot from "./snapshot";
 import * as commands from "@/lib/workspaces/commands";
 import WorkspaceManager from "@/lib/workspaces/manager";
 import { timeoutPromise } from "@/lib/utils";
+import { ydocBytesToBlocknote } from "@/lib/ydoc_to_blocknote";
 
 const logger = new Logger("Runbook", "green", "green");
 
@@ -168,6 +169,8 @@ export class OnlineRunbook extends Runbook {
   viewed_at: Date | null;
   _ydoc: Uint8Array | null;
   _ydocChanged: boolean = false;
+  _computedContent: string | null = null;
+  _contentStale: boolean = true; // Start stale so first access computes
   source: RunbookSource;
   sourceInfo: string | null;
   forkedFrom: string | null;
@@ -180,7 +183,44 @@ export class OnlineRunbook extends Runbook {
 
   set ydoc(value: Uint8Array | null) {
     this._ydocChanged = true;
+    this._contentStale = true; // Mark for recompute on next access
     this._ydoc = value;
+  }
+
+  // Override content getter to lazily compute from ydoc when available
+  override get content(): string {
+    // 1. Use cache if exists and not stale
+    if (this._computedContent !== null && !this._contentStale) {
+      return this._computedContent;
+    }
+
+    // 2. Recompute if we have ydoc and (cache is empty OR stale)
+    if (this._ydoc && this._ydoc.byteLength > 0) {
+      try {
+        const blocks = ydocBytesToBlocknote(this._ydoc);
+        this._computedContent = JSON.stringify(blocks);
+        this._contentStale = false;
+        // Write to DB field so next save() persists it
+        this._content = this._computedContent;
+        return this._computedContent;
+      } catch (err) {
+        logger.error("Failed to compute content from ydoc, falling back to stored content", err);
+        return this._content;
+      }
+    }
+
+    // 3. Fallback to stored content (legacy runbooks without ydoc)
+    return this._content;
+  }
+
+  // Override content setter to also update cache
+  override set content(value: string) {
+    if (value !== this._content) {
+      this.updated = new Date();
+      this._content = value;
+      this._computedContent = value; // Cache the explicit value
+      this._contentStale = false; // Explicit content is authoritative
+    }
   }
 
   constructor(attrs: OnlineRunbookAttrs, persisted: boolean = false) {
