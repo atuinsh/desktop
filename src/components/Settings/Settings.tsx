@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { isAppleDevice } from "@react-aria/utils";
 import { open } from "@tauri-apps/plugin-shell";
 import { PlusIcon, TrashIcon, PlayIcon } from "lucide-react";
 import {
@@ -179,6 +180,13 @@ const GeneralSettings = () => {
   const darkModeEditorTheme = useStore((state) => state.darkModeEditorTheme);
   const backgroundSync = useStore((state) => state.backgroundSync);
   const syncConcurrency = useStore((state) => state.syncConcurrency);
+  const uiScale = useStore((state) => state.uiScale);
+  const setUiScale = useStore((state) => state.setUiScale);
+  const [localUiScale, setLocalUiScale] = useState(uiScale);
+
+  useEffect(() => {
+    setLocalUiScale(uiScale);
+  }, [uiScale]);
 
   const [vimModeEnabled, setVimModeEnabledState, vimModeLoading] = useSettingsState(
     "editor_vim_mode",
@@ -333,6 +341,62 @@ const GeneralSettings = () => {
               Follow System
             </SelectItem>
           </Select>
+
+          <div className="mt-6">
+            <div className="flex items-end gap-6">
+              <Slider
+                label="UI Scale"
+                size="md"
+                step={10}
+                minValue={50}
+                maxValue={150}
+                value={localUiScale}
+                onChange={(val: number | number[]) => {
+                  const numVal = Array.isArray(val) ? val[0] : val;
+                  setLocalUiScale(numVal);
+                }}
+                onChangeEnd={(val: number | number[]) => {
+                  const numVal = Array.isArray(val) ? val[0] : val;
+                  setUiScale(numVal);
+                }}
+                marks={[
+                  { value: 50, label: "50%" },
+                  { value: 100, label: "100%" },
+                  { value: 150, label: "150%" },
+                ]}
+                hideValue
+                className="flex-1"
+              />
+              <Input
+                type="number"
+                size="sm"
+                min={50}
+                max={150}
+                step={10}
+                value={localUiScale.toString()}
+                onChange={(e) => {
+                  const val = parseInt(e.target.value);
+                  if (!isNaN(val)) {
+                    setLocalUiScale(val);
+                  }
+                }}
+                onBlur={() => {
+                  const clampedVal = Math.min(150, Math.max(50, localUiScale));
+                  setLocalUiScale(clampedVal);
+                  setUiScale(clampedVal);
+                }}
+                endContent={<span className="text-default-400 text-small">%</span>}
+                classNames={{
+                  base: "w-24",
+                  input: "text-right",
+                }}
+              />
+            </div>
+            <p className="text-tiny text-default-400 mt-1">
+              Adjust the overall UI size. Use {isAppleDevice() ? "Cmd" : "Ctrl"}+/- to quickly zoom, {isAppleDevice() ? "Cmd" : "Ctrl"}+0 to reset.
+            </p>
+          </div>
+
           <div className="flex flex-row gap-4 mt-4">
             <Autocomplete
               label="Font"

@@ -141,7 +141,7 @@ event.listen("tauri://move", debouncedSaveWindowInfo);
 event.listen("tauri://resize", debouncedSaveWindowInfo);
 
 function Application() {
-  const { refreshUser, refreshCollaborations, online, user } = useStore();
+  const { refreshUser, refreshCollaborations, online, user, uiScale } = useStore();
 
   useEffect(() => {
     if (online) {
@@ -158,6 +158,10 @@ function Application() {
   useEffect(() => {
     startupOperationProcessor();
   }, []);
+
+  useEffect(() => {
+    document.documentElement.style.zoom = `${uiScale}%`;
+  }, [uiScale]);
 
   return (
     <HeroUIProvider>

@@ -76,6 +76,7 @@ export interface AtuinUiState {
   vimModeEnabled: boolean;
   shellCheckEnabled: boolean;
   shellCheckPath: string;
+  uiScale: number;
 
   setAdvancedSettings: (advancedSettings: AdvancedSettings) => void;
   setAppVersion: (version: string) => void;
@@ -122,6 +123,7 @@ export interface AtuinUiState {
   setVimModeEnabled: (enabled: boolean) => void;
   setShellCheckEnabled: (enabled: boolean) => void;
   setShellCheckPath: (path: string) => void;
+  setUiScale: (scale: number) => void;
 
   getFolderState: (workspaceId: string) => Option<Record<string, boolean>>;
   toggleFolder: (workspaceId: string, folderId: string) => void;
@@ -146,6 +148,7 @@ export const persistUiKeys: (keyof AtuinUiState)[] = [
   "hiddenWorkspaces",
   "tabs",
   "currentTabId",
+  "uiScale",
 ];
 
 export const createUiState: StateCreator<AtuinUiState> = (set, get, _store): AtuinUiState => ({
@@ -185,6 +188,7 @@ export const createUiState: StateCreator<AtuinUiState> = (set, get, _store): Atu
   vimModeEnabled: false,
   shellCheckEnabled: false,
   shellCheckPath: "",
+  uiScale: 100,
 
   setAdvancedSettings: (advancedSettings: AdvancedSettings) =>
     set(() => ({ advancedSettings: advancedSettings })),
@@ -438,6 +442,7 @@ export const createUiState: StateCreator<AtuinUiState> = (set, get, _store): Atu
   setVimModeEnabled: (enabled: boolean) => set(() => ({ vimModeEnabled: enabled })),
   setShellCheckEnabled: (enabled: boolean) => set(() => ({ shellCheckEnabled: enabled })),
   setShellCheckPath: (path: string) => set(() => ({ shellCheckPath: path })),
+  setUiScale: (scale: number) => set(() => ({ uiScale: scale })),
 
   getFolderState: (workspaceId: string) => Some(get().folderState[workspaceId]),
   toggleFolder: (workspaceId: string, folderId: string) => {

@@ -151,6 +151,8 @@ function App() {
   const closeTab = useStore((state: AtuinState) => state.closeTab);
   const closeTabs = useStore((state: AtuinState) => state.closeTabs);
   const undoCloseTab = useStore((state: AtuinState) => state.undoCloseTab);
+  const uiScale = useStore((state: AtuinState) => state.uiScale);
+  const setUiScale = useStore((state: AtuinState) => state.setUiScale);
   const { data: workspaces } = useQuery(allWorkspaces());
 
   const queryClient = useQueryClient();
@@ -222,6 +224,17 @@ function App() {
       } else if (e.key.toLowerCase() === "tab" && e.ctrlKey && e.shiftKey) {
         e.preventDefault();
         advanceActiveTab(-1);
+      } else if ((e.key === "+" || e.key === "=") && e[hotkey]) {
+        e.preventDefault();
+        const newScale = Math.min(150, uiScale + 10);
+        setUiScale(newScale);
+      } else if (e.key === "-" && e[hotkey]) {
+        e.preventDefault();
+        const newScale = Math.max(50, uiScale - 10);
+        setUiScale(newScale);
+      } else if (e.key === "0" && e[hotkey]) {
+        e.preventDefault();
+        setUiScale(100);
       }
     };
 
@@ -230,7 +243,7 @@ function App() {
     return () => {
       document.removeEventListener("keydown", onKeyDown);
     };
-  }, [currentTabId]);
+  }, [currentTabId, uiScale, setUiScale]);
 
   useEffect(() => {
     const workspaceManager = WorkspaceManager.getInstance();
