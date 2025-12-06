@@ -106,7 +106,7 @@ const DEFAULT_CONTEXT: ResolvedContext = {
   sshHost: null,
 };
 
-export function useBlockContext(blockId: string): ResolvedContext {
+export function useBlockContext(blockId: string, suppressErrors: boolean = false): ResolvedContext {
   const [context, setContext] = useState<ResolvedContext | null>(null);
 
   const documentBridge = useDocumentBridge();
@@ -115,9 +115,16 @@ export function useBlockContext(blockId: string): ResolvedContext {
       return;
     }
 
-    documentBridge.getBlockContext(blockId).then((context) => {
-      setContext(context);
-    });
+    documentBridge
+      .getBlockContext(blockId)
+      .then((context) => {
+        setContext(context);
+      })
+      .catch((error) => {
+        if (!suppressErrors) {
+          throw error;
+        }
+      });
 
     return documentBridge.onBlockContextUpdate(blockId, (context) => {
       setContext(context);
