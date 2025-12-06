@@ -1,7 +1,23 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import "@xterm/xterm/css/xterm.css";
 import { useStore } from "@/state/store";
 import useResizeObserver from "use-resize-observer";
+import { TerminalData } from "@/state/store/pty_state";
+
+function getCellHeight(terminalData: TerminalData): number | undefined {
+  if (terminalData.isGhostty) {
+    // @ts-ignore - accessing ghostty renderer API
+    const metrics = terminalData.terminal.renderer?.getMetrics?.();
+    if (metrics?.height) {
+      return metrics.height;
+    }
+    // Fallback: estimate from font size
+    const fontSize = terminalData.terminal.options?.fontSize || 14;
+    return Math.ceil(fontSize * 1.2);
+  }
+  // @ts-ignore - accessing internal xterm.js API for accurate cell dimensions
+  return terminalData.terminal._core?._renderService?.dimensions?.css?.cell?.height;
+}
 
 const usePersistentTerminal = (pty: string) => {
   const newPtyTerm = useStore((store) => store.newPtyTerm);
@@ -97,6 +113,13 @@ const TerminalComponent = ({
       if (!terminalData.terminal.element && terminalRef.current) {
         terminalData.terminal.open(terminalRef.current);
 
+        // For ghostty, set up onData after open() since InputHandler is created during open()
+        if (terminalData.isGhostty) {
+          terminalData.disposeOnData = terminalData.terminal.onData((data: string) => {
+            terminalData.onData(data);
+          });
+        }
+
         // it might have been previously attached, but need moving elsewhere
       } else if (terminalData && terminalRef.current && terminalData.terminal.element) {
         terminalRef.current.appendChild(terminalData.terminal.element);
@@ -107,9 +130,11 @@ const TerminalComponent = ({
         terminalData.fitAddon.fit();
       }
 
+      // Focus the terminal for keyboard input
+      terminalData.terminal.focus();
+
       // Report actual dimensions after terminal renders
-      // @ts-ignore - accessing internal xterm.js API for accurate cell dimensions
-      const cellHeight = terminalData.terminal._core?._renderService?.dimensions?.css?.cell?.height;
+      const cellHeight = getCellHeight(terminalData);
       const actualHeight = terminalData.terminal.element?.offsetHeight;
       if (actualHeight && cellHeight && onDimensionsReady) {
         onDimensionsReady({ actualHeight, cellHeight });
@@ -135,13 +160,17 @@ const TerminalComponent = ({
     terminalData.fitAddon.fit();
 
     // Report updated dimensions after fit
-    // @ts-ignore - accessing internal xterm.js API
-    const cellHeight = terminalData.terminal._core?._renderService?.dimensions?.css?.cell?.height;
+    const cellHeight = getCellHeight(terminalData);
     const actualHeight = terminalData.terminal.element?.offsetHeight;
     if (actualHeight && cellHeight && onDimensionsReady) {
       onDimensionsReady({ actualHeight, cellHeight });
     }
   }, [terminalData, isAttached, height, onDimensionsReady]);
+
+  // Focus terminal on click (needed for ghostty which uses container for keyboard events)
+  const handleClick = useCallback(() => {
+    terminalData?.terminal?.focus();
+  }, [terminalData]);
 
   if (!isReady) return null;
 
@@ -161,6 +190,7 @@ const TerminalComponent = ({
         padding: 0,
       }}
       ref={setRefs}
+      onClick={handleClick}
     />
   );
 };

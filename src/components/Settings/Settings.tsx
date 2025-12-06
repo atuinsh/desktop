@@ -599,6 +599,12 @@ const RunbookSettings = () => {
     Settings.terminalGL,
     Settings.terminalGL,
   );
+  const [terminalGhostty, setTerminalGhostty, ghosttyLoading] = useSettingsState(
+    "terminal_ghostty",
+    false,
+    Settings.terminalGhostty,
+    Settings.terminalGhostty,
+  );
   const [terminalShell, setTerminalShell, shellLoading] = useSettingsState(
     "terminal_shell",
     "",
@@ -621,6 +627,7 @@ const RunbookSettings = () => {
   if (
     fontLoading ||
     glLoading ||
+    ghosttyLoading ||
     urlLoading ||
     fontSizeLoading ||
     shellLoading ||
@@ -654,11 +661,19 @@ const RunbookSettings = () => {
             </div>
           </div>
           <SettingSwitch
-            label="Enable WebGL rendering"
-            isSelected={terminalGl}
-            onValueChange={setTerminalGl}
-            description="May have issues with some fonts"
+            label="Use Ghostty terminal"
+            isSelected={terminalGhostty}
+            onValueChange={setTerminalGhostty}
+            description="Experimental: Use Ghostty's WASM-based terminal emulator"
           />
+          {!terminalGhostty && (
+            <SettingSwitch
+              label="Enable WebGL rendering"
+              isSelected={terminalGl}
+              onValueChange={setTerminalGl}
+              description="May have issues with some fonts"
+            />
+          )}
           <SettingInput
             type="text"
             label="Custom shell"

@@ -254,6 +254,9 @@ importers:
       framer-motion:
         specifier: ^11.18.2
         version: 11.18.2(@emotion/is-prop-valid@1.3.1)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      ghostty-web:
+        specifier: ^0.3.0
+        version: 0.3.0
       highlight.js:
         specifier: ^11.11.1
         version: 11.11.1
@@ -4291,6 +4294,9 @@ packages:
   get-proto@1.0.1:
     resolution: {integrity: sha512-sTSfBjoXBp89JvIKIefqw7U2CCebsc74kiY6awiGogKtoSGbgjYE/G/+l9sF3MWFPNc9IcoOC4ODfKHfxFmp0g==}
     engines: {node: '>= 0.4'}
+
+  ghostty-web@0.3.0:
+    resolution: {integrity: sha512-SAdSHWYF20GMZUB0n8kh1N6Z4ljMnuUqT8iTB2n5FAPswEV10MejEpLlhW/769GL5+BQa1NYwEg9y/XCckV5+A==}
 
   glob-parent@5.1.2:
     resolution: {integrity: sha512-AOIgSQCepiJYwP3ARnGx+5VnTu2HBYdzbGP45eLw1vr3zB3vZLeyed1sC9hnbcOc9/SrMyM5RPQrkGz4aS9Zow==}
@@ -11253,6 +11259,8 @@ snapshots:
       dunder-proto: 1.0.1
       es-object-atoms: 1.1.1
     optional: true
+
+  ghostty-web@0.3.0: {}
 
   glob-parent@5.1.2:
     dependencies:
