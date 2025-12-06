@@ -97,6 +97,7 @@
     "emittery": "^1.1.0",
     "flexsearch": "^0.7.43",
     "framer-motion": "^11.18.2",
+    "ghostty-web": "^0.3.0",
     "highlight.js": "^11.11.1",
     "jsondiffpatch": "^0.6.0",
     "lib0": "^0.2.99",

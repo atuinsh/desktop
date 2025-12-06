@@ -6,6 +6,7 @@ const PROMETHEUS_URL_KEY = "settings.runbooks.prometheus_url";
 const TERMINAL_FONT = "settings.runbooks.terminal.font";
 const TERMINAL_FONT_SIZE = "settings.runbooks.terminal.font_size";
 const TERMINAL_GL = "settings.runbooks.terminal.gl";
+const TERMINAL_GHOSTTY = "settings.runbooks.terminal.ghostty";
 const TERMINAL_SHELL = "settings.runbooks.terminal.shell";
 const SCRIPT_SHELL = "settings.runbooks.script.shell";
 const SCRIPT_INTERPRETERS = "settings.runbooks.script.interpreters";
@@ -85,6 +86,17 @@ export class Settings {
     }
 
     return (await store.get(TERMINAL_GL)) || false;
+  }
+
+  public static async terminalGhostty(val: boolean | null = null): Promise<boolean> {
+    let store = await KVStore.open_default();
+
+    if (val !== null) {
+      await store.set(TERMINAL_GHOSTTY, val);
+      return val;
+    }
+
+    return (await store.get(TERMINAL_GHOSTTY)) || false;
   }
 
   public static async terminalShell(val: string | null = null): Promise<string | null> {
