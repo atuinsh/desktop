@@ -10,10 +10,6 @@ const TERMINAL_SHELL = "settings.runbooks.terminal.shell";
 const SCRIPT_SHELL = "settings.runbooks.script.shell";
 const SCRIPT_INTERPRETERS = "settings.runbooks.script.interpreters";
 const EDITOR_VIM_MODE = "settings.editor.vim_mode";
-const AI_ENABLED = "settings.ai.enabled";
-const AI_API_KEY = "settings.ai.api_key";
-const AI_API_ENDPOINT = "settings.ai.api_endpoint";
-const AI_MODEL = "settings.ai.model";
 const SHELLCHECK_ENABLED = "settings.editor.shellcheck.enabled";
 const SHELLCHECK_PATH = "settings.editor.shellcheck.path";
 
@@ -133,50 +129,6 @@ export class Settings {
     }
 
     return (await store.get(EDITOR_VIM_MODE)) || false;
-  }
-
-  public static async aiEnabled(val: boolean | null = null): Promise<boolean> {
-    let store = await KVStore.open_default();
-
-    if (val !== null) {
-      await store.set(AI_ENABLED, val);
-      return val;
-    }
-
-    return (await store.get(AI_ENABLED)) || false;
-  }
-
-  public static async aiApiKey(val: string | null = null): Promise<string | null> {
-    let store = await KVStore.open_default();
-
-    if (val || val === "") {
-      await store.set(AI_API_KEY, val);
-      return val;
-    }
-
-    return await store.get(AI_API_KEY);
-  }
-
-  public static async aiApiEndpoint(val: string | null = null): Promise<string | null> {
-    let store = await KVStore.open_default();
-
-    if (val || val === "") {
-      await store.set(AI_API_ENDPOINT, val);
-      return val;
-    }
-
-    return await store.get(AI_API_ENDPOINT);
-  }
-
-  public static async aiModel(val: string | null = null): Promise<string | null> {
-    let store = await KVStore.open_default();
-
-    if (val || val === "") {
-      await store.set(AI_MODEL, val);
-      return val;
-    }
-
-    return await store.get(AI_MODEL);
   }
 
   public static async shellCheckEnabled(val: boolean | null = null): Promise<boolean> {

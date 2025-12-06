@@ -1133,80 +1133,6 @@ const NotificationSettings = () => {
   );
 };
 
-const AISettings = () => {
-  const [aiEnabled, setAiEnabled, enabledLoading] = useSettingsState(
-    "ai_enabled",
-    false,
-    Settings.aiEnabled,
-    Settings.aiEnabled,
-  );
-  const [aiApiKey, setAiApiKey, keyLoading] = useSettingsState(
-    "ai_api_key",
-    "",
-    Settings.aiApiKey,
-    Settings.aiApiKey,
-  );
-  const [aiApiEndpoint, setAiApiEndpoint, endpointLoading] = useSettingsState(
-    "ai_api_endpoint",
-    "",
-    Settings.aiApiEndpoint,
-    Settings.aiApiEndpoint,
-  );
-  const [aiModel, setAiModel, modelLoading] = useSettingsState(
-    "ai_model",
-    "",
-    Settings.aiModel,
-    Settings.aiModel,
-  );
-
-  if (enabledLoading || keyLoading || endpointLoading || modelLoading) return <Spinner />;
-
-  return (
-    <Card shadow="sm">
-      <CardBody className="flex flex-col gap-4">
-        <h2 className="text-xl font-semibold">AI Integration</h2>
-        <p className="text-sm text-default-500">Configure AI-powered runbook generation</p>
-
-        <SettingSwitch
-          label="Enable AI features"
-          isSelected={aiEnabled}
-          onValueChange={setAiEnabled}
-          description="Enable AI-powered runbook generation and assistance"
-        />
-
-        {aiEnabled && (
-          <>
-            <SettingInput
-              type="password"
-              label="API Key"
-              value={aiApiKey || ""}
-              onChange={setAiApiKey}
-              placeholder="sk-..."
-              description="Your OpenRouter/OpenAI API key"
-            />
-            <SettingInput
-              type="text"
-              label="API Endpoint"
-              value={aiApiEndpoint || ""}
-              onChange={setAiApiEndpoint}
-              placeholder="https://openrouter.ai/api/v1"
-              description="OpenAI-compatible API endpoint (default: OpenRouter)"
-            />
-            <SettingInput
-              type="text"
-              label="Model"
-              value={aiModel || ""}
-              onChange={setAiModel}
-              placeholder="anthropic/claude-sonnet-4"
-              description="Model name (e.g., anthropic/claude-sonnet-4, openai/gpt-4)"
-            />
-          </>
-        )}
-      </CardBody>
-    </Card>
-  );
-};
-
 const UserSettings = () => {
   const user = useStore((state) => state.user);
   const refreshUser = useStore((state) => state.refreshUser);
@@ -1320,12 +1246,6 @@ const SettingsPanel = () => {
         <Tab key="notification" title="Notifications">
           <div className="flex flex-col gap-4">
             <NotificationSettings />
-          </div>
-        </Tab>
-
-        <Tab key="ai" title="AI">
-          <div className="flex flex-col gap-4">
-            <AISettings />
           </div>
         </Tab>
 

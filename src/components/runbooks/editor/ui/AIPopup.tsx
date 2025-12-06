@@ -1,38 +1,37 @@
 import { useCallback } from "react";
 import { AIPopupBase } from "./AIPopupBase";
+import { AIFeatureDisabledError } from "@/lib/ai/block_editor";
 import track_event from "@/tracking";
+
+interface EditorContext {
+  documentMarkdown: string;
+  currentBlockId: string;
+  currentBlockIndex: number;
+}
 
 interface AIPopupProps {
   isOpen: boolean;
   onClose: () => void;
-  editor: any; // Use any for now to avoid complex type constraints
+  editor: any;
   currentBlock: any;
   position?: { x: number; y: number };
-  getEditorContext?: () => Promise<{
-    blocks: any[];
-    currentBlockId: string;
-    currentBlockIndex: number;
-  } | undefined>;
+  getEditorContext?: () => Promise<EditorContext | undefined>;
 }
 
-// Define block-specific AI suggestions
 const blockSuggestions: Record<string, string[]> = {
-  // Command/Script blocks
   run: [
     "Use template variables for dynamic values",
-    "Add error handling and validation", 
+    "Add error handling and validation",
     "Fix syntax and optimize performance",
     "Convert to different shell language",
   ],
   script: [
     "Use template variables for dynamic values",
-    "Add error handling and validation", 
+    "Add error handling and validation",
     "Store output in a variable",
     "Fix syntax and optimize performance",
     "Convert to different shell language",
   ],
-  
-  // Database blocks
   postgres: [
     "Use template variables in query",
     "Store query results in variable",
@@ -54,8 +53,6 @@ const blockSuggestions: Record<string, string[]> = {
     "Add proper indexing suggestions",
     "Convert to different SQL dialect",
   ],
-  
-  // Network blocks
   http: [
     "Use template variables for dynamic URLs",
     "Store response in a variable",
@@ -70,8 +67,6 @@ const blockSuggestions: Record<string, string[]> = {
     "Add alerting conditions",
     "Optimize time range",
   ],
-  
-  // Variable blocks
   var: [
     "Change variable name",
     "Update default value",
@@ -86,8 +81,6 @@ const blockSuggestions: Record<string, string[]> = {
     "Create related variables",
     "Set environment-specific values",
   ],
-  
-  // Environment blocks
   env: [
     "Use template variables in value",
     "Add environment-specific values",
@@ -98,19 +91,21 @@ const blockSuggestions: Record<string, string[]> = {
 };
 
 const getBlockSuggestions = (blockType: string): string[] => {
-  return blockSuggestions[blockType] || [
-    "Use template variables for dynamic content",
-    "Improve this content",
-    "Add more detail",
-    "Fix formatting",
-    "Make it clearer",
-  ];
+  return (
+    blockSuggestions[blockType] || [
+      "Use template variables for dynamic content",
+      "Improve this content",
+      "Add more detail",
+      "Fix formatting",
+      "Make it clearer",
+    ]
+  );
 };
 
 const getBlockTypeDisplay = (blockType: string) => {
   const typeMap: Record<string, string> = {
     run: "Terminal",
-    script: "Script", 
+    script: "Script",
     postgres: "PostgreSQL",
     sqlite: "SQLite",
     clickhouse: "ClickHouse",
@@ -123,49 +118,78 @@ const getBlockTypeDisplay = (blockType: string) => {
   return typeMap[blockType] || blockType;
 };
 
-export default function AIPopup({ isOpen, onClose, editor, currentBlock, position = { x: 0, y: 0 }, getEditorContext }: AIPopupProps) {
+export default function AIPopup({
+  isOpen,
+  onClose,
+  editor,
+  currentBlock,
+  position = { x: 0, y: 0 },
+  getEditorContext,
+}: AIPopupProps) {
   const blockType = currentBlock?.type || "paragraph";
   const suggestions = getBlockSuggestions(blockType);
   const blockTypeDisplay = getBlockTypeDisplay(blockType);
 
-  const handleEdit = useCallback(async (prompt: string) => {
-    if (!currentBlock) return;
-    
-    track_event("runbooks.ai.edit_request", { 
-      blockType, 
-      promptLength: prompt.length,
-      blockId: currentBlock.id 
-    });
-    
-    // Get editor context if available
-    const editorContext = getEditorContext ? await getEditorContext() : undefined;
-    
-    const { editBlock } = await import("@/lib/ai/block_editor");
-    
-    const result = await editBlock({
-      prompt,
-      currentBlock,
-      editorContext
-    });
-    
-    // Apply the changes to the editor
-    if (result.updatedBlock) {
-      editor.updateBlock(currentBlock.id, result.updatedBlock);
-      
-      track_event("runbooks.ai.edit_success", { 
-        blockType, 
-        blockId: currentBlock.id 
-      });
-    }
-  }, [blockType, currentBlock, editor, getEditorContext]);
+  const handleEdit = useCallback(
+    async (prompt: string) => {
+      if (!currentBlock) return;
 
-  const handleSuggestionClick = useCallback((suggestion: string) => {
-    track_event("runbooks.ai.suggestion_clicked", { 
-      blockType, 
-      suggestion,
-      blockId: currentBlock?.id 
-    });
-  }, [blockType, currentBlock?.id]);
+      track_event("runbooks.ai.edit_request", {
+        blockType,
+        promptLength: prompt.length,
+        blockId: currentBlock.id,
+      });
+
+      try {
+        const { editBlock } = await import("@/lib/ai/block_editor");
+
+        // Get editor context for document-aware editing
+        const context = getEditorContext ? await getEditorContext() : undefined;
+
+        const result = await editBlock({
+          prompt,
+          currentBlock,
+          documentMarkdown: context?.documentMarkdown,
+          blockIndex: context?.currentBlockIndex,
+        });
+
+        if (result.updatedBlock) {
+          editor.updateBlock(currentBlock.id, result.updatedBlock);
+
+          track_event("runbooks.ai.edit_success", {
+            blockType,
+            blockId: currentBlock.id,
+          });
+        }
+      } catch (error) {
+        if (error instanceof AIFeatureDisabledError) {
+          track_event("runbooks.ai.edit_feature_disabled", {
+            blockType,
+            blockId: currentBlock.id,
+          });
+        } else {
+          track_event("runbooks.ai.edit_error", {
+            blockType,
+            blockId: currentBlock.id,
+            error: error instanceof Error ? error.message : "Unknown error",
+          });
+        }
+        throw error;
+      }
+    },
+    [blockType, currentBlock, editor, getEditorContext]
+  );
+
+  const handleSuggestionClick = useCallback(
+    (suggestion: string) => {
+      track_event("runbooks.ai.suggestion_clicked", {
+        blockType,
+        suggestion,
+        blockId: currentBlock?.id,
+      });
+    },
+    [blockType, currentBlock?.id]
+  );
 
   return (
     <AIPopupBase
