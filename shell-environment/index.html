@@ -3,17 +3,15 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
-        <meta name="description" content="Workspaces are the highest level container for runbooks">
       
       
-      
-        <link rel="canonical" href="https://man.atuin.sh/workspaces/">
-      
-      
-        <link rel="prev" href="../getting-started/">
+        <link rel="canonical" href="https://man.atuin.sh/shell-environment/">
       
       
-        <link rel="next" href="../templating/">
+        <link rel="prev" href="../secrets/">
+      
+      
+        <link rel="next" href="../blocks/">
       
       
       <link rel="icon" href="../assets/images/favicon.png">
@@ -21,7 +19,7 @@
     
     
       
-        <title>Workspaces - Atuin Desktop Docs</title>
+        <title>Shell Environment - Atuin Desktop Docs</title>
       
     
     
@@ -60,11 +58,11 @@
       
         <meta property="og:type" content="website">
       
-        <meta property="og:title" content="Workspaces - Atuin Desktop Docs">
+        <meta property="og:title" content="Shell Environment - Atuin Desktop Docs">
       
-        <meta property="og:description" content="Workspaces are the highest level container for runbooks">
+        <meta property="og:description" content="None">
       
-        <meta property="og:image" content="https://man.atuin.sh/assets/images/social/workspaces.png">
+        <meta property="og:image" content="https://man.atuin.sh/assets/images/social/shell-environment.png">
       
         <meta property="og:image:type" content="image/png">
       
@@ -72,15 +70,15 @@
       
         <meta property="og:image:height" content="630">
       
-        <meta property="og:url" content="https://man.atuin.sh/workspaces/">
+        <meta property="og:url" content="https://man.atuin.sh/shell-environment/">
       
         <meta name="twitter:card" content="summary_large_image">
       
-        <meta name="twitter:title" content="Workspaces - Atuin Desktop Docs">
+        <meta name="twitter:title" content="Shell Environment - Atuin Desktop Docs">
       
-        <meta name="twitter:description" content="Workspaces are the highest level container for runbooks">
+        <meta name="twitter:description" content="None">
       
-        <meta name="twitter:image" content="https://man.atuin.sh/assets/images/social/workspaces.png">
+        <meta name="twitter:image" content="https://man.atuin.sh/assets/images/social/shell-environment.png">
       
     
     
@@ -113,7 +111,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#online-workspaces" class="md-skip">
+        <a href="#shell-environment" class="md-skip">
           Skip to content
         </a>
       
@@ -148,7 +146,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Workspaces
+              Shell Environment
             
           </span>
         </div>
@@ -334,30 +332,10 @@
       
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    Workspaces
-    
-  </span>
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../workspaces/" class="md-nav__link">
         
   
   
@@ -368,42 +346,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#online-workspaces" class="md-nav__link">
-    <span class="md-ellipsis">
-      Online Workspaces
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#offline-workspaces" class="md-nav__link">
-    <span class="md-ellipsis">
-      Offline Workspaces
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -456,10 +398,32 @@
       
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../shell-environment/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    Shell Environment
+    
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -470,6 +434,230 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#shells-vs-terminal-emulators" class="md-nav__link">
+    <span class="md-ellipsis">
+      Shells vs Terminal Emulators
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#interactive-vs-non-interactive-shells" class="md-nav__link">
+    <span class="md-ellipsis">
+      Interactive vs Non-Interactive Shells
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Interactive vs Non-Interactive Shells">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#interactive-shells" class="md-nav__link">
+    <span class="md-ellipsis">
+      Interactive Shells
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#non-interactive-shells" class="md-nav__link">
+    <span class="md-ellipsis">
+      Non-Interactive Shells
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#configuration-file-loading" class="md-nav__link">
+    <span class="md-ellipsis">
+      Configuration File Loading
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Configuration File Loading">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#zsh" class="md-nav__link">
+    <span class="md-ellipsis">
+      Zsh
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#bash" class="md-nav__link">
+    <span class="md-ellipsis">
+      Bash
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-atuin-desktop-handles-this" class="md-nav__link">
+    <span class="md-ellipsis">
+      How Atuin Desktop Handles This
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#fixing-path-issues" class="md-nav__link">
+    <span class="md-ellipsis">
+      Fixing PATH Issues
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Fixing PATH Issues">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#solution-1-restart-atuin-desktop" class="md-nav__link">
+    <span class="md-ellipsis">
+      Solution 1: Restart Atuin Desktop
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#solution-2-move-path-configuration-to-zshenv" class="md-nav__link">
+    <span class="md-ellipsis">
+      Solution 2: Move PATH Configuration to .zshenv
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#solution-3-use-absolute-paths" class="md-nav__link">
+    <span class="md-ellipsis">
+      Solution 3: Use Absolute Paths
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#solution-4-source-your-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      Solution 4: Source Your Configuration
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#solution-5-set-path-in-the-script" class="md-nav__link">
+    <span class="md-ellipsis">
+      Solution 5: Set PATH in the Script
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#environment-managers" class="md-nav__link">
+    <span class="md-ellipsis">
+      Environment Managers
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Environment Managers">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#nvm-node-version-manager" class="md-nav__link">
+    <span class="md-ellipsis">
+      nvm (Node Version Manager)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pyenv" class="md-nav__link">
+    <span class="md-ellipsis">
+      pyenv
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#rbenv" class="md-nav__link">
+    <span class="md-ellipsis">
+      rbenv
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#homebrew-macos" class="md-nav__link">
+    <span class="md-ellipsis">
+      Homebrew (macOS)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#using-terminal-blocks-instead" class="md-nav__link">
+    <span class="md-ellipsis">
+      Using Terminal Blocks Instead
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -1334,6 +1522,8 @@
   
   
   
+    
+  
   
     <label class="md-nav__title" for="__toc">
       <span class="md-nav__icon md-icon"></span>
@@ -1342,18 +1532,204 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#online-workspaces" class="md-nav__link">
+  <a href="#shells-vs-terminal-emulators" class="md-nav__link">
     <span class="md-ellipsis">
-      Online Workspaces
+      Shells vs Terminal Emulators
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#offline-workspaces" class="md-nav__link">
+  <a href="#interactive-vs-non-interactive-shells" class="md-nav__link">
     <span class="md-ellipsis">
-      Offline Workspaces
+      Interactive vs Non-Interactive Shells
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Interactive vs Non-Interactive Shells">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#interactive-shells" class="md-nav__link">
+    <span class="md-ellipsis">
+      Interactive Shells
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#non-interactive-shells" class="md-nav__link">
+    <span class="md-ellipsis">
+      Non-Interactive Shells
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#configuration-file-loading" class="md-nav__link">
+    <span class="md-ellipsis">
+      Configuration File Loading
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Configuration File Loading">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#zsh" class="md-nav__link">
+    <span class="md-ellipsis">
+      Zsh
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#bash" class="md-nav__link">
+    <span class="md-ellipsis">
+      Bash
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-atuin-desktop-handles-this" class="md-nav__link">
+    <span class="md-ellipsis">
+      How Atuin Desktop Handles This
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#fixing-path-issues" class="md-nav__link">
+    <span class="md-ellipsis">
+      Fixing PATH Issues
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Fixing PATH Issues">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#solution-1-restart-atuin-desktop" class="md-nav__link">
+    <span class="md-ellipsis">
+      Solution 1: Restart Atuin Desktop
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#solution-2-move-path-configuration-to-zshenv" class="md-nav__link">
+    <span class="md-ellipsis">
+      Solution 2: Move PATH Configuration to .zshenv
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#solution-3-use-absolute-paths" class="md-nav__link">
+    <span class="md-ellipsis">
+      Solution 3: Use Absolute Paths
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#solution-4-source-your-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      Solution 4: Source Your Configuration
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#solution-5-set-path-in-the-script" class="md-nav__link">
+    <span class="md-ellipsis">
+      Solution 5: Set PATH in the Script
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#environment-managers" class="md-nav__link">
+    <span class="md-ellipsis">
+      Environment Managers
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Environment Managers">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#nvm-node-version-manager" class="md-nav__link">
+    <span class="md-ellipsis">
+      nvm (Node Version Manager)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pyenv" class="md-nav__link">
+    <span class="md-ellipsis">
+      pyenv
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#rbenv" class="md-nav__link">
+    <span class="md-ellipsis">
+      rbenv
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#homebrew-macos" class="md-nav__link">
+    <span class="md-ellipsis">
+      Homebrew (macOS)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#using-terminal-blocks-instead" class="md-nav__link">
+    <span class="md-ellipsis">
+      Using Terminal Blocks Instead
     </span>
   </a>
   
@@ -1375,7 +1751,7 @@
 
 
   
-    <a href="https://github.com/atuinsh/desktop/edit/main/docs/docs/workspaces.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+    <a href="https://github.com/atuinsh/desktop/edit/main/docs/docs/shell-environment.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
       
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 20H6V4h7v5h5v3.1l2-2V8l-6-6H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h4zm10.2-7c.1 0 .3.1.4.2l1.3 1.3c.2.2.2.6 0 .8l-1 1-2.1-2.1 1-1c.1-.1.2-.2.4-.2m0 3.9L14.1 23H12v-2.1l6.1-6.1z"></path></svg>
     </a>
@@ -1384,42 +1760,192 @@
     
       
     
-    <a href="https://github.com/atuinsh/desktop/raw/main/docs/docs/workspaces.md" title="View source of this page" class="md-content__button md-icon">
+    <a href="https://github.com/atuinsh/desktop/raw/main/docs/docs/shell-environment.md" title="View source of this page" class="md-content__button md-icon">
       
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M17 18c.56 0 1 .44 1 1s-.44 1-1 1-1-.44-1-1 .44-1 1-1m0-3c-2.73 0-5.06 1.66-6 4 .94 2.34 3.27 4 6 4s5.06-1.66 6-4c-.94-2.34-3.27-4-6-4m0 6.5a2.5 2.5 0 0 1-2.5-2.5 2.5 2.5 0 0 1 2.5-2.5 2.5 2.5 0 0 1 2.5 2.5 2.5 2.5 0 0 1-2.5 2.5M9.27 20H6V4h7v5h5v4.07c.7.08 1.36.25 2 .49V8l-6-6H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h4.5a8.2 8.2 0 0 1-1.23-2"></path></svg>
     </a>
   
 
 
-  <h1>Workspaces</h1>
-
-<p>Workspaces are the highest level container for runbooks. They can be found in the left sidebar in the Desktop app.</p>
-<figure class="img-light">
-  <picture>
-    <a class="glightbox" data-type="image" data-width="auto" data-height="auto" href="../../images/workspaces-light.png" data-desc-position="bottom"><img src="../../images/workspaces-light.png" alt="Collaborations"></a>
-  </picture>
-  <figcaption>Operations, Internal Infra, and Meetings are all workspaces</figcaption>
-</figure>
-<figure class="img-dark">
-  <picture>
-    <a class="glightbox" data-type="image" data-width="auto" data-height="auto" href="../../images/workspaces-dark.png" data-desc-position="bottom"><img src="../../images/workspaces-dark.png" alt="Collaborations"></a>
-  </picture>
-  <figcaption>Operations, Internal Infra, and Meetings are all workspaces</figcaption>
-</figure>
-
-<p>You can create a new workspace one of three ways:</p>
+<h1 id="shell-environment">Shell Environment</h1>
+<p>When running scripts in Atuin Desktop, you might encounter issues where commands that work in your terminal don't work in a script block. This is usually because of differences between <strong>interactive</strong> and <strong>non-interactive</strong> shells. This page explains how shells work and how to ensure your scripts run correctly.</p>
+<h2 id="shells-vs-terminal-emulators">Shells vs Terminal Emulators</h2>
+<p>First, it's important to understand the difference between a <strong>shell</strong> and a <strong>terminal emulator</strong>:</p>
+<ul>
+<li>
+<p>A <strong>shell</strong> (like <code>zsh</code>, <code>bash</code>, or <code>fish</code>) is a program that interprets and executes commands. It handles things like your <code>PATH</code>, aliases, environment variables, and shell functions.</p>
+</li>
+<li>
+<p>A <strong>terminal emulator</strong> (like iTerm2, Terminal.app, Alacritty, or Kitty) is a graphical application that displays the shell's output and captures your keyboard input. It handles things like fonts, colors, window size, and rendering.</p>
+</li>
+</ul>
+<p>When you open your terminal application, it launches a shell process inside it. The terminal emulator is responsible for <em>displaying</em> what the shell outputs, while the shell is responsible for <em>executing</em> your commands.</p>
+<div class="admonition tip">
+<p class="admonition-title">Using custom fonts and icons</p>
+<p>Both Script and Terminal blocks use a terminal emulator for rendering, so special fonts (like Nerd Fonts with icons), colors, and other visual formatting will work. To use a custom font, configure it in the app settings.</p>
+</div>
+<h2 id="interactive-vs-non-interactive-shells">Interactive vs Non-Interactive Shells</h2>
+<p>Shells can run in two modes:</p>
+<h3 id="interactive-shells">Interactive Shells</h3>
+<p>An <strong>interactive shell</strong> is what you get when you open a terminal. It:</p>
+<ul>
+<li>Displays a prompt and waits for you to type commands</li>
+<li>Loads your full shell configuration (<code>.zshrc</code>, <code>.bashrc</code>, etc.)</li>
+<li>Supports features like tab completion, command history, and aliases</li>
+</ul>
+<h3 id="non-interactive-shells">Non-Interactive Shells</h3>
+<p>A <strong>non-interactive shell</strong> runs a script or command without user interaction. It:</p>
+<ul>
+<li>Executes commands from a script file or string</li>
+<li>Loads only a minimal configuration (<code>.zshenv</code> for zsh, or nothing for bash by default)</li>
+<li>Doesn't display a prompt or wait for input</li>
+</ul>
+<p><strong>Script blocks in Atuin Desktop run as non-interactive shells.</strong> This is faster and more suitable for automation, but it means your full shell configuration isn't loaded.</p>
+<h2 id="configuration-file-loading">Configuration File Loading</h2>
+<p>Different shells load different configuration files depending on the mode:</p>
+<h3 id="zsh">Zsh</h3>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th style="text-align: center;">Interactive Login</th>
+<th style="text-align: center;">Interactive Non-Login</th>
+<th style="text-align: center;">Non-Interactive</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>.zshenv</code></td>
+<td style="text-align: center;">Yes</td>
+<td style="text-align: center;">Yes</td>
+<td style="text-align: center;">Yes</td>
+</tr>
+<tr>
+<td><code>.zprofile</code></td>
+<td style="text-align: center;">Yes</td>
+<td style="text-align: center;">No</td>
+<td style="text-align: center;">No</td>
+</tr>
+<tr>
+<td><code>.zshrc</code></td>
+<td style="text-align: center;">Yes</td>
+<td style="text-align: center;">Yes</td>
+<td style="text-align: center;">No</td>
+</tr>
+<tr>
+<td><code>.zlogin</code></td>
+<td style="text-align: center;">Yes</td>
+<td style="text-align: center;">No</td>
+<td style="text-align: center;">No</td>
+</tr>
+</tbody>
+</table>
+<h3 id="bash">Bash</h3>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th style="text-align: center;">Interactive Login</th>
+<th style="text-align: center;">Interactive Non-Login</th>
+<th style="text-align: center;">Non-Interactive</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>.bash_profile</code></td>
+<td style="text-align: center;">Yes</td>
+<td style="text-align: center;">No</td>
+<td style="text-align: center;">No</td>
+</tr>
+<tr>
+<td><code>.bashrc</code></td>
+<td style="text-align: center;">No</td>
+<td style="text-align: center;">Yes</td>
+<td style="text-align: center;">No</td>
+</tr>
+</tbody>
+</table>
+<div class="admonition warning">
+<p class="admonition-title">The common mistake</p>
+<p>Many users add <code>PATH</code> modifications to <code>.zshrc</code> or <code>.bashrc</code>. These files are <strong>not loaded</strong> when running non-interactive scripts. If you run <code>which node</code> in your terminal and it works, but a script block can't find <code>node</code>, this is almost certainly why.</p>
+</div>
+<h2 id="how-atuin-desktop-handles-this">How Atuin Desktop Handles This</h2>
+<p>Atuin Desktop tries to help by capturing environment variables from an interactive shell at startup. When the app launches, it:</p>
 <ol>
-<li>Choose <code>File → Workspaces → New Workspace</code> from the application menu</li>
-<li>Choose "New Workspace" from the "New Runbook" dropdown arrow</li>
-<li>Right-click in an empty area of the sidebar and choose "New Workspace"</li>
+<li>Opens an interactive shell session</li>
+<li>Copies key environment variables (including <code>PATH</code>)</li>
+<li>Uses these variables when running script blocks</li>
 </ol>
-<p>Each workspace is either <strong>online</strong> or <strong>offline</strong>.</p>
-<h2 id="online-workspaces">Online Workspaces</h2>
-<p>Online workspaces are synced to <a href="../hub/getting-started">Atuin Hub</a>, and all runbooks added to them are automatically saved to the Hub. You must be online and logged in to the Hub to create or edit online workspaces, so <a href="../hub/getting-started">check out the getting started guide for more information</a>.</p>
-<p>Runbooks in online workspaces can be edited at the same time by multiple collaborators or team members; see <a href="../hub/collaborative-editing">the collaborative editing guide</a> for more information.</p>
-<h2 id="offline-workspaces">Offline Workspaces</h2>
-<p>Offline workspaces are not synced to the Hub, and all runbooks added to them are saved locally on your device. When you create an offline workspace, you will be prompted to choose a folder on your device in which to store the runbooks.</p>
-<p>While offline runbooks cannot be edited collaboratively inside the editor like online runbooks can be, the workspace folder can be managed by Git or another VCS for version control, VCS-based collaboration, and backup.</p>
+<p>This means that <strong>tools available in your terminal when Atuin Desktop starts should also be available in script blocks</strong>.</p>
+<p>However, this approach has limitations:</p>
+<ul>
+<li>If you install new tools after launching Atuin Desktop, they won't be available until you restart the app</li>
+<li>If your shell configuration is complex or slow, the capture might not work correctly</li>
+<li>Some environment managers (like <code>nvm</code>, <code>pyenv</code>, or <code>rbenv</code>) set up their environment dynamically in ways that might not transfer</li>
+</ul>
+<h2 id="fixing-path-issues">Fixing PATH Issues</h2>
+<p>If commands aren't found in your script blocks, try these solutions:</p>
+<h3 id="solution-1-restart-atuin-desktop">Solution 1: Restart Atuin Desktop</h3>
+<p>If you recently installed a tool, restart Atuin Desktop so it can capture your updated environment.</p>
+<h3 id="solution-2-move-path-configuration-to-zshenv">Solution 2: Move PATH Configuration to .zshenv</h3>
+<p>For zsh users, move your <code>PATH</code> modifications from <code>.zshrc</code> to <code>.zshenv</code>:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># In ~/.zshenv (loaded for ALL shell types)</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nb">export</span><span class="w"> </span><span class="nv">PATH</span><span class="o">=</span><span class="s2">"</span><span class="nv">$HOME</span><span class="s2">/.local/bin:</span><span class="nv">$PATH</span><span class="s2">"</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="nb">export</span><span class="w"> </span><span class="nv">PATH</span><span class="o">=</span><span class="s2">"/opt/homebrew/bin:</span><span class="nv">$PATH</span><span class="s2">"</span>
+</span></code></pre></div>
+<h3 id="solution-3-use-absolute-paths">Solution 3: Use Absolute Paths</h3>
+<p>If you know where a tool is installed, use its absolute path:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># Instead of:</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>node<span class="w"> </span>script.js
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="c1"># Use:</span>
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>/opt/homebrew/bin/node<span class="w"> </span>script.js
+</span></code></pre></div>
+<h3 id="solution-4-source-your-configuration">Solution 4: Source Your Configuration</h3>
+<p>You can explicitly source your shell configuration at the start of a script:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nb">source</span><span class="w"> </span>~/.zshrc
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="c1"># Now run your commands</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>node<span class="w"> </span>script.js
+</span></code></pre></div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>This adds startup time to every script execution and may cause issues if your <code>.zshrc</code> contains interactive-only commands.</p>
+</div>
+<h3 id="solution-5-set-path-in-the-script">Solution 5: Set PATH in the Script</h3>
+<p>For portability, set the required paths directly in your script:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">PATH</span><span class="o">=</span><span class="s2">"/opt/homebrew/bin:</span><span class="nv">$HOME</span><span class="s2">/.local/bin:</span><span class="nv">$PATH</span><span class="s2">"</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>node<span class="w"> </span>script.js
+</span></code></pre></div>
+<h2 id="environment-managers">Environment Managers</h2>
+<p>Tools like <code>nvm</code>, <code>pyenv</code>, <code>rbenv</code>, and <code>conda</code> often initialize themselves in <code>.zshrc</code> or <code>.bashrc</code>. To use them in script blocks:</p>
+<h3 id="nvm-node-version-manager">nvm (Node Version Manager)</h3>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">NVM_DIR</span><span class="o">=</span><span class="s2">"</span><span class="nv">$HOME</span><span class="s2">/.nvm"</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="o">[</span><span class="w"> </span>-s<span class="w"> </span><span class="s2">"</span><span class="nv">$NVM_DIR</span><span class="s2">/nvm.sh"</span><span class="w"> </span><span class="o">]</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="nb">source</span><span class="w"> </span><span class="s2">"</span><span class="nv">$NVM_DIR</span><span class="s2">/nvm.sh"</span>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>node<span class="w"> </span>--version
+</span></code></pre></div>
+<h3 id="pyenv">pyenv</h3>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">PYENV_ROOT</span><span class="o">=</span><span class="s2">"</span><span class="nv">$HOME</span><span class="s2">/.pyenv"</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="nb">export</span><span class="w"> </span><span class="nv">PATH</span><span class="o">=</span><span class="s2">"</span><span class="nv">$PYENV_ROOT</span><span class="s2">/bin:</span><span class="nv">$PATH</span><span class="s2">"</span>
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="nb">eval</span><span class="w"> </span><span class="s2">"</span><span class="k">$(</span>pyenv<span class="w"> </span>init<span class="w"> </span>-<span class="k">)</span><span class="s2">"</span>
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>python<span class="w"> </span>--version
+</span></code></pre></div>
+<h3 id="rbenv">rbenv</h3>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">PATH</span><span class="o">=</span><span class="s2">"</span><span class="nv">$HOME</span><span class="s2">/.rbenv/bin:</span><span class="nv">$PATH</span><span class="s2">"</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="nb">eval</span><span class="w"> </span><span class="s2">"</span><span class="k">$(</span>rbenv<span class="w"> </span>init<span class="w"> </span>-<span class="k">)</span><span class="s2">"</span>
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>ruby<span class="w"> </span>--version
+</span></code></pre></div>
+<h3 id="homebrew-macos">Homebrew (macOS)</h3>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="nb">eval</span><span class="w"> </span><span class="s2">"</span><span class="k">$(</span>/opt/homebrew/bin/brew<span class="w"> </span>shellenv<span class="k">)</span><span class="s2">"</span>
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="c1"># Now Homebrew-installed tools are available</span>
+</span></code></pre></div>
+<h2 id="using-terminal-blocks-instead">Using Terminal Blocks Instead</h2>
+<p>If you need full interactive shell features—including your complete environment, aliases, and formatted output—use a <a href="../blocks/executable/terminal/">Terminal block</a> instead of a Script block. Terminal blocks run an interactive shell session with your full configuration loaded.</p>
+<p>The tradeoff is that Terminal blocks:</p>
+<ul>
+<li>Are slower to start</li>
+<li>Cannot have their output captured as a variable (you must use <code>$ATUIN_OUTPUT_VARS</code>)</li>
+<li>Require an explicit <code>exit</code> command for serial execution to continue</li>
+</ul>
 
 
 
@@ -1442,7 +1968,7 @@
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"></path></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-timeago" title="September 28, 2025 19:58:35 UTC"><span class="timeago" datetime="2025-09-28T19:58:35+00:00" locale="en"></span></span><span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-iso_date" title="September 28, 2025 19:58:35 UTC">2025-09-28</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-timeago" title="December 7, 2025 05:07:03 UTC"><span class="timeago" datetime="2025-12-07T05:07:03+00:00" locale="en"></span></span><span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-iso_date" title="December 7, 2025 05:07:03 UTC">2025-12-07</span>
   </span>
 
     
@@ -1452,7 +1978,7 @@
     <span class="md-icon" title="Created">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.47 15.08 11 13V7h1.5v5.25l3.08 1.83c-.41.28-.79.62-1.11 1m-1.39 4.84c-.36.05-.71.08-1.08.08-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8c0 .37-.03.72-.08 1.08.69.1 1.33.32 1.92.64.1-.56.16-1.13.16-1.72 0-5.5-4.5-10-10-10S2 6.5 2 12s4.47 10 10 10c.59 0 1.16-.06 1.72-.16-.32-.59-.54-1.23-.64-1.92M18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3z"></path></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-timeago" title="September 19, 2025 22:28:18 UTC"><span class="timeago" datetime="2025-09-19T22:28:18+00:00" locale="en"></span></span><span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-iso_date" title="September 19, 2025 22:28:18 UTC">2025-09-19</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-timeago" title="December 7, 2025 05:07:03 UTC"><span class="timeago" datetime="2025-12-07T05:07:03+00:00" locale="en"></span></span><span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-iso_date" title="December 7, 2025 05:07:03 UTC">2025-12-07</span>
   </span>
 
     
