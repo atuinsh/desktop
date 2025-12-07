@@ -58,12 +58,12 @@ The Atuin CLI/sync server and Atuin Desktop are completely separate applications
 
 By default, Atuin Runbooks are backed by CRDT-based documents, which cannot be edited in an external editor. However, **offline workspaces** store runbooks as flat files on your hard drive, and these can be edited externally—though the file format isn't optimized for this. We're working on a markdown-based file format to improve this experience.
 
-Our intention with Atuin Hub is to make synchronizing, sharing, and editing Runbooks as frictionless as possible. If Hub isn't meeting your needs, or you prefer VCS-based runbook management, we'd love to hear from you on [our forum](https://forum.atuin.sh) or [Discord](https://discord.gg/atuin).
+Our intention with Atuin Hub is to make synchronizing, sharing, and editing Runbooks as frictionless as possible. If Hub isn't meeting your needs, or you prefer VCS-based runbook management, we'd love to hear from you on [our forum](https://forum.atuin.sh) or [Discord](https://discord.gg/jR3tfchVvW).
 
 ## Getting Help
 
 If your issue isn't covered here:
 
 - Check [our forum](https://forum.atuin.sh) for community discussions
-- Join [our Discord](https://discord.gg/atuin) for real-time help
+- Join [our Discord](https://discord.gg/jR3tfchVvW) for real-time help
 - [Open an issue on GitHub](https://github.com/atuinsh/desktop/issues) for bugs or feature requests
