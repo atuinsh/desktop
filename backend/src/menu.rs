@@ -250,13 +250,13 @@ pub fn menu<R: Runtime>(app_handle: &AppHandle<R>, tab_items: &[TabItem]) -> Res
         "Help",
         true,
         &[
-            &open_new_runtime_explainer_runbook(app_handle)?,
             &link_menu_item(
                 "documentation".try_into()?,
                 "Documentation",
                 "https://man.atuin.sh",
                 app_handle,
             )?,
+            &open_new_runtime_explainer_runbook(app_handle)?,
             &PredefinedMenuItem::separator(app_handle)?,
             &link_menu_item(
                 "twitter".try_into()?,
