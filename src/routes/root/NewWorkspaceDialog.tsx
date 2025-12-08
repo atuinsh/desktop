@@ -72,6 +72,26 @@ export default function NewWorkspaceDialog({ onAccept, onCancel }: NewWorkspaceD
     onAccept(name, isOnline, Some(selectedFolder));
   }
 
+  function handleNameChange(e: React.ChangeEvent<HTMLInputElement>) {
+    setName(e.target.value);
+  }
+
+  function handleSelectOnline() {
+    setIsOnline(true);
+  }
+
+  function handleSelectOffline() {
+    setIsOnline(false);
+  }
+
+  function handleSelectFolder() {
+    open({
+      directory: true,
+    }).then((folder) => {
+      setSelectedFolder(folder);
+    });
+  }
+
   return (
     <Modal isOpen={true} onClose={closeAndReset}>
       <ModalContent>
@@ -81,7 +101,7 @@ export default function NewWorkspaceDialog({ onAccept, onCancel }: NewWorkspaceD
             <Input
               label="Workspace Name"
               value={name}
-              onChange={(e) => setName(e.target.value)}
+              onChange={handleNameChange}
               autoFocus
             />
 
@@ -93,7 +113,7 @@ export default function NewWorkspaceDialog({ onAccept, onCancel }: NewWorkspaceD
                     <input
                       type="radio"
                       checked={isOnline}
-                      onChange={() => setIsOnline(true)}
+                      onChange={handleSelectOnline}
                       className="mr-2"
                     />
                     <span>Online - Sync across devices</span>
@@ -124,7 +144,7 @@ export default function NewWorkspaceDialog({ onAccept, onCancel }: NewWorkspaceD
                     <input
                       type="radio"
                       checked={!isOnline}
-                      onChange={() => setIsOnline(false)}
+                      onChange={handleSelectOffline}
                       className="mr-2"
                     />
                     <div>Offline - Local only</div>
@@ -136,13 +156,7 @@ export default function NewWorkspaceDialog({ onAccept, onCancel }: NewWorkspaceD
                       isIconOnly
                       isDisabled={isOnline}
                       className="mr-2"
-                      onPress={() => {
-                        open({
-                          directory: true,
-                        }).then((folder) => {
-                          setSelectedFolder(folder);
-                        });
-                      }}
+                      onPress={handleSelectFolder}
                     >
                       <FolderIcon />
                     </Button>

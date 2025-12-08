@@ -76,6 +76,11 @@ export default function InviteFriendsModal(props: InviteFriendsModalProps) {
     setEmails((emails) => emails.filter((e) => e.email !== email.email));
   }
 
+  function handleFormSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    handleAddEmail();
+  }
+
   async function handleSend() {
     if (connectionState !== ConnectionState.Online) {
       addToast({
@@ -120,10 +125,7 @@ export default function InviteFriendsModal(props: InviteFriendsModalProps) {
           )}
           <form
             className="flex flex-row gap-2 items-center"
-            onSubmit={(e) => {
-              e.preventDefault();
-              handleAddEmail();
-            }}
+            onSubmit={handleFormSubmit}
           >
             <Input
               label="Add invite"

@@ -446,6 +446,10 @@ export default function ConvertWorkspaceDialog(props: ConvertWorkspaceDialogProp
     openUrl("https://forum.atuin.sh/t/file-based-runbooks-are-coming/1304");
   }
 
+  function handleSetSelectedPath(path: string | null) {
+    dispatchFolderInfo({ type: "setPath", path });
+  }
+
   return (
     <Modal
       size="lg"
@@ -491,7 +495,7 @@ export default function ConvertWorkspaceDialog(props: ConvertWorkspaceDialogProp
               <p>Please choose a folder in which to store the workspace.</p>
               <FolderPicker
                 selectedPath={folderInfo.path}
-                setSelectedPath={(path) => dispatchFolderInfo({ type: "setPath", path })}
+                setSelectedPath={handleSetSelectedPath}
                 folderHasContents={folderInfo.hasContents}
                 folderIsAlreadyWorkspace={folderInfo.isAlreadyWorkspace}
                 folderIsChildOfWorkspace={folderInfo.isChildOfWorkspace}
@@ -510,7 +514,7 @@ export default function ConvertWorkspaceDialog(props: ConvertWorkspaceDialogProp
               <p>Please choose a folder in which to create the new offline-only workspace.</p>
               <FolderPicker
                 selectedPath={folderInfo.path}
-                setSelectedPath={(path) => dispatchFolderInfo({ type: "setPath", path })}
+                setSelectedPath={handleSetSelectedPath}
                 folderHasContents={folderInfo.hasContents}
                 folderIsAlreadyWorkspace={folderInfo.isAlreadyWorkspace}
                 folderIsChildOfWorkspace={folderInfo.isChildOfWorkspace}
@@ -556,6 +560,14 @@ interface FolderPickerProps {
 }
 
 function FolderPicker(props: FolderPickerProps) {
+  function handleSelectFolder() {
+    open({
+      directory: true,
+    }).then((folder) => {
+      props.setSelectedPath(folder);
+    });
+  }
+
   return (
     <>
       <div className="flex items-center">
@@ -564,13 +576,7 @@ function FolderPicker(props: FolderPickerProps) {
             isIconOnly
             className="mr-2"
             disabled={props.disabled}
-            onPress={() => {
-              open({
-                directory: true,
-              }).then((folder) => {
-                props.setSelectedPath(folder);
-              });
-            }}
+            onPress={handleSelectFolder}
           >
             <FolderIcon />
           </Button>

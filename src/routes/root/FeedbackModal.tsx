@@ -86,6 +86,14 @@ export default function FeedbackModal(props: FeedbackModalProps) {
     }
   }
 
+  function handleFeedbackChange(e: React.ChangeEvent<HTMLInputElement>) {
+    dispatch({ type: "set_feedback", feedback: e.target.value });
+  }
+
+  function handleEmailChange(value: string) {
+    dispatch({ type: "set_email", email: value });
+  }
+
   return (
     <Modal isOpen={props.isOpen} onClose={handleClose}>
       <ModalContent>
@@ -97,12 +105,12 @@ export default function FeedbackModal(props: FeedbackModalProps) {
               <Textarea
                 placeholder="What would you like to share with us?"
                 value={state.feedback}
-                onChange={(e) => dispatch({ type: "set_feedback", feedback: e.target.value })}
+                onChange={handleFeedbackChange}
               />
               <Input
                 placeholder="Email (optional)"
                 value={state.email}
-                onValueChange={(value) => dispatch({ type: "set_email", email: value })}
+                onValueChange={handleEmailChange}
               />
               {state.error && (
                 <div className="text-danger-600">

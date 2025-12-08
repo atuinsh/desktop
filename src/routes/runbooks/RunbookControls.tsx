@@ -223,6 +223,12 @@ export default function RunbookControls(props: RunbookControlsProps) {
     open("https://man.atuin.sh/workspaces/");
   }
 
+  function handleSlugKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Enter") {
+      slugApi.submitValue();
+    }
+  }
+
   return (
     <div className="flex flex-col w-full p-2 border-b">
       <div className="flex items-center justify-between select-none">
@@ -278,11 +284,7 @@ export default function RunbookControls(props: RunbookControlsProps) {
                 autoCapitalize="off"
                 autoComplete="off"
                 autoCorrect="off"
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    slugApi.submitValue();
-                  }
-                }}
+                onKeyDown={handleSlugKeyDown}
               />
             </div>
             <div className={tableCellButton}>

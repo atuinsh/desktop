@@ -175,6 +175,46 @@ function App() {
     openTab("/settings", "Settings", TabIcon.SETTINGS);
   }
 
+  function handleOpenHistory() {
+    openTab("/history", "History", TabIcon.HISTORY);
+  }
+
+  function handleOpenStats() {
+    openTab("/stats", "Stats", TabIcon.STATS);
+  }
+
+  function handleOpenFeedback() {
+    setShowFeedback(true);
+  }
+
+  function handleCloseFeedback() {
+    setShowFeedback(false);
+  }
+
+  function handleOpenInviteFriends() {
+    setShowInviteFriends(true);
+  }
+
+  function handleCloseInviteFriends() {
+    setShowInviteFriends(false);
+  }
+
+  function handleCloseDeleteRunbookModal() {
+    setRunbookIdToDelete(null);
+  }
+
+  function handleCloseDesktopImportModal() {
+    setOpenInDesktopImport(null);
+  }
+
+  function handleOpenHelpAndFeedback() {
+    open("https://dub.sh/atuin-desktop-beta");
+  }
+
+  function handleOpenLogin() {
+    open(AtuinEnv.url("/settings/desktop-connect"));
+  }
+
   useEffect(() => {
     (async () => {
       const onboardingComplete = await isOnboardingComplete();
@@ -389,7 +429,7 @@ function App() {
         <DropdownItem
           key="logout"
           description="Sign out of Atuin Hub"
-          onPress={() => logOut()}
+          onPress={logOut}
           color="danger"
         >
           Sign out
@@ -400,7 +440,7 @@ function App() {
         <DropdownItem
           key="login"
           description="Sign in to Atuin Hub"
-          onPress={() => open(AtuinEnv.url("/settings/desktop-connect"))}
+          onPress={handleOpenLogin}
         >
           Log in
         </DropdownItem>
@@ -957,6 +997,14 @@ function App() {
     handleDeepLink(atuinUrl, navigateToRunbook);
   }
 
+  function showWorkspaceDialog() {
+    setShowNewWorkspaceDialog(true);
+  }
+
+  function hideWorkspaceDialog() {
+    setShowNewWorkspaceDialog(false);
+  }
+
   return (
     <div
       className="flex w-screen dark:bg-default-50"
@@ -1006,7 +1054,7 @@ function App() {
               <Tooltip content="History" placement="right">
                 <Button
                   isIconOnly
-                  onPress={() => openTab("/history", "History", TabIcon.HISTORY)}
+                  onPress={handleOpenHistory}
                   size="md"
                   variant="light"
                   className="ml-2"
@@ -1018,7 +1066,7 @@ function App() {
               <Tooltip content="Stats" placement="right">
                 <Button
                   isIconOnly
-                  onPress={() => openTab("/stats", "Stats", TabIcon.STATS)}
+                  onPress={handleOpenStats}
                   size="md"
                   variant="light"
                   className="ml-2"
@@ -1063,7 +1111,7 @@ function App() {
 
             <div className="flex flex-col items-center gap-4 px-3">
               <Tooltip content="Share your feedback with us">
-                <Button isIconOnly variant="light" size="lg" onPress={() => setShowFeedback(true)}>
+                <Button isIconOnly variant="light" size="lg" onPress={handleOpenFeedback}>
                   <MessageCircleHeartIcon className="w-6 h-6" size={24} />
                 </Button>
               </Tooltip>
@@ -1074,7 +1122,7 @@ function App() {
                     isIconOnly
                     variant="light"
                     size="lg"
-                    onPress={() => setShowInviteFriends(true)}
+                    onPress={handleOpenInviteFriends}
                   >
                     <MailPlusIcon className="w-6 h-6" size={24} />
                   </Button>
@@ -1158,7 +1206,7 @@ function App() {
                     <DropdownItem
                       key="help_and_feedback"
                       description="Get in touch"
-                      onPress={() => open("https://dub.sh/atuin-desktop-beta")}
+                      onPress={handleOpenHelpAndFeedback}
                     >
                       Help & Feedback
                     </DropdownItem>
@@ -1186,7 +1234,7 @@ function App() {
             >
               {sidebarOpen && (
                 <List
-                  onStartCreateWorkspace={() => setShowNewWorkspaceDialog(true)}
+                  onStartCreateWorkspace={showWorkspaceDialog}
                   onStartCreateRunbook={handleStartCreateRunbook}
                   moveItemsToWorkspace={handleMoveItemsToWorkspace}
                   ref={listRef}
@@ -1208,21 +1256,21 @@ function App() {
           {showNewWorkspaceDialog && (
             <NewWorkspaceDialog
               onAccept={handleAcceptNewWorkspace}
-              onCancel={() => setShowNewWorkspaceDialog(false)}
+              onCancel={hideWorkspaceDialog}
             />
           )}
           <InviteFriendsModal
             isOpen={showInviteFriends}
-            onClose={() => setShowInviteFriends(false)}
+            onClose={handleCloseInviteFriends}
           />
-          <FeedbackModal isOpen={showFeedback} onClose={() => setShowFeedback(false)} />
+          <FeedbackModal isOpen={showFeedback} onClose={handleCloseFeedback} />
         </div>
 
         <DialogManager />
         {runbookIdToDelete && (
           <DeleteRunbookModal
             runbookId={runbookIdToDelete}
-            onClose={() => setRunbookIdToDelete(null)}
+            onClose={handleCloseDeleteRunbookModal}
             doDeleteRunbook={doDeleteRunbook}
           />
         )}
@@ -1237,7 +1285,7 @@ function App() {
           <DesktopImportModal
             runbookId={openInDesktopImport.id}
             tag={openInDesktopImport.tag}
-            onClose={() => setOpenInDesktopImport(null)}
+            onClose={handleCloseDesktopImportModal}
             activateRunbook={navigateToRunbook}
           />
         )}

@@ -168,6 +168,23 @@ const NoteSidebar = forwardRef((props: NotesSidebarProps, ref: React.ForwardedRe
     open(AtuinEnv.url(`/${user.username}?tab=orgs`));
   };
 
+  function handleBrowseToPersonalProfile() {
+    handleBrowseToOwner(user.username);
+  }
+
+  function handleSelectPersonalOrg() {
+    setSelectedOrg(null);
+    track_event("org.switch", { to: "personal" });
+  }
+
+  function handleNewRunbookInCurrentWorkspace() {
+    handleNewRunbook(currentWorkspaceId, null);
+  }
+
+  function handleStartDeleteRunbook(_workspaceId: string, runbookId: string) {
+    promptDeleteRunbook(runbookId);
+  }
+
   async function handleOpenSortMenu() {
     const sortMenu = await Menu.new({
       id: "sort_menu",
@@ -376,7 +393,7 @@ const NoteSidebar = forwardRef((props: NotesSidebarProps, ref: React.ForwardedRe
                         isIconOnly
                         size="sm"
                         variant="light"
-                        onPress={() => handleBrowseToOwner(user.username)}
+                        onPress={handleBrowseToPersonalProfile}
                       >
                         <ExternalLinkIcon
                           size={18}
@@ -384,10 +401,7 @@ const NoteSidebar = forwardRef((props: NotesSidebarProps, ref: React.ForwardedRe
                         />
                       </Button>
                     }
-                    onPress={() => {
-                      setSelectedOrg(null);
-                      track_event("org.switch", { to: "personal" });
-                    }}
+                    onPress={handleSelectPersonalOrg}
                   >
                     {user.isLoggedIn() ? <h3>{user.username} (Personal)</h3> : <h3>Personal</h3>}
                   </DropdownItem>
@@ -455,7 +469,7 @@ const NoteSidebar = forwardRef((props: NotesSidebarProps, ref: React.ForwardedRe
                 <Button
                   size="sm"
                   variant="flat"
-                  onPress={() => handleNewRunbook(currentWorkspaceId, null)}
+                  onPress={handleNewRunbookInCurrentWorkspace}
                 >
                   <Plus size={18} /> New Runbook
                 </Button>
@@ -464,7 +478,7 @@ const NoteSidebar = forwardRef((props: NotesSidebarProps, ref: React.ForwardedRe
                   variant="flat"
                   isIconOnly
                   className="border-l-2 border-gray-200 dark:border-gray-700"
-                  onPress={() => handleNewRunbookMenu()}
+                  onPress={handleNewRunbookMenu}
                 >
                   <ChevronDownIcon size={18} />
                 </Button>
@@ -507,14 +521,9 @@ const NoteSidebar = forwardRef((props: NotesSidebarProps, ref: React.ForwardedRe
                           focused={focusedWorkspaceId === workspace.get("id")}
                           sortBy={sortBy}
                           onActivateRunbook={activateRunbook}
-                          onStartCreateRunbook={(
-                            workspaceId: string,
-                            parentFolderId: string | null,
-                          ) => handleNewRunbook(workspaceId, parentFolderId)}
+                          onStartCreateRunbook={handleNewRunbook}
                           onStartCreateWorkspace={props.onStartCreateWorkspace}
-                          onStartDeleteRunbook={(_workspaceId: string, runbookId: string) =>
-                            promptDeleteRunbook(runbookId)
-                          }
+                          onStartDeleteRunbook={handleStartDeleteRunbook}
                           onStartMoveItemsToWorkspace={props.moveItemsToWorkspace}
                         />
                       </div>

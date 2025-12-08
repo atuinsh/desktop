@@ -124,16 +124,18 @@ export default function CommandMenu(props: CommandMenuProps) {
     [currentWorkspaceId, onItemSelect],
   );
 
+  function handleOpenChange(open: boolean) {
+    if (!open) {
+      setQuery("");
+    }
+    setOpen(open);
+  }
+
   return (
     <Dialog
       modal={false}
       open={isOpen}
-      onOpenChange={(open) => {
-        if (!open) {
-          setQuery("");
-        }
-        setOpen(open);
-      }}
+      onOpenChange={handleOpenChange}
     >
       <DialogPortal>
         <DialogContent className="overflow-hidden p-0 data-[state=open]:animate-none data-[state=closed]:animate-none">

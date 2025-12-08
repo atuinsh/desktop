@@ -131,6 +131,29 @@ const EditorBlock = ({
       .toSorted((a, b) => a.name.localeCompare(b.name));
   }, [languages, filterText]);
 
+  function handleCopyFromVarChange(e: any) {
+    setCopyFromVar(e.currentKey ?? null);
+  }
+
+  function handleApplyCopyFromVar() {
+    if (copyFromVar) {
+      onChange(context.variables[copyFromVar] || "");
+      setCopyFromVar(null);
+    }
+  }
+
+  function handleVariableNameInputChange(e: React.ChangeEvent<HTMLInputElement>) {
+    onVariableNameChange(e.target.value);
+  }
+
+  function handleToggleCollapseCode() {
+    setCollapseCode(!collapseCode);
+  }
+
+  function handleFilterTextChange(e: React.ChangeEvent<HTMLInputElement>) {
+    setFilterText(e.target.value);
+  }
+
   useEffect(() => {
     (async () => {
       if (!selected) return;
@@ -181,7 +204,7 @@ const EditorBlock = ({
                         variant="flat"
                         placeholder="Select variable"
                         value={variableName}
-                        onSelectionChange={(e) => setCopyFromVar(e.currentKey ?? null)}
+                        onSelectionChange={handleCopyFromVarChange}
                         disabled={!isEditable}
                       >
                         {variables
@@ -195,12 +218,7 @@ const EditorBlock = ({
                         size="sm"
                         variant="flat"
                         isDisabled={!copyFromVar}
-                        onPress={() => {
-                          if (copyFromVar) {
-                            onChange(context.variables[copyFromVar] || "");
-                            setCopyFromVar(null);
-                          }
-                        }}
+                        onPress={handleApplyCopyFromVar}
                       >
                         Apply
                       </Button>
@@ -216,13 +234,13 @@ const EditorBlock = ({
                 size="sm"
                 placeholder="Variable"
                 value={variableName}
-                onChange={(e) => onVariableNameChange(e.target.value)}
+                onChange={handleVariableNameInputChange}
                 disabled={!isEditable}
                 className="font-mono text-xs"
               />
               <Tooltip content={collapseCode ? "Expand code" : "Collapse code"}>
                 <Button
-                  onPress={() => setCollapseCode(!collapseCode)}
+                  onPress={handleToggleCollapseCode}
                   size="sm"
                   variant="flat"
                   isIconOnly
@@ -263,7 +281,7 @@ const EditorBlock = ({
                       type="text"
                       placeholder="Filter languages..."
                       value={filterText}
-                      onChange={(e) => setFilterText(e.target.value)}
+                      onChange={handleFilterTextChange}
                       className="w-full"
                       onClick={(e) => e.stopPropagation()}
                       disabled={!isEditable}
