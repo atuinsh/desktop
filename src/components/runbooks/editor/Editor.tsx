@@ -289,6 +289,11 @@ export default function Editor({ runbook, editable, runbookEditor }: EditorProps
   const [generatedBlockIds, setGeneratedBlockIds] = useState<string[]>([]);
   const [generatedBlockCount, setGeneratedBlockCount] = useState(0);
 
+  // Edit mode state for follow-up adjustments
+  const [isEditingGenerated, setIsEditingGenerated] = useState(false);
+  const [editPrompt, setEditPrompt] = useState("");
+  const isProgrammaticEditRef = useRef(false);
+
   // AI is enabled for logged-in Hub users
   const isLoggedIn = useStore((state) => state.isLoggedIn);
   const aiEnabledState = isLoggedIn();
@@ -573,7 +578,65 @@ export default function Editor({ runbook, editable, runbookEditor }: EditorProps
     setPostGenerationBlockId(null);
     setGeneratedBlockIds([]);
     setGeneratedBlockCount(0);
+    setIsEditingGenerated(false);
+    setEditPrompt("");
   }, []);
+
+  // Handle edit submission for follow-up adjustments
+  const handleEditSubmit = useCallback(async () => {
+    if (!editor || !postGenerationBlockId || !editPrompt.trim() || generatedBlockIds.length === 0) return;
+
+    const blockToEditId = generatedBlockIds[0];
+
+    // Use the same loading overlay as initial generation
+    setIsEditingGenerated(false);
+    setIsGeneratingInline(true);
+    setGeneratingBlockId(blockToEditId);
+    setLoadingStatus("loading");
+
+    try {
+      // Get the current block to edit
+      const currentBlock = editor.document.find((b: any) => b.id === blockToEditId);
+      if (!currentBlock) {
+        throw new Error("Block not found");
+      }
+
+      const context = await getEditorContext();
+      const { generateOrEditBlock } = await import("@/api/ai");
+
+      const result = await generateOrEditBlock({
+        action: "edit",
+        block: currentBlock,
+        instruction: editPrompt,
+        document_markdown: context?.documentMarkdown,
+      });
+
+      // Replace the block with the edited version
+      const newBlock = { ...result.block, id: currentBlock.id };
+      isProgrammaticEditRef.current = true;
+      editor.updateBlock(currentBlock.id, newBlock as any);
+      isProgrammaticEditRef.current = false;
+
+      // Reset edit prompt but stay in post-generation mode
+      setEditPrompt("");
+
+      track_event("runbooks.ai.post_generation_edit", {
+        blockType: currentBlock.type,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to edit block";
+      addToast({
+        title: "Edit failed",
+        description: message,
+        color: "danger",
+      });
+      track_event("runbooks.ai.post_generation_edit_error", { error: message });
+    } finally {
+      // Clear loading state - this will show the focus overlay again
+      setIsGeneratingInline(false);
+      setGeneratingBlockId(null);
+    }
+  }, [editor, postGenerationBlockId, editPrompt, generatedBlockIds, getEditorContext]);
 
   // Add keyboard shortcuts
   useEffect(() => {
@@ -582,6 +645,11 @@ export default function Editor({ runbook, editable, runbookEditor }: EditorProps
 
       // Handle post-generation mode shortcuts
       if (postGenerationBlockId) {
+        // Don't handle shortcuts while editing (except escape which is handled in the input)
+        if (isEditingGenerated) {
+          return;
+        }
+
         // Escape - dismiss and delete generated blocks
         if (e.key === "Escape") {
           e.preventDefault();
@@ -592,6 +660,15 @@ export default function Editor({ runbook, editable, runbookEditor }: EditorProps
           }
           clearPostGenerationMode();
           track_event("runbooks.ai.post_generation_dismiss");
+          return;
+        }
+
+        // E - enter edit mode for follow-up adjustments
+        if (e.key === "e" || e.key === "E") {
+          e.preventDefault();
+          e.stopPropagation();
+          setIsEditingGenerated(true);
+          track_event("runbooks.ai.post_generation_edit_start");
           return;
         }
 
@@ -711,7 +788,7 @@ export default function Editor({ runbook, editable, runbookEditor }: EditorProps
     return () => {
       document.removeEventListener("keydown", handleKeyDown, { capture: true });
     };
-  }, [editor, showAIPopup, isGeneratingInline, handleInlineGenerate, postGenerationBlockId, generatedBlockIds, generatedBlockCount, runbook?.id, clearPostGenerationMode]);
+  }, [editor, showAIPopup, isGeneratingInline, handleInlineGenerate, postGenerationBlockId, generatedBlockIds, generatedBlockCount, runbook?.id, clearPostGenerationMode, isEditingGenerated]);
 
   // Handle visibility and scroll restoration when runbook changes
   useLayoutEffect(() => {
@@ -900,8 +977,8 @@ export default function Editor({ runbook, editable, runbookEditor }: EditorProps
         sideMenu={false}
         onChange={() => {
           runbookEditor.save(runbook, editor);
-          // Clear post-generation mode when user edits anything
-          if (postGenerationBlockId) {
+          // Clear post-generation mode when user edits anything (but not programmatic edits)
+          if (postGenerationBlockId && !isProgrammaticEditRef.current) {
             clearPostGenerationMode();
           }
         }}
@@ -1009,7 +1086,15 @@ export default function Editor({ runbook, editable, runbookEditor }: EditorProps
 
       {/* Post-generation focus overlay - shows after AI generates a block */}
       {postGenerationBlockId && !isGeneratingInline && (
-        <AIFocusOverlay blockId={postGenerationBlockId} editor={editor} />
+        <AIFocusOverlay
+          blockId={postGenerationBlockId}
+          editor={editor}
+          isEditing={isEditingGenerated}
+          editValue={editPrompt}
+          onEditChange={setEditPrompt}
+          onEditSubmit={handleEditSubmit}
+          onEditCancel={() => setIsEditingGenerated(false)}
+        />
       )}
 
       {/* Runbook link popup */}
