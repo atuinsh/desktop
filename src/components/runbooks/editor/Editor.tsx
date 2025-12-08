@@ -34,6 +34,7 @@ import { AILoadingOverlay } from "./ui/AILoadingBlock";
 import { AIFocusOverlay } from "./ui/AIFocusOverlay";
 import { RunbookLinkPopup } from "./ui/RunbookLinkPopup";
 import { executeBlock } from "@/lib/runtime";
+import { onBlockFinished } from "@/lib/events/grand_central";
 import { SparklesIcon } from "lucide-react";
 
 import { insertSQLite } from "@/components/runbooks/editor/blocks/SQLite/SQLite";
@@ -285,6 +286,7 @@ export default function Editor({ runbook, editable, runbookEditor }: EditorProps
 
   // Post-generation mode state - after AI generates a block, user can Cmd+Enter to run or Tab to continue
   const [postGenerationBlockId, setPostGenerationBlockId] = useState<string | null>(null);
+  const [generatedBlockIds, setGeneratedBlockIds] = useState<string[]>([]);
   const [generatedBlockCount, setGeneratedBlockCount] = useState(0);
 
   // AI is enabled for logged-in Hub users
@@ -492,10 +494,12 @@ export default function Editor({ runbook, editable, runbookEditor }: EditorProps
         const blocksToInsert = result.blocks.slice(0, 3);
 
         let lastInsertedId = block.id;
+        const insertedIds: string[] = [];
         for (const newBlock of blocksToInsert) {
           const inserted = editor.insertBlocks([newBlock as any], lastInsertedId, "after");
           if (inserted?.[0]?.id) {
             lastInsertedId = inserted[0].id;
+            insertedIds.push(inserted[0].id);
           }
         }
 
@@ -507,6 +511,7 @@ export default function Editor({ runbook, editable, runbookEditor }: EditorProps
         // Enter post-generation mode - user can Cmd+Enter to run or Tab to continue
         if (blocksToInsert.length > 0) {
           setPostGenerationBlockId(lastInsertedId);
+          setGeneratedBlockIds(insertedIds);
           setGeneratedBlockCount(blocksToInsert.length);
         }
 
@@ -566,6 +571,7 @@ export default function Editor({ runbook, editable, runbookEditor }: EditorProps
   // Clear post-generation mode
   const clearPostGenerationMode = useCallback(() => {
     setPostGenerationBlockId(null);
+    setGeneratedBlockIds([]);
     setGeneratedBlockCount(0);
   }, []);
 
@@ -576,9 +582,23 @@ export default function Editor({ runbook, editable, runbookEditor }: EditorProps
 
       // Handle post-generation mode shortcuts
       if (postGenerationBlockId) {
+        // Escape - dismiss and delete generated blocks
+        if (e.key === "Escape") {
+          e.preventDefault();
+          e.stopPropagation();
+          // Delete all generated blocks
+          if (generatedBlockIds.length > 0) {
+            editor.removeBlocks(generatedBlockIds);
+          }
+          clearPostGenerationMode();
+          track_event("runbooks.ai.post_generation_dismiss");
+          return;
+        }
+
         // Tab - insert paragraph after generated block and continue writing
         if (e.key === "Tab" && !e.metaKey && !e.ctrlKey && !e.altKey) {
           e.preventDefault();
+          e.stopPropagation();
           const newParagraph = editor.insertBlocks(
             [{ type: "paragraph", content: "" }],
             postGenerationBlockId,
@@ -592,9 +612,10 @@ export default function Editor({ runbook, editable, runbookEditor }: EditorProps
           return;
         }
 
-        // Cmd+Enter - run the generated block
+        // Cmd+Enter - accept and run the generated block
         if (e.metaKey && e.key === "Enter") {
           e.preventDefault();
+          e.stopPropagation();
 
           // Check if multiple blocks were generated
           if (generatedBlockCount > 1) {
@@ -621,6 +642,17 @@ export default function Editor({ runbook, editable, runbookEditor }: EditorProps
               color: "warning",
             });
           }
+
+          // Move cursor after the block and insert a new paragraph
+          const newParagraph = editor.insertBlocks(
+            [{ type: "paragraph", content: "" }],
+            postGenerationBlockId,
+            "after"
+          );
+          if (newParagraph?.[0]?.id) {
+            editor.setTextCursorPosition(newParagraph[0].id, "start");
+          }
+
           clearPostGenerationMode();
           return;
         }
@@ -673,12 +705,13 @@ export default function Editor({ runbook, editable, runbookEditor }: EditorProps
       }
     };
 
-    document.addEventListener("keydown", handleKeyDown);
+    // Use capture phase to intercept before BlockNote handles the event
+    document.addEventListener("keydown", handleKeyDown, { capture: true });
 
     return () => {
-      document.removeEventListener("keydown", handleKeyDown);
+      document.removeEventListener("keydown", handleKeyDown, { capture: true });
     };
-  }, [editor, showAIPopup, isGeneratingInline, handleInlineGenerate, postGenerationBlockId, generatedBlockCount, runbook?.id, clearPostGenerationMode]);
+  }, [editor, showAIPopup, isGeneratingInline, handleInlineGenerate, postGenerationBlockId, generatedBlockIds, generatedBlockCount, runbook?.id, clearPostGenerationMode]);
 
   // Handle visibility and scroll restoration when runbook changes
   useLayoutEffect(() => {
