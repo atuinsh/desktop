@@ -14,6 +14,11 @@ const AccountModal = ({ close, isOpen }: { close: () => void; isOpen: boolean })
     await completeOnboarding();
   };
 
+  function handleConnectWithHub() {
+    handleClose();
+    open(AtuinEnv.url("/settings/desktop-connect"));
+  }
+
   return (
     <Modal
       disableAnimation
@@ -45,10 +50,7 @@ const AccountModal = ({ close, isOpen }: { close: () => void; isOpen: boolean })
               <Button
                 color="primary"
                 className="w-full text-lg font-semibold"
-                onPress={() => {
-                  handleClose();
-                  open(AtuinEnv.url("/settings/desktop-connect"));
-                }}
+                onPress={handleConnectWithHub}
               >
                 Connect with Hub
               </Button>
@@ -56,9 +58,7 @@ const AccountModal = ({ close, isOpen }: { close: () => void; isOpen: boolean })
                 color="default"
                 variant="flat"
                 className="w-full text-lg font-semibold opacity-60"
-                onPress={() => {
-                  handleClose();
-                }}
+                onPress={handleClose}
               >
                 Use offline
               </Button>

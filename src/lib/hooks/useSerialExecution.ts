@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   onSerialExecutionCancelled,
   onSerialExecutionCompleted,
@@ -25,15 +25,15 @@ export function useSerialExecution(runbookId: string | undefined | null) {
   const [isCancelled, setIsCancelled] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const start = () => {
+  const start = useCallback(() => {
     if (!runbookId) return;
     invoke("start_serial_execution", { documentId: runbookId });
-  };
+  }, [runbookId]);
 
-  const stop = () => {
+  const stop = useCallback(() => {
     if (!runbookId) return;
     invoke("stop_serial_execution", { documentId: runbookId });
-  };
+  }, [runbookId]);
 
   useEffect(() => {
     const unsubs: UnsubscribeFunction[] = [];

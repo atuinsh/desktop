@@ -17,6 +17,7 @@ nav:
   - "Workspaces": workspaces.md
   - "Templating": templating.md
   - "Secrets": secrets.md
+  - "Shell Environment": shell-environment.md
   - "Blocks":
       - blocks/index.md
       - "Executable":
@@ -46,6 +47,7 @@ nav:
       - hub/getting-started.md
       - "Sharing Runbooks": hub/sharing-runbooks.md
       - "Collaborative Editing": hub/collaborative-editing.md
+  - "Troubleshooting": troubleshooting.md
 
 theme:
   logo: ./images/icon.svg

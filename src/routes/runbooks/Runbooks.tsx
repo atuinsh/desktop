@@ -32,6 +32,7 @@ import {
 import DebugWindow from "@/lib/dev/DebugWindow";
 import { useSerialExecution } from "@/lib/hooks/useSerialExecution";
 import { Button, Spinner } from "@heroui/react";
+import AtuinEnv from "@/atuin_env";
 
 const Editor = React.lazy(() => import("@/components/runbooks/editor/Editor"));
 const Topbar = React.lazy(() => import("@/components/runbooks/TopBar/TopBar"));
@@ -112,15 +113,16 @@ export default function Runbooks() {
             // we need to set the workspace ID.
             setCurrentWorkspaceId(runbook.workspaceId);
           } else {
-            throw new Error(`Runbook ${runbookId} not found after sync`);
+            setFailedToSyncRunbook(true);
+            console.warn("Runbook not found after sync:", runbookId);
           }
+          setSyncingRunbook(false);
         } catch (err) {
           setFailedToSyncRunbook(true);
           console.warn(
             "Error syncing runbook; this could be normal if the runbook is offline",
             err,
           );
-        } finally {
           setSyncingRunbook(false);
         }
       })();
@@ -493,7 +495,7 @@ export default function Runbooks() {
     <RunbookIdContext.Provider value={currentRunbook?.id || null}>
       <DocumentBridgeContext.Provider value={documentBridge}>
         <div className="flex !w-full !max-w-full flex-row overflow-hidden h-full">
-          {runbookId && focusedBlockId && (
+          {AtuinEnv.isDev && runbookId && focusedBlockId && (
             <BlockContextDebug runbookId={runbookId} blockId={focusedBlockId} />
           )}
           {currentRunbook && readyToRender && (
@@ -573,7 +575,8 @@ export default function Runbooks() {
 }
 
 function BlockContextDebug({ runbookId, blockId }: { runbookId: string; blockId: string }) {
-  const blockContext = useBlockContext(blockId);
+  // Suppress errors because not all focused blocks actually have context
+  const blockContext = useBlockContext(blockId, true);
 
   return (
     <DebugWindow title="Block Context" id={`block-context-${runbookId}`}>

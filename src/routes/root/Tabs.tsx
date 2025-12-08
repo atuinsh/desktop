@@ -43,37 +43,21 @@ export const TabsContext = React.createContext<{
 });
 
 export default function Tabs() {
-  const {
-    tabs,
-    currentTabId,
-    openTab,
-    closeTab,
-    setTabTitle,
-    moveTab,
-    closeAllTabs,
-    closeOtherTabs,
-    closeLeftTabs,
-    closeRightTabs,
-    undoCloseTab,
-    setTabPtyCount,
-    incrementTabBadgeCount,
-    decrementTabBadgeCount,
-  } = useStore((state: AtuinState) => ({
-    tabs: state.tabs,
-    currentTabId: state.currentTabId,
-    openTab: state.openTab,
-    closeTab: state.closeTab,
-    moveTab: state.moveTab,
-    closeAllTabs: state.closeAllTabs,
-    closeOtherTabs: state.closeOtherTabs,
-    closeLeftTabs: state.closeLeftTabs,
-    closeRightTabs: state.closeRightTabs,
-    undoCloseTab: state.undoCloseTab,
-    setTabTitle: state.setTabTitle,
-    setTabPtyCount: state.setTabPtyCount,
-    incrementTabBadgeCount: state.incrementTabBadgeCount,
-    decrementTabBadgeCount: state.decrementTabBadgeCount,
-  }));
+  // Use individual selectors to avoid creating new object references on every store update
+  const tabs = useStore((state: AtuinState) => state.tabs);
+  const currentTabId = useStore((state: AtuinState) => state.currentTabId);
+  const openTab = useStore((state: AtuinState) => state.openTab);
+  const closeTab = useStore((state: AtuinState) => state.closeTab);
+  const setTabTitle = useStore((state: AtuinState) => state.setTabTitle);
+  const moveTab = useStore((state: AtuinState) => state.moveTab);
+  const closeAllTabs = useStore((state: AtuinState) => state.closeAllTabs);
+  const closeOtherTabs = useStore((state: AtuinState) => state.closeOtherTabs);
+  const closeLeftTabs = useStore((state: AtuinState) => state.closeLeftTabs);
+  const closeRightTabs = useStore((state: AtuinState) => state.closeRightTabs);
+  const undoCloseTab = useStore((state: AtuinState) => state.undoCloseTab);
+  const setTabPtyCount = useStore((state: AtuinState) => state.setTabPtyCount);
+  const incrementTabBadgeCount = useStore((state: AtuinState) => state.incrementTabBadgeCount);
+  const decrementTabBadgeCount = useStore((state: AtuinState) => state.decrementTabBadgeCount);
 
   const updateWindowMenuTabs = useCallback(
     debounce(async (tabs: TabType[]) => {
@@ -210,36 +194,17 @@ export default function Tabs() {
       </DndContext>
 
       {tabs.map((tab) => (
-        <TabsContext.Provider
+        <TabContextProvider
           key={tab.id}
-          value={{
-            tab,
-            setTitle: (title: string) => {
-              setTabTitle(tab.id, title);
-            },
-            setPtyCount: (ptyCount: number) => {
-              setTabPtyCount(tab.id, ptyCount);
-            },
-            incrementBadge: (number: number = 1) => {
-              incrementTabBadgeCount(tab.id, number);
-            },
-            decrementBadge: (number: number = 1) => {
-              decrementTabBadgeCount(tab.id, number);
-            },
-            closeTab: () => {
-              closeTab(tab.id);
-            },
-            reloadTab: () => {
-              const tabUrl = tab.url;
-              closeTab(tab.id);
-              setTimeout(() => {
-                openTab(tabUrl);
-              }, 100);
-            },
-          }}
-        >
-          <TabContent key={tab.id} url={tab.url} active={tab.id === currentTabId} />
-        </TabsContext.Provider>
+          tab={tab}
+          active={tab.id === currentTabId}
+          setTabTitle={setTabTitle}
+          setTabPtyCount={setTabPtyCount}
+          incrementTabBadgeCount={incrementTabBadgeCount}
+          decrementTabBadgeCount={decrementTabBadgeCount}
+          closeTab={closeTab}
+          openTab={openTab}
+        />
       ))}
 
       {tabs.length === 0 && <div className="flex flex-row w-full"></div>}
@@ -465,5 +430,76 @@ function TabContent(props: TabContentProps) {
     >
       <RouterProvider router={router} />
     </div>
+  );
+}
+
+interface TabContextProviderProps {
+  tab: TabType;
+  active: boolean;
+  setTabTitle: (id: string, title: string) => void;
+  setTabPtyCount: (id: string, count: number) => void;
+  incrementTabBadgeCount: (id: string, count: number) => void;
+  decrementTabBadgeCount: (id: string, count: number) => void;
+  closeTab: (id: string) => void;
+  openTab: (url: string) => void;
+}
+
+function TabContextProvider({
+  tab,
+  active,
+  setTabTitle,
+  setTabPtyCount,
+  incrementTabBadgeCount,
+  decrementTabBadgeCount,
+  closeTab,
+  openTab,
+}: TabContextProviderProps) {
+  const setTitle = useCallback(
+    (title: string) => setTabTitle(tab.id, title),
+    [tab.id, setTabTitle],
+  );
+
+  const setPtyCount = useCallback(
+    (ptyCount: number) => setTabPtyCount(tab.id, ptyCount),
+    [tab.id, setTabPtyCount],
+  );
+
+  const incrementBadge = useCallback(
+    (number: number = 1) => incrementTabBadgeCount(tab.id, number),
+    [tab.id, incrementTabBadgeCount],
+  );
+
+  const decrementBadge = useCallback(
+    (number: number = 1) => decrementTabBadgeCount(tab.id, number),
+    [tab.id, decrementTabBadgeCount],
+  );
+
+  const handleCloseTab = useCallback(() => closeTab(tab.id), [tab.id, closeTab]);
+
+  const reloadTab = useCallback(() => {
+    const tabUrl = tab.url;
+    closeTab(tab.id);
+    setTimeout(() => {
+      openTab(tabUrl);
+    }, 100);
+  }, [tab.id, tab.url, closeTab, openTab]);
+
+  const contextValue = useMemo(
+    () => ({
+      tab,
+      setTitle,
+      setPtyCount,
+      incrementBadge,
+      decrementBadge,
+      closeTab: handleCloseTab,
+      reloadTab,
+    }),
+    [tab, setTitle, setPtyCount, incrementBadge, decrementBadge, handleCloseTab, reloadTab],
+  );
+
+  return (
+    <TabsContext.Provider value={contextValue}>
+      <TabContent url={tab.url} active={active} />
+    </TabsContext.Provider>
   );
 }

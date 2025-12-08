@@ -180,13 +180,6 @@ export class PhoenixSynchronizer extends Emittery {
   private async doResync(): Promise<boolean> {
     if (this.isShutdown) return false;
 
-    try {
-      await this.channel.ensureJoined();
-    } catch (err: any) {
-      this.logger.error("Failed to ensure joined on doc channel", JSON.stringify(err));
-      return false;
-    }
-
     // Step 1: Get our state vector and send it to the server in exchange for
     // the server's state vector
     const stateVector = Y.encodeStateVector(this.doc);
@@ -281,14 +274,7 @@ export default class PhoenixProvider extends PhoenixSynchronizer {
     if (origin === this || !this.channel) return;
 
     if (this.connected) {
-      this.channel
-        .ensureJoined()
-        .then(() => {
-          this.channel.push("client_update", update.buffer);
-        })
-        .catch((err) => {
-          console.error("FAILED to ensure joined", err);
-        });
+      this.channel.push("client_update", update.buffer);
     }
   }
 
@@ -298,12 +284,10 @@ export default class PhoenixProvider extends PhoenixSynchronizer {
 
     const changedClients = added.concat(updated).concat(removed);
     if (this.connected) {
-      this.channel.ensureJoined().then(() => {
-        this.channel.push(
-          "client_awareness",
-          awarenessProtocol.encodeAwarenessUpdate(this.awareness, changedClients).buffer,
-        );
-      });
+      this.channel.push(
+        "client_awareness",
+        awarenessProtocol.encodeAwarenessUpdate(this.awareness, changedClients).buffer,
+      );
     }
   }
 

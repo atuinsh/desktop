@@ -26,7 +26,7 @@ import {
   User,
 } from "@heroui/react";
 import { UnlistenFn } from "@tauri-apps/api/event";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ImperativePanelHandle } from "react-resizable-panels";
 import { isAppleDevice } from "@react-aria/utils";
 import { useTauriEvent } from "@/lib/tauri";
@@ -135,7 +135,6 @@ async function isOnboardingComplete(): Promise<boolean> {
 function App() {
   const refreshUser = useStore((state: AtuinState) => state.refreshUser);
   const refreshRunbooks = useStore((state: AtuinState) => state.refreshRunbooks);
-  const currentWorkspaceId = useStore((state: AtuinState) => state.currentWorkspaceId);
   const setCurrentWorkspaceId = useStore((state: AtuinState) => state.setCurrentWorkspaceId);
   const openInDesktopImport = useStore((state: AtuinState) => state.openInDesktopImport);
   const setOpenInDesktopImport = useStore((state: AtuinState) => state.setOpenInDesktopImport);
@@ -162,10 +161,8 @@ function App() {
   const savingBlock = useStore((state: AtuinState) => state.savingBlock);
   const clearSavingBlock = useStore((state: AtuinState) => state.clearSavingBlock);
 
-  const [showNewWorkspaceDialog, setShowNewWorkspaceDialog] = useStore((state: AtuinState) => [
-    state.newWorkspaceDialogOpen,
-    state.setNewWorkspaceDialogOpen,
-  ]);
+  const showNewWorkspaceDialog = useStore((state: AtuinState) => state.newWorkspaceDialogOpen);
+  const setShowNewWorkspaceDialog = useStore((state: AtuinState) => state.setNewWorkspaceDialogOpen);
 
   const listRef = useRef<ListApi>(null);
 
@@ -173,6 +170,46 @@ function App() {
 
   function onSettingsOpen() {
     openTab("/settings", "Settings", TabIcon.SETTINGS);
+  }
+
+  function handleOpenHistory() {
+    openTab("/history", "History", TabIcon.HISTORY);
+  }
+
+  function handleOpenStats() {
+    openTab("/stats", "Stats", TabIcon.STATS);
+  }
+
+  function handleOpenFeedback() {
+    setShowFeedback(true);
+  }
+
+  function handleCloseFeedback() {
+    setShowFeedback(false);
+  }
+
+  function handleOpenInviteFriends() {
+    setShowInviteFriends(true);
+  }
+
+  function handleCloseInviteFriends() {
+    setShowInviteFriends(false);
+  }
+
+  function handleCloseDeleteRunbookModal() {
+    setRunbookIdToDelete(null);
+  }
+
+  function handleCloseDesktopImportModal() {
+    setOpenInDesktopImport(null);
+  }
+
+  function handleOpenHelpAndFeedback() {
+    open("https://dub.sh/atuin-desktop-beta");
+  }
+
+  function handleOpenLogin() {
+    open(AtuinEnv.url("/settings/desktop-connect"));
   }
 
   useEffect(() => {
@@ -389,7 +426,7 @@ function App() {
         <DropdownItem
           key="logout"
           description="Sign out of Atuin Hub"
-          onPress={() => logOut()}
+          onPress={logOut}
           color="danger"
         >
           Sign out
@@ -400,7 +437,7 @@ function App() {
         <DropdownItem
           key="login"
           description="Sign in to Atuin Hub"
-          onPress={() => open(AtuinEnv.url("/settings/desktop-connect"))}
+          onPress={handleOpenLogin}
         >
           Log in
         </DropdownItem>
@@ -408,7 +445,7 @@ function App() {
     }
   }
 
-  const navigateToRunbook = async (runbookId: string | null) => {
+  const navigateToRunbook = useCallback(async (runbookId: string | null) => {
     let runbook: Runbook | null = null;
     if (runbookId) {
       runbook = await Runbook.load(runbookId);
@@ -425,17 +462,17 @@ function App() {
 
       openTab(`/runbook/${runbookId}`, undefined, TabIcon.RUNBOOKS);
     }
-  };
+  }, [setCurrentWorkspaceId, openTab]);
 
-  const handlePromptDeleteRunbook = async (runbookId: string) => {
+  const handlePromptDeleteRunbook = useCallback(async (runbookId: string) => {
     const runbook = await Runbook.load(runbookId);
     if (!runbook) {
-      doDeleteRunbook(currentWorkspaceId, runbookId);
+      doDeleteRunbook(useStore.getState().currentWorkspaceId, runbookId);
       return;
     }
 
     setRunbookIdToDelete(runbookId);
-  };
+  }, []);
 
   async function doDeleteRunbook(workspaceId: string, runbookId: string) {
     // Cancel any running serial execution for this runbook
@@ -857,49 +894,52 @@ function App() {
       return;
     }
 
-    try {
-      // Step 6: Create an operation that contains both changeRefs to send to the server;
-      // the server will then process the changeRefs and update the runbook models as well,
-      // and will create any runbooks that don't exist on the server
-      await Operation.create(
-        moveItemsToNewWorkspace(
-          oldWorkspaceId,
-          newWorkspaceId,
-          newParentFolderId,
-          moveBundles.map((mb) => mb.id),
-          runbooksMovedWithName,
-          createChangeRef,
-          deleteChangeRef,
-        ),
-      );
+    // Step 6: Create an operation that contains both changeRefs to send to the server;
+    // the server will then process the changeRefs and update the runbook models as well,
+    // and will create any runbooks that don't exist on the server
+    await Operation.create(
+      moveItemsToNewWorkspace(
+        oldWorkspaceId,
+        newWorkspaceId,
+        newParentFolderId,
+        moveBundles.map((mb) => mb.id),
+        runbooksMovedWithName,
+        createChangeRef,
+        deleteChangeRef,
+      ),
+    );
 
-      // Before we move on, we need to drain the operation processor
-      const success = await processUnprocessedOperations();
-      if (!success) {
-        console.error("Failed to process operations after moving items");
+    // Before we move on, we need to drain the operation processor
+    const success = await processUnprocessedOperations();
+    if (!success) {
+      console.error("Failed to process operations after moving items");
 
-        oldManager.expireOptimisticUpdates([deleteChangeRef]);
-        newManager.expireOptimisticUpdates([createChangeRef]);
+      oldManager.expireOptimisticUpdates([deleteChangeRef]);
+      newManager.expireOptimisticUpdates([createChangeRef]);
 
-        await new DialogBuilder()
-          .title("Failed to move items")
-          .icon("error")
-          .message("Failed to move items")
-          .action({ label: "OK", value: "ok", variant: "flat" })
-          .build();
-
-        return;
-      }
-
-      runbooksMoved.forEach((runbookId) => {
-        queryClient.invalidateQueries({
-          queryKey: ["remote_runbook", runbookId],
-        });
-      });
-    } finally {
+      // Cleanup managers before showing dialog
       Rc.dispose(oldManager);
       Rc.dispose(newManager);
+
+      await new DialogBuilder()
+        .title("Failed to move items")
+        .icon("error")
+        .message("Failed to move items")
+        .action({ label: "OK", value: "ok", variant: "flat" })
+        .build();
+
+      return;
     }
+
+    runbooksMoved.forEach((runbookId) => {
+      queryClient.invalidateQueries({
+        queryKey: ["remote_runbook", runbookId],
+      });
+    });
+
+    // Cleanup managers after success
+    Rc.dispose(oldManager);
+    Rc.dispose(newManager);
   }
 
   const sidebarOpen = useStore((state) => state.sidebarOpen);
@@ -957,20 +997,36 @@ function App() {
     handleDeepLink(atuinUrl, navigateToRunbook);
   }
 
+  function showWorkspaceDialog() {
+    setShowNewWorkspaceDialog(true);
+  }
+
+  function hideWorkspaceDialog() {
+    setShowNewWorkspaceDialog(false);
+  }
+
+  // Stable empty callback for runbookMoved (currently unused but required by context API)
+  const handleRunbookMoved = useCallback(
+    (_runbookId: string, _newWorkspaceId: string, _newParentFolderId: string | null) => {},
+    [],
+  );
+
+  // Memoize context value to prevent re-renders of all context consumers
+  const runbookContextValue = useMemo(
+    () => ({
+      activateRunbook: navigateToRunbook,
+      promptDeleteRunbook: handlePromptDeleteRunbook,
+      runbookMoved: handleRunbookMoved,
+    }),
+    [navigateToRunbook, handlePromptDeleteRunbook, handleRunbookMoved],
+  );
+
   return (
     <div
       className="flex w-screen dark:bg-default-50"
       style={{ maxWidth: "100vw", height: "100vh" }}
     >
-      <RunbookContext.Provider
-        value={{
-          activateRunbook: navigateToRunbook,
-          promptDeleteRunbook: handlePromptDeleteRunbook,
-          // runbookDeleted: doDeleteRunbook,
-          // runbookCreated: handleRunbookCreated,
-          runbookMoved: () => {},
-        }}
-      >
+      <RunbookContext.Provider value={runbookContextValue}>
         <CommandMenu index={runbookIndex} />
         <CommandPalette />
         <RunbookSearchIndex index={runbookIndex} />
@@ -1006,7 +1062,7 @@ function App() {
               <Tooltip content="History" placement="right">
                 <Button
                   isIconOnly
-                  onPress={() => openTab("/history", "History", TabIcon.HISTORY)}
+                  onPress={handleOpenHistory}
                   size="md"
                   variant="light"
                   className="ml-2"
@@ -1018,7 +1074,7 @@ function App() {
               <Tooltip content="Stats" placement="right">
                 <Button
                   isIconOnly
-                  onPress={() => openTab("/stats", "Stats", TabIcon.STATS)}
+                  onPress={handleOpenStats}
                   size="md"
                   variant="light"
                   className="ml-2"
@@ -1063,7 +1119,7 @@ function App() {
 
             <div className="flex flex-col items-center gap-4 px-3">
               <Tooltip content="Share your feedback with us">
-                <Button isIconOnly variant="light" size="lg" onPress={() => setShowFeedback(true)}>
+                <Button isIconOnly variant="light" size="lg" onPress={handleOpenFeedback}>
                   <MessageCircleHeartIcon className="w-6 h-6" size={24} />
                 </Button>
               </Tooltip>
@@ -1074,7 +1130,7 @@ function App() {
                     isIconOnly
                     variant="light"
                     size="lg"
-                    onPress={() => setShowInviteFriends(true)}
+                    onPress={handleOpenInviteFriends}
                   >
                     <MailPlusIcon className="w-6 h-6" size={24} />
                   </Button>
@@ -1158,7 +1214,7 @@ function App() {
                     <DropdownItem
                       key="help_and_feedback"
                       description="Get in touch"
-                      onPress={() => open("https://dub.sh/atuin-desktop-beta")}
+                      onPress={handleOpenHelpAndFeedback}
                     >
                       Help & Feedback
                     </DropdownItem>
@@ -1186,7 +1242,7 @@ function App() {
             >
               {sidebarOpen && (
                 <List
-                  onStartCreateWorkspace={() => setShowNewWorkspaceDialog(true)}
+                  onStartCreateWorkspace={showWorkspaceDialog}
                   onStartCreateRunbook={handleStartCreateRunbook}
                   moveItemsToWorkspace={handleMoveItemsToWorkspace}
                   ref={listRef}
@@ -1208,21 +1264,21 @@ function App() {
           {showNewWorkspaceDialog && (
             <NewWorkspaceDialog
               onAccept={handleAcceptNewWorkspace}
-              onCancel={() => setShowNewWorkspaceDialog(false)}
+              onCancel={hideWorkspaceDialog}
             />
           )}
           <InviteFriendsModal
             isOpen={showInviteFriends}
-            onClose={() => setShowInviteFriends(false)}
+            onClose={handleCloseInviteFriends}
           />
-          <FeedbackModal isOpen={showFeedback} onClose={() => setShowFeedback(false)} />
+          <FeedbackModal isOpen={showFeedback} onClose={handleCloseFeedback} />
         </div>
 
         <DialogManager />
         {runbookIdToDelete && (
           <DeleteRunbookModal
             runbookId={runbookIdToDelete}
-            onClose={() => setRunbookIdToDelete(null)}
+            onClose={handleCloseDeleteRunbookModal}
             doDeleteRunbook={doDeleteRunbook}
           />
         )}
@@ -1237,7 +1293,7 @@ function App() {
           <DesktopImportModal
             runbookId={openInDesktopImport.id}
             tag={openInDesktopImport.tag}
-            onClose={() => setOpenInDesktopImport(null)}
+            onClose={handleCloseDesktopImportModal}
             activateRunbook={navigateToRunbook}
           />
         )}

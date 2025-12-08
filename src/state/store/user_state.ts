@@ -95,8 +95,14 @@ export const createUserState: StateCreator<AtuinUserState> = (
         newSelectedOrg = null;
       }
 
+      const oldUser = get().user;
+      const newUser = new User(user.username, user.email, "", user.avatar_url);
+
+      if (!oldUser.isEqual(newUser)) {
+        set({ user: newUser });
+      }
+
       set({
-        user: new User(user.username, user.email, "", user.avatar_url),
         userOrgs: orgs,
         selectedOrg: newSelectedOrg,
       });

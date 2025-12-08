@@ -221,7 +221,7 @@ export class WrappedChannel<J = unknown> {
 
   public leave(timeout?: number) {
     const push = this.channel.leave(timeout);
-    return new WrappedPush(push);
+    return new WrappedPush(Promise.resolve(push));
   }
 
   public on(event: string, callback: (response?: any) => void) {
@@ -259,8 +259,11 @@ export class WrappedChannel<J = unknown> {
       data = data.buffer;
     }
 
-    const push = this.channel.push(event, data, timeout);
-    return new WrappedPush(push);
+    const pushPromise = this.ensureJoined().then(() => {
+      return this.channel.push(event, data, timeout);
+    });
+
+    return new WrappedPush(pushPromise);
   }
 
   public get state() {
@@ -272,6 +275,7 @@ export class WrappedChannel<J = unknown> {
     const oldChannel = this.channel;
     this.channel = socket.channel(this.topic, this.channelParams);
     this.joinFailed = false;
+    this.joinPromise = null;
 
     this.handlers.forEach(({ ref }, event) => {
       oldChannel.off(event, ref);
@@ -282,23 +286,27 @@ export class WrappedChannel<J = unknown> {
 }
 
 export class WrappedPush {
-  private push: Push;
+  private pushPromise: Promise<Push>;
 
-  constructor(push: Push) {
-    this.push = push;
+  constructor(pushPromise: Promise<Push>) {
+    this.pushPromise = pushPromise;
+    // Prevent unhandled rejection for fire-and-forget pushes
+    this.pushPromise.catch(() => {});
   }
 
-  receive<T = any>(): Promise<T> {
+  async receive<T = any>(): Promise<T> {
+    const push = await this.pushPromise;
     return new Promise<T>((resolve, reject) => {
-      this.push
+      push
         .receive("ok", (data: T) => resolve(data))
         .receive("error", (error: any) => reject(error));
     });
   }
 
-  receiveBin(): Promise<Uint8Array> {
+  async receiveBin(): Promise<Uint8Array> {
+    const push = await this.pushPromise;
     return new Promise((resolve, reject) => {
-      this.push
+      push
         .receive("ok", (data: ArrayBuffer) => resolve(new Uint8Array(data)))
         .receive("error", (error: any) => reject(error));
     });

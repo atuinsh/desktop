@@ -3,7 +3,7 @@ members = ["backend", "crates/*"]
 resolver = "2"
 
 [workspace.package]
-version = "0.2.6"                                # NOTE - also update this in backend/Cargo.toml if not using `cargo workspaces`
+version = "0.2.7"                                # NOTE - also update this in backend/Cargo.toml if not using `cargo workspaces`
 edition = "2021"
 authors = ["ellie@atuin.sh", "michelle@atuin.sh"]
 

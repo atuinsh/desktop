@@ -117,6 +117,31 @@ export default function Topbar(props: TopbarProps) {
     props.onDeleteTag(props.currentTag);
   }
 
+  function handleCopyRunbookUrl() {
+    if (!remoteRunbook) return;
+    navigator.clipboard.writeText(AtuinEnv.url(remoteRunbook.nwo));
+    addToast({
+      title: "Runbook URL copied to clipboard",
+      color: "success",
+      radius: "sm",
+      timeout: 2000,
+      shouldShowTimeoutProgress: false,
+    });
+  }
+
+  function handleResetRunbookState() {
+    resetRunbookState(props.runbook.id);
+  }
+
+  function handleStartSerialExecution() {
+    track_event("runbooks.serial.execute");
+    serialExecution.start();
+  }
+
+  function handleStopSerialExecution() {
+    serialExecution.stop();
+  }
+
   const renderBarContents = () => {
     let owner = remoteRunbook?.owner;
 
@@ -164,16 +189,7 @@ export default function Topbar(props: TopbarProps) {
                   <CopyIcon
                     size={16}
                     className="ml-2 cursor-pointer"
-                    onClick={() => {
-                      navigator.clipboard.writeText(AtuinEnv.url(remoteRunbook.nwo));
-                      addToast({
-                        title: "Runbook URL copied to clipboard",
-                        color: "success",
-                        radius: "sm",
-                        timeout: 2000,
-                        shouldShowTimeoutProgress: false,
-                      });
-                    }}
+                    onClick={handleCopyRunbookUrl}
                   />
                 </Tooltip>
               )}
@@ -252,7 +268,7 @@ export default function Topbar(props: TopbarProps) {
             variant="flat"
             size="sm"
             className="mt-1 ml-2"
-            onPress={() => resetRunbookState(props.runbook.id)}
+            onPress={handleResetRunbookState}
           >
             <RefreshCcwIcon className="h-4 w-4" />
           </Button>
@@ -276,13 +292,8 @@ export default function Topbar(props: TopbarProps) {
           cancellable={true}
           tooltip="Run this runbook in serial mode (top-to-bottom)"
           tooltipPlacement="bottom"
-          onPlay={() => {
-            track_event("runbooks.serial.execute");
-            serialExecution.start();
-          }}
-          onStop={async () => {
-            serialExecution.stop();
-          }}
+          onPlay={handleStartSerialExecution}
+          onStop={handleStopSerialExecution}
         />
       </div>
     );

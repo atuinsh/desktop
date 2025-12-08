@@ -64,8 +64,6 @@ export default class ServerNotificationManager extends Emittery {
   }
 
   public async startNotifications() {
-    await this.channel.ensureJoined();
-
     // Subscribe is idempotent on the server, so we can just call it with all the runbook IDs
     const runbookIds = await Runbook.allIdsInAllWorkspaces();
     // TODO: replace this with a proper org model one day

@@ -21,6 +21,15 @@ export class User {
   is(otherUser: User): boolean {
     return this.username === otherUser.username && this.email === otherUser.email;
   }
+
+  isEqual(otherUser: User): boolean {
+    return (
+      this.username === otherUser.username &&
+      this.email === otherUser.email &&
+      this.avatar_url === otherUser.avatar_url &&
+      this.bio === otherUser.bio
+    );
+  }
 }
 
 export interface UserOrg {

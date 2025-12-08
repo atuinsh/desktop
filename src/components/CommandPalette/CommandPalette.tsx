@@ -16,10 +16,8 @@ import { LucideIcon } from "lucide-react";
 
 export default function CommandPalette() {
   const [query, setQuery] = useState("");
-  const [isOpen, setOpen] = useStore((store: any) => [
-    store.commandPaletteOpen,
-    store.setCommandPaletteOpen,
-  ]);
+  const isOpen = useStore((store: any) => store.commandPaletteOpen);
+  const setOpen = useStore((store: any) => store.setCommandPaletteOpen);
   const [results, setResults] = useState<CommandSearchResult[]>([]);
 
   const onClose = useCallback(() => {
@@ -90,16 +88,18 @@ export default function CommandPalette() {
 
   const groupedResults = groupCommandsByCategory(results);
 
+  function handleOpenChange(open: boolean) {
+    if (!open) {
+      setQuery("");
+    }
+    setOpen(open);
+  }
+
   return (
     <Dialog
       modal={false}
       open={isOpen}
-      onOpenChange={(open) => {
-        if (!open) {
-          setQuery("");
-        }
-        setOpen(open);
-      }}
+      onOpenChange={handleOpenChange}
     >
       <DialogPortal>
         <DialogContent className="overflow-hidden p-0 data-[state=open]:animate-none data-[state=closed]:animate-none">
