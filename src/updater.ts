@@ -1,8 +1,6 @@
 import Logger from "@/lib/logger";
 import { useStore } from "./state/store";
 import AtuinEnv from "./atuin_env";
-import { micromark } from "micromark";
-import { gfm, gfmHtml } from "micromark-extension-gfm";
 import { Update } from "@tauri-apps/plugin-updater";
 import { invoke } from "@tauri-apps/api/core";
 const logger = new Logger("Updater");
@@ -45,11 +43,7 @@ export async function checkForAppUpdates(manualActivation: boolean = false): Pro
 
     if (update.body) {
       // Fetch everything after the first instance of "Changelog" (with any heading level)
-      let changelog = /\#{1,6}\s*Changelog\n(.*)$/gms.exec(update.body)?.[1] || update.body;
-      update.body = micromark(changelog, {
-        extensions: [gfm()],
-        htmlExtensions: [gfmHtml()],
-      });
+      update.body = /\#{1,6}\s*Changelog\n(.*)$/gms.exec(update.body)?.[1] || update.body;
     } else {
       update.body = "*No changelog available*";
     }
