@@ -32,6 +32,7 @@ import { AIFeatureDisabledError } from "@/lib/ai/block_generator";
 import AIPopup from "./ui/AIPopup";
 import { AILoadingOverlay } from "./ui/AILoadingBlock";
 import { AIFocusOverlay } from "./ui/AIFocusOverlay";
+import { AIHint, incrementAIHintUseCount } from "./ui/AIHint";
 import { RunbookLinkPopup } from "./ui/RunbookLinkPopup";
 import { SparklesIcon } from "lucide-react";
 
@@ -523,6 +524,9 @@ export default function Editor({ runbook, editable, runbookEditor }: EditorProps
           prompt_length: prompt.length,
           blocks_generated: blocksToInsert.length,
         });
+
+        // Increment usage count for AI hint dismissal
+        incrementAIHintUseCount();
       } catch (error) {
         const message =
           error instanceof AIFeatureDisabledError
@@ -931,6 +935,11 @@ export default function Editor({ runbook, editable, runbookEditor }: EditorProps
           position={aiEditPopupPosition}
           getEditorContext={getEditorContext}
         />
+      )}
+
+      {/* Subtle hint for AI generation */}
+      {aiEnabledState && !postGenerationBlockId && (
+        <AIHint editor={editor} isGenerating={isGeneratingInline} aiEnabled={aiEnabledState} />
       )}
 
       {/* Inline generation loading overlay */}
