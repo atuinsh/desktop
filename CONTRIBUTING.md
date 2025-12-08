@@ -6,8 +6,8 @@
 
 Developing on Atuin Desktop requires:
 
-* Node.js 20.18.0 (see `.tool-versions` for most up-to-date information)
-* [pnpm](https://pnpm.io/installation)
+* Node.js 24.11.1 (see `.tool-versions` for most up-to-date information)
+* [pnpm](https://pnpm.io/installation) — if using asdf, run `corepack enable pnpm` after installing Node, then `asdf reshim nodejs`
 * Latest Rust stable
 
 Since Atuin Desktop is a Tauri app, you'll also need all of the prerequisites listed in the [Tauri Prerequisites doc](https://tauri.app/start/prerequisites/) for your platform.
