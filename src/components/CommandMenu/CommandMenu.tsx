@@ -27,10 +27,8 @@ export default function CommandMenu(props: CommandMenuProps) {
   const [query, setQuery] = useState("");
   const { data: runbooks } = useQuery(allRunbooks());
   const { data: workspaces } = useQuery(allWorkspaces());
-  const [isOpen, setOpen] = useStore((store: AtuinState) => [
-    store.searchOpen,
-    store.setSearchOpen,
-  ]);
+  const isOpen = useStore((store: AtuinState) => store.searchOpen);
+  const setOpen = useStore((store: AtuinState) => store.setSearchOpen);
   const currentWorkspaceId = useStore((store: AtuinState) => store.currentWorkspaceId);
   const setCurrentWorkspaceId = useStore((store: AtuinState) => store.setCurrentWorkspaceId);
   const [results, setResults] = useState<SearchResultItem[]>([]);
@@ -38,11 +36,11 @@ export default function CommandMenu(props: CommandMenuProps) {
 
   const onClose = useCallback(() => {
     setOpen(false);
-  }, []);
+  }, [setOpen]);
 
   const onOpen = useCallback(() => {
     setOpen(true);
-  }, []);
+  }, [setOpen]);
 
   useEffect(() => {
     let cancelled = false;

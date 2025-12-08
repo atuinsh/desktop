@@ -105,10 +105,8 @@ interface NotesSidebarProps {
 
 const NoteSidebar = forwardRef((props: NotesSidebarProps, ref: React.ForwardedRef<ListApi>) => {
   const isSyncing = useStore((state: AtuinState) => state.isSyncing);
-  const [isSearchOpen, setSearchOpen] = useStore((store: AtuinState) => [
-    store.searchOpen,
-    store.setSearchOpen,
-  ]);
+  const isSearchOpen = useStore((store: AtuinState) => store.searchOpen);
+  const setSearchOpen = useStore((store: AtuinState) => store.setSearchOpen);
   const [sortBy, setSortBy] = useState<SortBy>(SortBy.Name);
   const [pendingWorkspaceMigration, setPendingWorkspaceMigration] = useState<boolean>(true);
   const [focusedWorkspaceId, setFocusedWorkspaceId] = useState<string | null>(null);

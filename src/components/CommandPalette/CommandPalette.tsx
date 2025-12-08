@@ -16,10 +16,8 @@ import { LucideIcon } from "lucide-react";
 
 export default function CommandPalette() {
   const [query, setQuery] = useState("");
-  const [isOpen, setOpen] = useStore((store: any) => [
-    store.commandPaletteOpen,
-    store.setCommandPaletteOpen,
-  ]);
+  const isOpen = useStore((store: any) => store.commandPaletteOpen);
+  const setOpen = useStore((store: any) => store.setCommandPaletteOpen);
   const [results, setResults] = useState<CommandSearchResult[]>([]);
 
   const onClose = useCallback(() => {

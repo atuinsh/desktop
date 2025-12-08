@@ -26,7 +26,7 @@ import {
   User,
 } from "@heroui/react";
 import { UnlistenFn } from "@tauri-apps/api/event";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ImperativePanelHandle } from "react-resizable-panels";
 import { isAppleDevice } from "@react-aria/utils";
 import { useTauriEvent } from "@/lib/tauri";
@@ -135,7 +135,6 @@ async function isOnboardingComplete(): Promise<boolean> {
 function App() {
   const refreshUser = useStore((state: AtuinState) => state.refreshUser);
   const refreshRunbooks = useStore((state: AtuinState) => state.refreshRunbooks);
-  const currentWorkspaceId = useStore((state: AtuinState) => state.currentWorkspaceId);
   const setCurrentWorkspaceId = useStore((state: AtuinState) => state.setCurrentWorkspaceId);
   const openInDesktopImport = useStore((state: AtuinState) => state.openInDesktopImport);
   const setOpenInDesktopImport = useStore((state: AtuinState) => state.setOpenInDesktopImport);
@@ -162,10 +161,8 @@ function App() {
   const savingBlock = useStore((state: AtuinState) => state.savingBlock);
   const clearSavingBlock = useStore((state: AtuinState) => state.clearSavingBlock);
 
-  const [showNewWorkspaceDialog, setShowNewWorkspaceDialog] = useStore((state: AtuinState) => [
-    state.newWorkspaceDialogOpen,
-    state.setNewWorkspaceDialogOpen,
-  ]);
+  const showNewWorkspaceDialog = useStore((state: AtuinState) => state.newWorkspaceDialogOpen);
+  const setShowNewWorkspaceDialog = useStore((state: AtuinState) => state.setNewWorkspaceDialogOpen);
 
   const listRef = useRef<ListApi>(null);
 
@@ -448,7 +445,7 @@ function App() {
     }
   }
 
-  const navigateToRunbook = async (runbookId: string | null) => {
+  const navigateToRunbook = useCallback(async (runbookId: string | null) => {
     let runbook: Runbook | null = null;
     if (runbookId) {
       runbook = await Runbook.load(runbookId);
@@ -465,17 +462,17 @@ function App() {
 
       openTab(`/runbook/${runbookId}`, undefined, TabIcon.RUNBOOKS);
     }
-  };
+  }, [setCurrentWorkspaceId, openTab]);
 
-  const handlePromptDeleteRunbook = async (runbookId: string) => {
+  const handlePromptDeleteRunbook = useCallback(async (runbookId: string) => {
     const runbook = await Runbook.load(runbookId);
     if (!runbook) {
-      doDeleteRunbook(currentWorkspaceId, runbookId);
+      doDeleteRunbook(useStore.getState().currentWorkspaceId, runbookId);
       return;
     }
 
     setRunbookIdToDelete(runbookId);
-  };
+  }, []);
 
   async function doDeleteRunbook(workspaceId: string, runbookId: string) {
     // Cancel any running serial execution for this runbook
@@ -897,49 +894,52 @@ function App() {
       return;
     }
 
-    try {
-      // Step 6: Create an operation that contains both changeRefs to send to the server;
-      // the server will then process the changeRefs and update the runbook models as well,
-      // and will create any runbooks that don't exist on the server
-      await Operation.create(
-        moveItemsToNewWorkspace(
-          oldWorkspaceId,
-          newWorkspaceId,
-          newParentFolderId,
-          moveBundles.map((mb) => mb.id),
-          runbooksMovedWithName,
-          createChangeRef,
-          deleteChangeRef,
-        ),
-      );
+    // Step 6: Create an operation that contains both changeRefs to send to the server;
+    // the server will then process the changeRefs and update the runbook models as well,
+    // and will create any runbooks that don't exist on the server
+    await Operation.create(
+      moveItemsToNewWorkspace(
+        oldWorkspaceId,
+        newWorkspaceId,
+        newParentFolderId,
+        moveBundles.map((mb) => mb.id),
+        runbooksMovedWithName,
+        createChangeRef,
+        deleteChangeRef,
+      ),
+    );
 
-      // Before we move on, we need to drain the operation processor
-      const success = await processUnprocessedOperations();
-      if (!success) {
-        console.error("Failed to process operations after moving items");
+    // Before we move on, we need to drain the operation processor
+    const success = await processUnprocessedOperations();
+    if (!success) {
+      console.error("Failed to process operations after moving items");
 
-        oldManager.expireOptimisticUpdates([deleteChangeRef]);
-        newManager.expireOptimisticUpdates([createChangeRef]);
+      oldManager.expireOptimisticUpdates([deleteChangeRef]);
+      newManager.expireOptimisticUpdates([createChangeRef]);
 
-        await new DialogBuilder()
-          .title("Failed to move items")
-          .icon("error")
-          .message("Failed to move items")
-          .action({ label: "OK", value: "ok", variant: "flat" })
-          .build();
-
-        return;
-      }
-
-      runbooksMoved.forEach((runbookId) => {
-        queryClient.invalidateQueries({
-          queryKey: ["remote_runbook", runbookId],
-        });
-      });
-    } finally {
+      // Cleanup managers before showing dialog
       Rc.dispose(oldManager);
       Rc.dispose(newManager);
+
+      await new DialogBuilder()
+        .title("Failed to move items")
+        .icon("error")
+        .message("Failed to move items")
+        .action({ label: "OK", value: "ok", variant: "flat" })
+        .build();
+
+      return;
     }
+
+    runbooksMoved.forEach((runbookId) => {
+      queryClient.invalidateQueries({
+        queryKey: ["remote_runbook", runbookId],
+      });
+    });
+
+    // Cleanup managers after success
+    Rc.dispose(oldManager);
+    Rc.dispose(newManager);
   }
 
   const sidebarOpen = useStore((state) => state.sidebarOpen);
@@ -1005,20 +1005,28 @@ function App() {
     setShowNewWorkspaceDialog(false);
   }
 
+  // Stable empty callback for runbookMoved (currently unused but required by context API)
+  const handleRunbookMoved = useCallback(
+    (_runbookId: string, _newWorkspaceId: string, _newParentFolderId: string | null) => {},
+    [],
+  );
+
+  // Memoize context value to prevent re-renders of all context consumers
+  const runbookContextValue = useMemo(
+    () => ({
+      activateRunbook: navigateToRunbook,
+      promptDeleteRunbook: handlePromptDeleteRunbook,
+      runbookMoved: handleRunbookMoved,
+    }),
+    [navigateToRunbook, handlePromptDeleteRunbook, handleRunbookMoved],
+  );
+
   return (
     <div
       className="flex w-screen dark:bg-default-50"
       style={{ maxWidth: "100vw", height: "100vh" }}
     >
-      <RunbookContext.Provider
-        value={{
-          activateRunbook: navigateToRunbook,
-          promptDeleteRunbook: handlePromptDeleteRunbook,
-          // runbookDeleted: doDeleteRunbook,
-          // runbookCreated: handleRunbookCreated,
-          runbookMoved: () => {},
-        }}
-      >
+      <RunbookContext.Provider value={runbookContextValue}>
         <CommandMenu index={runbookIndex} />
         <CommandPalette />
         <RunbookSearchIndex index={runbookIndex} />

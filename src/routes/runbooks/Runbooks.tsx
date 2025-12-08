@@ -113,15 +113,16 @@ export default function Runbooks() {
             // we need to set the workspace ID.
             setCurrentWorkspaceId(runbook.workspaceId);
           } else {
-            throw new Error(`Runbook ${runbookId} not found after sync`);
+            setFailedToSyncRunbook(true);
+            console.warn("Runbook not found after sync:", runbookId);
           }
+          setSyncingRunbook(false);
         } catch (err) {
           setFailedToSyncRunbook(true);
           console.warn(
             "Error syncing runbook; this could be normal if the runbook is offline",
             err,
           );
-        } finally {
           setSyncingRunbook(false);
         }
       })();
