@@ -61,3 +61,9 @@
 .bn-block-group .bn-block-outer:has(.bn-block-content[data-content-type="paragraph"]) {
     margin-top: 0.25em !important;
 }
+
+/* AI-generated block pending acceptance */
+.ai-generated-pending {
+    opacity: 0.6;
+    transition: opacity 150ms ease-in-out;
+}

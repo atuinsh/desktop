@@ -35,24 +35,29 @@ export function AIFocusOverlay({
   }, [isEditing]);
 
   useLayoutEffect(() => {
-    const blockEl = editor?.domElement?.querySelector(`[data-id="${blockId}"]`);
+    if (!editor?.domElement) return;
 
-    // Apply faded effect to the block
+    const scrollContainer = editor.domElement.closest(".editor") as HTMLElement | null;
+    let blockEl = editor.domElement.querySelector(`[data-id="${blockId}"]`) as HTMLElement | null;
+
+    // Apply faded effect via CSS class
     if (blockEl) {
-      blockEl.style.opacity = "0.6";
-      blockEl.style.transition = "opacity 150ms ease-in-out";
+      blockEl.classList.add("ai-generated-pending");
     }
 
     const updatePosition = () => {
-      if (!editor?.domElement) return;
+      // Re-query in case block was re-rendered
+      const currentBlockEl = editor.domElement?.querySelector(`[data-id="${blockId}"]`) as HTMLElement | null;
+      if (!currentBlockEl || !scrollContainer) return;
 
-      const blockEl = editor.domElement.querySelector(`[data-id="${blockId}"]`);
-      if (!blockEl) return;
+      // Update blockEl reference if changed
+      if (currentBlockEl !== blockEl) {
+        blockEl?.classList.remove("ai-generated-pending");
+        currentBlockEl.classList.add("ai-generated-pending");
+        blockEl = currentBlockEl;
+      }
 
-      const scrollContainer = editor.domElement.closest(".editor");
-      if (!scrollContainer) return;
-
-      const blockRect = blockEl.getBoundingClientRect();
+      const blockRect = currentBlockEl.getBoundingClientRect();
       const containerRect = scrollContainer.getBoundingClientRect();
 
       setPosition({
@@ -65,22 +70,17 @@ export function AIFocusOverlay({
 
     updatePosition();
 
-    const scrollContainer = editor?.domElement?.closest(".editor");
     scrollContainer?.addEventListener("scroll", updatePosition);
     window.addEventListener("resize", updatePosition);
 
-    // Also update on any DOM changes (block content might change size)
+    // Observe only the specific block for size changes, not the whole editor
     const observer = new MutationObserver(updatePosition);
     if (blockEl) {
       observer.observe(blockEl, { childList: true, subtree: true, attributes: true });
     }
 
     return () => {
-      // Restore opacity when overlay is removed
-      if (blockEl) {
-        blockEl.style.opacity = "";
-        blockEl.style.transition = "";
-      }
+      blockEl?.classList.remove("ai-generated-pending");
       scrollContainer?.removeEventListener("scroll", updatePosition);
       window.removeEventListener("resize", updatePosition);
       observer.disconnect();
