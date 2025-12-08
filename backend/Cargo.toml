@@ -3,7 +3,7 @@ name = "atuin-desktop"
 description = "Atuin Desktop"
 publish = false
 workspace = ".."
-version = "0.2.6"            # duplicated here as CN CLI can't handle workspace version
+version = "0.2.6"             # duplicated here as CN CLI can't handle workspace version
 edition.workspace = true
 
 [lints.clippy]
@@ -37,16 +37,16 @@ url = { workspace = true }
 sha2 = "0.10"
 bigdecimal = { workspace = true }
 
-tauri = { version = "2.8.4", features = ["tray-icon", "devtools"] }
-tauri-plugin-http = { version = "2.5.2", features = ["native-tls"] }
-tauri-plugin-deep-link = "2.4.3"
-tauri-plugin-single-instance = { version = "2.3.4", features = ["deep-link"] }
-tauri-plugin-os = "2.3.1"
-tauri-plugin-shell = "2.3.1"
-tauri-plugin-dialog = "2.4.0"
-tauri-plugin-process = "2.3.0"
-tauri-plugin-fs = "2.4.2"
-tauri-plugin-opener = "2.5.0"
+tauri = { version = "2.9.4", features = ["tray-icon", "devtools"] }
+tauri-plugin-http = { version = "2.5.4", features = ["native-tls"] }
+tauri-plugin-deep-link = "2.4.5"
+tauri-plugin-single-instance = { version = "2.3.6", features = ["deep-link"] }
+tauri-plugin-os = "2.3.2"
+tauri-plugin-shell = "2.3.3"
+tauri-plugin-dialog = "2.4.2"
+tauri-plugin-process = "2.3.1"
+tauri-plugin-fs = "2.4.4"
+tauri-plugin-opener = "2.5.2"
 tauri-plugin-log = { version = "2.7.0", features = ["colored"] }
 tauri-plugin-notification = "2.2.1"
 
@@ -86,7 +86,7 @@ config = "0.15.19"
 
 [dependencies.tauri-plugin-sql]
 features = ["sqlite"] # or "postgres", or "mysql"
-version = "2.3.0"
+version = "2.3.1"
 
 [target."cfg(target_os = \"macos\")".dependencies]
 cocoa = "0.26"
