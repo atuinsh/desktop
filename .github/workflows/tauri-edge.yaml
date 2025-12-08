@@ -137,6 +137,7 @@ jobs:
           SENTRY_RELEASE: ${{ steps.update-edge-version.outputs.new_version }}
           NODE_OPTIONS: "--max-old-space-size=6144"
           RUSTC_WRAPPER: sccache
+          IS_EDGE_BUILD: true
         with:
           args: ${{ matrix.args }}
 

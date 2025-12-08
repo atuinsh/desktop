@@ -16,6 +16,10 @@ export default defineConfig(async () => ({
       project: "desktop-frontend",
       telemetry: false,
       debug: true,
+      sourcemaps: {
+        // keep sourcemaps for edge builds in the final bundle
+        filesToDeleteAfterUpload: process.env.IS_EDGE_BUILD ? [] : ["./dist/assets/*.map"],
+      },
     }),
     analyzer({
       analyzerMode: "static",
