@@ -7,7 +7,14 @@ import { sentryVitePlugin } from "@sentry/vite-plugin";
 // https://vitejs.dev/config/
 export default defineConfig(async () => ({
   plugins: [
-    react(),
+    react({
+      babel: {
+        plugins: [
+          "babel-plugin-react-compiler",
+          ["@babel/plugin-proposal-decorators", { legacy: true }],
+        ],
+      },
+    }),
     tsconfigPaths(),
     sentryVitePlugin({
       /* @ts-ignore */
