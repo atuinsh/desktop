@@ -322,43 +322,42 @@ export const createUiState: StateCreator<AtuinUiState> = (set, get, _store): Atu
     }
   },
   setTabTitle: (id: string, title: string) => {
-    const tabs = get().tabs;
-    const tab = tabs.find((tab) => tab.id === id);
-    if (tab) {
-      tab.title = title;
-      set(() => ({ tabs: tabs }));
-    }
+    set((state) => ({
+      tabs: state.tabs.map((tab) =>
+        tab.id === id ? { ...tab, title } : tab
+      ),
+    }));
   },
 
   setTabPtyCount: (id: string, ptyCount: number) => {
-    const tabs = get().tabs;
-    const tab = tabs.find((tab) => tab.id === id);
-    if (tab) {
-      console.log("setTabPtyCount", id, ptyCount);
-      tab.ptyCount = ptyCount;
-      tab.badge = tab.badgeCount + tab.ptyCount > 0 ? String(tab.badgeCount + tab.ptyCount) : null;
-      console.log("setTabPtyCount", tab.badge);
-      set(() => ({ tabs: tabs }));
-    }
+    set((state) => ({
+      tabs: state.tabs.map((tab) => {
+        if (tab.id !== id) return tab;
+        const badge = tab.badgeCount + ptyCount > 0 ? String(tab.badgeCount + ptyCount) : null;
+        return { ...tab, ptyCount, badge };
+      }),
+    }));
   },
 
   incrementTabBadgeCount: (id: string, count: number) => {
-    const tabs = get().tabs;
-    const tab = tabs.find((tab) => tab.id === id);
-    if (tab) {
-      tab.badgeCount = tab.badgeCount + count;
-      tab.badge = tab.badgeCount + tab.ptyCount > 0 ? String(tab.badgeCount + tab.ptyCount) : null;
-      set(() => ({ tabs: tabs }));
-    }
+    set((state) => ({
+      tabs: state.tabs.map((tab) => {
+        if (tab.id !== id) return tab;
+        const badgeCount = tab.badgeCount + count;
+        const badge = badgeCount + tab.ptyCount > 0 ? String(badgeCount + tab.ptyCount) : null;
+        return { ...tab, badgeCount, badge };
+      }),
+    }));
   },
   decrementTabBadgeCount: (id: string, count: number) => {
-    const tabs = get().tabs;
-    const tab = tabs.find((tab) => tab.id === id);
-    if (tab) {
-      tab.badgeCount = tab.badgeCount - count;
-      tab.badge = tab.badgeCount + tab.ptyCount > 0 ? String(tab.badgeCount + tab.ptyCount) : null;
-      set(() => ({ tabs: tabs }));
-    }
+    set((state) => ({
+      tabs: state.tabs.map((tab) => {
+        if (tab.id !== id) return tab;
+        const badgeCount = tab.badgeCount - count;
+        const badge = badgeCount + tab.ptyCount > 0 ? String(badgeCount + tab.ptyCount) : null;
+        return { ...tab, badgeCount, badge };
+      }),
+    }));
   },
   advanceActiveTab: (amount: number) => {
     const tabs = get().tabs;
