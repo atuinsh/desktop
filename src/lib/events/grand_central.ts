@@ -10,6 +10,7 @@ export interface GrandCentralEvents {
   "serial-execution-completed": { runbook_id: string };
   "serial-execution-cancelled": { runbook_id: string };
   "serial-execution-failed": { runbook_id: string; error: string };
+  "serial-execution-paused": { runbook_id: string; block_id: string };
   "block-started": { block_id: string; runbook_id: string };
   "block-finished": { block_id: string; runbook_id: string; success: boolean };
   "block-failed": { block_id: string; runbook_id: string; error: string };
@@ -130,6 +131,13 @@ export class GrandCentral extends Emittery<GrandCentralEvents> {
           });
           break;
 
+        case "serialExecutionPaused":
+          this.emit("serial-execution-paused", {
+            runbook_id: event.data.runbook_id,
+            block_id: event.data.block_id,
+          });
+          break;
+
         case "blockStarted":
           this.emit("block-started", {
             block_id: event.data.block_id,
@@ -201,6 +209,10 @@ export const onSerialExecutionCancelled = (
 export const onSerialExecutionFailed = (
   handler: (data: GrandCentralEvents["serial-execution-failed"]) => void,
 ) => grandCentral.on("serial-execution-failed", handler);
+
+export const onSerialExecutionPaused = (
+  handler: (data: GrandCentralEvents["serial-execution-paused"]) => void,
+) => grandCentral.on("serial-execution-paused", handler);
 
 export const onBlockStarted = (
   handler: (data: GrandCentralEvents["block-started"]) => void,

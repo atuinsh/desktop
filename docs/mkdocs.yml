@@ -30,6 +30,7 @@ nav:
           - "Script": blocks/executable/script.md
           - "Terminal": blocks/executable/terminal.md
           - "Variable": blocks/executable/variable.md
+          - "Pause": blocks/executable/pause.md
       - "Databases":
           - blocks/databases/index.md
           - "ClickHouse": blocks/databases/clickhouse.md

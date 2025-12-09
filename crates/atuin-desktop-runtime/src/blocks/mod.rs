@@ -19,6 +19,7 @@ pub(crate) mod local_directory;
 pub(crate) mod local_var;
 pub(crate) mod markdown_render;
 pub(crate) mod mysql;
+pub(crate) mod pause;
 pub(crate) mod postgres;
 pub(crate) mod prometheus;
 pub(crate) mod query_block;
@@ -156,6 +157,7 @@ pub enum Block {
     MarkdownRender(markdown_render::MarkdownRender),
     Editor(editor::Editor),
     Dropdown(dropdown::Dropdown),
+    Pause(pause::Pause),
 }
 
 impl Block {
@@ -183,6 +185,7 @@ impl Block {
             Block::MarkdownRender(markdown_render) => markdown_render.id,
             Block::Editor(editor) => editor.id,
             Block::Dropdown(dropdown) => dropdown.id,
+            Block::Pause(pause) => pause.id,
         }
     }
 
@@ -211,6 +214,7 @@ impl Block {
             Block::Host(_) => "".to_string(),
             Block::VarDisplay(_) => "".to_string(),
             Block::MarkdownRender(_) => "".to_string(),
+            Block::Pause(_) => "".to_string(),
         }
     }
 
@@ -274,6 +278,7 @@ impl Block {
             "dropdown" => Ok(Block::Dropdown(dropdown::Dropdown::from_document(
                 block_data,
             )?)),
+            "pause" => Ok(Block::Pause(pause::Pause::from_document(block_data)?)),
             _ => Err(format!("Unknown block type: {}", block_type)),
         }
     }
@@ -389,6 +394,11 @@ impl Block {
                     .passive_context(resolver, block_local_value_provider)
                     .await
             }
+            Block::Pause(pause) => {
+                pause
+                    .passive_context(resolver, block_local_value_provider)
+                    .await
+            }
         }
     }
 
@@ -415,6 +425,7 @@ impl Block {
             Block::MarkdownRender(markdown_render) => markdown_render.create_state(),
             Block::Editor(editor) => editor.create_state(),
             Block::Dropdown(dropdown) => dropdown.create_state(),
+            Block::Pause(pause) => pause.create_state(),
         }
     }
 
@@ -450,6 +461,7 @@ impl Block {
             Block::MarkdownRender(markdown_render) => markdown_render.execute(context).await,
             Block::Editor(editor) => editor.execute(context).await,
             Block::Dropdown(dropdown) => dropdown.execute(context).await,
+            Block::Pause(pause) => pause.execute(context).await,
         }
     }
 }

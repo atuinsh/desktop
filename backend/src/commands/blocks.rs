@@ -346,6 +346,7 @@ pub async fn start_serial_execution(
     app: AppHandle,
     state: State<'_, AtuinState>,
     document_id: String,
+    from_block: Option<String>,
 ) -> Result<(), String> {
     let mut serial_executions = state.serial_executions.write().await;
     if serial_executions.contains_key(&document_id) {
@@ -360,13 +361,31 @@ pub async fn start_serial_execution(
     let pty_store = state.pty_store();
     let ssh_pool = state.ssh_pool();
 
-    let block_ids = document
+    let all_block_ids: Vec<Uuid> = document
         .blocks()
         .await
         .map_err(|e| format!("Failed to get blocks from document {document_id}: {}", e))?
         .iter()
         .map(|b| b.id())
-        .collect::<Vec<_>>();
+        .collect();
+
+    // If from_block is specified, start from the block AFTER the specified block
+    let block_ids: Vec<Uuid> = if let Some(from_block_str) = from_block {
+        let from_block_uuid = Uuid::parse_str(&from_block_str).map_err(|e| e.to_string())?;
+        let start_index = all_block_ids
+            .iter()
+            .position(|id| *id == from_block_uuid)
+            .ok_or("Start block not found in document")?;
+
+        // Skip to the block AFTER from_block
+        if start_index + 1 >= all_block_ids.len() {
+            return Err("No blocks to execute after the specified start block".to_string());
+        }
+
+        all_block_ids.into_iter().skip(start_index + 1).collect()
+    } else {
+        all_block_ids
+    };
 
     let mut workspace_context = HashMap::new();
     let workspace_root = if let Some(workspace_manager) = state.workspaces.lock().await.as_ref() {
@@ -447,6 +466,14 @@ pub async fn start_serial_execution(
                                     exit_type = ExecutionResult::Cancelled;
                                     stop_serial_exec = true;
                                 }
+                                Some(ExecutionResult::Paused) => {
+                                    log::debug!("Block {block_id} in document {document_id} paused execution");
+                                    // Paused is not a failure - the SerialExecutionPaused event
+                                    // is emitted by the block itself, so we don't emit any
+                                    // additional completion/failure event
+                                    exit_type = ExecutionResult::Paused;
+                                    stop_serial_exec = true;
+                                }
                             }
 
                             log::trace!("Cleaning up execution handle for block {block_id} in document {document_id}");
@@ -507,6 +534,12 @@ pub async fn start_serial_execution(
                     })
                     .await
                     .map_err(|e| format!("Failed to emit serial execution cancelled event: {}", e));
+            }
+            ExecutionResult::Paused => {
+                // The SerialExecutionPaused event is already emitted by the pause block
+                // itself, so we don't emit any additional event here. This ensures we
+                // don't get both a "paused" and "completed" notification.
+                log::debug!("Serial execution paused for document {document_id}");
             }
         };
 

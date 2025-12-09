@@ -146,3 +146,17 @@ body.resizing, body.resizing a:hover, body.resizing * {
     padding-top: 0 !important;
     margin-top: 0 !important;
 }
+
+/* Pulsing glow animation for pause block continue button */
+@keyframes pulse-glow {
+    0%, 100% {
+        box-shadow: 0 0 8px 2px rgba(34, 197, 94, 0.6);
+    }
+    50% {
+        box-shadow: 0 0 16px 4px rgba(34, 197, 94, 0.9);
+    }
+}
+
+.animate-pulse-glow {
+    animation: pulse-glow 1.5s ease-in-out infinite;
+}

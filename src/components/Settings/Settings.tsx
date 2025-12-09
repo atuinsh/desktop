@@ -1038,6 +1038,26 @@ const NotificationSettings = () => {
     Settings.notificationsSerialFailedOs,
   );
 
+  // Serial paused settings
+  const [serialPausedDuration, setSerialPausedDuration, spDurationLoading] = useSettingsState(
+    "serial_paused_duration",
+    0,
+    Settings.notificationsSerialPausedDuration,
+    Settings.notificationsSerialPausedDuration,
+  );
+  const [serialPausedSound, setSerialPausedSound, spSoundLoading] = useSettingsState(
+    "serial_paused_sound",
+    "to_the_point",
+    Settings.notificationsSerialPausedSound,
+    Settings.notificationsSerialPausedSound,
+  );
+  const [serialPausedOs, setSerialPausedOs, spOsLoading] = useSettingsState(
+    "serial_paused_os",
+    "not_focused",
+    Settings.notificationsSerialPausedOs,
+    Settings.notificationsSerialPausedOs,
+  );
+
   const isLoading =
     sounds === null ||
     enabledLoading ||
@@ -1053,7 +1073,10 @@ const NotificationSettings = () => {
     sfOsLoading ||
     sxDurationLoading ||
     sxSoundLoading ||
-    sxOsLoading;
+    sxOsLoading ||
+    spDurationLoading ||
+    spSoundLoading ||
+    spOsLoading;
 
   if (isLoading) return <Spinner />;
 
@@ -1137,6 +1160,18 @@ const NotificationSettings = () => {
                 onSoundChange={setSerialFailedSound}
                 os={serialFailedOs}
                 onOsChange={setSerialFailedOs}
+                sounds={sounds}
+                volume={volume}
+              />
+              <NotificationRow
+                label="Workflow pauses after running at least"
+                durationLabel="Serial paused minimum duration"
+                duration={serialPausedDuration}
+                onDurationChange={setSerialPausedDuration}
+                sound={serialPausedSound}
+                onSoundChange={setSerialPausedSound}
+                os={serialPausedOs}
+                onOsChange={setSerialPausedOs}
                 sounds={sounds}
                 volume={volume}
               />

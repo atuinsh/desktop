@@ -22,6 +22,7 @@ import { LocalDirectoryBlockSpec } from "@/lib/blocks/localdirectory";
 import Script from "./blocks/Script/Script";
 import SshConnect from "./blocks/ssh/SshConnect";
 import HostSelect from "./blocks/Host";
+import Pause from "./blocks/Pause";
 
 import { randomColor } from "@/lib/colors";
 import PhoenixProvider from "@/lib/phoenix_provider";
@@ -72,6 +73,9 @@ export const schema = BlockNoteSchema.create({
     // Misc
     editor: CodeEditor(),
     horizontal_rule: HorizontalRule(),
+
+    // Workflow control
+    pause: Pause(),
   },
   inlineContentSpecs: {
     // Adds all default inline content.

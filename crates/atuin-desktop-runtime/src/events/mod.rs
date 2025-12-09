@@ -31,6 +31,9 @@ pub enum GCEvent {
     /// Serial execution failed
     SerialExecutionFailed { runbook_id: Uuid, error: String },
 
+    /// Serial execution paused at a pause block
+    SerialExecutionPaused { runbook_id: Uuid, block_id: Uuid },
+
     /// PTY was opened and is ready for use
     PtyOpened(PtyMetadata),
 

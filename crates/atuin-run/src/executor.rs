@@ -43,6 +43,9 @@ pub enum ExecutorError {
 
     #[error("Block {0} error: {1}")]
     BlockError(Uuid, String),
+
+    #[error("Workflow paused at block {0} - cannot pause in non-interactive mode")]
+    BlockPaused(Uuid),
 }
 
 pub struct Executor {
@@ -413,6 +416,31 @@ impl Executor {
                                 }
                                 return Err(ExecutorError::BlockError(block_id, data.message));
                             }
+                            BlockLifecycleEvent::Paused => {
+                                // Flush any pending viewport updates before pausing
+                                if pending_viewport_update && is_terminal {
+                                    if let Some(ref term_viewport) = terminal_viewport {
+                                        let lines = term_viewport.get_visible_lines();
+                                        if last_visible_lines.as_ref() != Some(&lines) {
+                                            let _ = self.renderer.replace_lines(viewport, lines.clone());
+                                            *last_visible_lines = Some(lines);
+                                        }
+                                    }
+                                }
+
+                                if self.interactive {
+                                    // In interactive mode, prompt the user to continue
+                                    self.renderer.mark_complete(viewport)?;
+                                    println!("\n⏸  Workflow paused. Press Enter to continue...");
+                                    let mut input = String::new();
+                                    std::io::stdin().read_line(&mut input)?;
+                                    // Continue to the next block
+                                    return Ok(());
+                                } else {
+                                    // Non-interactive mode cannot pause
+                                    return Err(ExecutorError::BlockPaused(block_id));
+                                }
+                            }
                         }
                     }
                 }
@@ -474,6 +502,7 @@ impl Executor {
             Block::MarkdownRender(_) => "Markdown render".to_string(),
             Block::Kubernetes(_) => "Kubernetes".to_string(),
             Block::Dropdown(_) => "Dropdown".to_string(),
+            Block::Pause(_) => "Pause".to_string(),
         }
     }
 }

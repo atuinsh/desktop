@@ -3,6 +3,7 @@ import {
   onSerialExecutionCancelled,
   onSerialExecutionCompleted,
   onSerialExecutionFailed,
+  onSerialExecutionPaused,
   onSerialExecutionStarted,
 } from "../events/grand_central";
 import { invoke } from "@tauri-apps/api/core";
@@ -13,9 +14,12 @@ export interface SerialExecutionHandle {
   isSuccess: boolean;
   isError: boolean;
   isCancelled: boolean;
+  isPaused: boolean;
+  pausedAtBlockId: string | null;
   error: string | null;
   start: () => void;
   stop: () => void;
+  resumeFrom: (blockId: string) => void;
 }
 
 export function useSerialExecution(runbookId: string | undefined | null) {
@@ -23,6 +27,8 @@ export function useSerialExecution(runbookId: string | undefined | null) {
   const [isSuccess, setIsSuccess] = useState(false);
   const [isError, setIsError] = useState(false);
   const [isCancelled, setIsCancelled] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
+  const [pausedAtBlockId, setPausedAtBlockId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const start = useCallback(() => {
@@ -35,6 +41,17 @@ export function useSerialExecution(runbookId: string | undefined | null) {
     invoke("stop_serial_execution", { documentId: runbookId });
   }, [runbookId]);
 
+  const resumeFrom = useCallback(
+    (blockId: string) => {
+      if (!runbookId) return;
+      invoke("start_serial_execution", {
+        documentId: runbookId,
+        fromBlock: blockId,
+      });
+    },
+    [runbookId],
+  );
+
   useEffect(() => {
     const unsubs: UnsubscribeFunction[] = [];
 
@@ -45,6 +62,8 @@ export function useSerialExecution(runbookId: string | undefined | null) {
           setIsSuccess(false);
           setIsError(false);
           setIsCancelled(false);
+          setIsPaused(false);
+          setPausedAtBlockId(null);
           setError(null);
         }
       }),
@@ -58,6 +77,8 @@ export function useSerialExecution(runbookId: string | undefined | null) {
           setIsSuccess(true);
           setIsError(false);
           setIsCancelled(false);
+          setIsPaused(false);
+          setPausedAtBlockId(null);
           setError(null);
         }
       }),
@@ -67,11 +88,13 @@ export function useSerialExecution(runbookId: string | undefined | null) {
       onSerialExecutionCancelled((data) => {
         console.log("onSerialExecutionCancelled", data);
         if (data.runbook_id === runbookId) {
+          setIsRunning(false);
           setIsSuccess(false);
           setIsError(false);
           setIsCancelled(true);
+          setIsPaused(false);
+          setPausedAtBlockId(null);
           setError(null);
-          setIsRunning(false);
         }
       }),
     );
@@ -80,11 +103,28 @@ export function useSerialExecution(runbookId: string | undefined | null) {
       onSerialExecutionFailed((data) => {
         console.log("onSerialExecutionFailed", data);
         if (data.runbook_id === runbookId) {
+          setIsRunning(false);
           setIsSuccess(false);
           setIsError(true);
           setIsCancelled(false);
+          setIsPaused(false);
+          setPausedAtBlockId(null);
           setError(data.error);
+        }
+      }),
+    );
+
+    unsubs.push(
+      onSerialExecutionPaused((data) => {
+        console.log("onSerialExecutionPaused", data);
+        if (data.runbook_id === runbookId) {
           setIsRunning(false);
+          setIsSuccess(false);
+          setIsError(false);
+          setIsCancelled(false);
+          setIsPaused(true);
+          setPausedAtBlockId(data.block_id);
+          setError(null);
         }
       }),
     );
@@ -96,15 +136,29 @@ export function useSerialExecution(runbookId: string | undefined | null) {
 
   const handle = useMemo(
     () => ({
-      isRunning: isRunning,
-      isSuccess: isSuccess,
-      isError: isError,
-      isCancelled: isCancelled,
-      error: error,
-      start: start,
-      stop: stop,
+      isRunning,
+      isSuccess,
+      isError,
+      isCancelled,
+      isPaused,
+      pausedAtBlockId,
+      error,
+      start,
+      stop,
+      resumeFrom,
     }),
-    [isRunning, isSuccess, isError, isCancelled, error, start, stop],
+    [
+      isRunning,
+      isSuccess,
+      isError,
+      isCancelled,
+      isPaused,
+      pausedAtBlockId,
+      error,
+      start,
+      stop,
+      resumeFrom,
+    ],
   );
 
   return handle;

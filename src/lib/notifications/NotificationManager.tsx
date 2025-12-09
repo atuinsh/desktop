@@ -5,12 +5,14 @@ import {
   requestPermission,
   sendNotification,
 } from "@tauri-apps/plugin-notification";
+import { addToast } from "@heroui/react";
 import {
   grandCentral,
   GrandCentralEvents,
   onSerialExecutionStarted,
   onSerialExecutionCompleted,
   onSerialExecutionFailed,
+  onSerialExecutionPaused,
 } from "@/lib/events/grand_central";
 import { Settings } from "@/state/settings";
 import Runbook from "@/state/runbooks/runbook";
@@ -46,6 +48,7 @@ interface NotificationSettings {
   blockFailed: EventNotificationConfig;
   serialFinished: EventNotificationConfig;
   serialFailed: EventNotificationConfig;
+  serialPaused: EventNotificationConfig;
 }
 
 type NotificationPayload = {
@@ -71,6 +74,9 @@ async function loadSettings(): Promise<NotificationSettings> {
     serialFailedDuration,
     serialFailedSound,
     serialFailedOs,
+    serialPausedDuration,
+    serialPausedSound,
+    serialPausedOs,
   ] = await Promise.all([
     Settings.notificationsEnabled(),
     Settings.notificationsVolume(),
@@ -86,6 +92,9 @@ async function loadSettings(): Promise<NotificationSettings> {
     Settings.notificationsSerialFailedDuration(),
     Settings.notificationsSerialFailedSound(),
     Settings.notificationsSerialFailedOs(),
+    Settings.notificationsSerialPausedDuration(),
+    Settings.notificationsSerialPausedSound(),
+    Settings.notificationsSerialPausedOs(),
   ]);
 
   return {
@@ -103,6 +112,7 @@ async function loadSettings(): Promise<NotificationSettings> {
       os: serialFinishedOs,
     },
     serialFailed: { duration: serialFailedDuration, sound: serialFailedSound, os: serialFailedOs },
+    serialPaused: { duration: serialPausedDuration, sound: serialPausedSound, os: serialPausedOs },
   };
 }
 
@@ -460,6 +470,73 @@ export default function NotificationManager() {
     [shouldNotify, notify],
   );
 
+  const handleSerialPaused = useCallback(
+    async (data: { runbook_id: string; block_id: string }) => {
+      logger.debug("serial-paused", data.runbook_id);
+      const execution = serialExecutionsRef.current.get(data.runbook_id);
+      serialExecutionsRef.current.delete(data.runbook_id);
+
+      if (!execution) {
+        logger.debug("no execution found for serial", data.runbook_id);
+        return;
+      }
+
+      const durationMs = Date.now() - execution.startTime;
+      const durationSecs = durationMs / 1000;
+      const settings = settingsRef.current;
+      if (!settings || !settings.enabled) return;
+
+      const config = settings.serialPaused;
+
+      // For paused events, we don't apply the minimum 0.5s duration filter
+      // that shouldNotify uses, since a pause is an intentional breakpoint
+      // that the user explicitly wants to be notified about
+      if (durationSecs < config.duration) {
+        logger.debug("filtered out by duration threshold");
+        return;
+      }
+
+      // Check if any notification channel is enabled
+      const hasOsNotification = config.os !== "never";
+      const hasSound = config.sound !== "none";
+      if (!hasOsNotification && !hasSound) {
+        logger.debug("no notification channels enabled");
+        return;
+      }
+
+      let runbookName = "Workflow";
+      try {
+        const runbook = await Runbook.load(data.runbook_id);
+        if (runbook) {
+          runbookName = runbook.name || "Untitled";
+        }
+      } catch {
+        // Ignore
+      }
+
+      // Show a toast if we won't show an OS notification
+      if (!shouldSendOsNotification(config)) {
+        addToast({
+          title: "Workflow Paused",
+          description: `${runbookName} - waiting for manual action`,
+          color: "warning",
+          timeout: 5000,
+        });
+      }
+
+      notify(
+        {
+          title: "Workflow Paused",
+          body: `${runbookName} - waiting for manual action`,
+          success: true,
+          duration: durationSecs,
+        },
+        config,
+      );
+    },
+    [notify],
+  );
+
   useEffect(() => {
     // Load initial settings
     refreshSettings();
@@ -477,6 +554,7 @@ export default function NotificationManager() {
     const unsubSerialStarted = onSerialExecutionStarted(handleSerialStarted);
     const unsubSerialCompleted = onSerialExecutionCompleted(handleSerialCompleted);
     const unsubSerialFailed = onSerialExecutionFailed(handleSerialFailed);
+    const unsubSerialPaused = onSerialExecutionPaused(handleSerialPaused);
 
     return () => {
       clearInterval(settingsInterval);
@@ -487,6 +565,7 @@ export default function NotificationManager() {
       unsubSerialStarted();
       unsubSerialCompleted();
       unsubSerialFailed();
+      unsubSerialPaused();
     };
   }, [
     refreshSettings,
@@ -497,6 +576,7 @@ export default function NotificationManager() {
     handleSerialStarted,
     handleSerialCompleted,
     handleSerialFailed,
+    handleSerialPaused,
   ]);
 
   // This component doesn't render anything

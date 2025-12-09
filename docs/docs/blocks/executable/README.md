@@ -89,4 +89,12 @@ Runbooks also support "serial execution". Click the play button in the top right
 
     [:octicons-arrow-right-24: Learn more](variable.md)
 
+-   :material-pause:{ .lg .middle } **Pause**
+
+    ---
+
+    Halt workflow execution for manual intervention or approval steps.
+
+    [:octicons-arrow-right-24: Learn more](pause.md)
+
 </div>

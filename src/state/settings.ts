@@ -40,6 +40,10 @@ const NOTIFICATIONS_SERIAL_FAILED_DURATION = "settings.notifications.serial.fail
 const NOTIFICATIONS_SERIAL_FAILED_SOUND = "settings.notifications.serial.failed.sound";
 const NOTIFICATIONS_SERIAL_FAILED_OS = "settings.notifications.serial.failed.os";
 
+const NOTIFICATIONS_SERIAL_PAUSED_DURATION = "settings.notifications.serial.paused.duration";
+const NOTIFICATIONS_SERIAL_PAUSED_SOUND = "settings.notifications.serial.paused.sound";
+const NOTIFICATIONS_SERIAL_PAUSED_OS = "settings.notifications.serial.paused.os";
+
 export class Settings {
   public static DEFAULT_FONT = "FiraCode";
   public static DEFAULT_FONT_SIZE = 14;
@@ -385,6 +389,44 @@ export class Settings {
     }
 
     return (await store.get(NOTIFICATIONS_SERIAL_FAILED_OS)) ?? "always";
+  }
+
+  // Serial paused settings
+  public static async notificationsSerialPausedDuration(
+    val: number | null = null,
+  ): Promise<number> {
+    let store = await KVStore.open_default();
+
+    if (val !== null) {
+      await store.set(NOTIFICATIONS_SERIAL_PAUSED_DURATION, val);
+      return val;
+    }
+
+    return (await store.get(NOTIFICATIONS_SERIAL_PAUSED_DURATION)) ?? 0;
+  }
+
+  public static async notificationsSerialPausedSound(val: string | null = null): Promise<string> {
+    let store = await KVStore.open_default();
+
+    if (val !== null) {
+      await store.set(NOTIFICATIONS_SERIAL_PAUSED_SOUND, val);
+      return val;
+    }
+
+    return (await store.get(NOTIFICATIONS_SERIAL_PAUSED_SOUND)) ?? "to_the_point";
+  }
+
+  public static async notificationsSerialPausedOs(
+    val: "always" | "not_focused" | "never" | null = null,
+  ): Promise<"always" | "not_focused" | "never"> {
+    let store = await KVStore.open_default();
+
+    if (val !== null) {
+      await store.set(NOTIFICATIONS_SERIAL_PAUSED_OS, val);
+      return val;
+    }
+
+    return (await store.get(NOTIFICATIONS_SERIAL_PAUSED_OS)) ?? "not_focused";
   }
 
   public static async getSystemDefaultShell(): Promise<string> {

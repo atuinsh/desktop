@@ -7,4 +7,4 @@ import type { BlockFinishedData } from "./BlockFinishedData";
  *
  * Indicates state transitions during block execution.
  */
-export type BlockLifecycleEvent = { "type": "started", "data": string } | { "type": "finished", "data": BlockFinishedData } | { "type": "cancelled" } | { "type": "error", "data": BlockErrorData };
+export type BlockLifecycleEvent = { "type": "started", "data": string } | { "type": "finished", "data": BlockFinishedData } | { "type": "cancelled" } | { "type": "error", "data": BlockErrorData } | { "type": "paused" };

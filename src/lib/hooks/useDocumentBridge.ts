@@ -280,6 +280,13 @@ export function useBlockExecution(blockId: string): ClientExecutionHandle {
         }
         setError(null);
         break;
+      case "paused":
+        // Paused is treated like success - the block completed its work
+        // (which was to pause the workflow)
+        setLifecycle("success");
+        setExecutionId(null);
+        setError(null);
+        break;
 
       default:
         if (output.lifecycle !== null) {

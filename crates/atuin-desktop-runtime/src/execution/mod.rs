@@ -28,6 +28,7 @@ pub enum ExecutionResult {
     Success,
     Failure,
     Cancelled,
+    Paused,
 }
 
 /// Context provided to blocks during execution
@@ -271,6 +272,33 @@ impl ExecutionContext {
         Ok(())
     }
 
+    /// Mark a block as paused
+    /// This stops the serial execution at this block and signals the frontend
+    /// Sends appropriate events to Grand Central and the output channel
+    pub async fn block_paused(&self) -> Result<(), DocumentError> {
+        let _ = self.handle().set_success().await;
+        let _ = self
+            .emit_gc_event(GCEvent::SerialExecutionPaused {
+                runbook_id: self.runbook_id,
+                block_id: self.block_id,
+            })
+            .await;
+        let _ = self
+            .send_output(
+                BlockOutput::builder()
+                    .block_id(self.block_id)
+                    .lifecycle(BlockLifecycleEvent::Paused)
+                    .build(),
+            )
+            .await;
+        let _ = self
+            .handle()
+            .on_finish
+            .0
+            .send(Some(ExecutionResult::Paused));
+        Ok(())
+    }
+
     pub fn cancellation_token(&self) -> CancellationToken {
         self.handle().cancellation_token.clone()
     }
@@ -473,4 +501,5 @@ pub enum BlockLifecycleEvent {
     Finished(BlockFinishedData),
     Cancelled,
     Error(BlockErrorData),
+    Paused,
 }
