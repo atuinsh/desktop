@@ -11,22 +11,14 @@ interface AIHintProps {
 }
 
 function shouldShowHint(): boolean {
-  try {
-    const dismissed = localStorage.getItem(STORAGE_KEY_DISMISSED) === "true";
-    const useCount = parseInt(localStorage.getItem(STORAGE_KEY_USE_COUNT) || "0", 10);
-    return !dismissed && useCount < USE_COUNT_THRESHOLD;
-  } catch {
-    return true; // Show by default if localStorage fails
-  }
+  const dismissed = localStorage.getItem(STORAGE_KEY_DISMISSED) === "true";
+  const useCount = parseInt(localStorage.getItem(STORAGE_KEY_USE_COUNT) || "0", 10);
+  return !dismissed && useCount < USE_COUNT_THRESHOLD;
 }
 
 export function incrementAIHintUseCount(): void {
-  try {
-    const current = parseInt(localStorage.getItem(STORAGE_KEY_USE_COUNT) || "0", 10);
-    localStorage.setItem(STORAGE_KEY_USE_COUNT, String(current + 1));
-  } catch {
-    // Ignore localStorage errors
-  }
+  const current = parseInt(localStorage.getItem(STORAGE_KEY_USE_COUNT) || "0", 10);
+  localStorage.setItem(STORAGE_KEY_USE_COUNT, String(current + 1));
 }
 
 export function AIHint({ editor, isGenerating, aiEnabled }: AIHintProps) {
@@ -37,11 +29,7 @@ export function AIHint({ editor, isGenerating, aiEnabled }: AIHintProps) {
   const lastContentRef = useRef<string>("");
 
   const dismissPermanently = useCallback(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY_DISMISSED, "true");
-    } catch {
-      // Ignore localStorage errors
-    }
+    localStorage.setItem(STORAGE_KEY_DISMISSED, "true");
     setPermanentlyHidden(true);
     setVisible(false);
   }, []);
@@ -143,7 +131,7 @@ export function AIHint({ editor, isGenerating, aiEnabled }: AIHintProps) {
         clearTimeout(timeoutRef.current);
       }
     };
-  }, [editor, isGenerating, aiEnabled]);
+  }, [editor, isGenerating, aiEnabled, permanentlyHidden]);
 
   // Hide on scroll
   useEffect(() => {
