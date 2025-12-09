@@ -4,7 +4,7 @@ import { AIFeatureDisabledError } from "@/lib/ai/block_editor";
 import track_event from "@/tracking";
 
 interface EditorContext {
-  documentMarkdown: string;
+  documentMarkdown?: string;
   currentBlockId: string;
   currentBlockIndex: number;
 }

@@ -294,9 +294,11 @@ export default function Editor({ runbook, editable, runbookEditor }: EditorProps
   const [editPrompt, setEditPrompt] = useState("");
   const isProgrammaticEditRef = useRef(false);
 
-  // AI is enabled for logged-in Hub users
+  // AI is enabled for logged-in Hub users when AI setting is on
   const isLoggedIn = useStore((state) => state.isLoggedIn);
-  const aiEnabledState = isLoggedIn();
+  const aiEnabled = useStore((state) => state.aiEnabled);
+  const aiShareContext = useStore((state) => state.aiShareContext);
+  const aiEnabledState = isLoggedIn() && aiEnabled;
 
   const showAIPopup = useCallback((position: { x: number; y: number }) => {
     setAiPopupPosition(position);
@@ -435,8 +437,10 @@ export default function Editor({ runbook, editable, runbookEditor }: EditorProps
       const currentBlockId = cursorPosition.block.id;
       const currentBlockIndex = blocks.findIndex((b: any) => b.id === currentBlockId);
 
-      // Export document as markdown to save tokens
-      const documentMarkdown = await editor.blocksToMarkdownLossy();
+      // Export document as markdown to save tokens (only if sharing context is enabled)
+      const documentMarkdown = aiShareContext
+        ? await editor.blocksToMarkdownLossy()
+        : undefined;
 
       return {
         documentMarkdown,
@@ -447,7 +451,7 @@ export default function Editor({ runbook, editable, runbookEditor }: EditorProps
       console.warn("Failed to get editor context:", error);
       return undefined;
     }
-  }, [editor]);
+  }, [editor, aiShareContext]);
 
   // Extract plain text from a BlockNote block's content
   const getBlockText = useCallback((block: any): string => {

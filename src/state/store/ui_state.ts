@@ -77,6 +77,8 @@ export interface AtuinUiState {
   shellCheckEnabled: boolean;
   shellCheckPath: string;
   uiScale: number;
+  aiEnabled: boolean;
+  aiShareContext: boolean;
 
   setAdvancedSettings: (advancedSettings: AdvancedSettings) => void;
   setAppVersion: (version: string) => void;
@@ -124,6 +126,8 @@ export interface AtuinUiState {
   setShellCheckEnabled: (enabled: boolean) => void;
   setShellCheckPath: (path: string) => void;
   setUiScale: (scale: number) => void;
+  setAiEnabled: (enabled: boolean) => void;
+  setAiShareContext: (enabled: boolean) => void;
 
   getFolderState: (workspaceId: string) => Option<Record<string, boolean>>;
   toggleFolder: (workspaceId: string, folderId: string) => void;
@@ -149,6 +153,8 @@ export const persistUiKeys: (keyof AtuinUiState)[] = [
   "tabs",
   "currentTabId",
   "uiScale",
+  "aiEnabled",
+  "aiShareContext",
 ];
 
 export const createUiState: StateCreator<AtuinUiState> = (set, get, _store): AtuinUiState => ({
@@ -189,6 +195,8 @@ export const createUiState: StateCreator<AtuinUiState> = (set, get, _store): Atu
   shellCheckEnabled: false,
   shellCheckPath: "",
   uiScale: 100,
+  aiEnabled: true,
+  aiShareContext: true,
 
   setAdvancedSettings: (advancedSettings: AdvancedSettings) =>
     set(() => ({ advancedSettings: advancedSettings })),
@@ -443,6 +451,8 @@ export const createUiState: StateCreator<AtuinUiState> = (set, get, _store): Atu
   setShellCheckEnabled: (enabled: boolean) => set(() => ({ shellCheckEnabled: enabled })),
   setShellCheckPath: (path: string) => set(() => ({ shellCheckPath: path })),
   setUiScale: (scale: number) => set(() => ({ uiScale: scale })),
+  setAiEnabled: (enabled: boolean) => set(() => ({ aiEnabled: enabled })),
+  setAiShareContext: (enabled: boolean) => set(() => ({ aiShareContext: enabled })),
 
   getFolderState: (workspaceId: string) => Some(get().folderState[workspaceId]),
   toggleFolder: (workspaceId: string, folderId: string) => {

@@ -774,7 +774,8 @@ const AuthTokenModal = (props: AuthTokenModalProps) => {
   const [validToken, setValidToken] = useState(false);
 
   useEffect(() => {
-    const valid = token.length == 54 && token.startsWith("atapi_");
+    const trimmed = token.trim();
+    const valid = trimmed.startsWith("atapi_") && trimmed.length >= 20;
     setValidToken(valid);
   }, [token]);
 
@@ -795,7 +796,7 @@ const AuthTokenModal = (props: AuthTokenModalProps) => {
             isDisabled={!validToken}
             color="success"
             variant="flat"
-            onPress={() => props.onSubmit(token)}
+            onPress={() => props.onSubmit(token.trim())}
           >
             Submit
           </Button>
@@ -1133,6 +1134,41 @@ const NotificationSettings = () => {
   );
 };
 
+const AISettings = () => {
+  const aiEnabled = useStore((state) => state.aiEnabled);
+  const aiShareContext = useStore((state) => state.aiShareContext);
+  const setAiEnabled = useStore((state) => state.setAiEnabled);
+  const setAiShareContext = useStore((state) => state.setAiShareContext);
+
+  return (
+    <Card shadow="sm">
+      <CardBody className="flex flex-col gap-4">
+        <h2 className="text-xl font-semibold">AI</h2>
+        <p className="text-sm text-default-500">
+          Configure AI-powered features in runbooks
+        </p>
+
+        <SettingSwitch
+          label="Enable AI features"
+          isSelected={aiEnabled}
+          onValueChange={setAiEnabled}
+          description="Enable AI block generation and editing (Cmd+Enter, Cmd+K)"
+        />
+
+        {aiEnabled && (
+          <SettingSwitch
+            className="ml-4"
+            label="Share document context"
+            isSelected={aiShareContext}
+            onValueChange={setAiShareContext}
+            description="Send document content to improve AI suggestions. Disable for sensitive documents."
+          />
+        )}
+      </CardBody>
+    </Card>
+  );
+};
+
 const UserSettings = () => {
   const user = useStore((state) => state.user);
   const refreshUser = useStore((state) => state.refreshUser);
@@ -1246,6 +1282,12 @@ const SettingsPanel = () => {
         <Tab key="notification" title="Notifications">
           <div className="flex flex-col gap-4">
             <NotificationSettings />
+          </div>
+        </Tab>
+
+        <Tab key="ai" title="AI">
+          <div className="flex flex-col gap-4">
+            <AISettings />
           </div>
         </Tab>
 

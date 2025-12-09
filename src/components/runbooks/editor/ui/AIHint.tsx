@@ -183,15 +183,18 @@ export function AIHint({ editor, isGenerating, aiEnabled }: AIHintProps) {
         opacity: visible ? 1 : 0,
       }}
     >
-      <button
-        onClick={dismissPermanently}
-        className="text-[10px] text-zinc-400 dark:text-zinc-500 flex items-center gap-1 hover:text-zinc-500 dark:hover:text-zinc-400 transition-colors cursor-pointer bg-transparent border-none p-0"
-        title="Click to dismiss (or press Esc)"
-      >
+      <div className="text-[10px] text-zinc-400 dark:text-zinc-500 flex items-center gap-1">
         <kbd className="font-mono bg-zinc-100 dark:bg-zinc-800 px-1 py-0.5 rounded text-zinc-500 dark:text-zinc-400">⌘</kbd>
         <kbd className="font-mono bg-zinc-100 dark:bg-zinc-800 px-1 py-0.5 rounded text-zinc-500 dark:text-zinc-400">↵</kbd>
         <span className="ml-0.5">to generate</span>
-      </button>
+        <button
+          onClick={dismissPermanently}
+          className="ml-1.5 text-zinc-300 dark:text-zinc-600 hover:text-zinc-500 dark:hover:text-zinc-400 transition-colors cursor-pointer bg-transparent border-none p-0 leading-none"
+          title="Dismiss forever"
+        >
+          ×
+        </button>
+      </div>
     </div>
   );
 }
