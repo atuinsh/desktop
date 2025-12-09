@@ -298,6 +298,9 @@ export default function Editor({ runbook, editable, runbookEditor }: EditorProps
   const isLoggedIn = useStore((state) => state.isLoggedIn);
   const aiEnabled = useStore((state) => state.aiEnabled);
   const aiShareContext = useStore((state) => state.aiShareContext);
+  const user = useStore((state) => state.user);
+  const username = user?.username?.toLowerCase() ?? "";
+  const showAiHint = ["ellie", "binarymuse"].includes(username);
   const aiEnabledState = isLoggedIn() && aiEnabled;
 
   const showAIPopup = useCallback((position: { x: number; y: number }) => {
@@ -942,7 +945,7 @@ export default function Editor({ runbook, editable, runbookEditor }: EditorProps
       )}
 
       {/* Subtle hint for AI generation */}
-      {aiEnabledState && !postGenerationBlockId && (
+      {aiEnabledState && showAiHint && !postGenerationBlockId && (
         <AIHint editor={editor} isGenerating={isGeneratingInline} aiEnabled={aiEnabledState} />
       )}
 
