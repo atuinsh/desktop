@@ -384,6 +384,7 @@ export class PhoenixSynchronizer extends Emittery {
     // disconnect from the ydoc
     // shut down the event emitter
     this.clearListeners();
+    this.verificationDoc.destroy();
   }
 }
 
