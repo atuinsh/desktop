@@ -163,6 +163,10 @@ export default class RunbookEditor {
     return this.emitter.on("block_focus", callback);
   }
 
+  onUnsupportedBlock(callback: (unknownTypes: string[]) => void) {
+    return this.emitter.on("unsupported_block", callback);
+  }
+
   getEditor(): Promise<BlockNoteEditor> {
     if (this.editor) return this.editor;
 
@@ -238,6 +242,12 @@ export default class RunbookEditor {
 
       provider.on("remote_update", () => {
         this.save(this.runbook, editor as any as BlockNoteEditor);
+      });
+
+      provider.on("unsupported_block", async (unknownTypes: string[]) => {
+        this.logger.warn(`Unsupported block types detected: ${unknownTypes.join(", ")}`);
+        this.emitter.emit("unsupported_block", unknownTypes);
+        this.shutdown();
       });
 
       provider.on("presence:join", this.onPresenceJoin);

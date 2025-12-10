@@ -7,6 +7,7 @@ import Emittery from "emittery";
 import WorkspaceSyncManager from "./sync/workspace_sync_manager";
 import { timeoutPromise } from "./utils";
 import { autobind } from "./decorators";
+import { schema } from "@/components/runbooks/editor/create_editor";
 
 type AwarenessData = { added: number[]; updated: number[]; removed: number[] };
 
@@ -21,6 +22,7 @@ export type SyncType = "online" | "offline" | "timeout" | "error";
  * Handles synchronization of a Y.Doc with the server over a Phoenix channel.
  *
  * @emits `"synced", SyncType ("online" | "offline" | "timeout" | "error")`
+ * @emits `"unsupported_block", string[]` when unknown block types are detected
  */
 export class PhoenixSynchronizer extends Emittery {
   public static instanceCount = 0;
@@ -38,6 +40,10 @@ export class PhoenixSynchronizer extends Emittery {
   protected unlock: Function | null = null;
   protected presenceColor: string | null = null;
 
+  // Verification infrastructure for validating incoming updates
+  protected verificationDoc: Y.Doc;
+  protected knownBlockTypes: Set<string>;
+
   constructor(runbookId: string, doc: Y.Doc, requireLock: boolean = true, isProvider = false) {
     super();
 
@@ -45,6 +51,10 @@ export class PhoenixSynchronizer extends Emittery {
     this.doc = doc;
     this.awareness = new awarenessProtocol.Awareness(this.doc);
     this.requireLock = requireLock;
+
+    // Initialize verification infrastructure (plain Y.Doc, no editor binding)
+    this.verificationDoc = new Y.Doc();
+    this.knownBlockTypes = new Set(Object.keys(schema.blockSpecs));
 
     PhoenixSynchronizer.instanceCount++;
     if (isProvider) {
@@ -69,6 +79,134 @@ export class PhoenixSynchronizer extends Emittery {
     this.connected = manager.isConnected();
 
     setTimeout(() => this.init());
+  }
+
+  /**
+   * Syncs the verification doc to match the main doc's current state.
+   * Called before validating incoming updates.
+   */
+  protected syncVerificationDoc() {
+    const currentState = Y.encodeStateAsUpdate(this.doc);
+    Y.applyUpdate(this.verificationDoc, currentState);
+  }
+
+  /**
+   * Applies an update to both the main doc and verification doc.
+   * Use this instead of Y.applyUpdate(this.doc, ...) directly to keep docs in sync.
+   */
+  protected applyUpdate(update: Uint8Array, origin?: any) {
+    Y.applyUpdate(this.doc, update, origin);
+    Y.applyUpdate(this.verificationDoc, update, origin);
+  }
+
+  /**
+   * Validates an update and applies it to both docs if valid.
+   * Returns true if the update was valid and applied, false otherwise.
+   * On invalid update, emits "unsupported_block" event and shuts down.
+   */
+  protected async validateAndApplyUpdate(update: Uint8Array, origin?: any): Promise<boolean> {
+    // Sync verification doc to current main doc state
+    this.syncVerificationDoc();
+
+    // Apply update to verification doc and check for unknown block types
+    Y.applyUpdate(this.verificationDoc, update);
+    const fragment = this.verificationDoc.getXmlFragment("document-store");
+    const unknownTypes = this.findUnknownBlockTypesInXml(fragment);
+
+    if (unknownTypes.length > 0) {
+      this.logger.warn(`Unsupported block types detected: ${unknownTypes.join(", ")}`);
+      await this.emit("unsupported_block", unknownTypes);
+      this.shutdown();
+      return false;
+    }
+
+    // Validation passed - apply to main doc (verification doc already has it)
+    Y.applyUpdate(this.doc, update, origin);
+    return true;
+  }
+
+  /**
+   * Debug helper to log the XML structure
+   */
+  // @ts-ignore - Unused but kept for future debugging
+  protected debugLogXmlStructure(element: Y.XmlFragment | Y.XmlElement, depth: number) {
+    const indent = "  ".repeat(depth);
+    // Check XmlElement FIRST since it extends XmlFragment
+    if (element instanceof Y.XmlElement) {
+      this.logger.info(`${indent}<${element.nodeName}>`);
+      for (const child of element.toArray()) {
+        if (child instanceof Y.XmlElement) {
+          this.debugLogXmlStructure(child, depth + 1);
+        } else {
+          this.logger.info(`${indent}  [XmlText]`);
+        }
+      }
+    } else if (element instanceof Y.XmlFragment) {
+      this.logger.info(`${indent}[XmlFragment]`);
+      for (const child of element.toArray()) {
+        if (child instanceof Y.XmlElement) {
+          this.debugLogXmlStructure(child, depth + 1);
+        } else {
+          this.logger.info(`${indent}  [XmlText]`);
+        }
+      }
+    }
+  }
+
+  /**
+   * Recursively inspects the raw Y.XmlFragment for unknown block types.
+   *
+   * BlockNote document structure:
+   * - XmlFragment "document-store"
+   *   - blockGroup
+   *     - blockContainer (for each block)
+   *       - [actual block type, e.g., "paragraph", "run", etc.]
+   *       - blockGroup (optional, for nested children)
+   */
+  protected findUnknownBlockTypesInXml(fragment: Y.XmlFragment): string[] {
+    const unknown: string[] = [];
+
+    const walkBlockGroup = (blockGroup: Y.XmlElement) => {
+      for (const child of blockGroup.toArray()) {
+        if (child instanceof Y.XmlElement && child.nodeName === "blockContainer") {
+          walkBlockContainer(child);
+        }
+      }
+    };
+
+    const walkBlockContainer = (container: Y.XmlElement) => {
+      for (const child of container.toArray()) {
+        if (child instanceof Y.XmlElement) {
+          if (child.nodeName === "blockGroup") {
+            // Nested children - recurse
+            walkBlockGroup(child);
+          } else {
+            // This is the actual block type
+            const blockType = child.nodeName;
+            if (!this.knownBlockTypes.has(blockType)) {
+              if (!unknown.includes(blockType)) {
+                unknown.push(blockType);
+              }
+            }
+            // Check for nested blockGroup inside the block itself (e.g., for table cells)
+            for (const innerChild of child.toArray()) {
+              if (innerChild instanceof Y.XmlElement && innerChild.nodeName === "blockGroup") {
+                walkBlockGroup(innerChild);
+              }
+            }
+          }
+        }
+      }
+    };
+
+    // Start at the root XmlFragment
+    for (const child of fragment.toArray()) {
+      if (child instanceof Y.XmlElement && child.nodeName === "blockGroup") {
+        walkBlockGroup(child);
+      }
+    }
+
+    return unknown;
   }
 
   get channel() {
@@ -139,7 +277,7 @@ export class PhoenixSynchronizer extends Emittery {
   async resync() {
     if (this.isShutdown) return;
     if (this.isSyncing) {
-      this.logger.error("Already syncing; skipping resync");
+      this.logger.warn("Already syncing; skipping resync");
       return;
     }
 
@@ -177,26 +315,52 @@ export class PhoenixSynchronizer extends Emittery {
     }
   }
 
-  private async doResync(): Promise<boolean> {
+  protected async doResync(): Promise<boolean> {
     if (this.isShutdown) return false;
 
-    // Step 1: Get our state vector and send it to the server in exchange for
-    // the server's state vector
+    // === VALIDATION PHASE ===
+    // Use a fresh doc with empty state vector to get FULL server state for validation.
+    // This ensures we validate what the SERVER has, independent of our local state.
+    const freshDoc = new Y.Doc();
+    const emptyStateVector = Y.encodeStateVector(freshDoc);
+    this.logger.debug(`⬆️ [Validation] Requesting full server state`);
+    const validationServerVector = await this.channel
+      .push("sync_step_1", emptyStateVector)
+      .receiveBin();
+    const emptyDiff = Y.encodeStateAsUpdate(freshDoc, validationServerVector);
+    const fullServerState = await this.channel.push("sync_step_2", emptyDiff).receiveBin();
+    this.logger.debug(
+      `⬇️ [Validation] Received full server state (${fullServerState.byteLength} bytes)`,
+    );
+
+    // Apply full server state to fresh doc and validate
+    Y.applyUpdate(freshDoc, fullServerState);
+    const fragment = freshDoc.getXmlFragment("document-store");
+    const unknownTypes = this.findUnknownBlockTypesInXml(fragment);
+
+    if (unknownTypes.length > 0) {
+      this.logger.warn(
+        `Unsupported block types detected during resync: ${unknownTypes.join(", ")}`,
+      );
+      await this.emit("unsupported_block", unknownTypes);
+      this.shutdown();
+      return false;
+    }
+
+    // === NORMAL SYNC PHASE ===
     const stateVector = Y.encodeStateVector(this.doc);
     this.logger.debug(`⬆️ Sending state vector (${stateVector.byteLength} bytes)`);
     const serverVector = await this.channel.push("sync_step_1", stateVector).receiveBin();
     this.logger.debug(`⬇️ Received server state vector (${serverVector.byteLength} bytes)`);
 
-    // Step 2: Get the diff between our document and the server's document
-    // and exchange it for the diff from the server
     const diff = Y.encodeStateAsUpdate(this.doc, serverVector);
     this.logger.debug(`⬆️ Sending state diff (${diff.byteLength} bytes)`);
     const serverDiff = await this.channel.push("sync_step_2", diff).receiveBin();
     this.logger.debug(`⬇️ Received server diff (${serverDiff.byteLength} bytes)`);
 
-    // Step 3: Apply the diff from the server
     if (!this.isShutdown) {
-      Y.applyUpdate(this.doc, serverDiff, this);
+      // Use applyUpdate to keep both main doc and verification doc in sync
+      this.applyUpdate(serverDiff, this);
       this.logger.info("Resync complete");
       return true;
     } else {
@@ -230,10 +394,13 @@ export class PhoenixSynchronizer extends Emittery {
  *
  * @emits `"synced", SyncType ("online" | "offline" | "timeout" | "error")`
  * @emits `"remote_update"` when a remote update is received
+ * @emits `"unsupported_block", string[]` when unknown block types are detected
  */
 export default class PhoenixProvider extends PhoenixSynchronizer {
   protected pendingUpdate: Uint8Array | null = null;
+  protected pendingLocalUpdate: Uint8Array | null = null;
   protected scheduledEmitAfterSync: boolean = false;
+  private validationComplete: boolean = false;
 
   constructor(runbookId: string, doc: Y.Doc, presenceColor: string, requireLock: boolean = true) {
     super(runbookId, doc, requireLock, true);
@@ -248,21 +415,41 @@ export default class PhoenixProvider extends PhoenixSynchronizer {
     this.subscriptions.push(this.channel.on("presence_diff", this.handlePresenceDiff));
   }
 
+  /**
+   * Override doResync to set validationComplete flag after validation passes.
+   * This ungates handleDocUpdate so updates can be sent to the server.
+   */
+  protected async doResync(): Promise<boolean> {
+    const result = await super.doResync();
+    if (result) {
+      // Validation passed - now allow updates to be sent to server
+      this.validationComplete = true;
+
+      // Send any local updates that were queued while waiting for validation
+      if (this.pendingLocalUpdate && this.connected) {
+        this.channel.push("client_update", this.pendingLocalUpdate.buffer);
+        this.pendingLocalUpdate = null;
+      }
+    }
+    return result;
+  }
+
   emitAfterSync() {
     if (this.scheduledEmitAfterSync) return;
 
     this.scheduledEmitAfterSync = true;
-    this.once("synced").then(() => {
+    this.once("synced").then(async () => {
       if (this.pendingUpdate) {
         try {
-          Y.applyUpdate(this.doc, this.pendingUpdate, this);
+          const valid = await this.validateAndApplyUpdate(this.pendingUpdate, this);
+          if (!valid) return; // validateAndApplyUpdate handles emit + shutdown
+          this.emit("remote_update");
         } catch (err) {
           this.logger.error("Failed to apply update", err);
           this.resync();
           this.emitAfterSync();
           return;
         }
-        this.emit("remote_update");
       }
       this.pendingUpdate = null;
       this.scheduledEmitAfterSync = false;
@@ -272,6 +459,18 @@ export default class PhoenixProvider extends PhoenixSynchronizer {
   @autobind
   handleDocUpdate(update: Uint8Array, origin: any) {
     if (origin === this || !this.channel) return;
+
+    // Don't send updates to server until we've validated the server state.
+    // This prevents y-prosemirror deletions of unknown blocks from propagating.
+    // Queue the updates to send after validation completes.
+    if (!this.validationComplete) {
+      if (this.pendingLocalUpdate) {
+        this.pendingLocalUpdate = Y.mergeUpdates([this.pendingLocalUpdate, update]);
+      } else {
+        this.pendingLocalUpdate = update;
+      }
+      return;
+    }
 
     if (this.connected) {
       this.channel.push("client_update", update.buffer);
@@ -292,7 +491,7 @@ export default class PhoenixProvider extends PhoenixSynchronizer {
   }
 
   @autobind
-  handleIncomingUpdate(payload: Uint8Array) {
+  async handleIncomingUpdate(payload: Uint8Array) {
     if (this.isSyncing) {
       if (this.pendingUpdate) {
         this.pendingUpdate = Y.mergeUpdates([this.pendingUpdate, payload]);
@@ -305,14 +504,13 @@ export default class PhoenixProvider extends PhoenixSynchronizer {
     }
 
     try {
-      Y.applyUpdate(this.doc, payload, this);
+      const valid = await this.validateAndApplyUpdate(payload, this);
+      if (!valid) return; // validateAndApplyUpdate handles emit + shutdown
+      this.emit("remote_update");
     } catch (err) {
       this.logger.error("Failed to apply update", err);
       this.resync();
-      return;
     }
-
-    this.emit("remote_update");
   }
 
   @autobind

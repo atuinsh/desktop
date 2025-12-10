@@ -701,11 +701,32 @@ export default function Editor({ runbook, editable, runbookEditor }: EditorProps
     [runbook?.id],
   );
 
+  const [unsupportedBlocks, setUnsupportedBlocks] = useState<string[]>([]);
+  useEffect(() => {
+    if (!runbookEditor) return;
+
+    return runbookEditor.onUnsupportedBlock((unknownTypes: string[]) => {
+      console.log(">> unsupported block", unknownTypes);
+      setUnsupportedBlocks(unknownTypes);
+    });
+  }, [runbookEditor]);
+
   if (editorError) {
     return (
       <div className="flex w-full h-full flex-col justify-center items-center gap-4">
         <AlertCircleIcon className="text-danger size-10" />
         <p className="text-danger max-w-lg text-center">{editorError.message}</p>
+      </div>
+    );
+  }
+
+  if (unsupportedBlocks.length > 0) {
+    return (
+      <div className="flex w-full h-full flex-col justify-center items-center gap-4">
+        <AlertCircleIcon className="text-danger size-10" />
+        <p className="text-danger max-w-lg text-center">
+          This document contains blocks that your version of Atuin Desktop does not support.
+        </p>
       </div>
     );
   }
