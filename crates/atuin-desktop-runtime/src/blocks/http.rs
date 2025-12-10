@@ -94,7 +94,16 @@ impl FromDocument for Http {
 
         let headers = props
             .get("headers")
-            .and_then(|v| v.as_object())
+            .and_then(|v| {
+                // Support both string format (from frontend) and object format (for backward compatibility)
+                if let Some(s) = v.as_str() {
+                    // Parse JSON string: "{\"key\":\"value\"}"
+                    serde_json::from_str::<serde_json::Map<String, serde_json::Value>>(s).ok()
+                } else {
+                    // Direct object format
+                    v.as_object().cloned()
+                }
+            })
             .map(|obj| {
                 obj.iter()
                     .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string())))
@@ -914,6 +923,28 @@ mod tests {
         assert_eq!(http.verb, HttpVerb::Get);
         assert!(http.headers.is_empty());
         assert!(http.body.is_empty());
+    }
+
+    #[test]
+    fn test_from_document_with_string_headers() {
+        // Test that headers stored as JSON string (frontend format) are correctly parsed
+        let block_data = serde_json::json!({
+            "id": "00000000-0000-0000-0000-000000000001",
+            "type": "http",
+            "props": {
+                "url": "https://api.example.com",
+                "headers": "{\"Access-Token\":\"abc123\",\"Content-Type\":\"application/json\"}"
+            }
+        });
+
+        let http = Http::from_document(&block_data).unwrap();
+
+        assert_eq!(http.headers.get("Access-Token").unwrap(), "abc123");
+        assert_eq!(
+            http.headers.get("Content-Type").unwrap(),
+            "application/json"
+        );
+        assert_eq!(http.headers.len(), 2);
     }
 
     #[test]
