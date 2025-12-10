@@ -42,6 +42,7 @@ export default class RunbookEditor {
   private onPresenceJoin: (user: PresenceUserInfo) => void;
   private onPresenceLeave: (user: PresenceUserInfo) => void;
   private onClearPresences: () => void;
+  private presenceColor: string | null = null;
   private yDoc: Y.Doc;
   private hashes: string[] = [];
   private emitter: Emittery;
@@ -108,9 +109,13 @@ export default class RunbookEditor {
     if (!this.editor) return;
 
     const editor = await this.editor;
-    const extension: any = editor.extensions.collaborationCursor;
+    const extension = editor.getExtension("yCursor") as any; // yCursorPlugin is from y-prosemirror
     if (extension) {
-      extension.options.user.name = user.username || "Anonymous";
+      // https://github.com/TypeCellOS/BlockNote/blob/356a3ef7224fb0b4778a3b975ab84d5565344b62/packages/core/src/extensions/Collaboration/YCursorPlugin.ts#L178C7-L178C17
+      extension.extension.updateUser({
+        name: user.username,
+        color: this.presenceColor || randomColor(),
+      });
     }
   }
 
@@ -216,15 +221,15 @@ export default class RunbookEditor {
         return;
       }
 
-      const presenceColor = randomColor();
-      const provider = new PhoenixProvider(this.runbook.id, this.yDoc, presenceColor);
+      this.presenceColor = randomColor();
+      const provider = new PhoenixProvider(this.runbook.id, this.yDoc, this.presenceColor);
       this.provider = provider;
       let editor: BlockNoteEditor | null = null;
       try {
         editor = createCollaborativeEditor(
           provider,
           this.user,
-          presenceColor,
+          this.presenceColor,
         ) as any as BlockNoteEditor;
       } catch (error) {
         reject(new Error(RUNBOOK_EDITOR_CREATION_ERROR_MESSAGE));
