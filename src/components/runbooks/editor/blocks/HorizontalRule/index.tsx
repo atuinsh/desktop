@@ -1,5 +1,4 @@
-// @ts-ignore
-import { createBlockNoteExtension } from "@blocknote/core";
+import type { Extension } from "@blocknote/core";
 import { createReactBlockSpec } from "@blocknote/react";
 
 /**
@@ -33,7 +32,7 @@ export default createReactBlockSpec(
     },
   },
   [
-    createBlockNoteExtension({
+    {
       key: "horizontal-rule-shortcut",
       inputRules: [
         {
@@ -43,6 +42,6 @@ export default createReactBlockSpec(
           },
         },
       ],
-    }),
+    } as Extension,
   ],
 );

@@ -45,7 +45,7 @@ import { setTemplateVar } from "@/state/templates";
 import { exportPropMatter, cn } from "@/lib/utils";
 import { useCurrentRunbookId } from "@/context/runbook_id_context";
 import { useBlockLocalState } from "@/lib/hooks/useBlockLocalState";
-import { createBlockNoteExtension } from "@blocknote/core";
+import type { Extension as BlockNoteExtension } from "@blocknote/core";
 import { useBlockContext } from "@/lib/hooks/useDocumentBridge";
 
 interface LanguageLoader {
@@ -430,7 +430,7 @@ export default createReactBlockSpec(
     },
   },
   [
-    createBlockNoteExtension({
+    {
       key: "editor-shortcut",
       inputRules: [
         {
@@ -440,7 +440,7 @@ export default createReactBlockSpec(
           },
         },
       ],
-    }),
+    } as BlockNoteExtension,
   ],
 );
 

@@ -1,10 +1,19 @@
-import { DragHandleMenuProps, useBlockNoteEditor, useComponentsContext } from "@blocknote/react";
+import { useBlockNoteEditor, useComponentsContext, useExtensionState } from "@blocknote/react";
+import { SideMenuExtension } from "@blocknote/core/extensions";
 import { SaveIcon } from "lucide-react";
 import { useStore } from "@/state/store";
 
-export function SaveBlockItem(props: DragHandleMenuProps) {
+export function SaveBlockItem() {
   const editor = useBlockNoteEditor();
   const Components = useComponentsContext()!;
+  const hoveredBlock = useExtensionState(SideMenuExtension, {
+    editor,
+    selector: (state) => state?.block,
+  });
+
+  if (!hoveredBlock) {
+    return null;
+  }
 
   return (
     <Components.Generic.Menu.Item
@@ -15,7 +24,7 @@ export function SaveBlockItem(props: DragHandleMenuProps) {
         // value in the block's props. So, we use `editor.document` to get the block.
         //
         // This is the same workaround as in DuplicateBlockItem.
-        let block = editor.getBlock(props.block.id) || props.block;
+        let block = editor.getBlock(hoveredBlock.id) || hoveredBlock;
         block = structuredClone(block);
 
         useStore.getState().setSavingBlock(block);
