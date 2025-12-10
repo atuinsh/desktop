@@ -44,7 +44,6 @@ export default function useWorkspaceFolder(workspaceId: string): [WorkspaceFolde
   );
 
   const workspaceFolder = useMemo(() => {
-    console.log("folderState", folderState);
     return WorkspaceFolder.fromJS(folderState);
   }, [folderState]);
 
