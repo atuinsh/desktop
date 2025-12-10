@@ -20,6 +20,10 @@ import Emittery, { UnsubscribeFunction } from "emittery";
 const SAVE_DEBOUNCE = 1000;
 const SEND_CHANGES_DEBOUNCE = 100;
 
+const RUNBOOK_EDITOR_CREATION_ERROR_MESSAGE =
+  "There was an error creating the runbook editor. This usually means that the " +
+  "runbook you're trying to open contains blocks that are not supported by your version of Atuin Desktop.";
+
 function isContentBlank(content: any) {
   return (
     content.length === 0 ||
@@ -157,7 +161,7 @@ export default class RunbookEditor {
   getEditor(): Promise<BlockNoteEditor> {
     if (this.editor) return this.editor;
 
-    this.editor = new Promise(async (resolve) => {
+    this.editor = new Promise(async (resolve, reject) => {
       // If viewing a tag, we just want a basic, no-frills editor
       if (this.selectedTag && this.selectedTag !== "latest") {
         const snapshot = await Snapshot.findByRunbookIdAndTag(this.runbook.id, this.selectedTag);
@@ -165,7 +169,13 @@ export default class RunbookEditor {
           // Fallback to latest if snapshot not found
           this.selectedTag = "latest";
         } else {
-          const editor = createBasicEditor(JSON.parse(snapshot.content));
+          let editor: BlockNoteEditor | null = null;
+          try {
+            editor = createBasicEditor(JSON.parse(snapshot.content)) as any as BlockNoteEditor;
+          } catch (error) {
+            reject(new Error(RUNBOOK_EDITOR_CREATION_ERROR_MESSAGE));
+            return;
+          }
           resolve(editor as any as BlockNoteEditor);
           return;
         }
@@ -186,7 +196,13 @@ export default class RunbookEditor {
           needsSave = true;
         }
 
-        const editor = createLocalOnlyEditor(content);
+        let editor: BlockNoteEditor | null = null;
+        try {
+          editor = createLocalOnlyEditor(content) as any as BlockNoteEditor;
+        } catch (error) {
+          reject(new Error(RUNBOOK_EDITOR_CREATION_ERROR_MESSAGE));
+          return;
+        }
         if (needsSave) {
           this.runbook.content = JSON.stringify(content);
           this.save(this.runbook, editor as any as BlockNoteEditor);
@@ -203,7 +219,17 @@ export default class RunbookEditor {
       const presenceColor = randomColor();
       const provider = new PhoenixProvider(this.runbook.id, this.yDoc, presenceColor);
       this.provider = provider;
-      const editor = createCollaborativeEditor(provider, this.user, presenceColor);
+      let editor: BlockNoteEditor | null = null;
+      try {
+        editor = createCollaborativeEditor(
+          provider,
+          this.user,
+          presenceColor,
+        ) as any as BlockNoteEditor;
+      } catch (error) {
+        reject(new Error(RUNBOOK_EDITOR_CREATION_ERROR_MESSAGE));
+        return;
+      }
 
       provider.on("remote_update", () => {
         this.save(this.runbook, editor as any as BlockNoteEditor);
@@ -246,6 +272,8 @@ export default class RunbookEditor {
         resolve(editor as any as BlockNoteEditor);
       }
     });
+    // silence uncaught promise rejection errors
+    this.editor.catch((_error) => {});
 
     return this.editor;
   }

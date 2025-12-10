@@ -208,14 +208,18 @@ export function normalizeInput(input: string) {
     .replace(/\u2018|\u2019/g, "'"); // Replace opening/closing single quotes
 }
 
-export function usePromise<T>(promise: Promise<T>, deps: any[] = []) {
+export function usePromise<T, E = Error>(
+  promise: Promise<T>,
+  deps: any[] = [],
+): [T | undefined, E | undefined] {
   const [value, setValue] = useState<T | undefined>(undefined);
+  const [error, setError] = useState<E | undefined>(undefined);
 
   useEffect(() => {
-    promise.then(setValue);
+    promise.then(setValue).catch((error) => setError(error as E));
   }, [promise, ...deps]);
 
-  return value;
+  return [value, error];
 }
 
 export function useAsyncData<T>(fn: () => Promise<T>, deps: any[] = []) {

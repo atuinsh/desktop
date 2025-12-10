@@ -26,6 +26,7 @@ import {
   BlocksIcon,
   MinusIcon,
   ClipboardPasteIcon,
+  AlertCircleIcon,
 } from "lucide-react";
 
 import { AIGeneratePopup } from "./AIGeneratePopup";
@@ -79,6 +80,7 @@ import { writeTextFile } from "@tauri-apps/plugin-fs";
 import { SaveBlockItem } from "./ui/SaveBlockItem";
 import { SavedBlockPopup } from "./ui/SavedBlockPopup";
 import { DeleteBlockItem } from "./ui/DeleteBlockItem";
+import { BlockNoteEditor } from "@blocknote/core";
 
 // Fix for react-dnd interference with BlockNote drag-and-drop
 // React-dnd wraps dataTransfer in a proxy that blocks access during drag operations
@@ -262,7 +264,7 @@ type EditorProps = {
 };
 
 export default function Editor({ runbook, editable, runbookEditor }: EditorProps) {
-  const editor = usePromise(runbookEditor.getEditor());
+  const [editor, editorError] = usePromise<BlockNoteEditor, Error>(runbookEditor.getEditor());
   const colorMode = useStore((state) => state.functionalColorMode);
   const fontSize = useStore((state) => state.fontSize);
   const fontFamily = useStore((state) => state.fontFamily);
@@ -693,12 +695,20 @@ export default function Editor({ runbook, editable, runbookEditor }: EditorProps
         clearTimeout(timeoutRef.current);
       }
       timeoutRef.current = window.setTimeout(() => {
-        console.log("saving scroll position for runbook", runbook.id);
         saveScrollPosition(runbook.id, target.scrollTop);
       }, 100);
     },
     [runbook?.id],
   );
+
+  if (editorError) {
+    return (
+      <div className="flex w-full h-full flex-col justify-center items-center gap-4">
+        <AlertCircleIcon className="text-danger size-10" />
+        <p className="text-danger max-w-lg text-center">{editorError.message}</p>
+      </div>
+    );
+  }
 
   if (!editor || !runbook) {
     return (
