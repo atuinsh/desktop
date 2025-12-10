@@ -38,14 +38,17 @@ impl Pool {
         auth: Option<Authentication>,
         cancellation_rx: Option<oneshot::Receiver<()>>,
     ) -> Result<Arc<Session>> {
-        let current_user = whoami::username();
-        let username = username.unwrap_or(&current_user);
+        let ssh_config = Session::resolve_ssh_config(host);
+        let username = username
+            .map(|u| u.to_string())
+            .or(ssh_config.username)
+            .unwrap_or_else(whoami::username);
         let key = format!("{username}@{host}");
 
         tracing::debug!("connecting to {key}");
 
         // Check if we have an existing connection
-        if let Some(session) = self.get(host, username) {
+        if let Some(session) = self.get(host, &username) {
             tracing::debug!("found existing ssh session in pool");
             // Test if the connection is still alive
             if session.send_keepalive().await {
@@ -60,7 +63,7 @@ impl Pool {
 
         let async_session = async {
             let mut session = Session::open(host).await?;
-            session.authenticate(auth, Some(username)).await?;
+            session.authenticate(auth, Some(&username)).await?;
             Ok::<_, eyre::Report>(session)
         };
 

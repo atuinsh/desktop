@@ -317,7 +317,7 @@ impl Session {
     }
 
     /// Resolve SSH configuration for a host using ~/.ssh/config with russh-config
-    fn resolve_ssh_config(host: &str) -> SshConfig {
+    pub fn resolve_ssh_config(host: &str) -> SshConfig {
         // Parse the input to extract user, hostname, and port
         let (input_user, hostname, input_port) = Self::parse_host_string(host);
 
