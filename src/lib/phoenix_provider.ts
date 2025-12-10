@@ -337,6 +337,7 @@ export class PhoenixSynchronizer extends Emittery {
     Y.applyUpdate(freshDoc, fullServerState);
     const fragment = freshDoc.getXmlFragment("document-store");
     const unknownTypes = this.findUnknownBlockTypesInXml(fragment);
+    freshDoc.destroy();
 
     if (unknownTypes.length > 0) {
       this.logger.warn(
