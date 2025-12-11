@@ -178,10 +178,10 @@ impl ScriptExecutionOutput {
 impl BlockExecutionOutput for ScriptExecutionOutput {
     fn get_template_value(&self, key: &str) -> Option<minijinja::Value> {
         match key {
-            "exit_code" => Some(minijinja::Value::from_serialize(&self.exit_code)),
-            "stdout" => Some(minijinja::Value::from_serialize(&self.stdout())),
-            "stderr" => Some(minijinja::Value::from_serialize(&self.stderr())),
-            "combined" => Some(minijinja::Value::from_serialize(&self.combined_out())),
+            "exit_code" => Some(minijinja::Value::from_serialize(self.exit_code)),
+            "stdout" => Some(minijinja::Value::from_serialize(self.stdout())),
+            "stderr" => Some(minijinja::Value::from_serialize(self.stderr())),
+            "combined" => Some(minijinja::Value::from_serialize(self.combined_out())),
             _ => None,
         }
     }

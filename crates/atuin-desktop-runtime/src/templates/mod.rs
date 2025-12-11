@@ -73,9 +73,8 @@ pub struct VecBlockTemplateState(Vec<BlockTemplateState>);
 
 impl Object for VecBlockTemplateState {
     fn get_value(self: &Arc<Self>, key: &Value) -> Option<Value> {
-        match key.as_usize()? {
-            n => self.0.get(n).cloned().map(Value::from_object),
-        }
+        let n = key.as_usize()?;
+        self.0.get(n).cloned().map(Value::from_object)
     }
 
     fn enumerate(self: &Arc<Self>) -> Enumerator {
@@ -94,9 +93,8 @@ pub struct HashMapBlockTemplateState(HashMap<String, BlockTemplateState>);
 
 impl Object for HashMapBlockTemplateState {
     fn get_value(self: &Arc<Self>, key: &Value) -> Option<Value> {
-        match key.as_str()? {
-            k => self.0.get(k).cloned().map(Value::from_object),
-        }
+        let k = key.as_str()?;
+        self.0.get(k).cloned().map(Value::from_object)
     }
 
     fn enumerate(self: &Arc<Self>) -> Enumerator {
@@ -156,7 +154,7 @@ impl DocumentTemplateState {
 
                 let mut state = serialized_block_to_state(block);
                 state.output = block_outputs
-                    .get(&block.get("id").unwrap().as_str().unwrap().to_string())
+                    .get(block.get("id").unwrap().as_str().unwrap())
                     .cloned()
                     .flatten();
                 name.map(|name| (name, state))
@@ -166,28 +164,26 @@ impl DocumentTemplateState {
         let mut first = serialized_block_to_state(flattened_doc.first().unwrap());
         first.output = block_outputs
             .get(
-                &flattened_doc
+                flattened_doc
                     .first()
                     .unwrap()
                     .get("id")
                     .unwrap()
                     .as_str()
-                    .unwrap()
-                    .to_string(),
+                    .unwrap(),
             )
             .cloned()
             .flatten();
         let mut last = serialized_block_to_state(flattened_doc.last().unwrap());
         last.output = block_outputs
             .get(
-                &flattened_doc
+                flattened_doc
                     .last()
                     .unwrap()
                     .get("id")
                     .unwrap()
                     .as_str()
-                    .unwrap()
-                    .to_string(),
+                    .unwrap(),
             )
             .cloned()
             .flatten();
@@ -196,7 +192,7 @@ impl DocumentTemplateState {
             .map(|block| {
                 let mut state = serialized_block_to_state(block);
                 state.output = block_outputs
-                    .get(&block.get("id").unwrap().as_str().unwrap().to_string())
+                    .get(block.get("id").unwrap().as_str().unwrap())
                     .cloned()
                     .flatten();
                 state

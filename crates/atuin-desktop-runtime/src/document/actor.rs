@@ -435,7 +435,7 @@ impl DocumentHandle {
                 Err(_) => Err(DocumentError::ExecutionOutputDowncastError),
             },
             Ok(None) => Ok(None),
-            Err(e) => Err(e.into()),
+            Err(e) => Err(e),
         }
     }
 
