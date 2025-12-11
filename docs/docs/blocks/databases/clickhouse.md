@@ -48,6 +48,15 @@ ORDER BY date;
 !!! example "Time-Series Queries"
     ClickHouse excels at time-series analysis. Use template variables to create flexible date ranges and filtering conditions.
 
+## Block Output
+
+ClickHouse blocks produce structured output that can be accessed in templates. See [Database Block Output](index.md#block-output) for full documentation on available fields and usage examples.
+
+```jinja
+{%- set output = doc.named['my_clickhouse_query'].output %}
+Found {{ output.total_rows }} rows
+```
+
 ## Security
 
 Consider using [secrets](../../secrets.md) for sensitive connection parameters like passwords to avoid storing credentials in plain text.

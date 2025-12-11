@@ -38,6 +38,15 @@ AND department = '{{var.department}}';
 
 Use template variables to create flexible queries that adapt based on runbook inputs or previous block outputs.
 
+## Block Output
+
+PostgreSQL blocks produce structured output that can be accessed in templates. See [Database Block Output](index.md#block-output) for full documentation on available fields and usage examples.
+
+```jinja
+{%- set output = doc.named['my_pg_query'].output %}
+Found {{ output.total_rows }} rows
+```
+
 ## Security
 
 Consider using [secrets](../../secrets.md) for sensitive connection parameters like passwords to avoid storing credentials in plain text.

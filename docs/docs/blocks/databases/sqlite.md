@@ -41,6 +41,15 @@ You can also use template variables for database paths to switch between differe
 Database Path: {{var.db_path}}/{{var.environment}}.db
 ```
 
+## Block Output
+
+SQLite blocks produce structured output that can be accessed in templates. See [Database Block Output](index.md#block-output) for full documentation on available fields and usage examples.
+
+```jinja
+{%- set output = doc.named['my_sqlite_query'].output %}
+Found {{ output.total_rows }} rows
+```
+
 ## Security
 
 Consider using [secrets](../../secrets.md) for sensitive database file paths or if your SQLite database uses encryption.

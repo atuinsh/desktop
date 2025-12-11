@@ -115,3 +115,72 @@ These variables can then be referenced in other blocks:
 ```
 
 See the [templating](../../templating.md) section for full information on template variables.
+
+## Block Output
+
+Script blocks produce structured output that can be accessed in templates after execution. See [Block Output](../index.md#block-output) for general information on accessing block output.
+
+### Accessing Script Results
+
+```jinja
+{%- set output = doc.named['my_script'].output %}
+
+Exit code: {{ output.exit_code }}
+Output: {{ output.stdout }}
+```
+
+### Output Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `exit_code` | number | Script exit code (0 for success, non-zero for failure) |
+| `stdout` | string | All stdout output combined as a single string |
+| `stderr` | string | All stderr output combined as a single string |
+| `combined` | string | Both stdout and stderr combined in execution order |
+
+### Example Usage
+
+```jinja
+{%- set output = doc.named['check_script'].output %}
+
+{% if output.exit_code == 0 %}
+  Script succeeded!
+  {{ output.stdout }}
+{% else %}
+  Script failed with exit code {{ output.exit_code }}
+  Error: {{ output.stderr }}
+{% endif %}
+```
+
+### Working with Output
+
+```jinja
+{%- set output = doc.named['system_info'].output %}
+
+{# Access just stdout #}
+System info: {{ output.stdout }}
+
+{# Access just stderr (errors/warnings) #}
+{% if output.stderr %}
+  Warnings: {{ output.stderr }}
+{% endif %}
+
+{# Or get everything combined #}
+Full output: {{ output.combined }}
+```
+
+### Combining with Output Variables
+
+Script block output complements the `$ATUIN_OUTPUT_VARS` mechanism. Use output variables for specific data extraction and block output for checking execution status:
+
+```jinja
+{%- set output = doc.named['deploy_script'].output %}
+
+{% if output.exit_code == 0 %}
+  Deployment succeeded!
+  Version: {{ var.deployed_version }}
+  Time: {{ var.deploy_time }}
+{% else %}
+  Deployment failed: {{ output.stderr }}
+{% endif %}
+```

@@ -83,3 +83,52 @@ These variables can then be referenced in other blocks:
 ```
 
 See the [templating](../../templating.md) section for full information on template variables.
+
+## Block Output
+
+Terminal blocks produce structured output that can be accessed in templates after the terminal session ends. See [Block Output](../index.md#block-output) for general information on accessing block output.
+
+!!! note "Raw PTY Output"
+    Terminal output is raw PTY data which may include control codes, escape sequences, and other terminal formatting. For clean, parsed output, consider using a [Script](script.md) block instead.
+
+### Accessing Terminal Results
+
+```jinja
+{%- set output = doc.named['my_terminal'].output %}
+
+Received {{ output.byte_count }} bytes
+```
+
+### Output Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `output` | string | Raw terminal output (UTF-8 lossy conversion from PTY bytes) |
+| `byte_count` | number | Total number of bytes received from the PTY |
+| `cancelled` | boolean | `true` if cancelled by user, `false` if terminal exited naturally |
+
+### Example Usage
+
+```jinja
+{%- set output = doc.named['debug_terminal'].output %}
+
+{% if output.cancelled %}
+  Terminal was cancelled by user
+{% else %}
+  Terminal exited normally
+{% endif %}
+
+Total output: {{ output.byte_count }} bytes
+
+{# Note: output contains raw PTY data with escape codes #}
+```
+
+### When to Use Terminal vs Script Output
+
+| Use Case | Recommended Block |
+|----------|-------------------|
+| Capturing clean stdout/stderr | Script block |
+| Checking exit codes | Script block |
+| Raw session logging | Terminal block |
+| Interactive debugging | Terminal block |
+| Setting variables | Either (via `$ATUIN_OUTPUT_VARS`) |

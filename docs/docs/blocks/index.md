@@ -55,11 +55,46 @@ Blocks can capture output as variables and share data:
 
 ```handlebars
 # A Script block captures server info
-{{var.server_status}} 
+{{var.server_status}}
 
-# An HTTP block uses that data  
+# An HTTP block uses that data
 POST /alerts with body: {"server": "{{var.server_status}}"}
 ```
+
+### Block Output {: #block-output }
+
+Many blocks produce structured output that can be accessed in templates after they execute. This allows you to use results from one block in subsequent blocks.
+
+#### Accessing Block Output
+
+Block output is accessed through the `doc.named` object using the block's name:
+
+```jinja
+{{ doc.named['my_block_name'].output.field_name }}
+```
+
+A common pattern is to assign the output to a variable for easier access:
+
+```jinja
+{%- set output = doc.named['my_query'].output %}
+Total rows: {{ output.total_rows }}
+First result: {{ output.rows[0] }}
+```
+
+#### Blocks with Output
+
+The following blocks produce structured output:
+
+| Block | Output Type | Key Fields |
+|-------|------------|------------|
+| [SQL Databases](databases/index.md) | Query results | `rows`, `columns`, `total_rows` |
+| [HTTP](network/http.md) | Response data | `status`, `body`, `body_json`, `headers` |
+| [Script](executable/script.md) | Execution result | `exit_code`, `stdout`, `stderr`, `combined` |
+| [Terminal](executable/terminal.md) | Terminal output | `output`, `byte_count`, `cancelled` |
+| [Kubernetes](executable/kubernetes.md) | Resource data | `data`, `columns`, `item_count`, `resource_kind` |
+| [Prometheus](monitoring/prometheus.md) | Metrics | `series`, `total_series`, `time_range` |
+
+See each block's documentation for detailed output field descriptions.
 
 ## Block Examples
 
