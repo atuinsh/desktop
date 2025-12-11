@@ -8,7 +8,7 @@ use crate::blocks::{Block, BlockBehavior, FromDocument};
 use crate::context::BlockVars;
 use crate::events::GCEvent;
 use crate::execution::{
-    StreamingBlockOutput, CancellationToken, ExecutionContext, ExecutionHandle, ExecutionStatus,
+    CancellationToken, ExecutionContext, ExecutionHandle, ExecutionStatus, StreamingBlockOutput,
 };
 use crate::pty::{Pty, PtyLike};
 use crate::ssh::SshPty;

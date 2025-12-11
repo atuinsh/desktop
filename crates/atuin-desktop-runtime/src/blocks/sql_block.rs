@@ -10,7 +10,7 @@ use typed_builder::TypedBuilder;
 
 use crate::{
     blocks::{BlockBehavior, BlockExecutionError, QueryBlockBehavior, QueryBlockError},
-    execution::{StreamingBlockOutput, ExecutionContext},
+    execution::{ExecutionContext, StreamingBlockOutput},
 };
 
 #[derive(Debug, thiserror::Error)]

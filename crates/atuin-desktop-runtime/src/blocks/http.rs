@@ -50,7 +50,7 @@ pub struct HttpExecutionOutput {
     pub status_text: String,
     pub status_success: bool,
     pub headers: HashMap<String, String>,
-    pub duration_ms: f64,
+    pub duration_seconds: f64,
     pub body: String,
     pub body_json: Option<serde_json::Value>,
 }
@@ -62,7 +62,7 @@ impl BlockExecutionOutput for HttpExecutionOutput {
             "status_text" => Some(minijinja::Value::from(self.status_text.clone())),
             "status_success" => Some(minijinja::Value::from(self.status_success)),
             "headers" => Some(minijinja::Value::from_serialize(&self.headers)),
-            "duration_ms" => Some(minijinja::Value::from(self.duration_ms)),
+            "duration_seconds" => Some(minijinja::Value::from(self.duration_seconds)),
             "body" => Some(minijinja::Value::from(self.body.clone())),
             "body_json" => Some(minijinja::Value::from_serialize(&self.body_json)),
             _ => None,
@@ -75,7 +75,7 @@ impl BlockExecutionOutput for HttpExecutionOutput {
             "status_text",
             "status_success",
             "headers",
-            "duration_ms",
+            "duration_seconds",
             "body",
             "body_json",
         ])
@@ -222,7 +222,7 @@ impl BlockBehavior for Http {
             status_text: response.status_text.clone(),
             status_success: response.status_success,
             headers: response.headers.clone(),
-            duration_ms: response.duration,
+            duration_seconds: response.duration,
             body: response.body.clone(),
             body_json,
         };

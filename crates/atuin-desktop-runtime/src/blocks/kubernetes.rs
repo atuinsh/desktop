@@ -7,7 +7,7 @@ use typed_builder::TypedBuilder;
 use uuid::Uuid;
 
 use crate::blocks::{Block, BlockBehavior};
-use crate::execution::{StreamingBlockOutput, ExecutionContext, ExecutionHandle};
+use crate::execution::{ExecutionContext, ExecutionHandle, StreamingBlockOutput};
 
 use super::FromDocument;
 
