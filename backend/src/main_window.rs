@@ -95,8 +95,8 @@ pub(crate) async fn create_main_window(app: &AppHandle) -> Result<(), String> {
 
     let app_url = WebviewUrl::App(format!("index.html?{query_string}").into());
 
-    let title = if dev_prefix.is_some() {
-        format!("Atuin - {}", dev_prefix.unwrap())
+    let title = if let Some(prefix) = dev_prefix {
+        format!("Atuin - {prefix}")
     } else {
         "Atuin".to_string()
     };
