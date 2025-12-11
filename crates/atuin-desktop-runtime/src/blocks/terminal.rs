@@ -122,26 +122,13 @@ impl BlockBehavior for Terminal {
 }
 
 impl Terminal {
-    /// Parse SSH host string to extract username and hostname
     fn parse_ssh_host(ssh_host: &str) -> (Option<String>, String) {
         if let Some(at_pos) = ssh_host.find('@') {
             let username = ssh_host[..at_pos].to_string();
-            let host_part = &ssh_host[at_pos + 1..];
-            // Remove port if present
-            let hostname = if let Some(colon_pos) = host_part.find(':') {
-                host_part[..colon_pos].to_string()
-            } else {
-                host_part.to_string()
-            };
-            (Some(username), hostname)
+            let host_part = ssh_host[at_pos + 1..].to_string();
+            (Some(username), host_part)
         } else {
-            // No username specified, just hostname
-            let hostname = if let Some(colon_pos) = ssh_host.find(':') {
-                ssh_host[..colon_pos].to_string()
-            } else {
-                ssh_host.to_string()
-            };
-            (None, hostname)
+            (None, ssh_host.to_string())
         }
     }
 

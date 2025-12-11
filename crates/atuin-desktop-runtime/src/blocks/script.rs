@@ -232,24 +232,13 @@ impl BlockBehavior for Script {
 }
 
 impl Script {
-    /// Parse SSH host string to extract username and hostname
     fn parse_ssh_host(ssh_host: &str) -> (Option<String>, String) {
         if let Some(at_pos) = ssh_host.find('@') {
             let username = ssh_host[..at_pos].to_string();
-            let host_part = &ssh_host[at_pos + 1..];
-            let hostname = if let Some(colon_pos) = host_part.find(':') {
-                host_part[..colon_pos].to_string()
-            } else {
-                host_part.to_string()
-            };
-            (Some(username), hostname)
+            let host_part = ssh_host[at_pos + 1..].to_string();
+            (Some(username), host_part)
         } else {
-            let hostname = if let Some(colon_pos) = ssh_host.find(':') {
-                ssh_host[..colon_pos].to_string()
-            } else {
-                ssh_host.to_string()
-            };
-            (None, hostname)
+            (None, ssh_host.to_string())
         }
     }
 
@@ -945,12 +934,12 @@ echo "Successfully wrote to $ATUIN_OUTPUT_VARS"
 
         assert_eq!(
             Script::parse_ssh_host("user@host.com:22"),
-            (Some("user".to_string()), "host.com".to_string())
+            (Some("user".to_string()), "host.com:22".to_string())
         );
 
         assert_eq!(
             Script::parse_ssh_host("host.com:2222"),
-            (None, "host.com".to_string())
+            (None, "host.com:2222".to_string())
         );
     }
 
