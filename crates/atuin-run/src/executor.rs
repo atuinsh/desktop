@@ -588,6 +588,9 @@ impl Executor {
                             | BlockLifecycleEvent::Paused => {
                                 // Nothing to clean up for these states
                             }
+                            BlockLifecycleEvent::Paused => {
+                                // Pause blocks are not supported in sub-runbooks
+                            }
                         }
                     }
 

@@ -9,6 +9,7 @@
 //! - Runbook content loaders for loading sub-runbooks
 
 mod bridge;
+pub mod hub;
 pub(crate) mod local;
 mod message_channel;
 mod runbook_loader;
@@ -17,6 +18,7 @@ pub use bridge::{
     ClientPrompt, ClientPromptResult, DocumentBridgeMessage, PromptIcon, PromptInput, PromptOption,
     PromptOptionColor, PromptOptionVariant,
 };
+pub use hub::{HubClient, HubError, HubRunbook, HubSnapshot, HubSnapshotMeta, ParsedUri};
 pub use local::LocalValueProvider;
 pub use message_channel::MessageChannel;
 pub use runbook_loader::{RunbookContentLoader, RunbookLoadError, SubRunbookRef};

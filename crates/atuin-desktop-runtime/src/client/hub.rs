@@ -102,10 +102,7 @@ impl HubClient {
     }
 
     /// Fetch a runbook by ID
-    pub async fn get_runbook_by_id(
-        &self,
-        id: &str,
-    ) -> Result<HubRunbook, HubError> {
+    pub async fn get_runbook_by_id(&self, id: &str) -> Result<HubRunbook, HubError> {
         let url = format!(
             "{}/runbooks/{}?include=snapshots,content",
             self.base_url, id
@@ -147,7 +144,7 @@ impl HubClient {
         nwo: &str,
         tag: Option<&str>,
     ) -> Result<(HubRunbook, Option<HubSnapshot>), HubError> {
-        let mut url = format!("{}/resolve/runbook?nwo={}", self.base_url, nwo);
+        let mut url = format!("{}/resolve/runbook?nwo={}&with_content=true", self.base_url, nwo);
 
         if let Some(tag) = tag {
             url.push_str(&format!("&tag={}", tag));
