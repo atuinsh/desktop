@@ -76,60 +76,105 @@ impl LocalValueProvider for KvBlockLocalValueProvider {
     }
 }
 
-/// Runbook content loader that uses the workspace manager to load runbook content
+/// Runbook content loader that uses the workspace manager to load runbook content,
+/// with fallback to Atuin Hub for remote runbooks.
 #[derive(Clone)]
 struct WorkspaceRunbookContentLoader {
     workspaces: Arc<tokio::sync::Mutex<Option<crate::workspaces::manager::WorkspaceManager>>>,
+    hub_client: Arc<atuin_desktop_runtime::client::HubClient>,
 }
 
 impl WorkspaceRunbookContentLoader {
     pub fn new(
         workspaces: Arc<tokio::sync::Mutex<Option<crate::workspaces::manager::WorkspaceManager>>>,
     ) -> Self {
-        Self { workspaces }
+        Self {
+            workspaces,
+            hub_client: Arc::new(atuin_desktop_runtime::client::HubClient::new()),
+        }
     }
-}
 
-#[async_trait]
-impl atuin_desktop_runtime::client::RunbookContentLoader for WorkspaceRunbookContentLoader {
-    async fn load_runbook_content(
+    /// Load runbook content from hub by URI (user/runbook or user/runbook:tag)
+    async fn load_from_uri(
         &self,
-        runbook_ref: &atuin_desktop_runtime::client::SubRunbookRef,
+        uri: &str,
+        display_id: &str,
     ) -> Result<Vec<serde_json::Value>, atuin_desktop_runtime::client::RunbookLoadError> {
-        let display_id = runbook_ref.display_id();
+        use atuin_desktop_runtime::client::{HubError, ParsedUri, RunbookLoadError};
 
-        // Desktop app primarily uses ID for workspace lookup
-        let lookup_id = runbook_ref.id.as_ref().ok_or_else(|| {
-            atuin_desktop_runtime::client::RunbookLoadError::LoadFailed {
-                runbook_id: display_id.clone(),
-                message: "No runbook ID provided for workspace lookup".to_string(),
-            }
+        let parsed = ParsedUri::parse(uri).ok_or_else(|| RunbookLoadError::LoadFailed {
+            runbook_id: display_id.to_string(),
+            message: format!(
+                "Invalid hub URI format: '{}'. Expected 'user/runbook' or 'user/runbook:tag'",
+                uri
+            ),
         })?;
+
+        // Default to "latest" tag if none specified
+        let tag = parsed.tag.as_deref().or(Some("latest"));
+        log::debug!(
+            "Fetching runbook from hub: {} (tag: {:?})",
+            parsed.nwo,
+            tag
+        );
+
+        let (runbook, snapshot) = self
+            .hub_client
+            .resolve_by_nwo(&parsed.nwo, tag)
+            .await
+            .map_err(|e| match e {
+                HubError::NotFound(_) => RunbookLoadError::NotFound {
+                    runbook_id: display_id.to_string(),
+                },
+                _ => RunbookLoadError::LoadFailed {
+                    runbook_id: display_id.to_string(),
+                    message: e.to_string(),
+                },
+            })?;
+
+        // Prefer snapshot content if available, otherwise use runbook content
+        if let Some(snapshot) = snapshot {
+            log::debug!("Using snapshot '{}' content", snapshot.tag);
+            Ok(snapshot.content)
+        } else if let Some(content) = runbook.content {
+            log::debug!("Using runbook content (no snapshot)");
+            Ok(content)
+        } else {
+            Err(RunbookLoadError::LoadFailed {
+                runbook_id: display_id.to_string(),
+                message: "Runbook has no content. You may need to specify a tag.".to_string(),
+            })
+        }
+    }
+
+    /// Load runbook content from workspace by ID
+    async fn load_from_workspace(
+        &self,
+        id: &str,
+        display_id: &str,
+    ) -> Result<Vec<serde_json::Value>, atuin_desktop_runtime::client::RunbookLoadError> {
+        use atuin_desktop_runtime::client::RunbookLoadError;
 
         let mut manager = self.workspaces.lock().await;
-        let manager = manager.as_mut().ok_or_else(|| {
-            atuin_desktop_runtime::client::RunbookLoadError::LoadFailed {
-                runbook_id: display_id.clone(),
-                message: "Workspace manager not initialized".to_string(),
-            }
+        let manager = manager.as_mut().ok_or_else(|| RunbookLoadError::LoadFailed {
+            runbook_id: display_id.to_string(),
+            message: "Workspace manager not initialized".to_string(),
         })?;
 
-        let runbook = manager.get_runbook(lookup_id).await.map_err(|e| {
-            // Check if the error indicates not found
+        let runbook = manager.get_runbook(id).await.map_err(|e| {
             let err_str = e.to_string();
             if err_str.contains("not found") || err_str.contains("NotFound") {
-                atuin_desktop_runtime::client::RunbookLoadError::NotFound {
-                    runbook_id: display_id.clone(),
+                RunbookLoadError::NotFound {
+                    runbook_id: display_id.to_string(),
                 }
             } else {
-                atuin_desktop_runtime::client::RunbookLoadError::LoadFailed {
-                    runbook_id: display_id.clone(),
+                RunbookLoadError::LoadFailed {
+                    runbook_id: display_id.to_string(),
                     message: err_str,
                 }
             }
         })?;
 
-        // Extract content from the runbook - it's a serde_json::Value array
         let content = runbook
             .file
             .internal
@@ -139,6 +184,34 @@ impl atuin_desktop_runtime::client::RunbookContentLoader for WorkspaceRunbookCon
             .unwrap_or_default();
 
         Ok(content)
+    }
+}
+
+#[async_trait]
+impl atuin_desktop_runtime::client::RunbookContentLoader for WorkspaceRunbookContentLoader {
+    async fn load_runbook_content(
+        &self,
+        runbook_ref: &atuin_desktop_runtime::client::SubRunbookRef,
+    ) -> Result<Vec<serde_json::Value>, atuin_desktop_runtime::client::RunbookLoadError> {
+        use atuin_desktop_runtime::client::RunbookLoadError;
+
+        let display_id = runbook_ref.display_id();
+
+        // 1. Try URI first (remote hub runbook)
+        if let Some(uri) = &runbook_ref.uri {
+            return self.load_from_uri(uri, &display_id).await;
+        }
+
+        // 2. Try ID (workspace lookup)
+        if let Some(id) = &runbook_ref.id {
+            return self.load_from_workspace(id, &display_id).await;
+        }
+
+        // No reference provided
+        Err(RunbookLoadError::LoadFailed {
+            runbook_id: display_id,
+            message: "No runbook reference provided (need uri or id)".to_string(),
+        })
     }
 }
 

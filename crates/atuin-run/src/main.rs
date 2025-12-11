@@ -5,7 +5,6 @@ use crate::{app::Args, executor::Executor};
 
 mod app;
 mod executor;
-mod hub;
 mod runbooks;
 mod runtime;
 mod ui;

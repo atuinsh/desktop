@@ -1,13 +1,11 @@
 use std::path::PathBuf;
 
-use atuin_desktop_runtime::{
-    client::{
-        DocumentBridgeMessage, LocalValueProvider, MessageChannel, RunbookContentLoader,
-        RunbookLoadError, SubRunbookRef,
-    },
-    context::{BlockContext, BlockContextStorage},
-    events::{EventBus, GCEvent},
+use atuin_desktop_runtime::client::{
+    DocumentBridgeMessage, HubClient, HubError, LocalValueProvider, MessageChannel, ParsedUri,
+    RunbookContentLoader, RunbookLoadError, SubRunbookRef,
 };
+use atuin_desktop_runtime::context::{BlockContext, BlockContextStorage};
+use atuin_desktop_runtime::events::{EventBus, GCEvent};
 use tokio::sync::mpsc;
 use uuid::Uuid;
 
@@ -115,14 +113,14 @@ pub struct FileRunbookLoader {
     /// Base directory for resolving relative paths (typically the directory containing the parent runbook)
     base_dir: PathBuf,
     /// Hub API client for fetching remote runbooks
-    hub_client: crate::hub::HubClient,
+    hub_client: HubClient,
 }
 
 impl FileRunbookLoader {
     pub fn new(base_dir: PathBuf) -> Self {
         Self {
             base_dir,
-            hub_client: crate::hub::HubClient::new(),
+            hub_client: HubClient::new(),
         }
     }
 
@@ -134,7 +132,7 @@ impl FileRunbookLoader {
             .unwrap_or_else(|| PathBuf::from("."));
         Self {
             base_dir,
-            hub_client: crate::hub::HubClient::new(),
+            hub_client: HubClient::new(),
         }
     }
 
@@ -161,19 +159,21 @@ impl FileRunbookLoader {
         uri: &str,
         display_id: &str,
     ) -> Result<Vec<serde_json::Value>, RunbookLoadError> {
-        let parsed = crate::hub::ParsedUri::parse(uri).ok_or_else(|| RunbookLoadError::LoadFailed {
+        let parsed = ParsedUri::parse(uri).ok_or_else(|| RunbookLoadError::LoadFailed {
             runbook_id: display_id.to_string(),
             message: format!("Invalid hub URI format: '{}'. Expected 'user/runbook' or 'user/runbook:tag'", uri),
         })?;
 
-        tracing::debug!("Fetching runbook from hub: {} (tag: {:?})", parsed.nwo, parsed.tag);
+        // Default to "latest" tag if none specified
+        let tag = parsed.tag.as_deref().or(Some("latest"));
+        tracing::debug!("Fetching runbook from hub: {} (tag: {:?})", parsed.nwo, tag);
 
         let (runbook, snapshot) = self
             .hub_client
-            .resolve_by_nwo(&parsed.nwo, parsed.tag.as_deref())
+            .resolve_by_nwo(&parsed.nwo, tag)
             .await
             .map_err(|e| match e {
-                crate::hub::HubError::NotFound(_) => RunbookLoadError::NotFound {
+                HubError::NotFound(_) => RunbookLoadError::NotFound {
                     runbook_id: display_id.to_string(),
                 },
                 _ => RunbookLoadError::LoadFailed {
@@ -210,7 +210,7 @@ impl FileRunbookLoader {
             .get_runbook_by_id(id)
             .await
             .map_err(|e| match e {
-                crate::hub::HubError::NotFound(_) => RunbookLoadError::NotFound {
+                HubError::NotFound(_) => RunbookLoadError::NotFound {
                     runbook_id: display_id.to_string(),
                 },
                 _ => RunbookLoadError::LoadFailed {
