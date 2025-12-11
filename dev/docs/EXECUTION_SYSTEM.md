@@ -8,6 +8,7 @@ This document provides a comprehensive overview of how the Atuin Desktop backend
 - [Core Components](#core-components)
 - [Execution Flow](#execution-flow)
 - [Context Management](#context-management)
+- [Block Execution Output](#block-execution-output)
 - [Serial Execution](#serial-execution)
 - [Cancellation & Error Handling](#cancellation--error-handling)
 
@@ -272,23 +273,25 @@ pub struct DocumentVar {
 impl BlockContextItem for DocumentVar {}
 ```
 
-**BlockWithContext**
-Wrapper that pairs a block with its contexts and state:
+**DocumentBlock**
+Wrapper that pairs a block with its contexts, state, and execution output:
 
 ```rust
-pub struct BlockWithContext {
+pub struct DocumentBlock {
     block: Block,
     passive_context: BlockContext,
     active_context: BlockContext,
     state: Option<Box<dyn BlockState>>,
+    execution_output: Option<Arc<dyn BlockExecutionOutput>>,
 }
 ```
 
-When constructing a `BlockWithContext`, you can optionally provide an active context (e.g., loaded from disk) and state. If not provided, empty context and no state are used.
+When constructing a `DocumentBlock`, you can optionally provide an active context (e.g., loaded from disk), state, and execution output. If not provided, empty context, no state, and no output are used.
 
-**Key differences between context and state:**
+**Key differences between context, state, and execution output:**
 - **Context** (passive/active): Affects execution environment for blocks below it; can be persisted to disk
 - **State**: Block-specific runtime data that doesn't affect other blocks; communicated to frontend for UI updates
+- **Execution Output**: Results of block execution; accessible via templates and Tauri commands; not persisted
 
 **ContextResolver**
 Resolves templates and provides access to cumulative context from blocks above:
@@ -324,7 +327,7 @@ Manages all blocks in a runbook with their contexts:
 ```rust
 pub struct Document {
     id: String,
-    blocks: Vec<BlockWithContext>,  // Blocks with their passive/active contexts
+    blocks: Vec<DocumentBlock>,  // Blocks with their passive/active contexts, state, and output
     document_bridge: Arc<dyn ClientMessageChannel<DocumentBridgeMessage>>,
     // ...
 }
@@ -715,12 +718,13 @@ tokio::spawn(async move {
 });
 ```
 
-### 6. Context Updates During Execution
+### 6. Context and Output Updates During Execution
 
-Blocks can update their context during execution:
+Blocks can update their context and output during execution:
 
-- `context.update_active_context()` - Store execution results (output variables, execution output)
+- `context.update_active_context()` - Store execution results (output variables)
 - `context.update_passive_context()` - Update passive context (rare, for blocks that change based on execution)
+- `context.set_block_execution_output()` - Store strongly-typed execution output accessible via templates
 
 ### 7. Handle Storage
 
@@ -748,12 +752,14 @@ Each block has two independent contexts:
    - **Not persisted to disk** - always computed from the document structure
 
 2. **Active Context** - Set during block execution
-   - Stores execution results (output variables, execution output via `BlockExecutionOutput`)
+   - Stores execution results (output variables)
    - Can modify context for blocks below (but only after execution completes)
    - Cleared before each execution (when `execute_block` is called)
    - **Persisted to disk** via `ContextStorage` - survives app restarts
    - Loaded from disk when a document is opened
    - Can be manually cleared via the "Clear all active context" button in the UI
+
+Note: Strongly-typed execution output (exit codes, query results, etc.) is stored separately via `BlockExecutionOutput`, not in the active context. See [Block Execution Output](#block-execution-output) for details.
 
 **Key Difference:** Passive context represents what the block _declares_ it will do (based on its configuration), while active context represents what the block _actually did_ (the results of execution). Both contribute to the `ContextResolver` for blocks below them, allowing both declarative context (passive) and execution results (active) to flow down the document.
 
@@ -883,6 +889,239 @@ if let Some(block) = self.document.get_block_mut(&block_id) {
 - **State**: Block-specific data, temporary runtime values, etc; sent to frontend on changes
 - **Context**: Execution environment (variables, cwd, env vars); affects blocks below; can be persisted
 - State is NOT persisted to disk and is NOT included in context resolution for other blocks
+
+## Block Execution Output
+
+Block execution output provides a mechanism for blocks to produce strongly-typed results that can be accessed by other blocks through the template system. Unlike context (which modifies the execution environment) or state (which is for UI updates), execution output represents the actual results of running a block.
+
+### BlockExecutionOutput Trait
+
+The `BlockExecutionOutput` trait defines how blocks expose their execution results:
+
+```rust
+pub trait BlockExecutionOutput:
+    erased_serde::Serialize + Send + Sync + std::fmt::Debug + Downcast + DynClone
+{
+    /// Get a specific value from the output for template resolution
+    /// Called lazily when templates access `doc.named['name'].output.field`
+    fn get_template_value(&self, _key: &str) -> Option<minijinja::Value> {
+        None
+    }
+
+    /// Enumerate available keys for template iteration
+    fn enumerate_template_keys(&self) -> minijinja::value::Enumerator {
+        minijinja::value::Enumerator::NonEnumerable
+    }
+}
+```
+
+**Key Features:**
+- **Lazy access**: `get_template_value()` is called only when templates actually access a field, avoiding expensive serialization when output isn't needed
+- **Type-safe storage**: Output is stored as `Arc<dyn BlockExecutionOutput>` in `DocumentBlock`, allowing efficient cloning and concurrent access
+- **Template integration**: Output is automatically available in templates via `doc.named['block_name'].output.field`
+- **Serializable**: Implements `erased_serde::Serialize` for cases where full serialization is needed
+- **Downcasting**: Implements `Downcast` for type-safe access to concrete output types via the document actor API
+
+### Storage in DocumentBlock
+
+Each block can optionally store execution output alongside its contexts and state:
+
+```rust
+pub struct DocumentBlock {
+    block: Block,
+    passive_context: BlockContext,
+    active_context: BlockContext,
+    state: Option<Box<dyn BlockState>>,
+    execution_output: Option<Arc<dyn BlockExecutionOutput>>,
+}
+```
+
+**Comparison with Context and State:**
+
+| Aspect | Context | State | Execution Output |
+|--------|---------|-------|------------------|
+| Purpose | Execution environment | UI updates | Block results |
+| Affects other blocks | Yes (via resolver) | No | Yes (via templates) |
+| Persisted to disk | Active context only | No | No |
+| Access pattern | Type-keyed map | Downcast | Template keys or downcast |
+| Frontend access | Via resolved context | Via BlockStateChanged | Via Tauri commands |
+
+### Implementing BlockExecutionOutput
+
+**Example - Script Block Output:**
+
+```rust
+#[derive(Debug, Clone, Serialize)]
+pub struct ScriptBlockOutput {
+    pub exit_code: i32,
+    pub stdout: String,
+    pub stderr: String,
+    pub duration_ms: u64,
+}
+
+impl BlockExecutionOutput for ScriptBlockOutput {
+    fn get_template_value(&self, key: &str) -> Option<minijinja::Value> {
+        match key {
+            "exit_code" => Some(minijinja::Value::from(self.exit_code)),
+            "stdout" => Some(minijinja::Value::from(self.stdout.clone())),
+            "stderr" => Some(minijinja::Value::from(self.stderr.clone())),
+            "duration_ms" => Some(minijinja::Value::from(self.duration_ms)),
+            _ => None,
+        }
+    }
+
+    fn enumerate_template_keys(&self) -> minijinja::value::Enumerator {
+        minijinja::value::Enumerator::Str(&["exit_code", "stdout", "stderr", "duration_ms"])
+    }
+}
+
+// Required: use dyn_clone to allow cloning the trait object
+dyn_clone::clone_trait_object!(BlockExecutionOutput);
+```
+
+**Example - Database Query Output:**
+
+```rust
+#[derive(Debug, Clone, Serialize)]
+pub struct SqlBlockOutput {
+    pub rows: Vec<HashMap<String, serde_json::Value>>,
+    pub row_count: usize,
+    pub columns: Vec<String>,
+}
+
+impl BlockExecutionOutput for SqlBlockOutput {
+    fn get_template_value(&self, key: &str) -> Option<minijinja::Value> {
+        match key {
+            "rows" => Some(minijinja::Value::from_serialize(&self.rows)),
+            "row_count" => Some(minijinja::Value::from(self.row_count)),
+            "columns" => Some(minijinja::Value::from_serialize(&self.columns)),
+            // Allow accessing first row directly for convenience
+            "first" => self.rows.first().map(|r| minijinja::Value::from_serialize(r)),
+            _ => None,
+        }
+    }
+
+    fn enumerate_template_keys(&self) -> minijinja::value::Enumerator {
+        minijinja::value::Enumerator::Str(&["rows", "row_count", "columns", "first"])
+    }
+}
+```
+
+### Setting Execution Output
+
+Blocks set their execution output during execution via the `ExecutionContext`:
+
+```rust
+// During block execution
+let output = ScriptBlockOutput {
+    exit_code: 0,
+    stdout: captured_stdout,
+    stderr: captured_stderr,
+    duration_ms: elapsed.as_millis() as u64,
+};
+
+context.set_block_execution_output(output).await?;
+```
+
+Or directly via the document handle:
+
+```rust
+document_handle.set_block_execution_output(block_id, output).await?;
+```
+
+### Accessing Output in Templates
+
+Execution output is available in MiniJinja templates through the `doc` object:
+
+```jinja
+{# Access output from a named block #}
+{{ doc.named['my_script'].output.exit_code }}
+{{ doc.named['my_script'].output.stdout }}
+
+{# Access output from previous block #}
+{{ doc.previous.output.exit_code }}
+
+{# Access output by index #}
+{{ doc.content[0].output.stdout }}
+
+{# Conditional based on output #}
+{% if doc.named['health_check'].output.exit_code == 0 %}
+Service is healthy
+{% endif %}
+```
+
+**Template Resolution Flow:**
+1. Template references `doc.named['name'].output.field`
+2. `DocumentTemplateState` looks up the block by name
+3. `BlockTemplateState::get_value("output")` returns an `OutputWrapper`
+4. `OutputWrapper::get_value("field")` calls `output.get_template_value("field")`
+5. The concrete implementation returns the `minijinja::Value` for that field
+
+This lazy evaluation means only the requested fields are computed, which is important for outputs that may contain large data (like database query results).
+
+### Accessing Output from Backend Code
+
+The document actor provides type-safe access to execution output:
+
+```rust
+// Get output with type casting
+let output: Option<Arc<ScriptBlockOutput>> = document_handle
+    .get_block_execution_output::<ScriptBlockOutput>(block_id)
+    .await?;
+
+if let Some(output) = output {
+    println!("Exit code: {}", output.exit_code);
+}
+```
+
+This uses a custom Arc downcast helper since `downcast-rs` doesn't natively support `Arc`:
+
+```rust
+fn downcast_arc<T: BlockExecutionOutput + 'static>(
+    arc: Arc<dyn BlockExecutionOutput>,
+) -> Result<Arc<T>, Arc<dyn BlockExecutionOutput>> {
+    if arc.as_any().is::<T>() {
+        let ptr = Arc::into_raw(arc) as *const T;
+        Ok(unsafe { Arc::from_raw(ptr) })
+    } else {
+        Err(arc)
+    }
+}
+```
+
+### Frontend Access
+
+The frontend can access execution output through Tauri commands:
+
+```typescript
+// Get serialized output for a block
+const output = await invoke('get_block_execution_output', {
+  documentId: runbookId,
+  blockId: blockId,
+});
+
+// Output is JSON-serialized via erased_serde
+if (output) {
+  console.log('Exit code:', output.exit_code);
+}
+```
+
+### Design Rationale
+
+**Why separate from Context?**
+- Context represents execution *environment* (cwd, env vars, variables)
+- Output represents execution *results* (exit codes, query results, response data)
+- Outputs don't "flow down" the way context does—they're accessed explicitly by name
+
+**Why separate from State?**
+- State is for runtime UI updates during execution (progress, selections)
+- Output is the final result of execution
+- State is `Box<dyn BlockState>`, output is `Arc<dyn BlockExecutionOutput>` for efficient sharing
+
+**Why lazy access via `get_template_value`?**
+- Some outputs are large (database results with thousands of rows)
+- Templates often only need specific fields
+- Avoids serializing entire output when only checking exit code
 
 ## Serial Execution
 
