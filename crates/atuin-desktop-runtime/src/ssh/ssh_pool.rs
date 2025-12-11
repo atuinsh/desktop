@@ -492,7 +492,11 @@ impl SshPool {
             } => {
                 let (cancel_tx, mut cancel_rx) = oneshot::channel();
 
-                let username = username.unwrap_or_else(whoami::username);
+                // Resolve username from SSH config if not provided, same as pool.connect() does
+                let ssh_config = Session::resolve_ssh_config(&host);
+                let username = username
+                    .or(ssh_config.username)
+                    .unwrap_or_else(whoami::username);
                 self.channels.insert(
                     channel.clone(),
                     ChannelMeta {
@@ -615,7 +619,12 @@ impl SshPool {
                 width,
                 height,
             } => {
-                let username = username.unwrap_or_else(whoami::username);
+                // Resolve username from SSH config if not provided, same as pool.connect() does
+                let ssh_config = Session::resolve_ssh_config(&host);
+                let username = username
+                    .or(ssh_config.username)
+                    .unwrap_or_else(whoami::username);
+
                 let session = self
                     .pool
                     .write()
