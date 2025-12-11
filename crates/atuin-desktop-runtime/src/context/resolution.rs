@@ -212,6 +212,14 @@ impl ContextResolver {
         // Create a minijinja environment
         let mut env = Environment::new();
         env.set_trim_blocks(true);
+
+        // Add custom filter for shell escaping
+        env.add_filter("shellquote", |value: String| -> String {
+            // Use POSIX shell single-quote escaping:
+            // wrap in single quotes and escape any single quotes as '\''
+            format!("'{}'", value.replace('\'', "'\\''"))
+        });
+
         env.set_undefined_behavior(minijinja::UndefinedBehavior::Strict);
 
         // Build the context object for template rendering
