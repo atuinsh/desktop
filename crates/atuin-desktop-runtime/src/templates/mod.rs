@@ -200,15 +200,17 @@ impl DocumentTemplateState {
             .collect::<Vec<BlockTemplateState>>();
 
         let previous = if let Some(active_block_id) = active_block_id {
-            let state = flattened_doc
+            flattened_doc
                 .iter()
                 .position(|block| block.get("id").unwrap().as_str().unwrap() == active_block_id)
-                .and_then(|active_index| flattened_doc.get(active_index - 1))
-                .map(serialized_block_to_state);
-            state.map(|mut state| {
-                state.output = block_outputs.get(active_block_id).cloned().flatten();
-                state
-            })
+                .and_then(|active_index| active_index.checked_sub(1))
+                .and_then(|prev_index| flattened_doc.get(prev_index))
+                .map(|prev_block| {
+                    let mut state = serialized_block_to_state(prev_block);
+                    let prev_block_id = prev_block.get("id").unwrap().as_str().unwrap();
+                    state.output = block_outputs.get(prev_block_id).cloned().flatten();
+                    state
+                })
         } else {
             None
         };
