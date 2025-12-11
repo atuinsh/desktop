@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { BookOpenIcon, ChevronDownIcon, GlobeIcon, FileIcon } from "lucide-react";
+import { BookOpenIcon, ChevronDownIcon, GlobeIcon, FileIcon, AlertCircleIcon } from "lucide-react";
 import { Button, Input, Tooltip, Select, SelectItem, Spinner } from "@heroui/react";
 import { cn, exportPropMatter } from "@/lib/utils";
 import { createReactBlockSpec } from "@blocknote/react";
@@ -11,6 +11,7 @@ import { useStore } from "@/state/store";
 import PlayButton from "@/lib/blocks/common/PlayButton";
 import WorkspaceManager from "@/lib/workspaces/manager";
 import { RemoteRunbook } from "@/state/models";
+import { resolveRunbookByNwo, ResolvedRunbook } from "@/api/runbooks";
 
 // Create a search index instance
 const searchIndex = new RunbookIndexService();
@@ -156,6 +157,27 @@ interface SubRunbookProps {
   currentRunbookId: string | null;
 }
 
+// Helper to validate hub URI format
+function isValidHubUri(uri: string): boolean {
+  // Matches: user/slug, user/slug:tag, or with optional hub.atuin.sh prefix
+  const cleanUri = uri
+    .trim()
+    .replace(/^https?:\/\//, '')
+    .replace(/^hub\.atuin\.sh\//, '');
+
+  // Basic format: owner/slug or owner/slug:tag
+  const pattern = /^[a-zA-Z0-9_-]+\/[a-zA-Z0-9_-]+(?::[a-zA-Z0-9._-]+)?$/;
+  return pattern.test(cleanUri);
+}
+
+
+// Hub lookup result state
+type HubLookupState =
+  | { status: "idle" }
+  | { status: "loading" }
+  | { status: "found"; data: ResolvedRunbook }
+  | { status: "error"; message: string };
+
 function RunbookSelector({
   isVisible,
   position,
@@ -175,7 +197,59 @@ function RunbookSelector({
   const [runbooks, setRunbooks] = useState<Runbook[]>([]);
   const [filteredRunbooks, setFilteredRunbooks] = useState<Runbook[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [hubLookup, setHubLookup] = useState<HubLookupState>({ status: "idle" });
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Check if the query looks like a hub URI
+  const queryLooksLikeHubUri = isValidHubUri(query);
+
+  // Debounced hub lookup when query looks like a URI
+  useEffect(() => {
+    if (!queryLooksLikeHubUri) {
+      setHubLookup({ status: "idle" });
+      return;
+    }
+
+    // Parse the URI to get nwo and tag
+    const parsed = parseHubUri(query);
+    if (!parsed) {
+      setHubLookup({ status: "idle" });
+      return;
+    }
+
+    setHubLookup({ status: "loading" });
+
+    const timeoutId = setTimeout(async () => {
+      try {
+        const result = await resolveRunbookByNwo(parsed.nwo, parsed.tag || undefined);
+        setHubLookup({ status: "found", data: result });
+      } catch (err: any) {
+        const message = err?.code === 404
+          ? "Runbook not found"
+          : err?.message || "Failed to fetch";
+        setHubLookup({ status: "error", message });
+      }
+    }, 300); // 300ms debounce
+
+    return () => clearTimeout(timeoutId);
+  }, [query, queryLooksLikeHubUri]);
+
+  // Helper to parse hub URI into nwo and tag
+  function parseHubUri(uri: string): { nwo: string; tag: string | null } | null {
+    const cleanUri = uri
+      .trim()
+      .replace(/^https?:\/\//, '')
+      .replace(/^hub\.atuin\.sh\//, '');
+
+    const colonIndex = cleanUri.lastIndexOf(':');
+    if (colonIndex === -1) {
+      return { nwo: cleanUri, tag: null };
+    }
+    return {
+      nwo: cleanUri.substring(0, colonIndex),
+      tag: cleanUri.substring(colonIndex + 1) || null,
+    };
+  }
 
   // Helper to select a runbook and calculate relative path or URI
   const selectRunbook = (runbook: Runbook) => {
@@ -206,6 +280,30 @@ function RunbookSelector({
       runbookUri,
     });
   };
+
+  // Handle selecting the hub runbook
+  const selectHubRunbook = () => {
+    if (hubLookup.status !== "found") return;
+
+    const { runbook, snapshot } = hubLookup.data;
+    // Build URI with tag if we have a snapshot
+    const tag = snapshot?.tag || "latest";
+    const uri = `${runbook.nwo}:${tag}`;
+
+    onSelect({
+      runbookId: runbook.id,
+      runbookName: runbook.name,
+      runbookPath: null,
+      runbookUri: uri,
+    });
+  };
+
+  // Whether we should show the hub result row
+  const showHubResult = queryLooksLikeHubUri && hubLookup.status !== "idle";
+
+  // Total selectable items (hub result + runbooks)
+  const hubResultSelectable = hubLookup.status === "found";
+  const totalItems = (showHubResult && hubResultSelectable ? 1 : 0) + filteredRunbooks.length;
 
   // Load runbooks when popup opens
   useEffect(() => {
@@ -267,7 +365,7 @@ function RunbookSelector({
       switch (e.key) {
         case "ArrowDown":
           e.preventDefault();
-          setSelectedIndex((prev) => Math.min(prev + 1, filteredRunbooks.length - 1));
+          setSelectedIndex((prev) => Math.min(prev + 1, Math.max(0, totalItems - 1)));
           break;
         case "ArrowUp":
           e.preventDefault();
@@ -275,8 +373,15 @@ function RunbookSelector({
           break;
         case "Enter":
           e.preventDefault();
-          if (filteredRunbooks[selectedIndex]) {
-            selectRunbook(filteredRunbooks[selectedIndex]);
+          // If hub result is showing and selected
+          if (hubResultSelectable && selectedIndex === 0) {
+            selectHubRunbook();
+          } else {
+            // Adjust index if hub result is present
+            const runbookIndex = hubResultSelectable ? selectedIndex - 1 : selectedIndex;
+            if (filteredRunbooks[runbookIndex]) {
+              selectRunbook(filteredRunbooks[runbookIndex]);
+            }
           }
           break;
         case "Escape":
@@ -288,7 +393,7 @@ function RunbookSelector({
 
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [isVisible, filteredRunbooks, selectedIndex, onSelect, onClose]);
+  }, [isVisible, filteredRunbooks, selectedIndex, onSelect, onClose, hubResultSelectable, totalItems, hubLookup]);
 
   // Close on click outside
   useEffect(() => {
@@ -317,7 +422,7 @@ function RunbookSelector({
       <div className="p-3">
         <Input
           ref={inputRef}
-          placeholder="Search runbooks..."
+          placeholder="Search or enter hub URI (user/runbook)"
           value={query}
           onValueChange={setQuery}
           size="sm"
@@ -328,31 +433,82 @@ function RunbookSelector({
       </div>
 
       <div className="max-h-60 overflow-y-auto">
-        {filteredRunbooks.length === 0 ? (
+        {/* Hub lookup result - shown when query looks like a URI */}
+        {showHubResult && (
+          <>
+            {hubLookup.status === "loading" && (
+              <div className="flex items-center gap-2 px-3 py-2 text-sm border-b border-gray-100 dark:border-gray-700">
+                <Spinner size="sm" classNames={{ wrapper: "h-4 w-4" }} />
+                <span className="text-gray-500 dark:text-gray-400">
+                  Looking up {query}...
+                </span>
+              </div>
+            )}
+
+            {hubLookup.status === "error" && (
+              <div className="flex items-center gap-2 px-3 py-2 text-sm border-b border-gray-100 dark:border-gray-700 text-red-500 dark:text-red-400">
+                <AlertCircleIcon size={14} />
+                <span>{hubLookup.message}</span>
+              </div>
+            )}
+
+            {hubLookup.status === "found" && (
+              <div
+                className={cn(
+                  "flex items-center gap-2 px-3 py-2 cursor-pointer text-sm border-b border-gray-100 dark:border-gray-700",
+                  selectedIndex === 0
+                    ? "bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400"
+                    : "hover:bg-gray-50 dark:hover:bg-gray-700",
+                )}
+                onClick={selectHubRunbook}
+              >
+                <GlobeIcon size={14} className="text-purple-500" />
+                <div className="flex flex-col min-w-0">
+                  <span className="truncate font-medium">{hubLookup.data.runbook.name}</span>
+                  <span className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                    {hubLookup.data.runbook.nwo}
+                    {hubLookup.data.snapshot && `:${hubLookup.data.snapshot.tag}`}
+                  </span>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+
+        {/* Local runbook results */}
+        {filteredRunbooks.length === 0 && !showHubResult ? (
           <div className="p-3 text-sm text-gray-500 dark:text-gray-400 text-center">
             No runbooks found
           </div>
         ) : (
-          filteredRunbooks.map((runbook, index) => (
-            <div
-              key={runbook.id}
-              className={cn(
-                "flex items-center gap-2 px-3 py-2 cursor-pointer text-sm border-b border-gray-100 dark:border-gray-700 last:border-b-0",
-                index === selectedIndex
-                  ? "bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400"
-                  : "hover:bg-gray-50 dark:hover:bg-gray-700",
-              )}
-              onClick={() => selectRunbook(runbook)}
-            >
-              <BookOpenIcon size={14} />
-              <span className="truncate">{runbook.name || "Untitled Runbook"}</span>
-            </div>
-          ))
+          filteredRunbooks.map((runbook, index) => {
+            // Adjust index if hub result is selectable
+            const itemIndex = hubResultSelectable ? index + 1 : index;
+            return (
+              <div
+                key={runbook.id}
+                className={cn(
+                  "flex items-center gap-2 px-3 py-2 cursor-pointer text-sm border-b border-gray-100 dark:border-gray-700 last:border-b-0",
+                  itemIndex === selectedIndex
+                    ? "bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400"
+                    : "hover:bg-gray-50 dark:hover:bg-gray-700",
+                )}
+                onClick={() => selectRunbook(runbook)}
+              >
+                {runbook.isOnline() ? (
+                  <GlobeIcon size={14} className="text-purple-500" />
+                ) : (
+                  <FileIcon size={14} />
+                )}
+                <span className="truncate">{runbook.name || "Untitled Runbook"}</span>
+              </div>
+            );
+          })
         )}
       </div>
 
       <div className="p-2 text-xs text-gray-500 dark:text-gray-400 border-t border-gray-100 dark:border-gray-700">
-        Press Enter to select
+        ↑↓ navigate · Enter select · Esc close
       </div>
     </div>
   );
