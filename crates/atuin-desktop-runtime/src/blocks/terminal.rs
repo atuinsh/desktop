@@ -1,17 +1,62 @@
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
+use tokio::sync::RwLock;
+use ts_rs::TS;
 use typed_builder::TypedBuilder;
 use uuid::Uuid;
 
 use std::io::Read;
 
 use crate::blocks::{Block, BlockBehavior, FromDocument};
-use crate::context::BlockVars;
+use crate::context::{BlockExecutionOutput, BlockVars};
 use crate::events::GCEvent;
 use crate::execution::{
     CancellationToken, ExecutionContext, ExecutionHandle, ExecutionStatus, StreamingBlockOutput,
 };
 use crate::pty::{Pty, PtyLike};
 use crate::ssh::SshPty;
+
+/// Output structure for Terminal blocks that implements BlockExecutionOutput
+/// for template access to terminal output.
+#[derive(Debug, Clone, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct TerminalBlockOutput {
+    /// Raw terminal output (UTF-8 lossy conversion from PTY bytes)
+    pub output: String,
+    /// Total number of bytes received
+    pub byte_count: usize,
+    /// Whether the terminal was cancelled (true) or finished naturally (false)
+    pub cancelled: bool,
+}
+
+impl TerminalBlockOutput {
+    /// Create a new TerminalBlockOutput from accumulated bytes
+    pub fn new(bytes: Vec<u8>, cancelled: bool) -> Self {
+        let byte_count = bytes.len();
+        let output = String::from_utf8_lossy(&bytes).into_owned();
+        Self {
+            output,
+            byte_count,
+            cancelled,
+        }
+    }
+}
+
+impl BlockExecutionOutput for TerminalBlockOutput {
+    fn get_template_value(&self, key: &str) -> Option<minijinja::Value> {
+        match key {
+            "output" => Some(minijinja::Value::from(self.output.clone())),
+            "byte_count" => Some(minijinja::Value::from(self.byte_count)),
+            "cancelled" => Some(minijinja::Value::from(self.cancelled)),
+            _ => None,
+        }
+    }
+
+    fn enumerate_template_keys(&self) -> minijinja::value::Enumerator {
+        minijinja::value::Enumerator::Str(&["output", "byte_count", "cancelled"])
+    }
+}
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, TypedBuilder)]
 #[serde(rename_all = "camelCase")]
@@ -162,6 +207,9 @@ impl Terminal {
             .take_receiver()
             .ok_or("Cancellation receiver already taken")?;
 
+        // Accumulator for terminal output (shared between reader tasks)
+        let output_accumulator: Arc<RwLock<Vec<u8>>> = Arc::new(RwLock::new(Vec::new()));
+
         // Setup fs_var for local terminal or remote path for SSH
         let fs_var_handle: Option<crate::context::fs_var::FsVarHandle>;
         let remote_var_path: Option<(String, Option<String>, String)>; // (hostname, username, path)
@@ -234,16 +282,25 @@ impl Terminal {
 
             let (pty_tx, resize_tx) = ssh_result?;
 
-            // Forward SSH output to binary channel
+            // Forward SSH output to binary channel and accumulate
             let context_clone = context.clone();
             let block_id = self.id;
+            let output_accumulator_clone = output_accumulator.clone();
             tokio::spawn(async move {
                 while let Some(output) = output_receiver.recv().await {
+                    let bytes = output.as_bytes().to_vec();
+
+                    // Accumulate output
+                    output_accumulator_clone
+                        .write()
+                        .await
+                        .extend_from_slice(&bytes);
+
                     let _ = context_clone
                         .send_output(
                             StreamingBlockOutput::builder()
                                 .block_id(block_id)
-                                .binary(output.as_bytes().to_vec())
+                                .binary(bytes)
                                 .build(),
                         )
                         .await;
@@ -289,6 +346,7 @@ impl Terminal {
             let block_id = self.id;
 
             let cancellation_token_clone = cancellation_token_clone.clone();
+            let output_accumulator_clone = output_accumulator.clone();
             tokio::spawn(async move {
                 loop {
                     // Use blocking read in a blocking task
@@ -312,12 +370,20 @@ impl Terminal {
                             break;
                         }
                         Ok(Ok((n, buf))) => {
+                            let bytes = buf[..n].to_vec();
+
+                            // Accumulate output
+                            output_accumulator_clone
+                                .write()
+                                .await
+                                .extend_from_slice(&bytes);
+
                             // Send raw binary data
                             let _ = context_clone
                                 .send_output(
                                     StreamingBlockOutput::builder()
                                         .block_id(block_id)
-                                        .binary(buf[..n].to_vec())
+                                        .binary(bytes)
                                         .build(),
                                 )
                                 .await;
@@ -458,9 +524,17 @@ impl Terminal {
             .emit_gc_event(GCEvent::PtyClosed { pty_id: self.id })
             .await;
 
+        // Determine if the terminal was cancelled (still running = cancelled by user)
+        let was_cancelled = *context.handle().status.read().await == ExecutionStatus::Running;
+
+        // Store accumulated output for template access
+        let accumulated_bytes = output_accumulator.read().await.clone();
+        let terminal_output = TerminalBlockOutput::new(accumulated_bytes, was_cancelled);
+        let _ = context.set_block_output(terminal_output).await;
+
         // If the block is still running, cancel it.
         // This will happen when the user manually cancels the block execution.
-        if *context.handle().status.read().await == ExecutionStatus::Running {
+        if was_cancelled {
             let _ = context.block_cancelled().await;
         }
         Ok(true)

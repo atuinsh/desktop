@@ -4,6 +4,7 @@ use async_trait::async_trait;
 use serde::Serialize;
 
 use crate::blocks::BlockBehavior;
+use crate::context::BlockExecutionOutput;
 use crate::execution::{ExecutionContext, ExecutionHandle, StreamingBlockOutput};
 
 pub trait BlockExecutionError {
@@ -100,6 +101,20 @@ pub trait QueryBlockBehavior: BlockBehavior + 'static {
         context: &ExecutionContext,
     ) -> Result<Vec<Self::QueryResult>, Self::Error>;
 
+    /// Create a structured output from query results for template access.
+    ///
+    /// This method is called after query execution to create a `BlockExecutionOutput`
+    /// that can be stored and accessed via templates (e.g., `{{ doc.named['block_name'].output.field }}`).
+    ///
+    /// The default implementation returns `None`, meaning no structured output is stored.
+    /// Override this method to provide block-specific output structures.
+    fn create_output(
+        &self,
+        _results: &[Self::QueryResult],
+    ) -> Option<Box<dyn BlockExecutionOutput>> {
+        None
+    }
+
     /// Execute the block. Creates an execution handle and manages all lifecycle events.
     /// This is the main entry point that handles the full execution lifecycle.
     async fn execute_query_block(
@@ -189,8 +204,8 @@ pub trait QueryBlockBehavior: BlockBehavior + 'static {
         let execution_task = async {
             let results = self.execute_query(&connection, &query, &context).await?;
 
-            // Send all results as output
-            for result in results {
+            // Send all results as streaming output
+            for result in &results {
                 let _ = context
                     .send_output(
                         StreamingBlockOutput::builder()
@@ -204,6 +219,11 @@ pub trait QueryBlockBehavior: BlockBehavior + 'static {
                             .build(),
                     )
                     .await;
+            }
+
+            // Store structured output for template access if the block provides one
+            if let Some(output) = self.create_output(&results) {
+                let _ = context.set_block_output_boxed(output).await;
             }
 
             Ok::<(), Self::Error>(())

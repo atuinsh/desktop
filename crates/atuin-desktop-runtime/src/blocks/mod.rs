@@ -37,7 +37,8 @@ use uuid::Uuid;
 
 pub use query_block::{BlockExecutionError, QueryBlockBehavior, QueryBlockError};
 pub use sql_block::{
-    SqlBlockBehavior, SqlBlockError, SqlBlockExecutionResult, SqlQueryResult, SqlStatementResult,
+    SqlBlockBehavior, SqlBlockError, SqlBlockExecutionResult, SqlBlockOutput, SqlQueryResult,
+    SqlStatementResult,
 };
 
 use crate::{

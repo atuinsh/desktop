@@ -10,6 +10,7 @@ use typed_builder::TypedBuilder;
 
 use crate::{
     blocks::{BlockBehavior, BlockExecutionError, QueryBlockBehavior, QueryBlockError},
+    context::BlockExecutionOutput,
     execution::{ExecutionContext, StreamingBlockOutput},
 };
 
@@ -123,6 +124,141 @@ pub struct SqlStatementResult {
 pub enum SqlBlockExecutionResult {
     Query(SqlQueryResult),
     Statement(SqlStatementResult),
+}
+
+/// Output structure for SQL blocks that implements BlockExecutionOutput
+/// for template access to query results.
+#[derive(Debug, Clone, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct SqlBlockOutput {
+    /// All results from the SQL execution (supports multiple statements)
+    pub results: Vec<SqlBlockExecutionResult>,
+    /// Total execution duration in seconds
+    #[serde(serialize_with = "serialize_duration")]
+    #[ts(type = "number")]
+    pub total_duration: Duration,
+}
+
+impl SqlBlockOutput {
+    /// Create a new SqlBlockOutput from a list of results
+    pub fn new(results: Vec<SqlBlockExecutionResult>) -> Self {
+        let total_duration = results
+            .iter()
+            .map(|r| match r {
+                SqlBlockExecutionResult::Query(q) => q.duration,
+                SqlBlockExecutionResult::Statement(s) => s.duration,
+            })
+            .sum();
+
+        Self {
+            results,
+            total_duration,
+        }
+    }
+
+    /// Get the total number of rows returned across all query results
+    pub fn total_rows(&self) -> usize {
+        self.results
+            .iter()
+            .filter_map(|r| match r {
+                SqlBlockExecutionResult::Query(q) => Some(q.rows.len()),
+                SqlBlockExecutionResult::Statement(_) => None,
+            })
+            .sum()
+    }
+
+    /// Get the total number of rows affected across all statement results
+    pub fn total_rows_affected(&self) -> u64 {
+        self.results
+            .iter()
+            .filter_map(|r| match r {
+                SqlBlockExecutionResult::Statement(s) => s.rows_affected,
+                SqlBlockExecutionResult::Query(_) => None,
+            })
+            .sum()
+    }
+
+    /// Get the first result (convenience for single-statement queries)
+    pub fn first_result(&self) -> Option<&SqlBlockExecutionResult> {
+        self.results.first()
+    }
+
+    /// Get the first query result (convenience for single SELECT queries)
+    pub fn first_query(&self) -> Option<&SqlQueryResult> {
+        self.results.iter().find_map(|r| match r {
+            SqlBlockExecutionResult::Query(q) => Some(q),
+            _ => None,
+        })
+    }
+
+    /// Get the first statement result
+    pub fn first_statement(&self) -> Option<&SqlStatementResult> {
+        self.results.iter().find_map(|r| match r {
+            SqlBlockExecutionResult::Statement(s) => Some(s),
+            _ => None,
+        })
+    }
+
+    /// Get all rows from all query results as a flat list
+    pub fn all_rows(&self) -> Vec<&Map<String, Value>> {
+        self.results
+            .iter()
+            .filter_map(|r| match r {
+                SqlBlockExecutionResult::Query(q) => Some(q.rows.iter()),
+                _ => None,
+            })
+            .flatten()
+            .collect()
+    }
+}
+
+impl BlockExecutionOutput for SqlBlockOutput {
+    fn get_template_value(&self, key: &str) -> Option<minijinja::Value> {
+        match key {
+            // Primary access methods
+            "results" => Some(minijinja::Value::from_serialize(&self.results)),
+            "first" => self
+                .first_result()
+                .map(minijinja::Value::from_serialize),
+
+            // Aggregated data
+            "total_rows" => Some(minijinja::Value::from(self.total_rows())),
+            "total_rows_affected" => Some(minijinja::Value::from(self.total_rows_affected())),
+            "total_duration" => Some(minijinja::Value::from(self.total_duration.as_secs_f64())),
+            "result_count" => Some(minijinja::Value::from(self.results.len())),
+
+            // Convenience accessors for the first query result
+            "rows" => self
+                .first_query()
+                .map(|q| minijinja::Value::from_serialize(&q.rows)),
+            "columns" => self
+                .first_query()
+                .map(|q| minijinja::Value::from_serialize(&q.columns)),
+
+            // Convenience accessor for statement results
+            "rows_affected" => self
+                .first_statement()
+                .and_then(|s| s.rows_affected)
+                .map(minijinja::Value::from),
+
+            _ => None,
+        }
+    }
+
+    fn enumerate_template_keys(&self) -> minijinja::value::Enumerator {
+        minijinja::value::Enumerator::Str(&[
+            "results",
+            "first",
+            "total_rows",
+            "total_rows_affected",
+            "total_duration",
+            "result_count",
+            "rows",
+            "columns",
+            "rows_affected",
+        ])
+    }
 }
 
 fn serialize_duration<S>(duration: &Duration, serializer: S) -> Result<S::Ok, S::Error>
@@ -262,5 +398,12 @@ where
         }
 
         Ok(results)
+    }
+
+    fn create_output(
+        &self,
+        results: &[Self::QueryResult],
+    ) -> Option<Box<dyn BlockExecutionOutput>> {
+        Some(Box::new(SqlBlockOutput::new(results.to_vec())))
     }
 }

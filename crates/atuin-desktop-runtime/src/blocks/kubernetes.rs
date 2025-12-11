@@ -7,6 +7,7 @@ use typed_builder::TypedBuilder;
 use uuid::Uuid;
 
 use crate::blocks::{Block, BlockBehavior};
+use crate::context::BlockExecutionOutput;
 use crate::execution::{ExecutionContext, ExecutionHandle, StreamingBlockOutput};
 
 use super::FromDocument;
@@ -21,6 +22,111 @@ pub enum KubernetesError {
     JsonParsing(String),
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
+}
+
+/// Output structure for Kubernetes blocks that implements BlockExecutionOutput
+/// for template access to kubectl results.
+#[derive(Debug, Clone, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct KubernetesBlockOutput {
+    /// The parsed table data as rows (each row is a list of cell values)
+    pub data: Vec<Vec<Value>>,
+    /// Column definitions for the table
+    pub columns: Vec<KubernetesColumn>,
+    /// Number of items/rows returned
+    pub item_count: usize,
+    /// The resource kind if detected (e.g., "pod", "service", "deployment")
+    pub resource_kind: Option<String>,
+    /// Raw stdout from the command (if not parsed as JSON)
+    pub raw_output: Option<String>,
+    /// Stderr output if any
+    pub stderr: Option<String>,
+}
+
+impl KubernetesBlockOutput {
+    /// Create a new output from parsed table data
+    pub fn from_table(
+        data: Vec<Vec<Value>>,
+        columns: Vec<KubernetesColumn>,
+        resource_kind: Option<String>,
+    ) -> Self {
+        let item_count = data.len();
+        Self {
+            data,
+            columns,
+            item_count,
+            resource_kind,
+            raw_output: None,
+            stderr: None,
+        }
+    }
+
+    /// Create a new output from raw (non-JSON) output
+    pub fn from_raw(raw_output: String, stderr: Option<String>) -> Self {
+        let line_count = raw_output.lines().count();
+        Self {
+            data: vec![],
+            columns: vec![],
+            item_count: line_count,
+            resource_kind: None,
+            raw_output: Some(raw_output),
+            stderr,
+        }
+    }
+
+    /// Get the first row of data
+    pub fn first_row(&self) -> Option<&Vec<Value>> {
+        self.data.first()
+    }
+}
+
+impl BlockExecutionOutput for KubernetesBlockOutput {
+    fn get_template_value(&self, key: &str) -> Option<minijinja::Value> {
+        match key {
+            // Table data access
+            "data" => Some(minijinja::Value::from_serialize(&self.data)),
+            "columns" => Some(minijinja::Value::from_serialize(&self.columns)),
+            "first_row" => self
+                .first_row()
+                .map(minijinja::Value::from_serialize),
+
+            // Metadata
+            "item_count" => Some(minijinja::Value::from(self.item_count)),
+            "resource_kind" => self
+                .resource_kind
+                .as_ref()
+                .map(|k| minijinja::Value::from(k.clone())),
+
+            // Raw output
+            "raw_output" => self
+                .raw_output
+                .as_ref()
+                .map(|s| minijinja::Value::from(s.clone())),
+            "stderr" => self
+                .stderr
+                .as_ref()
+                .map(|s| minijinja::Value::from(s.clone())),
+
+            // Convenience: check if we have structured data
+            "has_table" => Some(minijinja::Value::from(!self.data.is_empty())),
+
+            _ => None,
+        }
+    }
+
+    fn enumerate_template_keys(&self) -> minijinja::value::Enumerator {
+        minijinja::value::Enumerator::Str(&[
+            "data",
+            "columns",
+            "first_row",
+            "item_count",
+            "resource_kind",
+            "raw_output",
+            "stderr",
+            "has_table",
+        ])
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, TypedBuilder)]
@@ -149,11 +255,18 @@ impl BlockBehavior for Kubernetes {
         }
 
         let (stdout, stderr) = result.unwrap();
+        let stderr_for_output = if stderr.trim().is_empty() {
+            None
+        } else {
+            Some(stderr.clone())
+        };
 
         // Send stdout if present
         if !stdout.trim().is_empty() {
             // Try to parse as JSON kubectl output
-            if let Ok(parsed_output) = self.parse_kubectl_output(&stdout) {
+            if let Ok((parsed_output, block_output)) =
+                self.parse_kubectl_output_with_block_output(&stdout, stderr_for_output.clone())
+            {
                 let _ = context
                     .send_output(
                         StreamingBlockOutput::builder()
@@ -162,6 +275,9 @@ impl BlockBehavior for Kubernetes {
                             .build(),
                     )
                     .await;
+
+                // Store structured output for template access
+                let _ = context.set_block_output(block_output).await;
             } else {
                 // If not JSON, send as plain stdout
                 let _ = context
@@ -182,7 +298,23 @@ impl BlockBehavior for Kubernetes {
                             .build(),
                     )
                     .await;
+
+                // Store raw output for template access
+                let _ = context
+                    .set_block_output(KubernetesBlockOutput::from_raw(
+                        stdout.clone(),
+                        stderr_for_output,
+                    ))
+                    .await;
             }
+        } else if stderr_for_output.is_some() {
+            // No stdout but we have stderr - still store it
+            let _ = context
+                .set_block_output(KubernetesBlockOutput::from_raw(
+                    String::new(),
+                    stderr_for_output,
+                ))
+                .await;
         }
 
         // Send stderr if present
@@ -251,18 +383,25 @@ impl Kubernetes {
         Ok((stdout, stderr))
     }
 
-    fn parse_kubectl_output(&self, output: &str) -> Result<Value, KubernetesError> {
+    /// Parse kubectl output and return both the streaming Value and the BlockOutput
+    fn parse_kubectl_output_with_block_output(
+        &self,
+        output: &str,
+        stderr: Option<String>,
+    ) -> Result<(Value, KubernetesBlockOutput), KubernetesError> {
         let parsed: Value = serde_json::from_str(output)
             .map_err(|e| KubernetesError::JsonParsing(e.to_string()))?;
 
         // Check if this is a kubectl JSON list output
         if let Some(items) = parsed.get("items").and_then(|v| v.as_array()) {
             if items.is_empty() {
-                return Ok(json!({
+                let streaming_output = json!({
                     "type": "kubernetes",
                     "data": [],
                     "columns": []
-                }));
+                });
+                let block_output = KubernetesBlockOutput::from_table(vec![], vec![], None);
+                return Ok((streaming_output, block_output));
             }
 
             // Detect resource type and create appropriate columns
@@ -283,14 +422,31 @@ impl Kubernetes {
                 _ => self.parse_generic(items),
             };
 
-            Ok(json!({
+            let streaming_output = json!({
                 "type": "kubernetes",
                 "data": data,
                 "columns": columns
-            }))
+            });
+
+            let mut block_output =
+                KubernetesBlockOutput::from_table(data, columns, Some(kind.clone()));
+            block_output.stderr = stderr;
+
+            Ok((streaming_output, block_output))
         } else {
-            // Not a kubectl list, return as-is
-            Ok(parsed)
+            // Not a kubectl list - return raw JSON with the parsed value
+            let block_output = KubernetesBlockOutput {
+                data: vec![],
+                columns: vec![],
+                item_count: 1,
+                resource_kind: parsed
+                    .get("kind")
+                    .and_then(|k| k.as_str())
+                    .map(String::from),
+                raw_output: Some(output.to_string()),
+                stderr,
+            };
+            Ok((parsed, block_output))
         }
     }
 
@@ -654,10 +810,10 @@ impl Kubernetes {
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
-struct KubernetesColumn {
-    id: String,
-    title: String,
-    width: u32,
+pub struct KubernetesColumn {
+    pub id: String,
+    pub title: String,
+    pub width: u32,
 }
 
 impl KubernetesColumn {

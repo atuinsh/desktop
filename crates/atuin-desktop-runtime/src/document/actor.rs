@@ -377,11 +377,21 @@ impl DocumentHandle {
         block_id: Uuid,
         output: impl BlockExecutionOutput,
     ) -> Result<(), DocumentError> {
+        self.set_block_execution_output_boxed(block_id, Box::new(output))
+            .await
+    }
+
+    /// Set a block's output during execution (boxed variant)
+    pub async fn set_block_execution_output_boxed(
+        &self,
+        block_id: Uuid,
+        output: Box<dyn BlockExecutionOutput>,
+    ) -> Result<(), DocumentError> {
         let (tx, rx) = oneshot::channel();
         self.command_tx
             .send(DocumentCommand::SetBlockExecutionOutput {
                 block_id,
-                output: Box::new(output),
+                output,
                 reply: tx,
             })
             .map_err(|_| DocumentError::ActorSendError)?;

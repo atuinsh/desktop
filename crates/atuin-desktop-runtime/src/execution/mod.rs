@@ -148,6 +148,16 @@ impl ExecutionContext {
             .await
     }
 
+    /// Set the block output (boxed variant)
+    pub async fn set_block_output_boxed(
+        &self,
+        output: Box<dyn BlockExecutionOutput>,
+    ) -> Result<(), DocumentError> {
+        self.document_handle
+            .set_block_execution_output_boxed(self.block_id, output)
+            .await
+    }
+
     /// Emit a Grand Central event
     pub async fn emit_gc_event(&self, event: GCEvent) -> Result<(), DocumentError> {
         if let Some(event_bus) = &self.gc_event_bus {

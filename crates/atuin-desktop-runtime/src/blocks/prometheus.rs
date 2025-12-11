@@ -7,6 +7,7 @@ use typed_builder::TypedBuilder;
 use uuid::Uuid;
 
 use crate::blocks::{Block, BlockBehavior, BlockExecutionError, FromDocument, QueryBlockBehavior};
+use crate::context::BlockExecutionOutput;
 use crate::execution::{ExecutionContext, ExecutionHandle};
 
 // Prometheus-specific types for QueryBlockBehavior
@@ -39,6 +40,75 @@ pub struct PrometheusTimeRange {
     start: u64,
     end: u64,
     step: u32,
+}
+
+/// Output structure for Prometheus blocks that implements BlockExecutionOutput
+/// for template access to query results.
+#[derive(Debug, Clone, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct PrometheusBlockOutput {
+    /// All query results from the Prometheus execution
+    pub results: Vec<PrometheusQueryResult>,
+    /// Total number of series across all results
+    pub total_series: usize,
+}
+
+impl PrometheusBlockOutput {
+    /// Create a new PrometheusBlockOutput from query results
+    pub fn new(results: Vec<PrometheusQueryResult>) -> Self {
+        let total_series = results.iter().map(|r| r.series.len()).sum();
+        Self {
+            results,
+            total_series,
+        }
+    }
+
+    /// Get the first result (convenience for single-query access)
+    pub fn first_result(&self) -> Option<&PrometheusQueryResult> {
+        self.results.first()
+    }
+}
+
+impl BlockExecutionOutput for PrometheusBlockOutput {
+    fn get_template_value(&self, key: &str) -> Option<minijinja::Value> {
+        match key {
+            // Primary access
+            "results" => Some(minijinja::Value::from_serialize(&self.results)),
+            "first" => self
+                .first_result()
+                .map(minijinja::Value::from_serialize),
+
+            // Aggregated data
+            "total_series" => Some(minijinja::Value::from(self.total_series)),
+            "result_count" => Some(minijinja::Value::from(self.results.len())),
+
+            // Convenience accessors for first result
+            "series" => self
+                .first_result()
+                .map(|r| minijinja::Value::from_serialize(&r.series)),
+            "query_executed" => self
+                .first_result()
+                .map(|r| minijinja::Value::from(r.query_executed.clone())),
+            "time_range" => self
+                .first_result()
+                .map(|r| minijinja::Value::from_serialize(&r.time_range)),
+
+            _ => None,
+        }
+    }
+
+    fn enumerate_template_keys(&self) -> minijinja::value::Enumerator {
+        minijinja::value::Enumerator::Str(&[
+            "results",
+            "first",
+            "total_series",
+            "result_count",
+            "series",
+            "query_executed",
+            "time_range",
+        ])
+    }
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -403,5 +473,12 @@ impl QueryBlockBehavior for Prometheus {
         };
 
         Ok(vec![result])
+    }
+
+    fn create_output(
+        &self,
+        results: &[Self::QueryResult],
+    ) -> Option<Box<dyn BlockExecutionOutput>> {
+        Some(Box::new(PrometheusBlockOutput::new(results.to_vec())))
     }
 }
