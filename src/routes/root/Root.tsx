@@ -40,6 +40,7 @@ import { KVStore } from "@/state/kv";
 import Runbook from "@/state/runbooks/runbook";
 import RunbookIndexService from "@/state/runbooks/search";
 import {
+  BookOpenIcon,
   ChartBarBigIcon,
   HistoryIcon,
   MailPlusIcon,
@@ -1048,6 +1049,17 @@ function App() {
             <Spacer y={2} />
 
             <div className="flex flex-col items-center gap-4 px-3">
+              <Tooltip content="Documentation">
+                <Button
+                  isIconOnly
+                  variant="light"
+                  size="lg"
+                  onPress={() => open("https://man.atuin.sh")}
+                >
+                  <BookOpenIcon className="w-6 h-6" size={24} />
+                </Button>
+              </Tooltip>
+
               {isLoggedIn() && (
                 <Tooltip content="Invite friends and colleagues to try Atuin Desktop">
                   <Button
