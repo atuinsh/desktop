@@ -104,20 +104,26 @@ impl BlockContextStorage for TempNullContextStorage {
     }
 }
 
-/// Runbook loader that resolves references as file paths relative to a base directory
+/// Runbook loader that resolves references as file paths relative to a base directory,
+/// or fetches from Atuin Hub for remote references.
 ///
 /// Resolution order:
 /// 1. If `path` is set: Try as relative path, then absolute path
-/// 2. If `uri` is set: TODO - fetch from hub
-/// 3. If `id` is set: TODO - fetch from hub by ID
+/// 2. If `uri` is set: Fetch from hub by NWO (user/runbook:tag)
+/// 3. If `id` is set: Fetch from hub by ID
 pub struct FileRunbookLoader {
     /// Base directory for resolving relative paths (typically the directory containing the parent runbook)
     base_dir: PathBuf,
+    /// Hub API client for fetching remote runbooks
+    hub_client: crate::hub::HubClient,
 }
 
 impl FileRunbookLoader {
     pub fn new(base_dir: PathBuf) -> Self {
-        Self { base_dir }
+        Self {
+            base_dir,
+            hub_client: crate::hub::HubClient::new(),
+        }
     }
 
     /// Create a loader from a runbook file path (uses the parent directory as base)
@@ -126,7 +132,10 @@ impl FileRunbookLoader {
             .parent()
             .map(|p| p.to_path_buf())
             .unwrap_or_else(|| PathBuf::from("."));
-        Self::new(base_dir)
+        Self {
+            base_dir,
+            hub_client: crate::hub::HubClient::new(),
+        }
     }
 
     /// Try to resolve a path (relative to base_dir or absolute)
@@ -144,6 +153,96 @@ impl FileRunbookLoader {
         }
 
         None
+    }
+
+    /// Load runbook content from a hub URI (user/runbook or user/runbook:tag)
+    async fn load_from_uri(
+        &self,
+        uri: &str,
+        display_id: &str,
+    ) -> Result<Vec<serde_json::Value>, RunbookLoadError> {
+        let parsed = crate::hub::ParsedUri::parse(uri).ok_or_else(|| RunbookLoadError::LoadFailed {
+            runbook_id: display_id.to_string(),
+            message: format!("Invalid hub URI format: '{}'. Expected 'user/runbook' or 'user/runbook:tag'", uri),
+        })?;
+
+        tracing::debug!("Fetching runbook from hub: {} (tag: {:?})", parsed.nwo, parsed.tag);
+
+        let (runbook, snapshot) = self
+            .hub_client
+            .resolve_by_nwo(&parsed.nwo, parsed.tag.as_deref())
+            .await
+            .map_err(|e| match e {
+                crate::hub::HubError::NotFound(_) => RunbookLoadError::NotFound {
+                    runbook_id: display_id.to_string(),
+                },
+                _ => RunbookLoadError::LoadFailed {
+                    runbook_id: display_id.to_string(),
+                    message: e.to_string(),
+                },
+            })?;
+
+        // Prefer snapshot content if available, otherwise use runbook content
+        if let Some(snapshot) = snapshot {
+            tracing::debug!("Using snapshot '{}' content", snapshot.tag);
+            Ok(snapshot.content)
+        } else if let Some(content) = runbook.content {
+            tracing::debug!("Using runbook content (no snapshot)");
+            Ok(content)
+        } else {
+            Err(RunbookLoadError::LoadFailed {
+                runbook_id: display_id.to_string(),
+                message: "Runbook has no content. You may need to specify a tag.".to_string(),
+            })
+        }
+    }
+
+    /// Load runbook content from hub by ID
+    async fn load_from_hub_id(
+        &self,
+        id: &str,
+        display_id: &str,
+    ) -> Result<Vec<serde_json::Value>, RunbookLoadError> {
+        tracing::debug!("Fetching runbook from hub by ID: {}", id);
+
+        let runbook = self
+            .hub_client
+            .get_runbook_by_id(id)
+            .await
+            .map_err(|e| match e {
+                crate::hub::HubError::NotFound(_) => RunbookLoadError::NotFound {
+                    runbook_id: display_id.to_string(),
+                },
+                _ => RunbookLoadError::LoadFailed {
+                    runbook_id: display_id.to_string(),
+                    message: e.to_string(),
+                },
+            })?;
+
+        // Use runbook content if available
+        if let Some(content) = runbook.content {
+            Ok(content)
+        } else if !runbook.snapshots.is_empty() {
+            // Fall back to fetching the latest snapshot
+            let latest_snapshot_id = &runbook.snapshots[0].id;
+            tracing::debug!("Fetching latest snapshot: {}", latest_snapshot_id);
+
+            let snapshot = self
+                .hub_client
+                .get_snapshot(latest_snapshot_id)
+                .await
+                .map_err(|e| RunbookLoadError::LoadFailed {
+                    runbook_id: display_id.to_string(),
+                    message: format!("Failed to fetch snapshot: {}", e),
+                })?;
+
+            Ok(snapshot.content)
+        } else {
+            Err(RunbookLoadError::LoadFailed {
+                runbook_id: display_id.to_string(),
+                message: "Runbook has no content and no snapshots".to_string(),
+            })
+        }
     }
 
     /// Load runbook content from a file path
@@ -205,22 +304,14 @@ impl RunbookContentLoader for FileRunbookLoader {
             });
         }
 
-        // 2. Try URI (hub fetch) - TODO: implement hub fetching
+        // 2. Try URI (hub fetch by NWO)
         if let Some(uri) = &runbook_ref.uri {
-            // For now, return an error indicating hub fetching is not yet supported
-            return Err(RunbookLoadError::LoadFailed {
-                runbook_id: display_id,
-                message: format!("Hub URI fetching not yet supported: {}", uri),
-            });
+            return self.load_from_uri(uri, &display_id).await;
         }
 
-        // 3. Try ID (hub fetch by ID) - TODO: implement hub fetching
+        // 3. Try ID (hub fetch by ID)
         if let Some(id) = &runbook_ref.id {
-            // For now, return an error indicating hub fetching is not yet supported
-            return Err(RunbookLoadError::LoadFailed {
-                runbook_id: display_id,
-                message: format!("Hub ID fetching not yet supported: {}", id),
-            });
+            return self.load_from_hub_id(id, &display_id).await;
         }
 
         // No reference provided

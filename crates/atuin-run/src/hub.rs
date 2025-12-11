@@ -1,0 +1,234 @@
+//! Hub API client for fetching remote runbooks
+//!
+//! This module provides functionality to fetch runbook content from Atuin Hub.
+
+use serde::Deserialize;
+
+const HUB_API_BASE: &str = "https://hub.atuin.sh/api";
+
+/// A snapshot from the hub API
+#[derive(Debug, Deserialize)]
+pub struct HubSnapshot {
+    pub id: String,
+    pub tag: String,
+    pub content: Vec<serde_json::Value>,
+}
+
+/// A runbook from the hub API
+#[derive(Debug, Deserialize)]
+pub struct HubRunbook {
+    pub id: String,
+    pub name: String,
+    pub slug: String,
+    pub nwo: String,
+    pub visibility: String,
+    #[serde(default)]
+    pub snapshots: Vec<HubSnapshotMeta>,
+    /// Content is only present when fetched with include=content or via resolve
+    #[serde(default)]
+    pub content: Option<Vec<serde_json::Value>>,
+}
+
+/// Snapshot metadata (without content)
+#[derive(Debug, Deserialize)]
+pub struct HubSnapshotMeta {
+    pub id: String,
+    pub tag: String,
+}
+
+/// Response wrapper for runbook endpoint
+#[derive(Debug, Deserialize)]
+struct RunbookResponse {
+    runbook: HubRunbook,
+}
+
+/// Response wrapper for snapshot endpoint
+#[derive(Debug, Deserialize)]
+struct SnapshotResponse {
+    snapshot: HubSnapshot,
+}
+
+/// Response wrapper for resolve endpoint
+#[derive(Debug, Deserialize)]
+struct ResolveResponse {
+    runbook: HubRunbook,
+    snapshot: Option<HubSnapshot>,
+}
+
+/// Parsed URI reference: "user/runbook" or "user/runbook:tag"
+#[derive(Debug, Clone)]
+pub struct ParsedUri {
+    pub nwo: String,
+    pub tag: Option<String>,
+}
+
+impl ParsedUri {
+    /// Parse a URI string like "user/runbook" or "user/runbook:tag"
+    pub fn parse(uri: &str) -> Option<Self> {
+        // Strip optional hub.atuin.sh prefix
+        let uri = uri
+            .trim_start_matches("https://")
+            .trim_start_matches("http://")
+            .trim_start_matches("hub.atuin.sh/");
+
+        // Split on colon to get tag
+        let (nwo, tag) = if let Some((nwo, tag)) = uri.split_once(':') {
+            (nwo.to_string(), Some(tag.to_string()))
+        } else {
+            (uri.to_string(), None)
+        };
+
+        // Validate nwo format (should be "user/slug")
+        if !nwo.contains('/') || nwo.starts_with('/') || nwo.ends_with('/') {
+            return None;
+        }
+
+        Some(Self { nwo, tag })
+    }
+}
+
+/// Hub API client
+pub struct HubClient {
+    client: reqwest::Client,
+    base_url: String,
+}
+
+impl HubClient {
+    pub fn new() -> Self {
+        Self {
+            client: reqwest::Client::new(),
+            base_url: HUB_API_BASE.to_string(),
+        }
+    }
+
+    /// Fetch a runbook by ID
+    pub async fn get_runbook_by_id(
+        &self,
+        id: &str,
+    ) -> Result<HubRunbook, HubError> {
+        let url = format!(
+            "{}/runbooks/{}?include=snapshots,content",
+            self.base_url, id
+        );
+
+        let response = self
+            .client
+            .get(&url)
+            .send()
+            .await
+            .map_err(|e| HubError::NetworkError(e.to_string()))?;
+
+        if response.status() == reqwest::StatusCode::NOT_FOUND {
+            return Err(HubError::NotFound(id.to_string()));
+        }
+
+        if !response.status().is_success() {
+            return Err(HubError::ApiError(format!(
+                "HTTP {}: {}",
+                response.status(),
+                response.text().await.unwrap_or_default()
+            )));
+        }
+
+        let resp: RunbookResponse = response
+            .json()
+            .await
+            .map_err(|e| HubError::ParseError(e.to_string()))?;
+
+        Ok(resp.runbook)
+    }
+
+    /// Resolve a runbook by NWO (name-with-owner), optionally with a tag
+    ///
+    /// This uses the /resolve/runbook endpoint which returns both runbook metadata
+    /// and snapshot content in one request.
+    pub async fn resolve_by_nwo(
+        &self,
+        nwo: &str,
+        tag: Option<&str>,
+    ) -> Result<(HubRunbook, Option<HubSnapshot>), HubError> {
+        let mut url = format!("{}/resolve/runbook?nwo={}", self.base_url, nwo);
+
+        if let Some(tag) = tag {
+            url.push_str(&format!("&tag={}", tag));
+        }
+
+        let response = self
+            .client
+            .get(&url)
+            .send()
+            .await
+            .map_err(|e| HubError::NetworkError(e.to_string()))?;
+
+        if response.status() == reqwest::StatusCode::NOT_FOUND {
+            return Err(HubError::NotFound(nwo.to_string()));
+        }
+
+        if !response.status().is_success() {
+            return Err(HubError::ApiError(format!(
+                "HTTP {}: {}",
+                response.status(),
+                response.text().await.unwrap_or_default()
+            )));
+        }
+
+        let resp: ResolveResponse = response
+            .json()
+            .await
+            .map_err(|e| HubError::ParseError(e.to_string()))?;
+
+        Ok((resp.runbook, resp.snapshot))
+    }
+
+    /// Fetch a snapshot by ID
+    pub async fn get_snapshot(&self, id: &str) -> Result<HubSnapshot, HubError> {
+        let url = format!("{}/snapshots/{}", self.base_url, id);
+
+        let response = self
+            .client
+            .get(&url)
+            .send()
+            .await
+            .map_err(|e| HubError::NetworkError(e.to_string()))?;
+
+        if response.status() == reqwest::StatusCode::NOT_FOUND {
+            return Err(HubError::NotFound(id.to_string()));
+        }
+
+        if !response.status().is_success() {
+            return Err(HubError::ApiError(format!(
+                "HTTP {}: {}",
+                response.status(),
+                response.text().await.unwrap_or_default()
+            )));
+        }
+
+        let resp: SnapshotResponse = response
+            .json()
+            .await
+            .map_err(|e| HubError::ParseError(e.to_string()))?;
+
+        Ok(resp.snapshot)
+    }
+}
+
+impl Default for HubClient {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum HubError {
+    #[error("Network error: {0}")]
+    NetworkError(String),
+
+    #[error("Not found: {0}")]
+    NotFound(String),
+
+    #[error("API error: {0}")]
+    ApiError(String),
+
+    #[error("Parse error: {0}")]
+    ParseError(String),
+}

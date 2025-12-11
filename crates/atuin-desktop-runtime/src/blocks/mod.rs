@@ -403,6 +403,8 @@ impl Block {
             }
             Block::Pause(pause) => {
                 pause
+                    .passive_context(resolver, block_local_value_provider)
+                    .await
             }
             Block::SubRunbook(sub_runbook) => {
                 sub_runbook

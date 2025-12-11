@@ -156,7 +156,7 @@ impl BlockBehavior for SubRunbook {
         self,
         context: ExecutionContext,
     ) -> Result<Option<ExecutionHandle>, Box<dyn std::error::Error + Send + Sync>> {
-        log::trace!("Executing sub-runbook block {id}", id = self.id);
+        tracing::trace!("Executing sub-runbook block {id}", id = self.id);
 
         // Check if runbook reference is specified
         if self.runbook_ref.is_empty() {
@@ -219,7 +219,7 @@ impl BlockBehavior for SubRunbook {
             // Check for recursion before loading (use display_id for stack tracking)
             let stack_id = runbook_ref.display_id();
             if context.is_in_execution_stack(&stack_id) {
-                log::warn!(
+                tracing::warn!(
                     "Recursion detected for sub-runbook {}: already in stack {:?}",
                     stack_id,
                     context.execution_stack()
@@ -275,7 +275,7 @@ impl BlockBehavior for SubRunbook {
                 .filter_map(|block_data| match Block::from_document(block_data) {
                     Ok(block) => Some(block),
                     Err(e) => {
-                        log::debug!("Skipping unsupported block in sub-runbook: {}", e);
+                        tracing::debug!("Skipping unsupported block in sub-runbook: {}", e);
                         None
                     }
                 })
@@ -412,6 +412,22 @@ impl BlockBehavior for SubRunbook {
                                 })
                                 .await;
                             let _ = context.block_cancelled().await;
+                            return;
+                        }
+                        ExecutionResult::Paused => {
+                            // Pause blocks are not supported in sub-runbooks
+                            let error =
+                                "Pause blocks are not supported in sub-runbooks".to_string();
+                            let _ = context
+                                .update_block_state::<SubRunbookState, _>(block_id, move |state| {
+                                    state.status = SubRunbookStatus::Failed { error };
+                                })
+                                .await;
+                            let _ = context
+                                .block_failed(
+                                    "Pause blocks are not supported in sub-runbooks".to_string(),
+                                )
+                                .await;
                             return;
                         }
                     }
