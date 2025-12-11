@@ -19,13 +19,13 @@ use std::{
 
 use uuid::Uuid;
 
-use atuin_desktop_templates::DocumentTemplateState;
+use crate::templates::DocumentTemplateState;
 
 use crate::{
     blocks::{Block, KNOWN_UNSUPPORTED_BLOCKS},
     client::{DocumentBridgeMessage, LocalValueProvider, MessageChannel},
     context::{
-        BlockContext, BlockContextStorage, BlockState, BlockWithContext, ContextResolver,
+        BlockContext, BlockContextStorage, BlockState, ContextResolver, DocumentBlock,
         ResolvedContext,
     },
     events::{EventBus, GCEvent},
@@ -39,7 +39,7 @@ use crate::{
 pub(crate) struct Document {
     pub(crate) id: String,
     pub(crate) raw: Vec<serde_json::Value>,
-    pub(crate) blocks: Vec<BlockWithContext>,
+    pub(crate) blocks: Vec<DocumentBlock>,
     pub(crate) document_bridge: Arc<dyn MessageChannel<DocumentBridgeMessage>>,
     pub(crate) known_unsupported_blocks: HashSet<String>,
     pub(crate) block_local_value_provider: Option<Box<dyn LocalValueProvider>>,
@@ -111,6 +111,7 @@ impl Document {
         document: Vec<serde_json::Value>,
     ) -> Result<Option<usize>, Box<dyn std::error::Error + Send + Sync>> {
         let new_blocks = self.flatten_document(&document)?;
+        self.raw = document;
 
         if self.blocks.is_empty() {
             self.blocks = Vec::with_capacity(new_blocks.len());
@@ -123,11 +124,12 @@ impl Document {
                     .await
                     .unwrap_or(None);
                 let block_state = block.create_state();
-                self.blocks.push(BlockWithContext::new(
+                self.blocks.push(DocumentBlock::new(
                     block,
                     BlockContext::new(),
                     context,
                     block_state,
+                    None,
                 ));
             }
             return Ok(Some(0));
@@ -137,7 +139,7 @@ impl Document {
         let old_block_ids: Vec<Uuid> = self.blocks.iter().map(|b| b.id()).collect();
 
         // Build a map of existing blocks by ID for quick lookup
-        let mut existing_blocks_map: HashMap<Uuid, BlockWithContext> =
+        let mut existing_blocks_map: HashMap<Uuid, DocumentBlock> =
             self.blocks.drain(..).map(|b| (b.id(), b)).collect();
 
         // Track which blocks need context rebuild
@@ -168,9 +170,9 @@ impl Document {
                 updated_blocks.push(existing);
             } else {
                 // New block - create it
-                let block_with_context =
-                    BlockWithContext::new(new_block.clone(), BlockContext::new(), None, None);
-                updated_blocks.push(block_with_context);
+                let document_block =
+                    DocumentBlock::new(new_block.clone(), BlockContext::new(), None, None, None);
+                updated_blocks.push(document_block);
 
                 // Mark rebuild from this position
                 rebuild_from_index = Some(match rebuild_from_index {
@@ -212,7 +214,6 @@ impl Document {
         }
 
         self.blocks = updated_blocks;
-        self.raw = document;
 
         Ok(rebuild_from_index)
     }
@@ -275,7 +276,7 @@ impl Document {
     }
 
     /// Get all blocks
-    pub fn blocks(&self) -> &[BlockWithContext] {
+    pub fn blocks(&self) -> &[DocumentBlock] {
         &self.blocks
     }
 
@@ -285,22 +286,22 @@ impl Document {
     }
 
     /// Get a block's context
-    pub fn get_block(&self, block_id: &Uuid) -> Option<&BlockWithContext> {
+    pub fn get_block(&self, block_id: &Uuid) -> Option<&DocumentBlock> {
         let index = self.get_block_index(block_id)?;
         self.get_block_by_index(index)
     }
 
-    pub fn get_block_by_index(&self, index: usize) -> Option<&BlockWithContext> {
+    pub fn get_block_by_index(&self, index: usize) -> Option<&DocumentBlock> {
         self.blocks.get(index)
     }
 
     /// Get a mutable reference to a block
-    pub fn get_block_mut(&mut self, block_id: &Uuid) -> Option<&mut BlockWithContext> {
+    pub fn get_block_mut(&mut self, block_id: &Uuid) -> Option<&mut DocumentBlock> {
         let index = self.get_block_index(block_id)?;
         self.get_block_mut_by_index(index)
     }
 
-    pub fn get_block_mut_by_index(&mut self, index: usize) -> Option<&mut BlockWithContext> {
+    pub fn get_block_mut_by_index(&mut self, index: usize) -> Option<&mut DocumentBlock> {
         self.blocks.get_mut(index)
     }
 
@@ -338,8 +339,17 @@ impl Document {
         context_resolver
             .add_extra_template_context("runbook".to_string(), runbook_template_context);
 
-        let document_template_context =
-            DocumentTemplateState::new(&self.raw, Some(&block_id.to_string()));
+        let block_outputs = self
+            .blocks
+            .iter()
+            .map(|block| (block.id().to_string(), block.execution_output().clone()))
+            .collect::<HashMap<_, _>>();
+
+        let document_template_context = DocumentTemplateState::new(
+            flatten_document(&self.raw).as_slice(),
+            Some(&block_id.to_string()),
+            block_outputs,
+        );
 
         if let Some(document_template_context) = document_template_context {
             context_resolver
@@ -411,8 +421,23 @@ impl Document {
         for i in start..self.blocks.len() {
             let block_id = self.blocks[i].id();
 
-            // Build resolver from all blocks ABOVE this one
-            // let resolver = ContextResolver::from_blocks(&self.blocks[..i]);
+            // Build DocumentTemplateState so blocks can access doc.named[name].output etc.
+            let block_outputs = self
+                .blocks
+                .iter()
+                .map(|block| (block.id().to_string(), block.execution_output()))
+                .collect::<HashMap<_, _>>();
+
+            let document_template_context = DocumentTemplateState::new(
+                flatten_document(&self.raw).as_slice(),
+                Some(&block_id.to_string()),
+                block_outputs,
+            );
+
+            if let Some(document_template_context) = document_template_context {
+                context_resolver
+                    .add_extra_template_context("doc".to_string(), document_template_context);
+            }
 
             // Evaluate passive context for this block with the resolver
             match self.blocks[i]
@@ -512,6 +537,17 @@ impl Document {
             .map_err(|e| DocumentError::StateSerializationError(e.to_string()))
     }
 
+    pub async fn emit_block_execution_output_changed(
+        &self,
+        block_id: Uuid,
+    ) -> Result<(), DocumentError> {
+        let _ = self
+            .document_bridge
+            .send(DocumentBridgeMessage::BlockExecutionOutputChanged { block_id })
+            .await;
+        Ok(())
+    }
+
     pub(crate) async fn store_active_context(&self, block_id: Uuid) -> Result<(), DocumentError> {
         let block = self
             .get_block(&block_id)
@@ -532,4 +568,19 @@ impl Document {
         }
         Ok(())
     }
+}
+
+/// Flatten a document to include nested blocks (like those in ToggleHeading children)
+/// This creates a linear execution order regardless of UI nesting structure
+pub fn flatten_document(doc: &[serde_json::Value]) -> Vec<serde_json::Value> {
+    let mut flattened = Vec::with_capacity(doc.len());
+    for block in doc {
+        flattened.push(block.clone());
+        if let Some(children) = block.get("children").and_then(|c| c.as_array()) {
+            if !children.is_empty() {
+                flattened.extend(flatten_document(children));
+            }
+        }
+    }
+    flattened
 }

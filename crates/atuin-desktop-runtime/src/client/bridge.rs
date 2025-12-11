@@ -3,7 +3,7 @@ use ts_rs::TS;
 use uuid::Uuid;
 
 use crate::context::ResolvedContext;
-use crate::execution::BlockOutput;
+use crate::execution::StreamingBlockOutput;
 
 /// Messages sent from the runtime to the client application
 ///
@@ -25,10 +25,15 @@ pub enum DocumentBridgeMessage {
         state: serde_json::Value,
     },
 
+    BlockExecutionOutputChanged {
+        #[serde(rename = "blockId")]
+        block_id: Uuid,
+    },
+
     BlockOutput {
         #[serde(rename = "blockId")]
         block_id: Uuid,
-        output: BlockOutput,
+        output: StreamingBlockOutput,
     },
 
     ClientPrompt {
@@ -40,8 +45,8 @@ pub enum DocumentBridgeMessage {
     },
 }
 
-impl From<BlockOutput> for DocumentBridgeMessage {
-    fn from(output: BlockOutput) -> Self {
+impl From<StreamingBlockOutput> for DocumentBridgeMessage {
+    fn from(output: StreamingBlockOutput) -> Self {
         DocumentBridgeMessage::BlockOutput {
             block_id: output.block_id,
             output,

@@ -36,7 +36,6 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 pub use query_block::{BlockExecutionError, QueryBlockBehavior, QueryBlockError};
-pub use script::ScriptOutput;
 pub use sql_block::{
     SqlBlockBehavior, SqlBlockError, SqlBlockExecutionResult, SqlQueryResult, SqlStatementResult,
 };

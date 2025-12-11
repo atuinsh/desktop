@@ -108,4 +108,5 @@ pub mod exec_log;
 pub mod execution;
 pub mod pty;
 pub mod ssh;
+pub mod templates;
 pub mod workflow;

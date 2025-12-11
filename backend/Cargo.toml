@@ -20,7 +20,6 @@ atuin-common = { git = "https://github.com/atuinsh/atuin.git" }
 atuin-dotfiles = { git = "https://github.com/atuinsh/atuin.git" }
 atuin-history = { git = "https://github.com/atuinsh/atuin.git" }
 atuin-desktop-runtime = { workspace = true }
-atuin-desktop-templates = { workspace = true }
 
 eyre = { workspace = true }
 time = { workspace = true }

@@ -30,7 +30,6 @@ mod sqlite;
 mod state;
 mod stats;
 mod store;
-mod templates;
 mod util;
 mod workspaces;
 
@@ -522,7 +521,6 @@ fn main() {
             secret::save_password,
             secret::load_password,
             secret::delete_password,
-            templates::template_str,
             runbooks::ydoc::save_ydoc_for_runbook,
             runbooks::ydoc::load_ydoc_for_runbook,
             runbooks::runbook::export_atrb,

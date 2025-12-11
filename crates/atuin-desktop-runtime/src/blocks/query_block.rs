@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use serde::Serialize;
 
 use crate::blocks::BlockBehavior;
-use crate::execution::{BlockOutput, ExecutionContext, ExecutionHandle};
+use crate::execution::{ExecutionContext, ExecutionHandle, StreamingBlockOutput};
 
 pub trait BlockExecutionError {
     /// Create a cancellation error; this is used to indicate that the operation was cancelled by the user.
@@ -141,7 +141,7 @@ pub trait QueryBlockBehavior: BlockBehavior + 'static {
 
         let _ = context
             .send_output(
-                BlockOutput::builder()
+                StreamingBlockOutput::builder()
                     .block_id(block_id)
                     .stdout("Connecting...".to_string())
                     .build(),
@@ -158,7 +158,7 @@ pub trait QueryBlockBehavior: BlockBehavior + 'static {
                     match result {
                         Ok(conn) => {
                             let _ = context.send_output(
-                                BlockOutput::builder()
+                                StreamingBlockOutput::builder()
                                     .block_id(block_id)
                                     .stdout("Connected successfully".to_string())
                                     .build(),
@@ -179,7 +179,7 @@ pub trait QueryBlockBehavior: BlockBehavior + 'static {
 
         let _ = context
             .send_output(
-                BlockOutput::builder()
+                StreamingBlockOutput::builder()
                     .block_id(block_id)
                     .stdout("Executing query...".to_string())
                     .build(),
@@ -193,7 +193,7 @@ pub trait QueryBlockBehavior: BlockBehavior + 'static {
             for result in results {
                 let _ = context
                     .send_output(
-                        BlockOutput::builder()
+                        StreamingBlockOutput::builder()
                             .block_id(block_id)
                             .object(serde_json::to_value(result).map_err(|e| {
                                 Self::Error::serialization_error(format!(

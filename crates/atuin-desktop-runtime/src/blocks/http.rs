@@ -7,7 +7,7 @@ use typed_builder::TypedBuilder;
 use uuid::Uuid;
 
 use crate::blocks::{Block, BlockBehavior, FromDocument};
-use crate::execution::{BlockOutput, ExecutionContext, ExecutionHandle};
+use crate::execution::{StreamingBlockOutput, ExecutionContext, ExecutionHandle};
 
 #[derive(Debug, thiserror::Error)]
 pub enum HttpError {
@@ -178,7 +178,7 @@ impl BlockBehavior for Http {
 
         let _ = context
             .send_output(
-                BlockOutput::builder()
+                StreamingBlockOutput::builder()
                     .block_id(block_id)
                     .object(serde_json::to_value(response).map_err(|e| HttpError::Other(e.into()))?)
                     .build(),

@@ -7,7 +7,7 @@ use typed_builder::TypedBuilder;
 use uuid::Uuid;
 
 use crate::blocks::{Block, BlockBehavior};
-use crate::execution::{BlockOutput, ExecutionContext, ExecutionHandle};
+use crate::execution::{StreamingBlockOutput, ExecutionContext, ExecutionHandle};
 
 use super::FromDocument;
 
@@ -156,7 +156,7 @@ impl BlockBehavior for Kubernetes {
             if let Ok(parsed_output) = self.parse_kubectl_output(&stdout) {
                 let _ = context
                     .send_output(
-                        BlockOutput::builder()
+                        StreamingBlockOutput::builder()
                             .block_id(block_id)
                             .object(parsed_output)
                             .build(),
@@ -166,7 +166,7 @@ impl BlockBehavior for Kubernetes {
                 // If not JSON, send as plain stdout
                 let _ = context
                     .send_output(
-                        BlockOutput::builder()
+                        StreamingBlockOutput::builder()
                             .block_id(block_id)
                             .object(json!({
                                 "type": "kubernetes",
@@ -189,7 +189,7 @@ impl BlockBehavior for Kubernetes {
         if !stderr.trim().is_empty() {
             let _ = context
                 .send_output(
-                    BlockOutput::builder()
+                    StreamingBlockOutput::builder()
                         .block_id(block_id)
                         .stderr(stderr)
                         .build(),

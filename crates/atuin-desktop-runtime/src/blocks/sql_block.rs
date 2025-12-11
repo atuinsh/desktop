@@ -10,7 +10,7 @@ use typed_builder::TypedBuilder;
 
 use crate::{
     blocks::{BlockBehavior, BlockExecutionError, QueryBlockBehavior, QueryBlockError},
-    execution::{BlockOutput, ExecutionContext},
+    execution::{StreamingBlockOutput, ExecutionContext},
 };
 
 #[derive(Debug, thiserror::Error)]
@@ -242,7 +242,7 @@ where
         // Send query count metadata
         let _ = context
             .send_output(
-                BlockOutput::builder()
+                StreamingBlockOutput::builder()
                     .block_id(block_id)
                     .object(json!({ "type": "queryCount", "count": query_count }))
                     .build(),

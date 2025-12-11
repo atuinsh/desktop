@@ -8,7 +8,7 @@ use crate::blocks::{Block, BlockBehavior, FromDocument};
 use crate::context::BlockVars;
 use crate::events::GCEvent;
 use crate::execution::{
-    BlockOutput, CancellationToken, ExecutionContext, ExecutionHandle, ExecutionStatus,
+    StreamingBlockOutput, CancellationToken, ExecutionContext, ExecutionHandle, ExecutionStatus,
 };
 use crate::pty::{Pty, PtyLike};
 use crate::ssh::SshPty;
@@ -98,7 +98,7 @@ impl BlockBehavior for Terminal {
 
         let _ = context
             .send_output(
-                BlockOutput::builder()
+                StreamingBlockOutput::builder()
                     .block_id(self.id)
                     .object(
                         serde_json::to_value(metadata.clone())
@@ -241,7 +241,7 @@ impl Terminal {
                 while let Some(output) = output_receiver.recv().await {
                     let _ = context_clone
                         .send_output(
-                            BlockOutput::builder()
+                            StreamingBlockOutput::builder()
                                 .block_id(block_id)
                                 .binary(output.as_bytes().to_vec())
                                 .build(),
@@ -315,7 +315,7 @@ impl Terminal {
                             // Send raw binary data
                             let _ = context_clone
                                 .send_output(
-                                    BlockOutput::builder()
+                                    StreamingBlockOutput::builder()
                                         .block_id(block_id)
                                         .binary(buf[..n].to_vec())
                                         .build(),

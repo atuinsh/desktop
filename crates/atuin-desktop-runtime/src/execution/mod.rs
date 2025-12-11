@@ -18,7 +18,7 @@ use typed_builder::TypedBuilder;
 use uuid::Uuid;
 
 use crate::client::{ClientPrompt, ClientPromptResult, DocumentBridgeMessage, MessageChannel};
-use crate::context::{BlockContext, BlockState, ContextResolver};
+use crate::context::{BlockContext, BlockExecutionOutput, BlockState, ContextResolver};
 use crate::document::{DocumentError, DocumentHandle};
 use crate::events::{EventBus, GCEvent};
 use crate::pty::PtyStoreHandle;
@@ -138,6 +138,16 @@ impl ExecutionContext {
             .await
     }
 
+    /// Set the block output
+    pub async fn set_block_output(
+        &self,
+        output: Box<dyn BlockExecutionOutput>,
+    ) -> Result<(), DocumentError> {
+        self.document_handle
+            .set_block_execution_output(self.block_id, output)
+            .await
+    }
+
     /// Emit a Grand Central event
     pub async fn emit_gc_event(&self, event: GCEvent) -> Result<(), DocumentError> {
         if let Some(event_bus) = &self.gc_event_bus {
@@ -191,7 +201,7 @@ impl ExecutionContext {
         let _ = self.emit_block_started().await;
         let _ = self
             .send_output(
-                BlockOutput::builder()
+                StreamingBlockOutput::builder()
                     .block_id(self.block_id)
                     .lifecycle(BlockLifecycleEvent::Started(self.handle.id))
                     .build(),
@@ -211,7 +221,7 @@ impl ExecutionContext {
         let _ = self.emit_block_finished(success).await;
         let _ = self
             .send_output(
-                BlockOutput::builder()
+                StreamingBlockOutput::builder()
                     .block_id(self.block_id)
                     .lifecycle(BlockLifecycleEvent::Finished(BlockFinishedData {
                         exit_code,
@@ -235,7 +245,7 @@ impl ExecutionContext {
         let _ = self.emit_block_failed(error.clone()).await;
         let _ = self
             .send_output(
-                BlockOutput::builder()
+                StreamingBlockOutput::builder()
                     .block_id(self.block_id)
                     .lifecycle(BlockLifecycleEvent::Error(BlockErrorData {
                         message: error,
@@ -258,7 +268,7 @@ impl ExecutionContext {
         let _ = self.emit_block_cancelled().await;
         let _ = self
             .send_output(
-                BlockOutput::builder()
+                StreamingBlockOutput::builder()
                     .block_id(self.block_id)
                     .lifecycle(BlockLifecycleEvent::Cancelled)
                     .build(),
@@ -285,7 +295,7 @@ impl ExecutionContext {
             .await;
         let _ = self
             .send_output(
-                BlockOutput::builder()
+                StreamingBlockOutput::builder()
                     .block_id(self.block_id)
                     .lifecycle(BlockLifecycleEvent::Paused)
                     .build(),
@@ -461,7 +471,7 @@ pub enum ExecutionStatus {
 /// or structured JSON objects.
 #[derive(TS, Debug, Clone, Serialize, Deserialize, TypedBuilder)]
 #[ts(export)]
-pub struct BlockOutput {
+pub struct StreamingBlockOutput {
     pub block_id: Uuid,
     #[builder(default, setter(strip_option(fallback = stdout_opt)))]
     pub stdout: Option<String>,

@@ -7,7 +7,8 @@ use uuid::Uuid;
 use crate::blocks::Block;
 use crate::client::{DocumentBridgeMessage, LocalValueProvider, MessageChannel};
 use crate::context::{
-    BlockContext, BlockContextStorage, BlockState, BlockStateUpdater, ResolvedContext,
+    BlockContext, BlockContextStorage, BlockExecutionOutput, BlockState, BlockStateUpdater,
+    ResolvedContext,
 };
 use crate::document::Document;
 use crate::events::EventBus;
@@ -44,6 +45,12 @@ pub enum DocumentError {
 
     #[error("Failed to serialize block state: {0}")]
     StateSerializationError(String),
+
+    #[error("Failed to serialize block execution output: {0}")]
+    ExecutionOutputSerializationError(String),
+
+    #[error("Failed to downcast block execution output")]
+    ExecutionOutputDowncastError,
 }
 
 impl<T> From<mpsc::error::SendError<T>> for DocumentError {
@@ -110,6 +117,13 @@ pub(crate) enum DocumentCommand {
         reply: Reply<()>,
     },
 
+    /// Set a block's output during execution
+    SetBlockExecutionOutput {
+        block_id: Uuid,
+        output: Box<dyn BlockExecutionOutput>,
+        reply: Reply<()>,
+    },
+
     /// Get all blocks
     GetBlocks {
         reply: Reply<Vec<Block>>,
@@ -131,6 +145,18 @@ pub(crate) enum DocumentCommand {
     GetBlockState {
         block_id: Uuid,
         reply: oneshot::Sender<Result<Value, DocumentError>>,
+    },
+
+    /// Get a block's execution output
+    GetBlockExecutionOutput {
+        block_id: Uuid,
+        reply: oneshot::Sender<Result<Option<Arc<dyn BlockExecutionOutput>>, DocumentError>>,
+    },
+
+    /// Get a block's execution output, serialized
+    GetBlockExecutionOutputSerialized {
+        block_id: Uuid,
+        reply: oneshot::Sender<Result<Option<Value>, DocumentError>>,
     },
 
     ResetState {
@@ -345,6 +371,23 @@ impl DocumentHandle {
         rx.await.map_err(|_| DocumentError::ActorSendError)?
     }
 
+    /// Set a block's output during execution
+    pub async fn set_block_execution_output(
+        &self,
+        block_id: Uuid,
+        output: Box<dyn BlockExecutionOutput>,
+    ) -> Result<(), DocumentError> {
+        let (tx, rx) = oneshot::channel();
+        self.command_tx
+            .send(DocumentCommand::SetBlockExecutionOutput {
+                block_id,
+                output,
+                reply: tx,
+            })
+            .map_err(|_| DocumentError::ActorSendError)?;
+        rx.await.map_err(|_| DocumentError::ActorSendError)?
+    }
+
     /// Get a flattened block context
     pub async fn get_resolved_context(
         &self,
@@ -365,6 +408,48 @@ impl DocumentHandle {
         let (tx, rx) = oneshot::channel();
         self.command_tx
             .send(DocumentCommand::GetBlockState {
+                block_id,
+                reply: tx,
+            })
+            .map_err(|_| DocumentError::ActorSendError)?;
+        rx.await.map_err(|_| DocumentError::ActorSendError)?
+    }
+
+    /// Get a block's execution output as a specific type
+    ///
+    /// This call creates a clone of the block's execution output.
+    pub async fn get_block_execution_output<T: BlockExecutionOutput>(
+        &self,
+        block_id: Uuid,
+    ) -> Result<Option<Arc<T>>, DocumentError> {
+        let (tx, rx) = oneshot::channel();
+        self.command_tx
+            .send(DocumentCommand::GetBlockExecutionOutput {
+                block_id,
+                reply: tx,
+            })
+            .map_err(|_| DocumentError::ActorSendError)?;
+        match rx.await.map_err(|_| DocumentError::ActorSendError)? {
+            Ok(Some(output)) => match downcast_arc::<T>(output) {
+                Ok(output) => Ok(Some(output)),
+                Err(_) => Err(DocumentError::ExecutionOutputDowncastError),
+            },
+            Ok(None) => Ok(None),
+            Err(e) => Err(e.into()),
+        }
+    }
+
+    /// Get a block's execution output as a serialized value
+    ///
+    /// If all you want to do with the output is serialize it, this saves a clone
+    /// over `get_block_execution_output`.
+    pub async fn get_block_execution_output_serialized(
+        &self,
+        block_id: Uuid,
+    ) -> Result<Option<Value>, DocumentError> {
+        let (tx, rx) = oneshot::channel();
+        self.command_tx
+            .send(DocumentCommand::GetBlockExecutionOutputSerialized {
                 block_id,
                 reply: tx,
             })
@@ -553,6 +638,16 @@ impl DocumentActor {
                     let result = self.handle_update_block_state(block_id, update_fn).await;
                     let _ = reply.send(result);
                 }
+                DocumentCommand::SetBlockExecutionOutput {
+                    block_id,
+                    output,
+                    reply,
+                } => {
+                    let result = self
+                        .handle_set_block_execution_output(block_id, output)
+                        .await;
+                    let _ = reply.send(result);
+                }
                 DocumentCommand::GetResolvedContext { block_id, reply } => {
                     let context = self.document.get_resolved_context(&block_id);
                     let _ = reply.send(context);
@@ -560,6 +655,16 @@ impl DocumentActor {
                 DocumentCommand::GetBlockState { block_id, reply } => {
                     let state = self.document.get_block_state(&block_id);
                     let _ = reply.send(state);
+                }
+                DocumentCommand::GetBlockExecutionOutput { block_id, reply } => {
+                    let output = self.handle_get_block_execution_output(block_id).await;
+                    let _ = reply.send(output);
+                }
+                DocumentCommand::GetBlockExecutionOutputSerialized { block_id, reply } => {
+                    let output = self
+                        .handle_get_block_execution_output_serialized(block_id)
+                        .await;
+                    let _ = reply.send(output);
                 }
                 DocumentCommand::GetBlocks { reply } => {
                     let blocks = self
@@ -754,6 +859,72 @@ impl DocumentActor {
         Ok(())
     }
 
+    async fn handle_set_block_execution_output(
+        &mut self,
+        block_id: Uuid,
+        output: Box<dyn BlockExecutionOutput>,
+    ) -> Result<(), DocumentError> {
+        tracing::trace!("Setting block execution output for block {block_id}");
+
+        let block_index = self
+            .document
+            .get_block_index(&block_id)
+            .ok_or(DocumentError::BlockNotFound(block_id))?;
+
+        let block = self
+            .document
+            .get_block_mut_by_index(block_index)
+            .ok_or(DocumentError::BlockNotFound(block_id))?;
+
+        block.replace_execution_output(output);
+        let _ = self
+            .document
+            .emit_block_execution_output_changed(block_id)
+            .await;
+
+        let _ = self
+            .document
+            .rebuild_contexts(Some(block_index), self.event_bus.clone())
+            .await;
+
+        Ok(())
+    }
+
+    async fn handle_get_block_execution_output(
+        &mut self,
+        block_id: Uuid,
+    ) -> Result<Option<Arc<dyn BlockExecutionOutput>>, DocumentError> {
+        let block = self
+            .document
+            .get_block(&block_id)
+            .ok_or(DocumentError::BlockNotFound(block_id))?;
+        Ok(block.execution_output())
+    }
+
+    async fn handle_get_block_execution_output_serialized(
+        &mut self,
+        block_id: Uuid,
+    ) -> Result<Option<Value>, DocumentError> {
+        let block = self
+            .document
+            .get_block(&block_id)
+            .ok_or(DocumentError::BlockNotFound(block_id))?;
+
+        if let Some(output) = block.execution_output() {
+            let mut buf = Vec::new();
+            let mut serializer = serde_json::Serializer::new(&mut buf);
+            let mut erased = <dyn erased_serde::Serializer>::erase(&mut serializer);
+            output
+                .erased_serialize(&mut erased)
+                .map_err(|e| DocumentError::ExecutionOutputSerializationError(e.to_string()))?;
+            Ok(Some(serde_json::from_slice(&buf).map_err(|e| {
+                DocumentError::ExecutionOutputSerializationError(e.to_string())
+            })?))
+        } else {
+            Ok(None)
+        }
+    }
+
     async fn handle_block_local_value_changed(
         &mut self,
         block_id: Uuid,
@@ -800,5 +971,21 @@ impl DocumentActor {
         }
 
         Ok(())
+    }
+}
+
+/// Downcast an Arc<dyn BlockExecutionOutput> to Arc<T>
+fn downcast_arc<T: BlockExecutionOutput>(
+    arc: Arc<dyn BlockExecutionOutput>,
+) -> Result<Arc<T>, Arc<dyn BlockExecutionOutput>> {
+    if arc.as_any().is::<T>() {
+        // SAFETY: We verified the type matches above via `is::<T>()`.
+        // This assumes `BlockExecutionOutput::as_any()` is correctly implemented
+        // to return `self` for the concrete implementing type.
+        // The implementation here comes from the `downcast-rs` crate.
+        let ptr = Arc::into_raw(arc) as *const T;
+        Ok(unsafe { Arc::from_raw(ptr) })
+    } else {
+        Err(arc)
     }
 }

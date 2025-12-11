@@ -554,7 +554,6 @@ dependencies = [
  "atuin-client",
  "atuin-common",
  "atuin-desktop-runtime",
- "atuin-desktop-templates",
  "atuin-dotfiles",
  "atuin-history",
  "bigdecimal",
@@ -622,7 +621,6 @@ name = "atuin-desktop-runtime"
 version = "0.2.9"
 dependencies = [
  "async-trait",
- "atuin-desktop-templates",
  "base64 0.22.1",
  "bigdecimal",
  "bytes",
@@ -660,15 +658,6 @@ dependencies = [
  "url",
  "uuid",
  "whoami",
-]
-
-[[package]]
-name = "atuin-desktop-templates"
-version = "0.2.9"
-dependencies = [
- "minijinja",
- "serde",
- "serde_json",
 ]
 
 [[package]]

@@ -1,7 +1,10 @@
 import { invoke } from "@tauri-apps/api/core";
-import { platform } from "@tauri-apps/plugin-os";
 import { FitAddon } from "@xterm/addon-fit";
-import { FitAddon as GhosttyFitAddon, Terminal as GhosttyTerminal, init as initGhostty } from "ghostty-web";
+import {
+  FitAddon as GhosttyFitAddon,
+  Terminal as GhosttyTerminal,
+  init as initGhostty,
+} from "ghostty-web";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import { open } from "@tauri-apps/plugin-shell";
 import { IDisposable, Terminal } from "@xterm/xterm";
@@ -9,7 +12,6 @@ import { Settings } from "../settings";
 import { WebglAddon } from "@xterm/addon-webgl";
 import Logger from "@/lib/logger";
 import { StateCreator } from "zustand";
-import { templateString } from "../templates";
 import { listen, UnlistenFn } from "@tauri-apps/api/event";
 import Emittery from "emittery";
 
@@ -44,7 +46,12 @@ export class TerminalData extends Emittery {
    */
   hasRunInitialScript: boolean;
 
-  constructor(pty: string, terminal: Terminal | GhosttyTerminal, fit: FitAddon | GhosttyFitAddon, isGhostty: boolean = false) {
+  constructor(
+    pty: string,
+    terminal: Terminal | GhosttyTerminal,
+    fit: FitAddon | GhosttyFitAddon,
+    isGhostty: boolean = false,
+  ) {
     super();
 
     this.terminal = terminal;
@@ -99,18 +106,6 @@ export class TerminalData extends Emittery {
       cols: size.cols,
       rows: size.rows,
     });
-  }
-
-  async write(block_id: string, data: string, doc: any, runbook: string | null) {
-    // Template the string before we execute it
-    logger.debug(`templating ${runbook} with doc`, doc);
-    let templated = await templateString(block_id, data, doc, runbook);
-
-    let isWindows = platform() == "windows";
-    let cmdEnd = isWindows ? "\r\n" : "\n";
-    let val = !templated.endsWith("\n") ? templated + cmdEnd : templated;
-
-    await invoke("pty_write", { pid: this.pty, data: val });
   }
 
   dispose() {

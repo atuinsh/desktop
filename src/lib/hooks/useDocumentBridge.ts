@@ -4,7 +4,7 @@ import { autobind } from "../decorators";
 import Emittery from "emittery";
 import { DocumentBridgeMessage } from "@/rs-bindings/DocumentBridgeMessage";
 import { ResolvedContext } from "@/rs-bindings/ResolvedContext";
-import { BlockOutput } from "@/rs-bindings/BlockOutput";
+import { StreamingBlockOutput } from "@/rs-bindings/StreamingBlockOutput";
 import Logger from "../logger";
 import { cancelExecution, executeBlock } from "../runtime";
 import { JsonValue } from "@/rs-bindings/serde_json/JsonValue";
@@ -19,7 +19,7 @@ export default function useDocumentBridge(): DocumentBridge | null {
 export type BlockContext = {};
 
 export type Omit<T, K> = Pick<T, Exclude<keyof T, K>>;
-export type GenericBlockOutput<T = JsonValue> = Omit<BlockOutput, "object"> &
+export type GenericBlockOutput<T = JsonValue> = Omit<StreamingBlockOutput, "object"> &
   Partial<{
     object?: T;
   }>;

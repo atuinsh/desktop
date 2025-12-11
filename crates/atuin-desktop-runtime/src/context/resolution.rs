@@ -11,7 +11,7 @@ use crate::{
     blocks::BlockBehavior,
     client::LocalValueProvider,
     context::{
-        BlockWithContext, DocumentCwd, DocumentEnvVar, DocumentSshHost, DocumentVar, DocumentVars,
+        DocumentBlock, DocumentCwd, DocumentEnvVar, DocumentSshHost, DocumentVar, DocumentVars,
     },
 };
 
@@ -49,7 +49,7 @@ impl ResolvedContext {
             .await?
         {
             let block_with_context =
-                BlockWithContext::new(block.clone().into_block(), context, None, None);
+                DocumentBlock::new(block.clone().into_block(), context, None, None, None);
             let resolver = ContextResolver::from_blocks(&[block_with_context]);
             Ok(Self::from_resolver(&resolver))
         } else {
@@ -90,7 +90,7 @@ impl ContextResolver {
     }
 
     /// Build a resolver from blocks (typically all blocks above the current one)
-    pub fn from_blocks(blocks: &[BlockWithContext]) -> Self {
+    pub fn from_blocks(blocks: &[DocumentBlock]) -> Self {
         // Process blocks in order (earlier blocks can be overridden by later ones)
         let mut resolver = Self::new();
         for block in blocks {
@@ -120,7 +120,7 @@ impl ContextResolver {
 
     /// Update the resolver with the context of a block.
     /// Values are overwritten or merged as appropriate.
-    pub fn push_block(&mut self, block: &BlockWithContext) {
+    pub fn push_block(&mut self, block: &DocumentBlock) {
         let passive_context = block.passive_context();
         let active_context = block.active_context();
 
@@ -349,6 +349,7 @@ pub struct ContextResolverBuilder {
 }
 
 #[cfg(test)]
+#[allow(unused)]
 impl ContextResolverBuilder {
     pub fn new() -> Self {
         Self {
@@ -427,13 +428,19 @@ mod tests {
     fn create_block_with_context(
         passive_context: BlockContext,
         active_context: Option<BlockContext>,
-    ) -> BlockWithContext {
+    ) -> DocumentBlock {
         let host = Host::builder()
             .id(uuid::Uuid::new_v4())
             .host("localhost")
             .build();
 
-        BlockWithContext::new(Block::Host(host), passive_context, active_context, None)
+        DocumentBlock::new(
+            Block::Host(host),
+            passive_context,
+            active_context,
+            None,
+            None,
+        )
     }
 
     #[test]

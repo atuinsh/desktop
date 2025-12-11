@@ -1,4 +1,4 @@
-use std::{any::TypeId, collections::HashMap};
+use std::{any::TypeId, collections::HashMap, sync::Arc};
 
 use downcast_rs::{impl_downcast, Downcast};
 use dyn_clone::DynClone;
@@ -15,6 +15,23 @@ pub trait BlockState: erased_serde::Serialize + Send + Sync + std::fmt::Debug + 
 impl_downcast!(BlockState);
 
 pub type BlockStateUpdater = Box<dyn FnOnce(&mut Box<dyn BlockState>) + Send>;
+
+/// Trait for block-specific output that can be stored and updated during execution
+///
+/// Each block type can define its own output struct and implement this trait.
+/// The output can be accessed via downcasting from `Box<dyn BlockOutput>`.
+pub trait BlockExecutionOutput:
+    erased_serde::Serialize + Send + Sync + std::fmt::Debug + Downcast + DynClone
+{
+    fn get_template_value(&self, _key: &str) -> Option<minijinja::Value> {
+        None
+    }
+
+    fn enumerate_template_keys(&self) -> minijinja::value::Enumerator {
+        minijinja::value::Enumerator::NonEnumerable
+    }
+}
+impl_downcast!(BlockExecutionOutput);
 
 /// Container for block context items
 ///
@@ -124,25 +141,28 @@ impl<'de> Deserialize<'de> for BlockContext {
 /// - **Passive context**: Values available before execution (e.g., variable definitions)
 /// - **Active context**: Values produced during execution (e.g., command output)
 #[derive(Debug)]
-pub struct BlockWithContext {
+pub struct DocumentBlock {
     block: Block,
     passive_context: BlockContext,
     active_context: BlockContext,
     state: Option<Box<dyn BlockState>>,
+    execution_output: Option<Arc<dyn BlockExecutionOutput>>,
 }
 
-impl BlockWithContext {
+impl DocumentBlock {
     pub fn new(
         block: Block,
         passive_context: BlockContext,
         active_context: Option<BlockContext>,
         state: Option<Box<dyn BlockState>>,
+        execution_output: Option<Arc<dyn BlockExecutionOutput>>,
     ) -> Self {
         Self {
             block,
             passive_context,
             active_context: active_context.unwrap_or_default(),
             state,
+            execution_output,
         }
     }
 
@@ -174,6 +194,10 @@ impl BlockWithContext {
         self.state.as_mut()
     }
 
+    pub fn execution_output(&self) -> Option<Arc<dyn BlockExecutionOutput>> {
+        self.execution_output.clone()
+    }
+
     pub fn block(&self) -> &Block {
         &self.block
     }
@@ -189,6 +213,10 @@ impl BlockWithContext {
 
     pub fn replace_active_context(&mut self, context: BlockContext) {
         *self.active_context_mut() = context;
+    }
+
+    pub fn replace_execution_output(&mut self, output: Box<dyn BlockExecutionOutput>) {
+        self.execution_output = Some(Arc::from(output));
     }
 }
 
@@ -303,15 +331,3 @@ pub struct DocumentSshHost(pub Option<String>);
 
 #[typetag::serde]
 impl BlockContextItem for DocumentSshHost {}
-
-/// Execution output from blocks that produce results
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct BlockExecutionOutput {
-    pub exit_code: Option<i32>,
-    pub stdout: Option<String>,
-    pub stderr: Option<String>,
-    // Future: dataframes, complex data structures, etc.
-}
-
-#[typetag::serde]
-impl BlockContextItem for BlockExecutionOutput {}
