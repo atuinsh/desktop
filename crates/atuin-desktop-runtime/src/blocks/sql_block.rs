@@ -218,9 +218,7 @@ impl BlockExecutionOutput for SqlBlockOutput {
         match key {
             // Primary access methods
             "results" => Some(minijinja::Value::from_serialize(&self.results)),
-            "first" => self
-                .first_result()
-                .map(minijinja::Value::from_serialize),
+            "first" => self.first_result().map(minijinja::Value::from_serialize),
 
             // Aggregated data
             "total_rows" => Some(minijinja::Value::from(self.total_rows())),

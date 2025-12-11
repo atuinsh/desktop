@@ -75,9 +75,7 @@ impl BlockExecutionOutput for PrometheusBlockOutput {
         match key {
             // Primary access
             "results" => Some(minijinja::Value::from_serialize(&self.results)),
-            "first" => self
-                .first_result()
-                .map(minijinja::Value::from_serialize),
+            "first" => self.first_result().map(minijinja::Value::from_serialize),
 
             // Aggregated data
             "total_series" => Some(minijinja::Value::from(self.total_series)),

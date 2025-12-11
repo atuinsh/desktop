@@ -87,9 +87,7 @@ impl BlockExecutionOutput for KubernetesBlockOutput {
             // Table data access
             "data" => Some(minijinja::Value::from_serialize(&self.data)),
             "columns" => Some(minijinja::Value::from_serialize(&self.columns)),
-            "first_row" => self
-                .first_row()
-                .map(minijinja::Value::from_serialize),
+            "first_row" => self.first_row().map(minijinja::Value::from_serialize),
 
             // Metadata
             "item_count" => Some(minijinja::Value::from(self.item_count)),
