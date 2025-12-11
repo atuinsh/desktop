@@ -697,6 +697,7 @@ dependencies = [
  "clap",
  "crossterm 0.29.0",
  "eyre",
+ "reqwest 0.12.15",
  "serde",
  "serde_json",
  "serde_yaml",

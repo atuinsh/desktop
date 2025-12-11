@@ -545,6 +545,15 @@ impl Executor {
                                         data.message,
                                     ));
                                 }
+                                BlockLifecycleEvent::Paused => {
+                                    // Pause blocks are not supported in sub-runbooks
+                                    self.renderer.set_indent_level(current_indent);
+                                    return Err(ExecutorError::BlockError(
+                                        parent_block_id,
+                                        "Pause blocks are not supported in sub-runbooks"
+                                            .to_string(),
+                                    ));
+                                }
                             }
                         }
                         continue;
@@ -574,8 +583,10 @@ impl Executor {
                                     let _ = self.renderer.mark_complete(viewport);
                                 }
                             }
-                            BlockLifecycleEvent::Cancelled | BlockLifecycleEvent::Error(_) => {
-                                // Nothing to clean up
+                            BlockLifecycleEvent::Cancelled
+                            | BlockLifecycleEvent::Error(_)
+                            | BlockLifecycleEvent::Paused => {
+                                // Nothing to clean up for these states
                             }
                         }
                     }
