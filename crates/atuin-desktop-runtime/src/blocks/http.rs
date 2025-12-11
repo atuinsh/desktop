@@ -7,7 +7,8 @@ use typed_builder::TypedBuilder;
 use uuid::Uuid;
 
 use crate::blocks::{Block, BlockBehavior, FromDocument};
-use crate::execution::{StreamingBlockOutput, ExecutionContext, ExecutionHandle};
+use crate::context::BlockExecutionOutput;
+use crate::execution::{ExecutionContext, ExecutionHandle, StreamingBlockOutput};
 
 #[derive(Debug, thiserror::Error)]
 pub enum HttpError {
@@ -39,6 +40,45 @@ pub enum HttpVerb {
 impl HttpVerb {
     pub fn is_body_allowed(&self) -> bool {
         !matches!(self, HttpVerb::Get | HttpVerb::Head)
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, TypedBuilder)]
+#[serde(rename_all = "camelCase")]
+pub struct HttpExecutionOutput {
+    pub status: u16,
+    pub status_text: String,
+    pub status_success: bool,
+    pub headers: HashMap<String, String>,
+    pub duration_ms: f64,
+    pub body: String,
+    pub body_json: Option<serde_json::Value>,
+}
+
+impl BlockExecutionOutput for HttpExecutionOutput {
+    fn get_template_value(&self, key: &str) -> Option<minijinja::Value> {
+        match key {
+            "status" => Some(minijinja::Value::from(self.status)),
+            "status_text" => Some(minijinja::Value::from(self.status_text.clone())),
+            "status_success" => Some(minijinja::Value::from(self.status_success)),
+            "headers" => Some(minijinja::Value::from_serialize(&self.headers)),
+            "duration_ms" => Some(minijinja::Value::from(self.duration_ms)),
+            "body" => Some(minijinja::Value::from(self.body.clone())),
+            "body_json" => Some(minijinja::Value::from_serialize(&self.body_json)),
+            _ => None,
+        }
+    }
+
+    fn enumerate_template_keys(&self) -> minijinja::value::Enumerator {
+        minijinja::value::Enumerator::Str(&[
+            "status",
+            "status_text",
+            "status_success",
+            "headers",
+            "duration_ms",
+            "body",
+            "body_json",
+        ])
     }
 }
 
@@ -175,6 +215,19 @@ impl BlockBehavior for Http {
 
         let response = response.unwrap();
         let was_success = response.status_success;
+
+        let body_json = serde_json::from_str(&response.body).ok();
+        let output = HttpExecutionOutput {
+            status: response.status,
+            status_text: response.status_text.clone(),
+            status_success: response.status_success,
+            headers: response.headers.clone(),
+            duration_ms: response.duration,
+            body: response.body.clone(),
+            body_json,
+        };
+
+        let _ = context.set_block_output(output).await;
 
         let _ = context
             .send_output(
