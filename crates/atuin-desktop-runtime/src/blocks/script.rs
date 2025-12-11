@@ -275,10 +275,10 @@ impl BlockBehavior for Script {
 
                     // Store execution output in context
                     let _ = context
-                        .set_block_output(Box::new(ScriptExecutionOutput {
+                        .set_block_output(ScriptExecutionOutput {
                             exit_code: Some(0),
                             output: captured_lines,
-                        }))
+                        })
                         .await;
 
                     // Signal completion AFTER context is updated
@@ -289,10 +289,10 @@ impl BlockBehavior for Script {
                 Ok(code) => {
                     // Store execution output in context (failed)
                     let _ = context
-                        .set_block_output(Box::new(ScriptExecutionOutput {
+                        .set_block_output(ScriptExecutionOutput {
                             exit_code: Some(code),
                             output: captured_lines,
-                        }))
+                        })
                         .await;
 
                     // Signal failure AFTER context is updated
@@ -304,10 +304,10 @@ impl BlockBehavior for Script {
                 }
                 Err(e) => {
                     let _ = context
-                        .set_block_output(Box::new(ScriptExecutionOutput {
+                        .set_block_output(ScriptExecutionOutput {
                             exit_code: None,
                             output: Vec::new(),
-                        }))
+                        })
                         .await;
                     let _ = context.block_failed(e.to_string()).await;
                     ExecutionStatus::Failed(e.to_string())

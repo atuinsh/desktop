@@ -375,13 +375,13 @@ impl DocumentHandle {
     pub async fn set_block_execution_output(
         &self,
         block_id: Uuid,
-        output: Box<dyn BlockExecutionOutput>,
+        output: impl BlockExecutionOutput,
     ) -> Result<(), DocumentError> {
         let (tx, rx) = oneshot::channel();
         self.command_tx
             .send(DocumentCommand::SetBlockExecutionOutput {
                 block_id,
-                output,
+                output: Box::new(output),
                 reply: tx,
             })
             .map_err(|_| DocumentError::ActorSendError)?;

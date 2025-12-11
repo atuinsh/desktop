@@ -141,7 +141,7 @@ impl ExecutionContext {
     /// Set the block output
     pub async fn set_block_output(
         &self,
-        output: Box<dyn BlockExecutionOutput>,
+        output: impl BlockExecutionOutput,
     ) -> Result<(), DocumentError> {
         self.document_handle
             .set_block_execution_output(self.block_id, output)
