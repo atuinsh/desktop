@@ -12,14 +12,14 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/atuinsh/desktop/releases">download</a> | <a href="https://man.atuin.sh">documentation</a> | <a href="https://hub.atuin.sh/">hub</a> | <a href="https://discord.gg/Fq8bJSKPHh">discord</a>
+  <a href="https://github.com/atuinsh/desktop/releases">download</a> | <a href="https://docs.atuin.sh/desktop">documentation</a> | <a href="https://hub.atuin.sh/">hub</a> | <a href="https://discord.gg/Fq8bJSKPHh">discord</a>
 </p>
 
 
 <p align="center">
  <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://man.atuin.sh/images/atuin-desktop-ss-dark.png">
-  <img alt="Atuin Desktop" src="https://man.atuin.sh/images/atuin-desktop-ss-light.png">
+  <source media="(prefers-color-scheme: dark)" srcset="https://docs.atuin.sh/desktop/images/atuin-desktop-ss-dark.png">
+  <img alt="Atuin Desktop" src="https://docs.atuin.sh/desktop/images/atuin-desktop-ss-light.png">
 </picture>
 </p>
 
@@ -77,7 +77,7 @@ Teams are already using Atuin Desktop for:
 
 1. Download a package for your platform [on our releases page](https://github.com/atuinsh/desktop/releases)
 2. Sign up for an account [on Atuin Hub](https://hub.atuin.sh/)
-3. [Log into Atuin Desktop](https://man.atuin.sh/hub/getting-started/) and create your first runbook
+3. [Log into Atuin Desktop](https://docs.atuin.sh/desktop/hub/getting-started/) and create your first runbook
 
 ## Feedback & Support
 

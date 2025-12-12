@@ -220,7 +220,7 @@ export default function RunbookControls(props: RunbookControlsProps) {
 
   function handleLearnMore(e: React.MouseEvent<HTMLAnchorElement>) {
     e.preventDefault();
-    open("https://man.atuin.sh/workspaces/");
+    open("https://docs.atuin.sh/desktop/workspaces/");
   }
 
   function handleSlugKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
@@ -243,9 +243,10 @@ export default function RunbookControls(props: RunbookControlsProps) {
 
       {props.isOfflineRunbook && (
         <p className="text-sm text-gray-500 dark:text-gray-400 italic ml-5 mt-1 select-none cursor-default">
-          Runbooks in offline workspaces exist only on your device, and cannot be shared via the Hub.{" "}
+          Runbooks in offline workspaces exist only on your device, and cannot be shared via the
+          Hub.{" "}
           <a
-            href="https://man.atuin.sh/workspaces/"
+            href="https://docs.atuin.sh/desktop/workspaces/"
             className="text-blue-500"
             onClick={handleLearnMore}
           >

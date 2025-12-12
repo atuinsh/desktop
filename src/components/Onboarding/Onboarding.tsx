@@ -48,12 +48,10 @@ const Onboarding = () => {
     onOnboardingOpen();
   }, []);
 
-
   const close = async (onClose: any) => {
     onClose();
 
     setShowAccountModal(true);
-
   };
 
   return (
@@ -66,16 +64,14 @@ const Onboarding = () => {
         onOpenChange={onOnboardingOpenChange}
         className="w-full select-none"
         size="2xl"
-        onClose={async ()=>{
+        onClose={async () => {
           await init_tracking();
         }}
       >
         <ModalContent className="w-full">
           {(onClose) => (
             <div className="max-w-[900px] mx-auto p-6 space-y-6">
-              <h1 className="text-4xl font-bold text-center">
-                Welcome to Atuin Desktop
-              </h1>
+              <h1 className="text-4xl font-bold text-center">Welcome to Atuin Desktop</h1>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <FeatureCard
@@ -97,16 +93,10 @@ const Onboarding = () => {
                 <Divider />
                 <CardBody>
                   <ul className="list-disc pl-6 space-y-2">
+                    <li>Select a runbook from the sidebar to get started</li>
                     <li>
-                      Select a runbook from the sidebar to get started
-                    </li>
-                    <li>
-                      Use the{" "}
-                      <Icon
-                        className="inline-block"
-                        icon="solar:history-outline"
-                      />{" "}
-                      icon to explore your shell history
+                      Use the <Icon className="inline-block" icon="solar:history-outline" /> icon to
+                      explore your shell history
                     </li>
                     <li>
                       Join the{" "}
@@ -120,7 +110,14 @@ const Onboarding = () => {
                       to get help and share feedback
                     </li>
                     <li>
-                      Read the docs at <a href="https://man.atuin.sh" target="_blank" className="text-blue-400 underline">man.atuin.sh</a>
+                      Read the docs at{" "}
+                      <a
+                        href="https://docs.atuin.sh/desktop"
+                        target="_blank"
+                        className="text-blue-400 underline"
+                      >
+                        docs.atuin.sh/desktop
+                      </a>
                     </li>
                   </ul>
                 </CardBody>
@@ -130,9 +127,8 @@ const Onboarding = () => {
                 <CardBody className="gap-4">
                   <h2 className="text-xl font-bold">Usage Tracking</h2>
                   <p className="text-gray-600">
-                    To help improve Atuin, we'd like to collect anonymous usage
-                    data and error reports. We respect your privacy and only track
-                    with your permission.
+                    To help improve Atuin, we'd like to collect anonymous usage data and error
+                    reports. We respect your privacy and only track with your permission.
                   </p>
                   <div className="flex items-center justify-between">
                     <p className="font-semibold">Enable tracking</p>
@@ -151,8 +147,7 @@ const Onboarding = () => {
                   </div>
                   {trackingOptIn && (
                     <p className="text-sm text-gray-500">
-                      Thank you for helping us improve Atuin. You can change this
-                      setting anytime.
+                      Thank you for helping us improve Atuin. You can change this setting anytime.
                     </p>
                   )}
                   {!trackingOptIn && (
@@ -163,12 +158,8 @@ const Onboarding = () => {
                 </CardBody>
               </Card>
 
-              <Button
-                color="success"
-                className="w-full"
-                onClick={() => close(onClose)}
-              >
-              Next
+              <Button color="success" className="w-full" onClick={() => close(onClose)}>
+                Next
               </Button>
             </div>
           )}

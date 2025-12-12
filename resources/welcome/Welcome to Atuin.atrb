@@ -37,7 +37,7 @@ content:
     text: 'This serves as an overview of the functionality we provide, and should help you get started. Please note that we’re currently in beta, and moving rapidly - features might change, and bugs will be fixed fast. You can also check out the '
     styles: {}
   - type: link
-    href: https://man.atuin.sh
+    href: https://docs.atuin.sh/desktop
     content:
     - type: text
       text: documentation
@@ -163,7 +163,7 @@ content:
     text: 'Read more in the '
     styles: {}
   - type: link
-    href: https://man.atuin.sh/hub/getting-started/
+    href: https://docs.atuin.sh/desktop/hub/getting-started/
     content:
     - type: text
       text: docs
@@ -580,7 +580,7 @@ content:
     text: 'This is super powerful. Every input in the runbook is first processed by our template system - the syntax is very similar to Jinja, and you can read more '
     styles: {}
   - type: link
-    href: https://man.atuin.sh/templating
+    href: https://docs.atuin.sh/desktop/templating
     content:
     - type: text
       text: here
@@ -694,7 +694,7 @@ content:
     text: We also have
     styles: {}
   - type: link
-    href: https://man.atuin.sh/blocks/databases
+    href: https://docs.atuin.sh/desktop/blocks/databases
     content:
     - type: text
       text: ' database clients'
@@ -703,7 +703,7 @@ content:
     text: ', an '
     styles: {}
   - type: link
-    href: https://man.atuin.sh/blocks/network/ssh
+    href: https://docs.atuin.sh/desktop/blocks/network/ssh
     content:
     - type: text
       text: SSH integration
@@ -712,7 +712,7 @@ content:
     text: ', and more! Be sure to check out the '
     styles: {}
   - type: link
-    href: https://man.atuin.sh
+    href: https://docs.atuin.sh/desktop
     content:
     - type: text
       text: docs

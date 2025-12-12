@@ -253,7 +253,7 @@ pub fn menu<R: Runtime>(app_handle: &AppHandle<R>, tab_items: &[TabItem]) -> Res
             &link_menu_item(
                 "documentation".try_into()?,
                 "Documentation",
-                "https://man.atuin.sh",
+                "https://docs.atuin.sh",
                 app_handle,
             )?,
             &open_new_runtime_explainer_runbook(app_handle)?,
