@@ -752,6 +752,57 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#block-output" class="md-nav__link">
+    <span class="md-ellipsis">
+      Block Output
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Block Output">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#accessing-terminal-results" class="md-nav__link">
+    <span class="md-ellipsis">
+      Accessing Terminal Results
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#output-fields" class="md-nav__link">
+    <span class="md-ellipsis">
+      Output Fields
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example-usage" class="md-nav__link">
+    <span class="md-ellipsis">
+      Example Usage
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#when-to-use-terminal-vs-script-output" class="md-nav__link">
+    <span class="md-ellipsis">
+      When to Use Terminal vs Script Output
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -1372,6 +1423,57 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#block-output" class="md-nav__link">
+    <span class="md-ellipsis">
+      Block Output
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Block Output">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#accessing-terminal-results" class="md-nav__link">
+    <span class="md-ellipsis">
+      Accessing Terminal Results
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#output-fields" class="md-nav__link">
+    <span class="md-ellipsis">
+      Output Fields
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example-usage" class="md-nav__link">
+    <span class="md-ellipsis">
+      Example Usage
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#when-to-use-terminal-vs-script-output" class="md-nav__link">
+    <span class="md-ellipsis">
+      When to Use Terminal vs Script Output
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -1475,6 +1577,88 @@
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="cp">{{</span><span class="nv">var.current_dir</span><span class="cp">}}</span>
 </span></code></pre></div>
 <p>See the <a href="../../../templating/">templating</a> section for full information on template variables.</p>
+<h2 id="block-output">Block Output</h2>
+<p>Terminal blocks produce structured output that can be accessed in templates after the terminal session ends. See <a href="../../#block-output">Block Output</a> for general information on accessing block output.</p>
+<div class="admonition note">
+<p class="admonition-title">Raw PTY Output</p>
+<p>Terminal output is raw PTY data which may include control codes, escape sequences, and other terminal formatting. For clean, parsed output, consider using a <a href="../script/">Script</a> block instead.</p>
+</div>
+<h3 id="accessing-terminal-results">Accessing Terminal Results</h3>
+<div class="language-jinja highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="cp">{%</span>- <span class="k">set</span> <span class="nv">output</span> <span class="o">=</span> <span class="nv">doc.named</span><span class="o">[</span><span class="s1">'my_terminal'</span><span class="o">]</span><span class="nv">.output</span> <span class="cp">%}</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="x">Received </span><span class="cp">{{</span> <span class="nv">output.byte_count</span> <span class="cp">}}</span><span class="x"> bytes</span>
+</span></code></pre></div>
+<h3 id="output-fields">Output Fields</h3>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>output</code></td>
+<td>string</td>
+<td>Raw terminal output (UTF-8 lossy conversion from PTY bytes)</td>
+</tr>
+<tr>
+<td><code>byte_count</code></td>
+<td>number</td>
+<td>Total number of bytes received from the PTY</td>
+</tr>
+<tr>
+<td><code>cancelled</code></td>
+<td>boolean</td>
+<td><code>true</code> if cancelled by user, <code>false</code> if terminal exited naturally</td>
+</tr>
+</tbody>
+</table>
+<h3 id="example-usage">Example Usage</h3>
+<div class="language-jinja highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="cp">{%</span>- <span class="k">set</span> <span class="nv">output</span> <span class="o">=</span> <span class="nv">doc.named</span><span class="o">[</span><span class="s1">'debug_terminal'</span><span class="o">]</span><span class="nv">.output</span> <span class="cp">%}</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="cp">{%</span> <span class="k">if</span> <span class="nv">output.cancelled</span> <span class="cp">%}</span>
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="x">  Terminal was cancelled by user</span>
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="cp">{%</span> <span class="k">else</span> <span class="cp">%}</span>
+</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="x">  Terminal exited normally</span>
+</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="cp">{%</span> <span class="k">endif</span> <span class="cp">%}</span>
+</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>
+</span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="x">Total output: </span><span class="cp">{{</span> <span class="nv">output.byte_count</span> <span class="cp">}}</span><span class="x"> bytes</span>
+</span><span id="__span-4-10"><a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a>
+</span><span id="__span-4-11"><a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a><span class="c">{# Note: output contains raw PTY data with escape codes #}</span>
+</span></code></pre></div>
+<h3 id="when-to-use-terminal-vs-script-output">When to Use Terminal vs Script Output</h3>
+<table>
+<thead>
+<tr>
+<th>Use Case</th>
+<th>Recommended Block</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Capturing clean stdout/stderr</td>
+<td>Script block</td>
+</tr>
+<tr>
+<td>Checking exit codes</td>
+<td>Script block</td>
+</tr>
+<tr>
+<td>Raw session logging</td>
+<td>Terminal block</td>
+</tr>
+<tr>
+<td>Interactive debugging</td>
+<td>Terminal block</td>
+</tr>
+<tr>
+<td>Setting variables</td>
+<td>Either (via <code>$ATUIN_OUTPUT_VARS</code>)</td>
+</tr>
+</tbody>
+</table>
 
 
 
@@ -1497,7 +1681,7 @@
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"></path></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-timeago" title="December 4, 2025 18:32:12 UTC"><span class="timeago" datetime="2025-12-04T18:32:12+00:00" locale="en"></span></span><span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-iso_date" title="December 4, 2025 18:32:12 UTC">2025-12-04</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-timeago" title="December 12, 2025 16:32:25 UTC"><span class="timeago" datetime="2025-12-12T16:32:25+00:00" locale="en"></span></span><span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-iso_date" title="December 12, 2025 16:32:25 UTC">2025-12-12</span>
   </span>
 
     

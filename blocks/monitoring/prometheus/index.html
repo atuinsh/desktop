@@ -1006,6 +1006,19 @@
         
       
       
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    Prometheus
+    
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
       <a href="./" class="md-nav__link md-nav__link--active">
         
   
@@ -1017,6 +1030,76 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#block-output" class="md-nav__link">
+    <span class="md-ellipsis">
+      Block Output
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Block Output">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#accessing-metrics-data" class="md-nav__link">
+    <span class="md-ellipsis">
+      Accessing Metrics Data
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#output-fields" class="md-nav__link">
+    <span class="md-ellipsis">
+      Output Fields
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#series-data-structure" class="md-nav__link">
+    <span class="md-ellipsis">
+      Series Data Structure
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example-usage" class="md-nav__link">
+    <span class="md-ellipsis">
+      Example Usage
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
       
     </li>
   
@@ -1316,6 +1399,65 @@
     
   
   
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#block-output" class="md-nav__link">
+    <span class="md-ellipsis">
+      Block Output
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Block Output">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#accessing-metrics-data" class="md-nav__link">
+    <span class="md-ellipsis">
+      Accessing Metrics Data
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#output-fields" class="md-nav__link">
+    <span class="md-ellipsis">
+      Output Fields
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#series-data-structure" class="md-nav__link">
+    <span class="md-ellipsis">
+      Series Data Structure
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example-usage" class="md-nav__link">
+    <span class="md-ellipsis">
+      Example Usage
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
 </nav>
                   </div>
                 </div>
@@ -1356,6 +1498,104 @@
 <li>From the Atuin Desktop settings</li>
 </ol>
 <p>This allows you to set a default endpoint, and then override it per-chart.</p>
+<h2 id="block-output">Block Output</h2>
+<p>Prometheus blocks produce structured output that can be accessed in templates after execution. See <a href="../../#block-output">Block Output</a> for general information on accessing block output.</p>
+<h3 id="accessing-metrics-data">Accessing Metrics Data</h3>
+<div class="language-jinja highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="cp">{%</span>- <span class="k">set</span> <span class="nv">output</span> <span class="o">=</span> <span class="nv">doc.named</span><span class="o">[</span><span class="s1">'my_prometheus_query'</span><span class="o">]</span><span class="nv">.output</span> <span class="cp">%}</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="c">{# Access series data #}</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="cp">{%</span> <span class="k">for</span> <span class="nv">series</span> <span class="k">in</span> <span class="nv">output.series</span> <span class="cp">%}</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="x">  </span><span class="cp">{{</span> <span class="nv">series.name</span> <span class="cp">}}</span><span class="x">: </span><span class="cp">{{</span> <span class="nv">series.data</span> <span class="o">|</span> <span class="nf">length</span> <span class="cp">}}</span><span class="x"> data points</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="cp">{%</span> <span class="k">endfor</span> <span class="cp">%}</span>
+</span></code></pre></div>
+<h3 id="output-fields">Output Fields</h3>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>results</code></td>
+<td>array</td>
+<td>All query results</td>
+</tr>
+<tr>
+<td><code>first</code></td>
+<td>object</td>
+<td>The first result (convenience accessor)</td>
+</tr>
+<tr>
+<td><code>series</code></td>
+<td>array</td>
+<td>Time series data from the first result</td>
+</tr>
+<tr>
+<td><code>total_series</code></td>
+<td>number</td>
+<td>Total number of series across all results</td>
+</tr>
+<tr>
+<td><code>result_count</code></td>
+<td>number</td>
+<td>Number of query results</td>
+</tr>
+<tr>
+<td><code>query_executed</code></td>
+<td>string</td>
+<td>The PromQL query that was executed</td>
+</tr>
+<tr>
+<td><code>time_range</code></td>
+<td>object</td>
+<td>Time range of the query (<code>start</code>, <code>end</code>, <code>step</code>)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="series-data-structure">Series Data Structure</h3>
+<p>Each series in the <code>series</code> array contains:</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>name</code></td>
+<td>string</td>
+<td>Series name (metric labels)</td>
+</tr>
+<tr>
+<td><code>data</code></td>
+<td>array</td>
+<td>Array of <code>[timestamp, value]</code> pairs</td>
+</tr>
+<tr>
+<td><code>series_type</code></td>
+<td>string</td>
+<td>Chart type (e.g., "line")</td>
+</tr>
+</tbody>
+</table>
+<h3 id="example-usage">Example Usage</h3>
+<div class="language-jinja highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="cp">{%</span>- <span class="k">set</span> <span class="nv">output</span> <span class="o">=</span> <span class="nv">doc.named</span><span class="o">[</span><span class="s1">'cpu_metrics'</span><span class="o">]</span><span class="nv">.output</span> <span class="cp">%}</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="cp">{%</span> <span class="k">if</span> <span class="nv">output.total_series</span> <span class="o">&gt;</span> <span class="m">0</span> <span class="cp">%}</span>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="x">  Query: </span><span class="cp">{{</span> <span class="nv">output.query_executed</span> <span class="cp">}}</span>
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="x">  Time range: </span><span class="cp">{{</span> <span class="nv">output.time_range.start</span> <span class="cp">}}</span><span class="x"> to </span><span class="cp">{{</span> <span class="nv">output.time_range.end</span> <span class="cp">}}</span>
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="x">  </span><span class="cp">{%</span> <span class="k">for</span> <span class="nv">series</span> <span class="k">in</span> <span class="nv">output.series</span> <span class="cp">%}</span>
+</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="x">  Series: </span><span class="cp">{{</span> <span class="nv">series.name</span> <span class="cp">}}</span>
+</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="x">  Data points: </span><span class="cp">{{</span> <span class="nv">series.data</span> <span class="o">|</span> <span class="nf">length</span> <span class="cp">}}</span>
+</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="x">  </span><span class="cp">{%</span> <span class="k">endfor</span> <span class="cp">%}</span>
+</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="cp">{%</span> <span class="k">endif</span> <span class="cp">%}</span>
+</span></code></pre></div>
 
 
 
@@ -1378,7 +1618,7 @@
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"></path></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-timeago" title="September 19, 2025 00:26:50 UTC"><span class="timeago" datetime="2025-09-19T00:26:50+00:00" locale="en"></span></span><span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-iso_date" title="September 19, 2025 00:26:50 UTC">2025-09-19</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-timeago" title="December 12, 2025 16:32:25 UTC"><span class="timeago" datetime="2025-12-12T16:32:25+00:00" locale="en"></span></span><span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-iso_date" title="December 12, 2025 16:32:25 UTC">2025-12-12</span>
   </span>
 
     
