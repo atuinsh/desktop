@@ -82,7 +82,7 @@ plugins:
   - multirepo:
       imported_repo: true
       url: https://github.com/atuinsh/docs
-      section_name: Atuin Desktop
+      section_name: Desktop
       paths: ["mkdocs.yml", "docs/index.md", "docs/stylesheets/*"]
       yml_file: mkdocs.yml
       branch: mkt/docs-migration
