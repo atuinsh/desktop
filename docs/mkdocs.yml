@@ -1,5 +1,6 @@
 site_name: Atuin Desktop Docs
-site_url: https://man.atuin.sh
+site_url: https://docs.atuin.sh/atuin-desktop/
+docs_dir: .
 
 # Repository information
 repo_name: atuinsh/desktop
