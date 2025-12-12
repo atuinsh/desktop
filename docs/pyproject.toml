@@ -8,4 +8,5 @@ dependencies = [
     "mkdocs-material[imaging]",
     "mkdocs-glightbox",
     "mkdocs-git-revision-date-localized-plugin",
+    "mkdocs-multirepo-plugin>=0.8",
 ]

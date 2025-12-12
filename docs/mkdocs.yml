@@ -79,6 +79,13 @@ plugins:
   - git-revision-date-localized:
       enable_creation_date: true
       type: timeago
+  - multirepo:
+      imported_repo: true
+      url: https://github.com/atuinsh/docs
+      section_name: Atuin Desktop
+      paths: ["mkdocs.yml", "docs/index.md", "docs/stylesheets/*"]
+      yml_file: mkdocs.yml
+      branch: mkt/docs-migration
 
 markdown_extensions:
   - admonition
