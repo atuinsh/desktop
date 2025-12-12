@@ -198,6 +198,7 @@ impl ExecutionContext {
     pub async fn block_started(&self) -> Result<(), DocumentError> {
         let _ = self.handle().set_running().await;
         let _ = self.emit_block_started().await;
+
         let _ = self
             .send_output(
                 BlockOutput::builder()
