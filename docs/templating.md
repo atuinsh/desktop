@@ -334,13 +334,13 @@ Then, it can be referred to via the `{{ doc.named }}`map, within the template sy
 
 <figure class="img-light">
   <picture>
-    <img src="../../images/templating-light.png" alt="Collaborations">
+    <img src="./images/templating-light.png" alt="Collaborations">
   </picture>
   <figcaption>An example using an editor block's content from another block, via the template system</figcaption>
 </figure>
 <figure class="img-dark">
   <picture>
-    <img src="../../images/templating-dark.png" alt="Collaborations">
+    <img src="./images/templating-dark.png" alt="Collaborations">
   </picture>
   <figcaption>An example using an editor block's content from another block, via the template system</figcaption>
 </figure>

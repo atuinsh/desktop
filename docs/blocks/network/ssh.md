@@ -4,13 +4,13 @@ SSH is another "contextual" block - just like setting a directory or environment
 
 <figure class="img-light">
   <picture>
-    <img src="../../../images/ssh-1-light.png" alt="SSH Block">
+    <img src="../../images/ssh-1-light.png" alt="SSH Block">
   </picture>
   <figcaption>Example SSH usage</figcaption>
 </figure>
 <figure class="img-dark">
   <picture>
-    <img src="../../../images/ssh-1-dark.png" alt="SSH Block">
+    <img src="../../images/ssh-1-dark.png" alt="SSH Block">
   </picture>
   <figcaption>Example SSH usage</figcaption>
 </figure>
@@ -42,13 +42,13 @@ If you wish to revert back to local execution, insert a "host" block.
 
 <figure class="img-light">
   <picture>
-    <img src="../../../images/ssh-2-light.png" alt="SSH Block">
+    <img src="../../images/ssh-2-light.png" alt="SSH Block">
   </picture>
   <figcaption>Example SSH usage</figcaption>
 </figure>
 <figure class="img-dark">
   <picture>
-    <img src="../../../images/ssh-2-dark.png" alt="SSH Block">
+    <img src="../../images/ssh-2-dark.png" alt="SSH Block">
   </picture>
   <figcaption>Example SSH usage</figcaption>
 </figure>

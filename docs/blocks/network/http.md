@@ -2,13 +2,13 @@
 
 <figure class="img-light">
   <picture>
-    <img src="../../../images/http-light.png" alt="HTTP Block">
+    <img src="../../images/http-light.png" alt="HTTP Block">
   </picture>
   <figcaption></figcaption>
 </figure>
 <figure class="img-dark">
   <picture>
-    <img src="../../../images/http-dark.png" alt="HTTP Block">
+    <img src="../../images/http-dark.png" alt="HTTP Block">
   </picture>
   <figcaption></figcaption>
 </figure>

@@ -10,13 +10,13 @@ To change the slug (which determines the Runbook's URL) or visibility, click the
 
 <figure class="img-light">
   <picture>
-    <img src="../../images/runbook-settings-light.png" alt="Desktop app login button">
+    <img src="../images/runbook-settings-light.png" alt="Desktop app login button">
   </picture>
   <figcaption></figcaption>
 </figure>
 <figure class="img-dark">
   <picture>
-    <img src="../../images/runbook-settings-dark.png" alt="Desktop app login button">
+    <img src="../images/runbook-settings-dark.png" alt="Desktop app login button">
   </picture>
   <figcaption></figcaption>
 </figure>

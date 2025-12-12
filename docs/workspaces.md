@@ -6,13 +6,13 @@ Workspaces are the highest level container for runbooks. They can be found in th
 
 <figure class="img-light">
   <picture>
-    <img src="../../images/workspaces-light.png" alt="Collaborations">
+    <img src="./images/workspaces-light.png" alt="Collaborations">
   </picture>
   <figcaption>Operations, Internal Infra, and Meetings are all workspaces</figcaption>
 </figure>
 <figure class="img-dark">
   <picture>
-    <img src="../../images/workspaces-dark.png" alt="Collaborations">
+    <img src="./images/workspaces-dark.png" alt="Collaborations">
   </picture>
   <figcaption>Operations, Internal Infra, and Meetings are all workspaces</figcaption>
 </figure>
