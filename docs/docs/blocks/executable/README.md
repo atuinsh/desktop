@@ -97,4 +97,12 @@ Runbooks also support "serial execution". Click the play button in the top right
 
     [:octicons-arrow-right-24: Learn more](pause.md)
 
+-   :material-book-open-variant:{ .lg .middle } **Sub-Runbook**
+
+    ---
+
+    Embed and execute another runbook as part of your workflow.
+
+    [:octicons-arrow-right-24: Learn more](sub-runbook.md)
+
 </div>
