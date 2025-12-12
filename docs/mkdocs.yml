@@ -4,7 +4,7 @@ site_url: https://man.atuin.sh
 # Repository information
 repo_name: atuinsh/desktop
 repo_url: https://github.com/atuinsh/desktop
-edit_uri: edit/main/docs/docs/
+edit_uri: edit/main/docs/
 
 extra:
   homepage: https://atuin.sh
