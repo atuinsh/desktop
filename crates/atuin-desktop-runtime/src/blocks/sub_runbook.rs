@@ -8,13 +8,13 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use tokio::sync::Mutex;
 use typed_builder::TypedBuilder;
 use uuid::Uuid;
 
 use crate::blocks::{Block, BlockBehavior, FromDocument};
 use crate::client::{RunbookLoadError, SubRunbookRef};
-use crate::context::{BlockState, BlockVars, BlockWithContext, ContextResolver};
+use crate::context::{BlockState, BlockVars};
+use crate::events::MemoryEventBus;
 use crate::execution::{ExecutionContext, ExecutionHandle, ExecutionResult};
 
 /// State representing the progress of a sub-runbook execution
@@ -207,7 +207,8 @@ impl BlockBehavior for SubRunbook {
             }
         };
 
-        let context_clone = context.clone();
+        // Clone context to get handle for return value (original moves into spawned task)
+        let handle_context = context.clone();
         let block_id = self.id;
         let runbook_ref = self.runbook_ref.clone();
         let export_env = self.export_env;
@@ -250,9 +251,9 @@ impl BlockBehavior for SubRunbook {
                 return;
             }
 
-            // Load the runbook content
-            let runbook_content = match runbook_loader.load_runbook_content(&runbook_ref).await {
-                Ok(content) => content,
+            // Load the runbook
+            let loaded_runbook = match runbook_loader.load_runbook(&runbook_ref).await {
+                Ok(loaded) => loaded,
                 Err(RunbookLoadError::NotFound { .. }) => {
                     let _ = context
                         .update_block_state::<SubRunbookState, _>(block_id, |state| {
@@ -281,17 +282,79 @@ impl BlockBehavior for SubRunbook {
                 }
             };
 
-            // Parse blocks from content
-            let blocks: Vec<Block> = runbook_content
-                .iter()
-                .filter_map(|block_data| match Block::from_document(block_data) {
-                    Ok(block) => Some(block),
-                    Err(e) => {
-                        tracing::debug!("Skipping unsupported block in sub-runbook: {}", e);
-                        None
-                    }
-                })
-                .collect();
+            let sub_runbook_id = loaded_runbook.id;
+            let runbook_content = loaded_runbook.content;
+
+            // Create a child DocumentHandle for the sub-runbook
+            // Use the actual sub-runbook's UUID as the document ID
+            let sub_document_id = sub_runbook_id.to_string();
+
+            // Create a simple no-op message channel for the sub-document
+            // Actual output will flow through the parent's channel via with_sub_runbook
+            struct NoOpChannel;
+            #[async_trait::async_trait]
+            impl crate::client::MessageChannel<crate::client::DocumentBridgeMessage> for NoOpChannel {
+                async fn send(
+                    &self,
+                    _message: crate::client::DocumentBridgeMessage,
+                ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+                    Ok(())
+                }
+            }
+
+            let sub_document = crate::document::DocumentHandle::new(
+                sub_document_id.clone(),
+                Arc::new(MemoryEventBus::new()),
+                Arc::new(NoOpChannel),
+                None, // block_local_value_provider
+                None, // context_storage (sub-runbooks don't persist context)
+                Some(runbook_loader.clone()),
+            );
+
+            // Set parent context so the sub-runbook inherits vars, env_vars, cwd, ssh_host
+            if let Err(e) = sub_document.set_parent_context(context.context_resolver.clone()).await {
+                let error = format!("Failed to set parent context: {}", e);
+                let _ = context
+                    .update_block_state::<SubRunbookState, _>(block_id, move |state| {
+                        state.status = SubRunbookStatus::Failed { error };
+                    })
+                    .await;
+                let _ = context
+                    .block_failed(format!("Failed to set parent context: {}", e))
+                    .await;
+                return;
+            }
+
+            // Load the runbook content into the document
+            if let Err(e) = sub_document.put_document(runbook_content.clone()).await {
+                let error = format!("Failed to initialize sub-runbook document: {}", e);
+                let _ = context
+                    .update_block_state::<SubRunbookState, _>(block_id, move |state| {
+                        state.status = SubRunbookStatus::Failed { error };
+                    })
+                    .await;
+                let _ = context
+                    .block_failed(format!("Failed to initialize sub-runbook document: {}", e))
+                    .await;
+                return;
+            }
+
+            // Get blocks from the document
+            let blocks = match sub_document.blocks().await {
+                Ok(blocks) => blocks,
+                Err(e) => {
+                    let error = format!("Failed to get blocks from sub-runbook: {}", e);
+                    let _ = context
+                        .update_block_state::<SubRunbookState, _>(block_id, move |state| {
+                            state.status = SubRunbookStatus::Failed { error };
+                        })
+                        .await;
+                    let _ = context
+                        .block_failed(format!("Failed to get blocks from sub-runbook: {}", e))
+                        .await;
+                    return;
+                }
+            };
 
             let total_blocks = blocks.len();
 
@@ -315,11 +378,6 @@ impl BlockBehavior for SubRunbook {
                 return;
             }
 
-            // Create isolated context resolver from parent's context
-            let sub_resolver = Arc::new(Mutex::new(ContextResolver::from_parent(
-                &context.context_resolver,
-            )));
-
             // Execute blocks sequentially
             for (index, block) in blocks.iter().enumerate() {
                 // Update progress state
@@ -337,29 +395,36 @@ impl BlockBehavior for SubRunbook {
                     })
                     .await;
 
-                // Evaluate passive context for this block
-                let resolver_guard = sub_resolver.lock().await;
-                let passive_ctx = block
-                    .passive_context(&resolver_guard, None)
+                // Create execution context for this block using the sub-document
+                let sub_block_context = match sub_document
+                    .create_execution_context(
+                        block.id(),
+                        None, // SSH pool will be set via with_resources
+                        None, // PTY store will be set via with_resources
+                        None, // extra_template_context
+                    )
                     .await
-                    .ok()
-                    .flatten()
-                    .unwrap_or_default();
+                {
+                    Ok(ctx) => ctx,
+                    Err(e) => {
+                        let error = format!("Failed to create execution context: {}", e);
+                        let _ = context
+                            .update_block_state::<SubRunbookState, _>(block_id, move |state| {
+                                state.status = SubRunbookStatus::Failed { error };
+                            })
+                            .await;
+                        let _ = context
+                            .block_failed(format!("Failed to create execution context: {}", e))
+                            .await;
+                        return;
+                    }
+                };
 
-                // Create BlockWithContext for context accumulation
-                let block_with_context =
-                    BlockWithContext::new(block.clone(), passive_ctx.clone(), None, None);
-
-                // Create a resolver that includes this block's context
-                let mut block_resolver = resolver_guard.clone();
-                block_resolver.push_block(&block_with_context);
-                drop(resolver_guard);
-
-                // Create execution context for the sub-runbook block
+                // Wrap the context with sub_runbook to forward output to parent and detect recursion
                 let sub_context = match context.with_sub_runbook(
                     stack_id.clone(),
                     block.id(),
-                    Arc::new(block_resolver),
+                    sub_block_context.context_resolver.clone(),
                 ) {
                     Ok(ctx) => ctx,
                     Err(e) => {
@@ -400,7 +465,7 @@ impl BlockBehavior for SubRunbook {
 
                     match result {
                         ExecutionResult::Success => {
-                            // Success - will update resolver below
+                            // Success - continue to next block
                         }
                         ExecutionResult::Failure => {
                             let error = format!("Block '{}' failed", block.name());
@@ -441,14 +506,6 @@ impl BlockBehavior for SubRunbook {
                         }
                     }
                 }
-
-                // Update the resolver with completed block's context
-                // This handles both executed blocks and passive-only blocks (env, var, etc.)
-                let mut resolver_guard = sub_resolver.lock().await;
-                let block_with_context =
-                    BlockWithContext::new(block.clone(), passive_ctx, None, None);
-                resolver_guard.push_block(&block_with_context);
-                drop(resolver_guard);
             }
 
             // All blocks completed successfully
@@ -460,9 +517,19 @@ impl BlockBehavior for SubRunbook {
                 })
                 .await;
 
+            // Export environment variables to parent if requested
             if export_env {
-                let resolver_guard = sub_resolver.lock().await;
-                let child_env_vars = resolver_guard.env_vars();
+                // Get final context resolver from sub-document (includes all block contexts)
+                let final_resolver = match sub_document.get_context_resolver().await {
+                    Ok(resolver) => resolver,
+                    Err(e) => {
+                        tracing::warn!("Failed to get context resolver for env export: {}", e);
+                        // Don't fail the whole block just because we couldn't export env vars
+                        let _ = context.block_finished(Some(0), true).await;
+                        return;
+                    }
+                };
+                let child_env_vars = final_resolver.env_vars();
                 let parent_env_vars = context.context_resolver.env_vars();
 
                 tracing::debug!(
@@ -500,7 +567,7 @@ impl BlockBehavior for SubRunbook {
             let _ = context.block_finished(Some(0), true).await;
         });
 
-        Ok(Some(context_clone.handle()))
+        Ok(Some(handle_context.handle()))
     }
 }
 
@@ -891,5 +958,244 @@ mod tests {
         assert_eq!(parsed.completed_blocks, 2);
         assert_eq!(parsed.current_block_name, Some("Script Block".to_string()));
         assert_eq!(parsed.status, SubRunbookStatus::Running);
+    }
+
+    /// Test: Recursion detection prevents infinite loops
+    ///
+    /// Runbook A calls itself as a sub-runbook - this should be detected and fail
+    #[tokio::test]
+    async fn test_recursion_detection() {
+        // Define runbook A that calls itself
+        let runbook_a_id = "recursive-runbook";
+        let sub_runbook_block_id = Uuid::new_v4();
+
+        let runbook_a_content = vec![json!({
+            "id": sub_runbook_block_id.to_string(),
+            "type": "sub-runbook",
+            "props": {
+                "name": "Call Self",
+                "runbookPath": runbook_a_id
+            }
+        })];
+
+        let runbook_loader = Arc::new(
+            MemoryRunbookContentLoader::new().with_runbook(runbook_a_id, runbook_a_content.clone()),
+        );
+
+        let (document_handle, event_bus) = setup_test_document(runbook_loader.clone()).await;
+
+        // Load runbook A
+        document_handle
+            .update_document(runbook_a_content)
+            .await
+            .expect("Should load document");
+
+        // Execute the sub-runbook block (which tries to call itself)
+        let exec_context = document_handle
+            .create_execution_context(sub_runbook_block_id, None, None, None)
+            .await
+            .expect("Should create execution context");
+
+        let sub_runbook_block = SubRunbook::builder()
+            .id(sub_runbook_block_id)
+            .name("Call Self")
+            .runbook_ref(SubRunbookRef {
+                id: None,
+                uri: None,
+                path: Some(runbook_a_id.to_string()),
+            })
+            .build();
+
+        let handle = sub_runbook_block
+            .execute(exec_context)
+            .await
+            .expect("Should start execution");
+
+        // Wait for execution to complete
+        if let Some(handle) = handle {
+            let result = handle.wait_for_completion().await;
+            // Should fail due to recursion
+            assert_eq!(result, ExecutionResult::Failure);
+        }
+
+        // Check that we got a recursion error in events
+        let events = event_bus.events();
+        let has_recursion_error = events.iter().any(|e| {
+            if let crate::events::GCEvent::BlockFailed { error, .. } = e {
+                error.contains("Recursion detected")
+            } else {
+                false
+            }
+        });
+        assert!(has_recursion_error, "Should have emitted recursion error");
+    }
+
+    /// Test: Environment variables can be exported from sub-runbook to parent
+    ///
+    /// Sub-runbook sets MY_VAR=hello, parent should see it after execution with export_env=true
+    #[tokio::test]
+    async fn test_env_export_from_sub_runbook() {
+        // Define sub-runbook that sets an env var
+        let sub_runbook_id = "env-setter";
+        let env_block_id = Uuid::new_v4();
+
+        let sub_runbook_content = vec![json!({
+            "id": env_block_id.to_string(),
+            "type": "environment",
+            "props": {
+                "name": "EXPORTED_VAR",
+                "value": "hello_from_sub"
+            }
+        })];
+
+        // Parent runbook calls sub-runbook with export_env=true
+        let parent_sub_block_id = Uuid::new_v4();
+        let parent_content = vec![json!({
+            "id": parent_sub_block_id.to_string(),
+            "type": "sub-runbook",
+            "props": {
+                "name": "Run Env Setter",
+                "runbookPath": sub_runbook_id,
+                "exportEnv": true
+            }
+        })];
+
+        let runbook_loader = Arc::new(
+            MemoryRunbookContentLoader::new().with_runbook(sub_runbook_id, sub_runbook_content),
+        );
+
+        let (document_handle, _event_bus) = setup_test_document(runbook_loader).await;
+
+        document_handle
+            .update_document(parent_content)
+            .await
+            .expect("Should load document");
+
+        // Verify env var is NOT set before execution
+        let resolver_before = document_handle
+            .get_context_resolver()
+            .await
+            .expect("Should get resolver");
+        assert!(
+            resolver_before.env_vars().get("EXPORTED_VAR").is_none(),
+            "EXPORTED_VAR should not exist before execution"
+        );
+
+        // Execute the sub-runbook block
+        let exec_context = document_handle
+            .create_execution_context(parent_sub_block_id, None, None, None)
+            .await
+            .expect("Should create execution context");
+
+        let sub_runbook_block = SubRunbook::builder()
+            .id(parent_sub_block_id)
+            .name("Run Env Setter")
+            .runbook_ref(SubRunbookRef {
+                id: None,
+                uri: None,
+                path: Some(sub_runbook_id.to_string()),
+            })
+            .export_env(true)
+            .build();
+
+        let handle = sub_runbook_block
+            .execute(exec_context)
+            .await
+            .expect("Should execute");
+
+        // Wait for completion
+        if let Some(handle) = handle {
+            let result = handle.wait_for_completion().await;
+            assert_eq!(result, ExecutionResult::Success);
+        }
+
+        // Verify env var IS set after execution
+        let resolver_after = document_handle
+            .get_context_resolver()
+            .await
+            .expect("Should get resolver");
+        assert_eq!(
+            resolver_after.env_vars().get("EXPORTED_VAR"),
+            Some(&"hello_from_sub".to_string()),
+            "EXPORTED_VAR should be exported to parent"
+        );
+    }
+
+    /// Test: Environment variables are NOT exported when export_env=false
+    #[tokio::test]
+    async fn test_env_not_exported_by_default() {
+        // Define sub-runbook that sets an env var
+        let sub_runbook_id = "env-setter-no-export";
+        let env_block_id = Uuid::new_v4();
+
+        let sub_runbook_content = vec![json!({
+            "id": env_block_id.to_string(),
+            "type": "environment",
+            "props": {
+                "name": "PRIVATE_VAR",
+                "value": "should_stay_private"
+            }
+        })];
+
+        // Parent runbook calls sub-runbook WITHOUT export_env
+        let parent_sub_block_id = Uuid::new_v4();
+        let parent_content = vec![json!({
+            "id": parent_sub_block_id.to_string(),
+            "type": "sub-runbook",
+            "props": {
+                "name": "Run Env Setter",
+                "runbookPath": sub_runbook_id
+                // exportEnv defaults to false
+            }
+        })];
+
+        let runbook_loader = Arc::new(
+            MemoryRunbookContentLoader::new().with_runbook(sub_runbook_id, sub_runbook_content),
+        );
+
+        let (document_handle, _event_bus) = setup_test_document(runbook_loader).await;
+
+        document_handle
+            .update_document(parent_content)
+            .await
+            .expect("Should load document");
+
+        // Execute the sub-runbook block
+        let exec_context = document_handle
+            .create_execution_context(parent_sub_block_id, None, None, None)
+            .await
+            .expect("Should create execution context");
+
+        let sub_runbook_block = SubRunbook::builder()
+            .id(parent_sub_block_id)
+            .name("Run Env Setter")
+            .runbook_ref(SubRunbookRef {
+                id: None,
+                uri: None,
+                path: Some(sub_runbook_id.to_string()),
+            })
+            .export_env(false) // explicitly false
+            .build();
+
+        let handle = sub_runbook_block
+            .execute(exec_context)
+            .await
+            .expect("Should execute");
+
+        // Wait for completion
+        if let Some(handle) = handle {
+            let result = handle.wait_for_completion().await;
+            assert_eq!(result, ExecutionResult::Success);
+        }
+
+        // Verify env var is NOT exported to parent
+        let resolver_after = document_handle
+            .get_context_resolver()
+            .await
+            .expect("Should get resolver");
+        assert!(
+            resolver_after.env_vars().get("PRIVATE_VAR").is_none(),
+            "PRIVATE_VAR should NOT be exported to parent when export_env=false"
+        );
     }
 }

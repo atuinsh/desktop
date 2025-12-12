@@ -215,16 +215,17 @@ impl Default for HubClient {
     }
 }
 
-/// Load runbook content from a hub URI (user/runbook or user/runbook:tag)
+/// Load runbook from a hub URI (user/runbook or user/runbook:tag)
 ///
 /// This is a convenience function that handles URI parsing, API resolution,
-/// and content extraction in one call. Used by both desktop and CLI loaders.
-pub async fn load_runbook_content_from_uri(
+/// and content extraction in one call. Returns the runbook ID and content.
+pub async fn load_runbook_from_uri(
     client: &HubClient,
     uri: &str,
     display_id: &str,
-) -> Result<Vec<serde_json::Value>, super::RunbookLoadError> {
+) -> Result<super::LoadedRunbook, super::RunbookLoadError> {
     use super::RunbookLoadError;
+    use uuid::Uuid;
 
     let parsed = ParsedUri::parse(uri).ok_or_else(|| RunbookLoadError::LoadFailed {
         runbook_id: display_id.to_string(),
@@ -255,19 +256,72 @@ pub async fn load_runbook_content_from_uri(
             },
         })?;
 
+    // Parse the runbook ID
+    let id = Uuid::parse_str(&runbook.id).map_err(|e| RunbookLoadError::LoadFailed {
+        runbook_id: display_id.to_string(),
+        message: format!("Invalid runbook ID from hub: {}", e),
+    })?;
+
     // Prefer snapshot content if available, otherwise use runbook content
-    if let Some(snapshot) = snapshot {
+    let content = if let Some(snapshot) = snapshot {
         tracing::debug!("Using snapshot '{}' content", snapshot.tag);
-        Ok(snapshot.content)
+        snapshot.content
     } else if let Some(content) = runbook.content {
         tracing::debug!("Using runbook content (no snapshot)");
-        Ok(content)
+        content
     } else {
-        Err(RunbookLoadError::LoadFailed {
+        return Err(RunbookLoadError::LoadFailed {
             runbook_id: display_id.to_string(),
             message: "Runbook has no content. You may need to specify a tag.".to_string(),
-        })
-    }
+        });
+    };
+
+    Ok(super::LoadedRunbook { id, content })
+}
+
+/// Load runbook from hub by ID
+///
+/// This is a convenience function that handles ID-based lookup and content extraction.
+/// Returns the runbook ID and content, or fails if no content is available.
+pub async fn load_runbook_from_id(
+    client: &HubClient,
+    hub_id: &str,
+    display_id: &str,
+) -> Result<super::LoadedRunbook, super::RunbookLoadError> {
+    use super::RunbookLoadError;
+    use uuid::Uuid;
+
+    tracing::debug!("Fetching runbook from hub by ID: {}", hub_id);
+
+    let runbook = client
+        .get_runbook_by_id(hub_id)
+        .await
+        .map_err(|e| match e {
+            HubError::NotFound(_) => RunbookLoadError::NotFound {
+                runbook_id: display_id.to_string(),
+            },
+            _ => RunbookLoadError::LoadFailed {
+                runbook_id: display_id.to_string(),
+                message: e.to_string(),
+            },
+        })?;
+
+    // Parse the runbook ID
+    let runbook_uuid = Uuid::parse_str(&runbook.id).map_err(|e| RunbookLoadError::LoadFailed {
+        runbook_id: display_id.to_string(),
+        message: format!("Invalid runbook ID from hub: {}", e),
+    })?;
+
+    // Require content to be present
+    let content = runbook.content.ok_or_else(|| RunbookLoadError::LoadFailed {
+        runbook_id: display_id.to_string(),
+        message: "Runbook has no content. Specify a tag to load a specific version.".to_string(),
+    })?;
+
+    Ok(super::LoadedRunbook {
+        id: runbook_uuid,
+        content,
+    })
 }
 
 #[derive(Debug, thiserror::Error)]

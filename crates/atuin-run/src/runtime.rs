@@ -1,8 +1,8 @@
 use std::path::PathBuf;
 
 use atuin_desktop_runtime::client::{
-    load_runbook_content_from_uri, DocumentBridgeMessage, HubClient, HubError, LocalValueProvider,
-    MessageChannel, RunbookContentLoader, RunbookLoadError, SubRunbookRef,
+    load_runbook_from_id, load_runbook_from_uri, DocumentBridgeMessage, HubClient, LoadedRunbook,
+    LocalValueProvider, MessageChannel, RunbookContentLoader, RunbookLoadError, SubRunbookRef,
 };
 use atuin_desktop_runtime::context::{BlockContext, BlockContextStorage};
 use atuin_desktop_runtime::events::{EventBus, GCEvent};
@@ -153,71 +153,32 @@ impl FileRunbookLoader {
         None
     }
 
-    /// Load runbook content from a hub URI (user/runbook or user/runbook:tag)
+    /// Load runbook from a hub URI (user/runbook or user/runbook:tag)
     async fn load_from_uri(
         &self,
         uri: &str,
         display_id: &str,
-    ) -> Result<Vec<serde_json::Value>, RunbookLoadError> {
-        load_runbook_content_from_uri(&self.hub_client, uri, display_id).await
+    ) -> Result<LoadedRunbook, RunbookLoadError> {
+        load_runbook_from_uri(&self.hub_client, uri, display_id).await
     }
 
-    /// Load runbook content from hub by ID
+    /// Load runbook from hub by ID
     async fn load_from_hub_id(
         &self,
         id: &str,
         display_id: &str,
-    ) -> Result<Vec<serde_json::Value>, RunbookLoadError> {
-        tracing::debug!("Fetching runbook from hub by ID: {}", id);
-
-        let runbook = self
-            .hub_client
-            .get_runbook_by_id(id)
-            .await
-            .map_err(|e| match e {
-                HubError::NotFound(_) => RunbookLoadError::NotFound {
-                    runbook_id: display_id.to_string(),
-                },
-                _ => RunbookLoadError::LoadFailed {
-                    runbook_id: display_id.to_string(),
-                    message: e.to_string(),
-                },
-            })?;
-
-        // Use runbook content if available
-        if let Some(content) = runbook.content {
-            Ok(content)
-        } else if !runbook.snapshots.is_empty() {
-            // Fall back to fetching the latest snapshot
-            let latest_snapshot_id = &runbook.snapshots[0].id;
-            tracing::debug!("Fetching latest snapshot: {}", latest_snapshot_id);
-
-            let snapshot = self
-                .hub_client
-                .get_snapshot(latest_snapshot_id)
-                .await
-                .map_err(|e| RunbookLoadError::LoadFailed {
-                    runbook_id: display_id.to_string(),
-                    message: format!("Failed to fetch snapshot: {}", e),
-                })?;
-
-            Ok(snapshot.content)
-        } else {
-            Err(RunbookLoadError::LoadFailed {
-                runbook_id: display_id.to_string(),
-                message: "Runbook has no content and no snapshots".to_string(),
-            })
-        }
+    ) -> Result<LoadedRunbook, RunbookLoadError> {
+        load_runbook_from_id(&self.hub_client, id, display_id).await
     }
 
-    /// Load runbook content from a file path
+    /// Load runbook from a file path
     async fn load_from_path(
         &self,
         path: &PathBuf,
         display_id: &str,
-    ) -> Result<Vec<serde_json::Value>, RunbookLoadError> {
+    ) -> Result<LoadedRunbook, RunbookLoadError> {
         // Read and parse the file
-        let content =
+        let file_content =
             tokio::fs::read_to_string(path)
                 .await
                 .map_err(|e| RunbookLoadError::LoadFailed {
@@ -227,7 +188,7 @@ impl FileRunbookLoader {
 
         // Parse YAML (which is a superset of JSON)
         let yaml_value: serde_yaml::Value =
-            serde_yaml::from_str(&content).map_err(|e| RunbookLoadError::LoadFailed {
+            serde_yaml::from_str(&file_content).map_err(|e| RunbookLoadError::LoadFailed {
                 runbook_id: display_id.to_string(),
                 message: format!("Failed to parse YAML: {}", e),
             })?;
@@ -238,24 +199,33 @@ impl FileRunbookLoader {
                 message: format!("Failed to convert to JSON: {}", e),
             })?;
 
+        // Try to get runbook ID from file, otherwise generate one
+        let id = json_value
+            .get("id")
+            .and_then(|v| v.as_str())
+            .and_then(|s| Uuid::parse_str(s).ok())
+            .unwrap_or_else(Uuid::new_v4);
+
         // Extract content array
-        json_value
+        let content = json_value
             .get("content")
             .and_then(|v| v.as_array())
             .cloned()
             .ok_or_else(|| RunbookLoadError::LoadFailed {
                 runbook_id: display_id.to_string(),
                 message: "Runbook file missing 'content' array".to_string(),
-            })
+            })?;
+
+        Ok(LoadedRunbook { id, content })
     }
 }
 
 #[async_trait::async_trait]
 impl RunbookContentLoader for FileRunbookLoader {
-    async fn load_runbook_content(
+    async fn load_runbook(
         &self,
         runbook_ref: &SubRunbookRef,
-    ) -> Result<Vec<serde_json::Value>, RunbookLoadError> {
+    ) -> Result<LoadedRunbook, RunbookLoadError> {
         let display_id = runbook_ref.display_id();
 
         // 1. Try path first (most specific for CLI use)

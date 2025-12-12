@@ -5,6 +5,7 @@
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 /// Reference to a sub-runbook that can be resolved in different ways
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
@@ -45,17 +46,17 @@ impl SubRunbookRef {
 /// which fields are populated (id, uri, path).
 #[async_trait]
 pub trait RunbookContentLoader: Send + Sync {
-    /// Load the content of a runbook by reference
+    /// Load a runbook by reference
     ///
     /// # Arguments
     /// * `runbook_ref` - A reference to the runbook (can have id, uri, and/or path)
     ///
     /// # Returns
-    /// The runbook content as a JSON array of blocks, or an error if not found
-    async fn load_runbook_content(
+    /// The loaded runbook with its ID and content, or an error if not found
+    async fn load_runbook(
         &self,
         runbook_ref: &SubRunbookRef,
-    ) -> Result<Vec<serde_json::Value>, RunbookLoadError>;
+    ) -> Result<LoadedRunbook, RunbookLoadError>;
 }
 
 /// Errors that can occur when loading runbook content
@@ -85,9 +86,18 @@ impl std::fmt::Display for RunbookLoadError {
 
 impl std::error::Error for RunbookLoadError {}
 
+/// Result of loading a runbook - contains both the ID and content
+#[derive(Debug, Clone)]
+pub struct LoadedRunbook {
+    /// The runbook's unique identifier (UUID)
+    pub id: Uuid,
+    /// The runbook content as a JSON array of blocks
+    pub content: Vec<serde_json::Value>,
+}
+
 #[cfg(test)]
 pub struct MemoryRunbookContentLoader {
-    runbooks: std::collections::HashMap<String, Vec<serde_json::Value>>,
+    runbooks: std::collections::HashMap<String, (Uuid, Vec<serde_json::Value>)>,
 }
 
 #[cfg(test)]
@@ -99,7 +109,9 @@ impl MemoryRunbookContentLoader {
     }
 
     pub fn with_runbook(mut self, id: &str, content: Vec<serde_json::Value>) -> Self {
-        self.runbooks.insert(id.to_string(), content);
+        // Generate a UUID for test runbooks, or parse if it's already a UUID
+        let uuid = Uuid::parse_str(id).unwrap_or_else(|_| Uuid::new_v4());
+        self.runbooks.insert(id.to_string(), (uuid, content));
         self
     }
 }
@@ -107,14 +119,18 @@ impl MemoryRunbookContentLoader {
 #[cfg(test)]
 #[async_trait]
 impl RunbookContentLoader for MemoryRunbookContentLoader {
-    async fn load_runbook_content(
+    async fn load_runbook(
         &self,
         runbook_ref: &SubRunbookRef,
-    ) -> Result<Vec<serde_json::Value>, RunbookLoadError> {
-        let id = runbook_ref.display_id();
-        self.runbooks
-            .get(&id)
+    ) -> Result<LoadedRunbook, RunbookLoadError> {
+        let display_id = runbook_ref.display_id();
+        let (id, content) = self
+            .runbooks
+            .get(&display_id)
             .cloned()
-            .ok_or_else(|| RunbookLoadError::NotFound { runbook_id: id })
+            .ok_or_else(|| RunbookLoadError::NotFound {
+                runbook_id: display_id,
+            })?;
+        Ok(LoadedRunbook { id, content })
     }
 }

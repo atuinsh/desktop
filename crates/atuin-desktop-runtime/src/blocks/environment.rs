@@ -35,9 +35,8 @@ impl BlockBehavior for Environment {
         _block_local_value_provider: Option<&dyn LocalValueProvider>,
     ) -> Result<Option<BlockContext>, Box<dyn std::error::Error + Send + Sync>> {
         let mut context = BlockContext::new();
-        // Skip blocks with empty names - they don't contribute to context
         if self.name.is_empty() {
-            return Ok(None);
+            return Err("Environment variable name cannot be empty".into());
         }
 
         if self.name.contains('=') || self.name.contains('\0') {
@@ -122,16 +121,15 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_empty_name_returns_empty_context() {
+    async fn test_empty_name_fails() {
         let env = Environment::builder()
             .id(Uuid::new_v4())
             .name("")
             .value("test_value")
             .build();
 
-        // Empty names are skipped gracefully, resulting in empty context
-        let context = ResolvedContext::from_block(&env, None).await.unwrap();
-        assert!(context.env_vars.is_empty());
+        let context = ResolvedContext::from_block(&env, None).await;
+        assert!(context.is_err());
     }
 
     #[tokio::test]
