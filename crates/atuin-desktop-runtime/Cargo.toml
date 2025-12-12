@@ -7,7 +7,7 @@ edition.workspace = true
 [dependencies]
 russh = "0.54"
 russh-keys = "0.49"
-russh-config = "0.54.0" # For SSH config parsing with glob support
+russh-config = "0.50.0" # For SSH config parsing with glob support
 whoami = "1.5" # For getting current username
 base64 = "0.22"
 sqlparser = { workspace = true }
