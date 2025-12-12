@@ -10,13 +10,13 @@ Using an [executable](../blocks/executable/ "mention") block, it is easy to inte
 
 <figure class="img-light">
   <picture>
-    <img src="./images/secrets-light.png" alt="Secrets">
+    <img src="../images/secrets-light.png" alt="Secrets">
   </picture>
   <figcaption></figcaption>
 </figure>
 <figure class="img-dark">
   <picture>
-    <img src="./images/secrets-dark.png" alt="Secrets">
+    <img src="../images/secrets-dark.png" alt="Secrets">
   </picture>
   <figcaption></figcaption>
 </figure>

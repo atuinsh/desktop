@@ -2,13 +2,13 @@
 
 <figure class="img-light">
   <picture>
-    <img src="../../images/script-basic-light.png" alt="Script block">
+    <img src="../../../images/script-basic-light.png" alt="Script block">
   </picture>
   <figcaption></figcaption>
 </figure>
 <figure class="img-dark">
   <picture>
-    <img src="../../images/script-basic-dark.png" alt="Script block">
+    <img src="../../../images/script-basic-dark.png" alt="Script block">
   </picture>
   <figcaption></figcaption>
 </figure>
@@ -41,13 +41,13 @@ Set the "output variable" name in the header of the block. You can refer to the 
 
 <figure class="img-light">
   <picture>
-    <img src="../../images/script-light.png" alt="Script block with variables">
+    <img src="../../../images/script-light.png" alt="Script block with variables">
   </picture>
   <figcaption></figcaption>
 </figure>
 <figure class="img-dark">
   <picture>
-    <img src="../../images/script-dark.png" alt="Script block with variables">
+    <img src="../../../images/script-dark.png" alt="Script block with variables">
   </picture>
   <figcaption></figcaption>
 </figure>

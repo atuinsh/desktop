@@ -2,13 +2,13 @@
 
 <figure class="img-light">
   <picture>
-    <img src="../../images/terminal-light.png" alt="Terminal block">
+    <img src="../../../images/terminal-light.png" alt="Terminal block">
   </picture>
   <figcaption></figcaption>
 </figure>
 <figure class="img-dark">
   <picture>
-    <img src="../../images/terminal-dark.png" alt="Terminal block">
+    <img src="../../../images/terminal-dark.png" alt="Terminal block">
   </picture>
   <figcaption></figcaption>
 </figure>

@@ -12,13 +12,13 @@ You can invite individual users to collaborate on your runbook using the Runbook
 
 <figure class="img-light">
   <picture>
-    <img src="../images/collab-light.png" alt="Collaborations">
+    <img src="../../images/collab-light.png" alt="Collaborations">
   </picture>
   <figcaption></figcaption>
 </figure>
 <figure class="img-dark">
   <picture>
-    <img src="../images/collab-dark.png" alt="Collaborations">
+    <img src="../../images/collab-dark.png" alt="Collaborations">
   </picture>
   <figcaption></figcaption>
 </figure>
@@ -32,13 +32,13 @@ If you collaborate with a number of people regularly, you may want to create an 
 
 <figure class="img-light">
   <picture>
-    <img src="../images/create-org-light.png" alt="Orgs">
+    <img src="../../images/create-org-light.png" alt="Orgs">
   </picture>
   <figcaption>Create an organization from the "Organizations" tab on your profile page</figcaption>
 </figure>
 <figure class="img-dark">
   <picture>
-    <img src="../images/create-org-dark.png" alt="Orgs">
+    <img src="../../images/create-org-dark.png" alt="Orgs">
   </picture>
   <figcaption>Create an organization from the "Organizations" tab on your profile page</figcaption>
 </figure>
