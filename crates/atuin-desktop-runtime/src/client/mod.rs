@@ -19,12 +19,12 @@ pub use bridge::{
     PromptOptionColor, PromptOptionVariant,
 };
 pub use hub::{
-    load_runbook_content_from_uri, HubClient, HubError, HubRunbook, HubSnapshot, HubSnapshotMeta,
-    ParsedUri,
+    load_runbook_from_id, load_runbook_from_uri, HubClient, HubError, HubRunbook, HubSnapshot,
+    HubSnapshotMeta, ParsedUri,
 };
 pub use local::LocalValueProvider;
 pub use message_channel::MessageChannel;
-pub use runbook_loader::{RunbookContentLoader, RunbookLoadError, SubRunbookRef};
+pub use runbook_loader::{LoadedRunbook, RunbookContentLoader, RunbookLoadError, SubRunbookRef};
 
 #[cfg(test)]
 pub use runbook_loader::MemoryRunbookContentLoader;

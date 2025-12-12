@@ -562,84 +562,87 @@ const SubRunbook = ({
         delay={1000}
       >
         <div className="flex flex-col w-full bg-white dark:bg-slate-800 rounded-lg p-3 border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow-md transition-all duration-200">
-          <span className="text-[10px] font-mono text-gray-400 dark:text-gray-500 mb-2">subrunbook</span>
-          <div className="flex flex-row items-start space-x-3">
-          <PlayButton
-            eventName="runbooks.block.execute"
-            eventProps={{ type: "sub-runbook" }}
-            onPlay={handleExecute}
-            onStop={execution.cancel}
-            isRunning={execution.isRunning}
-            cancellable={true}
-            disabled={!runbookId}
-            tooltip={!runbookId ? "Select a runbook first" : undefined}
-          />
-
-          <div className="flex-1 min-w-0">
-            <div className="flex gap-2">
-              <Button
-                ref={selectButtonRef}
-                variant="flat"
-                className="flex-1 justify-between bg-default-100"
-                onPress={handleSelectClick}
-                isDisabled={!isEditable}
-                endContent={<ChevronDownIcon className="h-4 w-4 shrink-0" />}
+          {/* Header row with block type name and settings */}
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[10px] font-mono text-gray-400 dark:text-gray-500">subrunbook</span>
+            <Tooltip content="Settings" delay={500}>
+              <button
+                onClick={() => setSettingsOpen(true)}
+                className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
               >
-                <span className="truncate text-sm">{runbookId ? runbookName : "Select Runbook"}</span>
-              </Button>
-              {runbookUri && availableTags.length > 0 && (
-                <Select
-                  size="md"
-                  className="w-28"
-                  selectedKeys={[getTagFromUri(runbookUri)]}
-                  onSelectionChange={(keys) => {
-                    const selectedTag = Array.from(keys)[0] as string;
-                    if (selectedTag) {
-                      onTagChange(selectedTag);
-                    }
-                  }}
-                  isDisabled={!isEditable}
-                  aria-label="Select tag"
-                  items={[{ key: 'latest', label: 'latest' }, ...availableTags.map(tag => ({ key: tag, label: tag }))]}
-                >
-                  {(item) => <SelectItem key={item.key}>{item.label}</SelectItem>}
-                </Select>
-              )}
-            </div>
-            {(runbookUri || runbookPath || status === "running" || status === "loading") && (
-              <div className="flex items-center justify-between mt-1">
-                <span className="text-[10px] font-mono text-gray-400 dark:text-gray-500 truncate flex items-center gap-1">
-                  {runbookUri ? (
-                    <GlobeIcon className="h-3 w-3 shrink-0" />
-                  ) : runbookPath ? (
-                    <FileIcon className="h-3 w-3 shrink-0" />
-                  ) : null}
-                  {runbookUri || runbookPath}
-                </span>
-                {(status === "running" || status === "loading") && (
-                  <span className="flex items-center gap-1.5 text-[10px] font-mono text-gray-400 dark:text-gray-500 whitespace-nowrap ml-2">
-                    <Spinner size="sm" classNames={{ wrapper: "h-3 w-3" }} />
-                    {status === "loading" ? "Loading..." : (
-                      <>
-                        {progress}
-                        {currentBlock && <span className="truncate max-w-[120px]">({currentBlock})</span>}
-                      </>
-                    )}
-                  </span>
-                )}
-              </div>
-            )}
+                <SettingsIcon className="h-4 w-4" />
+              </button>
+            </Tooltip>
           </div>
 
-          {/* Settings button */}
-          <Tooltip content="Settings" delay={500}>
-            <button
-              onClick={() => setSettingsOpen(true)}
-              className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-            >
-              <SettingsIcon className="h-4 w-4" />
-            </button>
-          </Tooltip>
+          {/* Main content row */}
+          <div className="flex flex-row items-start space-x-3">
+            <PlayButton
+              eventName="runbooks.block.execute"
+              eventProps={{ type: "sub-runbook" }}
+              onPlay={handleExecute}
+              onStop={execution.cancel}
+              isRunning={execution.isRunning}
+              cancellable={true}
+              disabled={!runbookId}
+              tooltip={!runbookId ? "Select a runbook first" : undefined}
+            />
+
+            <div className="flex-1 min-w-0">
+              <div className="flex gap-2">
+                <Button
+                  ref={selectButtonRef}
+                  variant="flat"
+                  className="flex-1 justify-between bg-default-100"
+                  onPress={handleSelectClick}
+                  isDisabled={!isEditable}
+                  endContent={<ChevronDownIcon className="h-4 w-4 shrink-0" />}
+                >
+                  <span className="truncate text-sm">{runbookId ? runbookName : "Select Runbook"}</span>
+                </Button>
+                {runbookUri && availableTags.length > 0 && (
+                  <Select
+                    size="md"
+                    className="w-28"
+                    selectedKeys={[getTagFromUri(runbookUri)]}
+                    onSelectionChange={(keys) => {
+                      const selectedTag = Array.from(keys)[0] as string;
+                      if (selectedTag) {
+                        onTagChange(selectedTag);
+                      }
+                    }}
+                    isDisabled={!isEditable}
+                    aria-label="Select tag"
+                    items={[{ key: 'latest', label: 'latest' }, ...availableTags.map(tag => ({ key: tag, label: tag }))]}
+                  >
+                    {(item) => <SelectItem key={item.key}>{item.label}</SelectItem>}
+                  </Select>
+                )}
+              </div>
+              {(runbookUri || runbookPath || status === "running" || status === "loading") && (
+                <div className="flex items-center justify-between mt-1">
+                  <span className="text-[10px] font-mono text-gray-400 dark:text-gray-500 truncate flex items-center gap-1">
+                    {runbookUri ? (
+                      <GlobeIcon className="h-3 w-3 shrink-0" />
+                    ) : runbookPath ? (
+                      <FileIcon className="h-3 w-3 shrink-0" />
+                    ) : null}
+                    {runbookUri || runbookPath}
+                  </span>
+                  {(status === "running" || status === "loading") && (
+                    <span className="flex items-center gap-1.5 text-[10px] font-mono text-gray-400 dark:text-gray-500 whitespace-nowrap ml-2">
+                      <Spinner size="sm" classNames={{ wrapper: "h-3 w-3" }} />
+                      {status === "loading" ? "Loading..." : (
+                        <>
+                          {progress}
+                          {currentBlock && <span className="truncate max-w-[120px]">({currentBlock})</span>}
+                        </>
+                      )}
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </Tooltip>

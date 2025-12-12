@@ -124,13 +124,14 @@ impl Document {
         if self.blocks.is_empty() {
             self.blocks = Vec::with_capacity(new_blocks.len());
             for block in new_blocks {
-                let context = self
-                    .context_storage
-                    .as_ref()
-                    .unwrap()
-                    .load(self.id.as_str(), &block.id())
-                    .await
-                    .unwrap_or(None);
+                let context = if let Some(storage) = self.context_storage.as_ref() {
+                    storage
+                        .load(self.id.as_str(), &block.id())
+                        .await
+                        .unwrap_or(None)
+                } else {
+                    None
+                };
                 let block_state = block.create_state();
                 self.blocks.push(DocumentBlock::new(
                     block,

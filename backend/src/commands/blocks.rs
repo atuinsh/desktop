@@ -94,13 +94,13 @@ impl WorkspaceRunbookContentLoader {
         }
     }
 
-    /// Load runbook content from hub by URI (user/runbook or user/runbook:tag)
+    /// Load runbook from hub by URI (user/runbook or user/runbook:tag)
     async fn load_from_uri(
         &self,
         uri: &str,
         display_id: &str,
-    ) -> Result<Vec<serde_json::Value>, atuin_desktop_runtime::client::RunbookLoadError> {
-        atuin_desktop_runtime::client::load_runbook_content_from_uri(
+    ) -> Result<atuin_desktop_runtime::client::LoadedRunbook, atuin_desktop_runtime::client::RunbookLoadError> {
+        atuin_desktop_runtime::client::load_runbook_from_uri(
             &self.hub_client,
             uri,
             display_id,
@@ -108,12 +108,12 @@ impl WorkspaceRunbookContentLoader {
         .await
     }
 
-    /// Load runbook content from workspace by ID
+    /// Load runbook from workspace by ID
     async fn load_from_workspace(
         &self,
         id: &str,
         display_id: &str,
-    ) -> Result<Vec<serde_json::Value>, atuin_desktop_runtime::client::RunbookLoadError> {
+    ) -> Result<atuin_desktop_runtime::client::LoadedRunbook, atuin_desktop_runtime::client::RunbookLoadError> {
         use atuin_desktop_runtime::client::RunbookLoadError;
 
         let mut manager = self.workspaces.lock().await;
@@ -136,6 +136,12 @@ impl WorkspaceRunbookContentLoader {
             }
         })?;
 
+        // Parse the runbook ID as UUID
+        let runbook_uuid = Uuid::parse_str(id).map_err(|e| RunbookLoadError::LoadFailed {
+            runbook_id: display_id.to_string(),
+            message: format!("Invalid runbook ID: {}", e),
+        })?;
+
         let content = runbook
             .file
             .internal
@@ -144,16 +150,19 @@ impl WorkspaceRunbookContentLoader {
             .cloned()
             .unwrap_or_default();
 
-        Ok(content)
+        Ok(atuin_desktop_runtime::client::LoadedRunbook {
+            id: runbook_uuid,
+            content,
+        })
     }
 }
 
 #[async_trait]
 impl atuin_desktop_runtime::client::RunbookContentLoader for WorkspaceRunbookContentLoader {
-    async fn load_runbook_content(
+    async fn load_runbook(
         &self,
         runbook_ref: &atuin_desktop_runtime::client::SubRunbookRef,
-    ) -> Result<Vec<serde_json::Value>, atuin_desktop_runtime::client::RunbookLoadError> {
+    ) -> Result<atuin_desktop_runtime::client::LoadedRunbook, atuin_desktop_runtime::client::RunbookLoadError> {
         use atuin_desktop_runtime::client::RunbookLoadError;
 
         let display_id = runbook_ref.display_id();
