@@ -215,6 +215,61 @@ impl Default for HubClient {
     }
 }
 
+/// Load runbook content from a hub URI (user/runbook or user/runbook:tag)
+///
+/// This is a convenience function that handles URI parsing, API resolution,
+/// and content extraction in one call. Used by both desktop and CLI loaders.
+pub async fn load_runbook_content_from_uri(
+    client: &HubClient,
+    uri: &str,
+    display_id: &str,
+) -> Result<Vec<serde_json::Value>, super::RunbookLoadError> {
+    use super::RunbookLoadError;
+
+    let parsed = ParsedUri::parse(uri).ok_or_else(|| RunbookLoadError::LoadFailed {
+        runbook_id: display_id.to_string(),
+        message: format!(
+            "Invalid hub URI format: '{}'. Expected 'user/runbook' or 'user/runbook:tag'",
+            uri
+        ),
+    })?;
+
+    // Default to "latest" tag if none specified
+    let tag = parsed.tag.as_deref().or(Some("latest"));
+    tracing::debug!(
+        "Fetching runbook from hub: {} (tag: {:?})",
+        parsed.nwo,
+        tag
+    );
+
+    let (runbook, snapshot) = client
+        .resolve_by_nwo(&parsed.nwo, tag)
+        .await
+        .map_err(|e| match e {
+            HubError::NotFound(_) => RunbookLoadError::NotFound {
+                runbook_id: display_id.to_string(),
+            },
+            _ => RunbookLoadError::LoadFailed {
+                runbook_id: display_id.to_string(),
+                message: e.to_string(),
+            },
+        })?;
+
+    // Prefer snapshot content if available, otherwise use runbook content
+    if let Some(snapshot) = snapshot {
+        tracing::debug!("Using snapshot '{}' content", snapshot.tag);
+        Ok(snapshot.content)
+    } else if let Some(content) = runbook.content {
+        tracing::debug!("Using runbook content (no snapshot)");
+        Ok(content)
+    } else {
+        Err(RunbookLoadError::LoadFailed {
+            runbook_id: display_id.to_string(),
+            message: "Runbook has no content. You may need to specify a tag.".to_string(),
+        })
+    }
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum HubError {
     #[error("Network error: {0}")]

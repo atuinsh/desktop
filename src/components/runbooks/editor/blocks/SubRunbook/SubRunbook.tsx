@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
-import { BookOpenIcon, ChevronDownIcon, GlobeIcon, FileIcon, AlertCircleIcon } from "lucide-react";
-import { Button, Input, Tooltip, Select, SelectItem, Spinner } from "@heroui/react";
+import { BookOpenIcon, ChevronDownIcon, GlobeIcon, FileIcon, AlertCircleIcon, SettingsIcon } from "lucide-react";
+import { Button, Input, Tooltip, Select, SelectItem, Spinner, Switch, Modal, ModalContent, ModalHeader, ModalBody } from "@heroui/react";
 import { cn, exportPropMatter } from "@/lib/utils";
 import { createReactBlockSpec } from "@blocknote/react";
 import useDocumentBridge, { useBlockExecution, useBlockState } from "@/lib/hooks/useDocumentBridge";
@@ -137,9 +137,11 @@ interface SubRunbookProps {
   runbookName: string;
   runbookPath: string;
   runbookUri: string;
+  exportEnv: boolean;
   isEditable: boolean;
   onRunbookSelect: (selection: RunbookSelection) => void;
   onTagChange: (tag: string) => void;
+  onExportEnvChange: (exportEnv: boolean) => void;
   currentRunbookId: string | null;
 }
 
@@ -197,19 +199,31 @@ function RunbookSelector({
 
     setHubLookup({ status: "loading" });
 
+    // Track if this effect is still current (not stale from a newer query)
+    let isCancelled = false;
+
     const timeoutId = setTimeout(async () => {
       try {
         const result = await resolveRunbookByNwo(parsed.nwo, parsed.tag || undefined);
-        setHubLookup({ status: "found", data: result });
+        // Only update state if this request is still relevant
+        if (!isCancelled) {
+          setHubLookup({ status: "found", data: result });
+        }
       } catch (err: any) {
-        const message = err?.code === 404
-          ? "Runbook not found"
-          : err?.message || "Failed to fetch";
-        setHubLookup({ status: "error", message });
+        // Only update state if this request is still relevant
+        if (!isCancelled) {
+          const message = err?.code === 404
+            ? "Runbook not found"
+            : err?.message || "Failed to fetch";
+          setHubLookup({ status: "error", message });
+        }
       }
     }, 300);
 
-    return () => clearTimeout(timeoutId);
+    return () => {
+      isCancelled = true;
+      clearTimeout(timeoutId);
+    };
   }, [query, queryLooksLikeHubUri]);
 
   function parseHubUri(uri: string): { nwo: string; tag: string | null } | null {
@@ -478,14 +492,17 @@ const SubRunbook = ({
   runbookName,
   runbookPath,
   runbookUri,
+  exportEnv,
   isEditable,
   onRunbookSelect,
   onTagChange,
+  onExportEnvChange,
   currentRunbookId,
 }: SubRunbookProps) => {
   const [selectorVisible, setSelectorVisible] = useState(false);
   const [selectorPosition, setSelectorPosition] = useState({ x: 0, y: 0 });
   const [availableTags, setAvailableTags] = useState<string[]>([]);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const selectButtonRef = useRef<HTMLButtonElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -613,6 +630,16 @@ const SubRunbook = ({
               </div>
             )}
           </div>
+
+          {/* Settings button */}
+          <Tooltip content="Settings" delay={500}>
+            <button
+              onClick={() => setSettingsOpen(true)}
+              className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+            >
+              <SettingsIcon className="h-4 w-4" />
+            </button>
+          </Tooltip>
           </div>
         </div>
       </Tooltip>
@@ -622,6 +649,35 @@ const SubRunbook = ({
           {getStatusLabel(status)}
         </div>
       )}
+
+      {/* Settings Modal */}
+      <Modal
+        isOpen={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        size="sm"
+      >
+        <ModalContent>
+          <ModalHeader className="text-base font-medium">Sub-Runbook Settings</ModalHeader>
+          <ModalBody className="pb-6">
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex flex-col">
+                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Export environment variables
+                </span>
+                <span className="text-xs text-gray-500 dark:text-gray-400">
+                  Merge env vars from the sub-runbook into the parent
+                </span>
+              </div>
+              <Switch
+                size="sm"
+                isSelected={exportEnv}
+                onValueChange={onExportEnvChange}
+                isDisabled={!isEditable}
+              />
+            </div>
+          </ModalBody>
+        </ModalContent>
+      </Modal>
 
       <RunbookSelector
         isVisible={selectorVisible}
@@ -646,12 +702,14 @@ export default createReactBlockSpec(
       runbookPath: { default: "" },  // File path for CLI use
       // Display name
       runbookName: { default: "" },
+      // Settings
+      exportEnv: { default: false }, // Export env vars to parent runbook
     },
     content: "none",
   },
   {
     toExternalHTML: ({ block }) => {
-      const propMatter = exportPropMatter("sub-runbook", block.props, ["name", "runbookId", "runbookUri", "runbookPath", "runbookName"]);
+      const propMatter = exportPropMatter("sub-runbook", block.props, ["name", "runbookId", "runbookUri", "runbookPath", "runbookName", "exportEnv"]);
       return (
         <div>
           <pre lang="sub-runbook">{propMatter}</pre>
@@ -694,6 +752,16 @@ export default createReactBlockSpec(
         });
       };
 
+      const onExportEnvChange = (exportEnv: boolean): void => {
+        editor.updateBlock(block, {
+          // @ts-ignore
+          props: {
+            ...block.props,
+            exportEnv,
+          },
+        });
+      };
+
       return (
         <SubRunbook
           id={block.id}
@@ -701,9 +769,11 @@ export default createReactBlockSpec(
           runbookName={block.props.runbookName}
           runbookPath={block.props.runbookPath}
           runbookUri={block.props.runbookUri}
+          exportEnv={block.props.exportEnv}
           isEditable={editor.isEditable}
           onRunbookSelect={onRunbookSelect}
           onTagChange={onTagChange}
+          onExportEnvChange={onExportEnvChange}
           currentRunbookId={currentRunbookId}
         />
       );

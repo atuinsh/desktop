@@ -18,7 +18,10 @@ pub use bridge::{
     ClientPrompt, ClientPromptResult, DocumentBridgeMessage, PromptIcon, PromptInput, PromptOption,
     PromptOptionColor, PromptOptionVariant,
 };
-pub use hub::{HubClient, HubError, HubRunbook, HubSnapshot, HubSnapshotMeta, ParsedUri};
+pub use hub::{
+    load_runbook_content_from_uri, HubClient, HubError, HubRunbook, HubSnapshot, HubSnapshotMeta,
+    ParsedUri,
+};
 pub use local::LocalValueProvider;
 pub use message_channel::MessageChannel;
 pub use runbook_loader::{RunbookContentLoader, RunbookLoadError, SubRunbookRef};
