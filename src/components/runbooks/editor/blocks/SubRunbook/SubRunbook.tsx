@@ -13,19 +13,14 @@ import WorkspaceManager from "@/lib/workspaces/manager";
 import { RemoteRunbook } from "@/state/models";
 import { resolveRunbookByNwo, ResolvedRunbook } from "@/api/runbooks";
 
-// Create a search index instance
 const searchIndex = new RunbookIndexService();
 
-// Helper to calculate relative path from one runbook to another
 function getRelativePath(fromPath: string, toPath: string): string {
-  // Split paths into segments
   const fromParts = fromPath.split('/').filter(Boolean);
   const toParts = toPath.split('/').filter(Boolean);
 
-  // Remove filename from source path to get directory
   fromParts.pop();
 
-  // Find common prefix length
   let commonLength = 0;
   while (
     commonLength < fromParts.length &&
@@ -35,14 +30,11 @@ function getRelativePath(fromPath: string, toPath: string): string {
     commonLength++;
   }
 
-  // Build relative path: ".." for each directory we need to go up
   const upCount = fromParts.length - commonLength;
   const relativeParts = Array(upCount).fill('..');
 
-  // Add the path from common ancestor to target
   relativeParts.push(...toParts.slice(commonLength));
 
-  // If in same directory, use "./"
   if (relativeParts.length === 0) {
     return './' + toParts[toParts.length - 1];
   }
@@ -50,7 +42,6 @@ function getRelativePath(fromPath: string, toPath: string): string {
   return relativeParts.join('/');
 }
 
-// Helper to get runbook path from workspace
 function getRunbookPathFromWorkspace(runbookId: string): string | null {
   const manager = WorkspaceManager.getInstance();
   const workspaces = manager.getWorkspaces();
@@ -64,7 +55,6 @@ function getRunbookPathFromWorkspace(runbookId: string): string | null {
   return null;
 }
 
-// Helper to get hub URI and available tags from online runbook's remoteInfo
 function getHubInfoFromRunbook(runbook: Runbook): { uri: string | null; tags: string[] } {
   if (!runbook.isOnline()) {
     return { uri: null, tags: [] };
@@ -81,26 +71,22 @@ function getHubInfoFromRunbook(runbook: Runbook): { uri: string | null; tags: st
     const tags = remoteInfo.snapshots?.map((s) => s.tag) || [];
     return { uri, tags };
   } catch {
-    // Failed to parse remoteInfo
+    return { uri: null, tags: [] };
   }
-  return { uri: null, tags: [] };
 }
 
-// Helper to extract tag from URI (e.g., "ellie/foo:v1" -> "v1")
 function getTagFromUri(uri: string): string {
   const colonIndex = uri.lastIndexOf(':');
   if (colonIndex === -1) return 'latest';
   return uri.substring(colonIndex + 1) || 'latest';
 }
 
-// Helper to get base URI without tag (e.g., "ellie/foo:v1" -> "ellie/foo")
 function getBaseUri(uri: string): string {
   const colonIndex = uri.lastIndexOf(':');
   if (colonIndex === -1) return uri;
   return uri.substring(0, colonIndex);
 }
 
-// SubRunbook state from backend
 interface SubRunbookState {
   totalBlocks: number;
   completedBlocks: number;
@@ -157,21 +143,16 @@ interface SubRunbookProps {
   currentRunbookId: string | null;
 }
 
-// Helper to validate hub URI format
 function isValidHubUri(uri: string): boolean {
-  // Matches: user/slug, user/slug:tag, or with optional hub.atuin.sh prefix
   const cleanUri = uri
     .trim()
     .replace(/^https?:\/\//, '')
     .replace(/^hub\.atuin\.sh\//, '');
 
-  // Basic format: owner/slug or owner/slug:tag
   const pattern = /^[a-zA-Z0-9_-]+\/[a-zA-Z0-9_-]+(?::[a-zA-Z0-9._-]+)?$/;
   return pattern.test(cleanUri);
 }
 
-
-// Hub lookup result state
 type HubLookupState =
   | { status: "idle" }
   | { status: "loading" }
@@ -200,17 +181,14 @@ function RunbookSelector({
   const [hubLookup, setHubLookup] = useState<HubLookupState>({ status: "idle" });
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Check if the query looks like a hub URI
   const queryLooksLikeHubUri = isValidHubUri(query);
 
-  // Debounced hub lookup when query looks like a URI
   useEffect(() => {
     if (!queryLooksLikeHubUri) {
       setHubLookup({ status: "idle" });
       return;
     }
 
-    // Parse the URI to get nwo and tag
     const parsed = parseHubUri(query);
     if (!parsed) {
       setHubLookup({ status: "idle" });
@@ -229,12 +207,11 @@ function RunbookSelector({
           : err?.message || "Failed to fetch";
         setHubLookup({ status: "error", message });
       }
-    }, 300); // 300ms debounce
+    }, 300);
 
     return () => clearTimeout(timeoutId);
   }, [query, queryLooksLikeHubUri]);
 
-  // Helper to parse hub URI into nwo and tag
   function parseHubUri(uri: string): { nwo: string; tag: string | null } | null {
     const cleanUri = uri
       .trim()
@@ -251,19 +228,15 @@ function RunbookSelector({
     };
   }
 
-  // Helper to select a runbook and calculate relative path or URI
   const selectRunbook = (runbook: Runbook) => {
     const runbookName = runbook.name || "Untitled Runbook";
     let relativePath: string | null = null;
     let runbookUri: string | null = null;
 
     if (runbook.isOnline()) {
-      // For online runbooks, get the hub URI (owner/slug) from remoteInfo
       const hubInfo = getHubInfoFromRunbook(runbook);
-      // Default to latest tag
       runbookUri = hubInfo.uri ? `${hubInfo.uri}:latest` : null;
     } else {
-      // For offline (file-based) runbooks, calculate relative path
       const selectedPath = getRunbookPathFromWorkspace(runbook.id);
       if (selectedPath && currentRunbookId) {
         const currentPath = getRunbookPathFromWorkspace(currentRunbookId);
@@ -281,12 +254,10 @@ function RunbookSelector({
     });
   };
 
-  // Handle selecting the hub runbook
   const selectHubRunbook = () => {
     if (hubLookup.status !== "found") return;
 
     const { runbook, snapshot } = hubLookup.data;
-    // Build URI with tag if we have a snapshot
     const tag = snapshot?.tag || "latest";
     const uri = `${runbook.nwo}:${tag}`;
 
@@ -298,14 +269,10 @@ function RunbookSelector({
     });
   };
 
-  // Whether we should show the hub result row
   const showHubResult = queryLooksLikeHubUri && hubLookup.status !== "idle";
-
-  // Total selectable items (hub result + runbooks)
   const hubResultSelectable = hubLookup.status === "found";
   const totalItems = (showHubResult && hubResultSelectable ? 1 : 0) + filteredRunbooks.length;
 
-  // Load runbooks when popup opens
   useEffect(() => {
     if (isVisible) {
       const loadRunbooks = async () => {
@@ -317,7 +284,6 @@ function RunbookSelector({
         setRunbooks(allRunbooks);
         searchIndex.bulkUpdateRunbooks(allRunbooks);
 
-        // Show recent runbooks initially
         const recentRunbooks = allRunbooks
           .slice()
           .sort((a: Runbook, b: Runbook) => b.updated.getTime() - a.updated.getTime())
@@ -335,7 +301,6 @@ function RunbookSelector({
     }
   }, [isVisible]);
 
-  // Handle search
   useEffect(() => {
     if (!query.trim()) {
       const recentRunbooks = runbooks
@@ -357,7 +322,6 @@ function RunbookSelector({
     });
   }, [query, runbooks]);
 
-  // Handle keyboard navigation
   useEffect(() => {
     if (!isVisible) return;
 
@@ -373,11 +337,9 @@ function RunbookSelector({
           break;
         case "Enter":
           e.preventDefault();
-          // If hub result is showing and selected
           if (hubResultSelectable && selectedIndex === 0) {
             selectHubRunbook();
           } else {
-            // Adjust index if hub result is present
             const runbookIndex = hubResultSelectable ? selectedIndex - 1 : selectedIndex;
             if (filteredRunbooks[runbookIndex]) {
               selectRunbook(filteredRunbooks[runbookIndex]);
@@ -395,7 +357,6 @@ function RunbookSelector({
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [isVisible, filteredRunbooks, selectedIndex, onSelect, onClose, hubResultSelectable, totalItems, hubLookup]);
 
-  // Close on click outside
   useEffect(() => {
     if (!isVisible) return;
 
@@ -433,7 +394,6 @@ function RunbookSelector({
       </div>
 
       <div className="max-h-60 overflow-y-auto">
-        {/* Hub lookup result - shown when query looks like a URI */}
         {showHubResult && (
           <>
             {hubLookup.status === "loading" && (
@@ -475,14 +435,12 @@ function RunbookSelector({
           </>
         )}
 
-        {/* Local runbook results */}
         {filteredRunbooks.length === 0 && !showHubResult ? (
           <div className="p-3 text-sm text-gray-500 dark:text-gray-400 text-center">
             No runbooks found
           </div>
         ) : (
           filteredRunbooks.map((runbook, index) => {
-            // Adjust index if hub result is selectable
             const itemIndex = hubResultSelectable ? index + 1 : index;
             return (
               <div
@@ -534,7 +492,6 @@ const SubRunbook = ({
   const execution = useBlockExecution(id);
   const state = useBlockState<SubRunbookState>(id);
 
-  // Fetch available tags when runbookId or runbookUri changes (for online runbooks)
   useEffect(() => {
     if (!runbookId) {
       setAvailableTags([]);
@@ -590,7 +547,6 @@ const SubRunbook = ({
         <div className="flex flex-col w-full bg-white dark:bg-slate-800 rounded-lg p-3 border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow-md transition-all duration-200">
           <span className="text-[10px] font-mono text-gray-400 dark:text-gray-500 mb-2">subrunbook</span>
           <div className="flex flex-row items-start space-x-3">
-          {/* Play button */}
           <PlayButton
             eventName="runbooks.block.execute"
             eventProps={{ type: "sub-runbook" }}
@@ -602,7 +558,6 @@ const SubRunbook = ({
             tooltip={!runbookId ? "Select a runbook first" : undefined}
           />
 
-          {/* Runbook selector button */}
           <div className="flex-1 min-w-0">
             <div className="flex gap-2">
               <Button
@@ -615,7 +570,6 @@ const SubRunbook = ({
               >
                 <span className="truncate text-sm">{runbookId ? runbookName : "Select Runbook"}</span>
               </Button>
-              {/* Tag selector - only show for online runbooks with available tags */}
               {runbookUri && availableTags.length > 0 && (
                 <Select
                   size="md"
@@ -635,7 +589,6 @@ const SubRunbook = ({
                 </Select>
               )}
             </div>
-            {/* Show URI or path reference and progress */}
             {(runbookUri || runbookPath || status === "running" || status === "loading") && (
               <div className="flex items-center justify-between mt-1">
                 <span className="text-[10px] font-mono text-gray-400 dark:text-gray-500 truncate flex items-center gap-1">
@@ -646,7 +599,6 @@ const SubRunbook = ({
                   ) : null}
                   {runbookUri || runbookPath}
                 </span>
-                {/* Progress indicator */}
                 {(status === "running" || status === "loading") && (
                   <span className="flex items-center gap-1.5 text-[10px] font-mono text-gray-400 dark:text-gray-500 whitespace-nowrap ml-2">
                     <Spinner size="sm" classNames={{ wrapper: "h-3 w-3" }} />
@@ -665,14 +617,12 @@ const SubRunbook = ({
         </div>
       </Tooltip>
 
-      {/* Error message */}
       {isErrorStatus(status) && (
         <div className="mt-2 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded p-2">
           {getStatusLabel(status)}
         </div>
       )}
 
-      {/* Runbook selector popup */}
       <RunbookSelector
         isVisible={selectorVisible}
         position={selectorPosition}
