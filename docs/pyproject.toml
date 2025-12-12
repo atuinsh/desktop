@@ -9,4 +9,5 @@ dependencies = [
     "mkdocs-glightbox",
     "mkdocs-git-revision-date-localized-plugin",
     "mkdocs-multirepo-plugin @ git+https://github.com/atuinsh/mkdocs-multirepo-plugin@mkt/imported_repo",
+    "mkdocs-redirects>=1.2.2",
 ]
