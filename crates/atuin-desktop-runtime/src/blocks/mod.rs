@@ -27,6 +27,7 @@ pub(crate) mod script;
 pub(crate) mod sql_block;
 pub(crate) mod sqlite;
 pub(crate) mod ssh_connect;
+pub(crate) mod sub_runbook;
 pub(crate) mod terminal;
 pub(crate) mod var;
 pub(crate) mod var_display;
@@ -158,6 +159,7 @@ pub enum Block {
     Editor(editor::Editor),
     Dropdown(dropdown::Dropdown),
     Pause(pause::Pause),
+    SubRunbook(sub_runbook::SubRunbook),
 }
 
 impl Block {
@@ -186,6 +188,7 @@ impl Block {
             Block::Editor(editor) => editor.id,
             Block::Dropdown(dropdown) => dropdown.id,
             Block::Pause(pause) => pause.id,
+            Block::SubRunbook(sub_runbook) => sub_runbook.id,
         }
     }
 
@@ -215,6 +218,7 @@ impl Block {
             Block::VarDisplay(_) => "".to_string(),
             Block::MarkdownRender(_) => "".to_string(),
             Block::Pause(_) => "".to_string(),
+            Block::SubRunbook(sub_runbook) => sub_runbook.name.clone(),
         }
     }
 
@@ -279,6 +283,9 @@ impl Block {
                 block_data,
             )?)),
             "pause" => Ok(Block::Pause(pause::Pause::from_document(block_data)?)),
+            "sub-runbook" => Ok(Block::SubRunbook(sub_runbook::SubRunbook::from_document(
+                block_data,
+            )?)),
             _ => Err(format!("Unknown block type: {}", block_type)),
         }
     }
@@ -399,6 +406,11 @@ impl Block {
                     .passive_context(resolver, block_local_value_provider)
                     .await
             }
+            Block::SubRunbook(sub_runbook) => {
+                sub_runbook
+                    .passive_context(resolver, block_local_value_provider)
+                    .await
+            }
         }
     }
 
@@ -426,6 +438,7 @@ impl Block {
             Block::Editor(editor) => editor.create_state(),
             Block::Dropdown(dropdown) => dropdown.create_state(),
             Block::Pause(pause) => pause.create_state(),
+            Block::SubRunbook(sub_runbook) => sub_runbook.create_state(),
         }
     }
 
@@ -462,6 +475,7 @@ impl Block {
             Block::Editor(editor) => editor.execute(context).await,
             Block::Dropdown(dropdown) => dropdown.execute(context).await,
             Block::Pause(pause) => pause.execute(context).await,
+            Block::SubRunbook(sub_runbook) => sub_runbook.execute(context).await,
         }
     }
 }

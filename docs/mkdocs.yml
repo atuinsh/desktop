@@ -31,6 +31,7 @@ nav:
           - "Terminal": blocks/executable/terminal.md
           - "Variable": blocks/executable/variable.md
           - "Pause": blocks/executable/pause.md
+          - "Sub-Runbook": blocks/executable/sub-runbook.md
       - "Databases":
           - blocks/databases/index.md
           - "ClickHouse": blocks/databases/clickhouse.md

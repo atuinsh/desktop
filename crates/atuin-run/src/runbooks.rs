@@ -22,11 +22,17 @@ pub enum RunbookError {
 pub struct Runbook {
     pub id: Uuid,
     pub content: Vec<serde_json::Value>,
+    /// Source path of the runbook file (if loaded from a file)
+    pub source_path: Option<PathBuf>,
 }
 
 impl Runbook {
-    pub fn new(id: Uuid, content: Vec<serde_json::Value>) -> Self {
-        Self { id, content }
+    pub fn new(id: Uuid, content: Vec<serde_json::Value>, source_path: Option<PathBuf>) -> Self {
+        Self {
+            id,
+            content,
+            source_path,
+        }
     }
 }
 
@@ -78,5 +84,5 @@ fn load_runbook_from_json_value(
             )
         })?;
 
-    Ok(Runbook::new(id, content))
+    Ok(Runbook::new(id, content, Some(path.as_ref().to_path_buf())))
 }

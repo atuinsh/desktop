@@ -76,6 +76,145 @@ impl LocalValueProvider for KvBlockLocalValueProvider {
     }
 }
 
+/// Runbook content loader that uses the workspace manager to load runbook content,
+/// with fallback to Atuin Hub for remote runbooks.
+#[derive(Clone)]
+struct WorkspaceRunbookContentLoader {
+    workspaces: Arc<tokio::sync::Mutex<Option<crate::workspaces::manager::WorkspaceManager>>>,
+    hub_client: Arc<atuin_desktop_runtime::client::HubClient>,
+}
+
+impl WorkspaceRunbookContentLoader {
+    pub fn new(
+        workspaces: Arc<tokio::sync::Mutex<Option<crate::workspaces::manager::WorkspaceManager>>>,
+    ) -> Self {
+        Self {
+            workspaces,
+            hub_client: Arc::new(atuin_desktop_runtime::client::HubClient::new()),
+        }
+    }
+
+    /// Load runbook content from hub by URI (user/runbook or user/runbook:tag)
+    async fn load_from_uri(
+        &self,
+        uri: &str,
+        display_id: &str,
+    ) -> Result<Vec<serde_json::Value>, atuin_desktop_runtime::client::RunbookLoadError> {
+        use atuin_desktop_runtime::client::{HubError, ParsedUri, RunbookLoadError};
+
+        let parsed = ParsedUri::parse(uri).ok_or_else(|| RunbookLoadError::LoadFailed {
+            runbook_id: display_id.to_string(),
+            message: format!(
+                "Invalid hub URI format: '{}'. Expected 'user/runbook' or 'user/runbook:tag'",
+                uri
+            ),
+        })?;
+
+        // Default to "latest" tag if none specified
+        let tag = parsed.tag.as_deref().or(Some("latest"));
+        log::debug!(
+            "Fetching runbook from hub: {} (tag: {:?})",
+            parsed.nwo,
+            tag
+        );
+
+        let (runbook, snapshot) = self
+            .hub_client
+            .resolve_by_nwo(&parsed.nwo, tag)
+            .await
+            .map_err(|e| match e {
+                HubError::NotFound(_) => RunbookLoadError::NotFound {
+                    runbook_id: display_id.to_string(),
+                },
+                _ => RunbookLoadError::LoadFailed {
+                    runbook_id: display_id.to_string(),
+                    message: e.to_string(),
+                },
+            })?;
+
+        // Prefer snapshot content if available, otherwise use runbook content
+        if let Some(snapshot) = snapshot {
+            log::debug!("Using snapshot '{}' content", snapshot.tag);
+            Ok(snapshot.content)
+        } else if let Some(content) = runbook.content {
+            log::debug!("Using runbook content (no snapshot)");
+            Ok(content)
+        } else {
+            Err(RunbookLoadError::LoadFailed {
+                runbook_id: display_id.to_string(),
+                message: "Runbook has no content. You may need to specify a tag.".to_string(),
+            })
+        }
+    }
+
+    /// Load runbook content from workspace by ID
+    async fn load_from_workspace(
+        &self,
+        id: &str,
+        display_id: &str,
+    ) -> Result<Vec<serde_json::Value>, atuin_desktop_runtime::client::RunbookLoadError> {
+        use atuin_desktop_runtime::client::RunbookLoadError;
+
+        let mut manager = self.workspaces.lock().await;
+        let manager = manager.as_mut().ok_or_else(|| RunbookLoadError::LoadFailed {
+            runbook_id: display_id.to_string(),
+            message: "Workspace manager not initialized".to_string(),
+        })?;
+
+        let runbook = manager.get_runbook(id).await.map_err(|e| {
+            let err_str = e.to_string();
+            if err_str.contains("not found") || err_str.contains("NotFound") {
+                RunbookLoadError::NotFound {
+                    runbook_id: display_id.to_string(),
+                }
+            } else {
+                RunbookLoadError::LoadFailed {
+                    runbook_id: display_id.to_string(),
+                    message: err_str,
+                }
+            }
+        })?;
+
+        let content = runbook
+            .file
+            .internal
+            .content
+            .as_array()
+            .cloned()
+            .unwrap_or_default();
+
+        Ok(content)
+    }
+}
+
+#[async_trait]
+impl atuin_desktop_runtime::client::RunbookContentLoader for WorkspaceRunbookContentLoader {
+    async fn load_runbook_content(
+        &self,
+        runbook_ref: &atuin_desktop_runtime::client::SubRunbookRef,
+    ) -> Result<Vec<serde_json::Value>, atuin_desktop_runtime::client::RunbookLoadError> {
+        use atuin_desktop_runtime::client::RunbookLoadError;
+
+        let display_id = runbook_ref.display_id();
+
+        // 1. Try URI first (remote hub runbook)
+        if let Some(uri) = &runbook_ref.uri {
+            return self.load_from_uri(uri, &display_id).await;
+        }
+
+        // 2. Try ID (workspace lookup)
+        if let Some(id) = &runbook_ref.id {
+            return self.load_from_workspace(id, &display_id).await;
+        }
+
+        // No reference provided
+        Err(RunbookLoadError::LoadFailed {
+            runbook_id: display_id,
+            message: "No runbook reference provided (need uri or id)".to_string(),
+        })
+    }
+}
+
 #[tauri::command]
 pub async fn execute_block(
     state: State<'_, AtuinState>,
@@ -196,12 +335,17 @@ pub async fn open_document(
     )
     .await
     .map_err(|e| format!("Failed to create context storage: {}", e))?;
+
+    // Create runbook loader for sub-runbook support
+    let runbook_loader = Arc::new(WorkspaceRunbookContentLoader::new(state.workspaces.clone()));
+
     let document_handle = DocumentHandle::new(
         document_id.clone(),
         event_bus,
         document_bridge,
         Some(Box::new(KvBlockLocalValueProvider::new(app.clone()))),
         Some(Box::new(context_storage)),
+        Some(runbook_loader),
     );
 
     document_handle
@@ -565,6 +709,37 @@ pub async fn stop_serial_execution(
             .map_err(|_| "Failed to send stop signal to serial execution")?;
     }
     Ok(())
+}
+
+/// Get the content of a runbook by ID for sub-runbook execution
+///
+/// This command loads the runbook content from the workspace manager.
+/// It's used by the SubRunbook block to load referenced runbooks.
+#[tauri::command]
+pub async fn get_runbook_content(
+    state: State<'_, AtuinState>,
+    runbook_id: String,
+) -> Result<Vec<serde_json::Value>, String> {
+    let mut manager = state.workspaces.lock().await;
+    let manager = manager
+        .as_mut()
+        .ok_or("Workspace manager not initialized")?;
+
+    let runbook = manager
+        .get_runbook(&runbook_id)
+        .await
+        .map_err(|e| format!("Failed to load runbook: {}", e))?;
+
+    // Extract content from the runbook - it's a serde_json::Value array
+    let content = runbook
+        .file
+        .internal
+        .content
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+
+    Ok(content)
 }
 
 async fn execute_single_block(

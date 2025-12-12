@@ -23,6 +23,7 @@ import Script from "./blocks/Script/Script";
 import SshConnect from "./blocks/ssh/SshConnect";
 import HostSelect from "./blocks/Host";
 import Pause from "./blocks/Pause";
+import SubRunbook from "./blocks/SubRunbook";
 
 import { randomColor } from "@/lib/colors";
 import PhoenixProvider from "@/lib/phoenix_provider";
@@ -55,6 +56,7 @@ export const schema = BlockNoteSchema.create({
     markdown_render: MarkdownRender(),
     "local-var": LocalVar(),
     dropdown: Dropdown(),
+    "sub-runbook": SubRunbook(),
 
     // Monitoring
     prometheus: Prometheus(),
