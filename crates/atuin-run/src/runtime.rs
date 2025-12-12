@@ -1,8 +1,8 @@
 use std::path::PathBuf;
 
 use atuin_desktop_runtime::client::{
-    DocumentBridgeMessage, HubClient, HubError, LocalValueProvider, MessageChannel, ParsedUri,
-    RunbookContentLoader, RunbookLoadError, SubRunbookRef,
+    load_runbook_content_from_uri, DocumentBridgeMessage, HubClient, HubError, LocalValueProvider,
+    MessageChannel, RunbookContentLoader, RunbookLoadError, SubRunbookRef,
 };
 use atuin_desktop_runtime::context::{BlockContext, BlockContextStorage};
 use atuin_desktop_runtime::events::{EventBus, GCEvent};
@@ -159,42 +159,7 @@ impl FileRunbookLoader {
         uri: &str,
         display_id: &str,
     ) -> Result<Vec<serde_json::Value>, RunbookLoadError> {
-        let parsed = ParsedUri::parse(uri).ok_or_else(|| RunbookLoadError::LoadFailed {
-            runbook_id: display_id.to_string(),
-            message: format!("Invalid hub URI format: '{}'. Expected 'user/runbook' or 'user/runbook:tag'", uri),
-        })?;
-
-        // Default to "latest" tag if none specified
-        let tag = parsed.tag.as_deref().or(Some("latest"));
-        tracing::debug!("Fetching runbook from hub: {} (tag: {:?})", parsed.nwo, tag);
-
-        let (runbook, snapshot) = self
-            .hub_client
-            .resolve_by_nwo(&parsed.nwo, tag)
-            .await
-            .map_err(|e| match e {
-                HubError::NotFound(_) => RunbookLoadError::NotFound {
-                    runbook_id: display_id.to_string(),
-                },
-                _ => RunbookLoadError::LoadFailed {
-                    runbook_id: display_id.to_string(),
-                    message: e.to_string(),
-                },
-            })?;
-
-        // Prefer snapshot content if available, otherwise use runbook content
-        if let Some(snapshot) = snapshot {
-            tracing::debug!("Using snapshot '{}' content", snapshot.tag);
-            Ok(snapshot.content)
-        } else if let Some(content) = runbook.content {
-            tracing::debug!("Using runbook content (no snapshot)");
-            Ok(content)
-        } else {
-            Err(RunbookLoadError::LoadFailed {
-                runbook_id: display_id.to_string(),
-                message: "Runbook has no content. You may need to specify a tag.".to_string(),
-            })
-        }
+        load_runbook_content_from_uri(&self.hub_client, uri, display_id).await
     }
 
     /// Load runbook content from hub by ID

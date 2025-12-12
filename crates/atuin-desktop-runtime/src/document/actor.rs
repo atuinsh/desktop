@@ -10,7 +10,7 @@ use crate::client::{
 };
 use crate::context::{
     BlockContext, BlockContextStorage, BlockExecutionOutput, BlockState, BlockStateUpdater,
-    ResolvedContext,
+    ContextResolver, ResolvedContext,
 };
 use crate::document::Document;
 use crate::events::EventBus;
@@ -163,6 +163,17 @@ pub(crate) enum DocumentCommand {
 
     ResetState {
         reply: Reply<()>,
+    },
+
+    /// Set parent context for sub-runbook execution
+    SetParentContext {
+        parent: Arc<ContextResolver>,
+        reply: Reply<()>,
+    },
+
+    /// Get the current context resolver (includes all blocks + parent context)
+    GetContextResolver {
+        reply: oneshot::Sender<ContextResolver>,
     },
 
     /// Shutdown the document actor
@@ -536,6 +547,29 @@ impl DocumentHandle {
             .map_err(|_| DocumentError::ActorSendError)?;
         rx.await.map_err(|_| DocumentError::ActorSendError)?
     }
+
+    /// Set parent context for sub-runbook execution
+    /// This makes the document inherit vars, env_vars, cwd, ssh_host from the parent
+    pub async fn set_parent_context(
+        &self,
+        parent: Arc<ContextResolver>,
+    ) -> Result<(), DocumentError> {
+        let (tx, rx) = oneshot::channel();
+        self.command_tx
+            .send(DocumentCommand::SetParentContext { parent, reply: tx })
+            .map_err(|_| DocumentError::ActorSendError)?;
+        rx.await.map_err(|_| DocumentError::ActorSendError)?
+    }
+
+    /// Get the current context resolver (includes all blocks + parent context)
+    /// This is useful for extracting env vars after sub-runbook execution
+    pub async fn get_context_resolver(&self) -> Result<ContextResolver, DocumentError> {
+        let (tx, rx) = oneshot::channel();
+        self.command_tx
+            .send(DocumentCommand::GetContextResolver { reply: tx })
+            .map_err(|_| DocumentError::ActorSendError)?;
+        rx.await.map_err(|_| DocumentError::ActorSendError)
+    }
 }
 
 impl Drop for DocumentHandle {
@@ -701,6 +735,14 @@ impl DocumentActor {
                 DocumentCommand::ResetState { reply } => {
                     let result = self.handle_reset_state().await;
                     let _ = reply.send(result);
+                }
+                DocumentCommand::SetParentContext { parent, reply } => {
+                    self.document.set_parent_context(parent);
+                    let _ = reply.send(Ok(()));
+                }
+                DocumentCommand::GetContextResolver { reply } => {
+                    let resolver = self.document.get_context_resolver();
+                    let _ = reply.send(resolver);
                 }
                 DocumentCommand::Shutdown => {
                     break;

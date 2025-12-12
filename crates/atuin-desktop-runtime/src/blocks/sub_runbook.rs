@@ -14,7 +14,7 @@ use uuid::Uuid;
 
 use crate::blocks::{Block, BlockBehavior, FromDocument};
 use crate::client::{RunbookLoadError, SubRunbookRef};
-use crate::context::{BlockState, BlockWithContext, ContextResolver};
+use crate::context::{BlockState, BlockVars, BlockWithContext, ContextResolver};
 use crate::execution::{ExecutionContext, ExecutionHandle, ExecutionResult};
 
 /// State representing the progress of a sub-runbook execution
@@ -61,7 +61,8 @@ pub enum SubRunbookStatus {
 /// When executed, this block loads the referenced runbook and executes
 /// all its blocks sequentially. The sub-runbook inherits context from
 /// the parent (environment variables, working directory, variables, SSH host)
-/// but changes made within the sub-runbook do not propagate back to the parent.
+/// but changes made within the sub-runbook do not propagate back to the parent
+/// unless `import_env` is enabled.
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, TypedBuilder)]
 #[serde(rename_all = "camelCase")]
 pub struct SubRunbook {
@@ -80,6 +81,10 @@ pub struct SubRunbook {
     /// Cached display name of the referenced runbook (optional)
     #[builder(default)]
     pub runbook_name: Option<String>,
+
+    /// Export environment variables set by the sub-runbook to the parent
+    #[builder(default)]
+    pub export_env: bool,
 }
 
 impl FromDocument for SubRunbook {
@@ -115,6 +120,11 @@ impl FromDocument for SubRunbook {
                 .map(|s| s.to_string()),
         };
 
+        let export_env = props
+            .get("exportEnv")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+
         let sub_runbook = SubRunbook::builder()
             .id(id)
             .name(
@@ -132,6 +142,7 @@ impl FromDocument for SubRunbook {
                     .filter(|s| !s.is_empty())
                     .map(|s| s.to_string()),
             )
+            .export_env(export_env)
             .build();
 
         Ok(sub_runbook)
@@ -199,6 +210,7 @@ impl BlockBehavior for SubRunbook {
         let context_clone = context.clone();
         let block_id = self.id;
         let runbook_ref = self.runbook_ref.clone();
+        let export_env = self.export_env;
         // Use runbook_name if set, otherwise fall back to display_id
         let runbook_name = self
             .runbook_name
@@ -381,17 +393,14 @@ impl BlockBehavior for SubRunbook {
                     }
                 };
 
-                // Wait for block to complete
+                // Wait for block to complete (if it has an execution handle)
+                // Passive-only blocks (env, var, etc.) return None
                 if let Some(handle) = execution_handle {
                     let result = handle.wait_for_completion().await;
 
                     match result {
                         ExecutionResult::Success => {
-                            // Update the resolver with completed block's context
-                            let mut resolver_guard = sub_resolver.lock().await;
-                            let block_with_context =
-                                BlockWithContext::new(block.clone(), passive_ctx, None, None);
-                            resolver_guard.push_block(&block_with_context);
+                            // Success - will update resolver below
                         }
                         ExecutionResult::Failure => {
                             let error = format!("Block '{}' failed", block.name());
@@ -432,6 +441,14 @@ impl BlockBehavior for SubRunbook {
                         }
                     }
                 }
+
+                // Update the resolver with completed block's context
+                // This handles both executed blocks and passive-only blocks (env, var, etc.)
+                let mut resolver_guard = sub_resolver.lock().await;
+                let block_with_context =
+                    BlockWithContext::new(block.clone(), passive_ctx, None, None);
+                resolver_guard.push_block(&block_with_context);
+                drop(resolver_guard);
             }
 
             // All blocks completed successfully
@@ -442,6 +459,44 @@ impl BlockBehavior for SubRunbook {
                     state.status = SubRunbookStatus::Success;
                 })
                 .await;
+
+            if export_env {
+                let resolver_guard = sub_resolver.lock().await;
+                let child_env_vars = resolver_guard.env_vars();
+                let parent_env_vars = context.context_resolver.env_vars();
+
+                tracing::debug!(
+                    "export_env: child has {} env vars, parent has {} env vars",
+                    child_env_vars.len(),
+                    parent_env_vars.len()
+                );
+                tracing::debug!("export_env: child env vars: {:?}", child_env_vars);
+                tracing::debug!("export_env: parent env vars: {:?}", parent_env_vars);
+
+                let new_env_vars: Vec<(String, String)> = child_env_vars
+                    .iter()
+                    .filter(|(k, v)| parent_env_vars.get(*k).map(|pv| pv.as_str()) != Some(v.as_str()))
+                    .map(|(k, v)| (k.clone(), v.clone()))
+                    .collect();
+
+                tracing::debug!("export_env: new env vars to export: {:?}", new_env_vars);
+
+                if !new_env_vars.is_empty() {
+                    tracing::info!(
+                        "Exporting {} env vars from sub-runbook to parent: {:?}",
+                        new_env_vars.len(),
+                        new_env_vars.iter().map(|(k, _)| k).collect::<Vec<_>>()
+                    );
+                    let _ = context
+                        .update_active_context(block_id, move |ctx| {
+                            for (name, value) in new_env_vars {
+                                ctx.add_env(name, value);
+                            }
+                        })
+                        .await;
+                }
+            }
+
             let _ = context.block_finished(Some(0), true).await;
         });
 

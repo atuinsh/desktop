@@ -84,6 +84,7 @@ impl BlockContext {
 /// This trait is implemented for `BlockContext` and can be used to add variables to a block context.
 pub trait BlockVars {
     fn add_var(&mut self, var_name: String, var_value: String, var_source: String);
+    fn add_env(&mut self, env_name: String, env_value: String);
 }
 
 impl BlockVars for BlockContext {
@@ -94,6 +95,16 @@ impl BlockVars for BlockContext {
             let mut vars = DocumentVars::new();
             vars.push(DocumentVar::new(var_name, var_value, var_source));
             self.insert(vars);
+        }
+    }
+
+    fn add_env(&mut self, env_name: String, env_value: String) {
+        if let Some(envs) = self.get_mut::<DocumentEnvVars>() {
+            envs.push(env_name, env_value);
+        } else {
+            let mut envs = DocumentEnvVars::new();
+            envs.push(env_name, env_value);
+            self.insert(envs);
         }
     }
 }
@@ -324,6 +335,33 @@ pub struct DocumentEnvVar(pub String, pub String);
 
 #[typetag::serde]
 impl BlockContextItem for DocumentEnvVar {}
+
+/// Container for multiple environment variables (used when importing from sub-runbooks)
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DocumentEnvVars {
+    vars: Vec<DocumentEnvVar>,
+}
+
+impl DocumentEnvVars {
+    pub fn new() -> Self {
+        Self { vars: Vec::new() }
+    }
+
+    pub fn push(&mut self, name: String, value: String) {
+        self.vars.push(DocumentEnvVar(name, value));
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = &DocumentEnvVar> {
+        self.vars.iter()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.vars.is_empty()
+    }
+}
+
+#[typetag::serde]
+impl BlockContextItem for DocumentEnvVars {}
 
 /// SSH connection information from SSH connection and host blocks
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

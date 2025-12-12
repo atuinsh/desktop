@@ -46,6 +46,9 @@ pub(crate) struct Document {
     pub(crate) context_storage: Option<Box<dyn BlockContextStorage>>,
     /// Loader for sub-runbook content (optional - sub-runbooks won't work without this)
     pub(crate) runbook_loader: Option<Arc<dyn RunbookContentLoader>>,
+    /// Parent context resolver for sub-runbooks. When set, this document inherits
+    /// vars, env_vars, cwd, and ssh_host from the parent.
+    pub(crate) parent_context: Option<Arc<ContextResolver>>,
     /// Tracks the last ResolvedContext sent to the frontend for each block.
     /// Used to avoid sending redundant BlockContextUpdate messages when the
     /// resolved context hasn't actually changed.
@@ -70,6 +73,7 @@ impl Document {
             block_local_value_provider,
             context_storage,
             runbook_loader,
+            parent_context: None,
             last_sent_contexts: HashMap::new(),
         };
         doc.put_document(document).await?;
@@ -309,6 +313,19 @@ impl Document {
         self.blocks.get_mut(index)
     }
 
+    /// Set the parent context for this document (used for sub-runbooks)
+    pub fn set_parent_context(&mut self, parent: Arc<ContextResolver>) {
+        self.parent_context = Some(parent);
+    }
+
+    /// Get the current context resolver (includes all blocks and parent context)
+    pub fn get_context_resolver(&self) -> ContextResolver {
+        match &self.parent_context {
+            Some(parent) => ContextResolver::from_blocks_with_parent(&self.blocks, parent),
+            None => ContextResolver::from_blocks(&self.blocks),
+        }
+    }
+
     /// Build an execution context for a block, capturing all context from blocks above it
     #[allow(clippy::too_many_arguments)]
     pub fn build_execution_context(
@@ -330,8 +347,13 @@ impl Document {
             .get_block_index(block_id)
             .ok_or(DocumentError::BlockNotFound(*block_id))?;
 
-        // Build context resolver from all blocks above this one
-        let mut context_resolver = ContextResolver::from_blocks(&self.blocks[..position]);
+        // Build context resolver from all blocks above this one (with parent context if set)
+        let mut context_resolver = match &self.parent_context {
+            Some(parent) => {
+                ContextResolver::from_blocks_with_parent(&self.blocks[..position], parent)
+            }
+            None => ContextResolver::from_blocks(&self.blocks[..position]),
+        };
         if let Some(extra_template_context) = extra_template_context {
             for (namespace, context) in extra_template_context {
                 context_resolver.add_extra_template_context(namespace.clone(), context.clone());
@@ -388,7 +410,12 @@ impl Document {
             .get_block_index(block_id)
             .ok_or(DocumentError::BlockNotFound(*block_id))?;
 
-        let resolver = ContextResolver::from_blocks(&self.blocks[..position]);
+        let resolver = match &self.parent_context {
+            Some(parent) => {
+                ContextResolver::from_blocks_with_parent(&self.blocks[..position], parent)
+            }
+            None => ContextResolver::from_blocks(&self.blocks[..position]),
+        };
         Ok(ResolvedContext::from_resolver(&resolver))
     }
 
@@ -422,7 +449,12 @@ impl Document {
         let mut errors = Vec::new();
         let start = start_index.unwrap_or(0);
 
-        let mut context_resolver = ContextResolver::from_blocks(&self.blocks[..start]);
+        let mut context_resolver = match &self.parent_context {
+            Some(parent) => {
+                ContextResolver::from_blocks_with_parent(&self.blocks[..start], parent)
+            }
+            None => ContextResolver::from_blocks(&self.blocks[..start]),
+        };
         for i in start..self.blocks.len() {
             let block_id = self.blocks[i].id();
 

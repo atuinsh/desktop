@@ -11,7 +11,8 @@ use crate::{
     blocks::BlockBehavior,
     client::LocalValueProvider,
     context::{
-        DocumentBlock, DocumentCwd, DocumentEnvVar, DocumentSshHost, DocumentVar, DocumentVars,
+        DocumentBlock, DocumentCwd, DocumentEnvVar, DocumentEnvVars, DocumentSshHost, DocumentVar,
+        DocumentVars,
     },
 };
 
@@ -100,6 +101,17 @@ impl ContextResolver {
         resolver
     }
 
+    /// Build a resolver from blocks with a parent context
+    /// The parent context provides initial vars, env_vars, cwd, ssh_host
+    /// which are then extended/overridden by the blocks
+    pub fn from_blocks_with_parent(blocks: &[DocumentBlock], parent: &ContextResolver) -> Self {
+        let mut resolver = Self::from_parent(parent);
+        for block in blocks {
+            resolver.push_block(block);
+        }
+        resolver
+    }
+
     /// Test-only constructor to create a resolver with specific vars
     #[cfg(test)]
     pub fn with_vars(vars: HashMap<String, String>) -> Self {
@@ -160,6 +172,25 @@ impl ContextResolver {
                         "Failed to resolve template for environment variable {}",
                         env.0
                     );
+                }
+            }
+
+            // Process multiple environment variables (from sub-runbook imports)
+            if let Some(envs) = ctx.get::<DocumentEnvVars>() {
+                tracing::debug!(
+                    "Processing DocumentEnvVars with {} entries",
+                    envs.iter().count()
+                );
+                for env in envs.iter() {
+                    tracing::debug!("Adding env var from DocumentEnvVars: {}={}", env.0, env.1);
+                    if let Ok(resolved_value) = self.resolve_template(&env.1) {
+                        self.env_vars.insert(env.0.clone(), resolved_value);
+                    } else {
+                        tracing::warn!(
+                            "Failed to resolve template for environment variable {}",
+                            env.0
+                        );
+                    }
                 }
             }
 

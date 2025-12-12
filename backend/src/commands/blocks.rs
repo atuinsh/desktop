@@ -100,51 +100,12 @@ impl WorkspaceRunbookContentLoader {
         uri: &str,
         display_id: &str,
     ) -> Result<Vec<serde_json::Value>, atuin_desktop_runtime::client::RunbookLoadError> {
-        use atuin_desktop_runtime::client::{HubError, ParsedUri, RunbookLoadError};
-
-        let parsed = ParsedUri::parse(uri).ok_or_else(|| RunbookLoadError::LoadFailed {
-            runbook_id: display_id.to_string(),
-            message: format!(
-                "Invalid hub URI format: '{}'. Expected 'user/runbook' or 'user/runbook:tag'",
-                uri
-            ),
-        })?;
-
-        // Default to "latest" tag if none specified
-        let tag = parsed.tag.as_deref().or(Some("latest"));
-        log::debug!(
-            "Fetching runbook from hub: {} (tag: {:?})",
-            parsed.nwo,
-            tag
-        );
-
-        let (runbook, snapshot) = self
-            .hub_client
-            .resolve_by_nwo(&parsed.nwo, tag)
-            .await
-            .map_err(|e| match e {
-                HubError::NotFound(_) => RunbookLoadError::NotFound {
-                    runbook_id: display_id.to_string(),
-                },
-                _ => RunbookLoadError::LoadFailed {
-                    runbook_id: display_id.to_string(),
-                    message: e.to_string(),
-                },
-            })?;
-
-        // Prefer snapshot content if available, otherwise use runbook content
-        if let Some(snapshot) = snapshot {
-            log::debug!("Using snapshot '{}' content", snapshot.tag);
-            Ok(snapshot.content)
-        } else if let Some(content) = runbook.content {
-            log::debug!("Using runbook content (no snapshot)");
-            Ok(content)
-        } else {
-            Err(RunbookLoadError::LoadFailed {
-                runbook_id: display_id.to_string(),
-                message: "Runbook has no content. You may need to specify a tag.".to_string(),
-            })
-        }
+        atuin_desktop_runtime::client::load_runbook_content_from_uri(
+            &self.hub_client,
+            uri,
+            display_id,
+        )
+        .await
     }
 
     /// Load runbook content from workspace by ID
