@@ -20,7 +20,7 @@ use uuid::Uuid;
 use crate::client::{
     ClientPrompt, ClientPromptResult, DocumentBridgeMessage, MessageChannel, RunbookContentLoader,
 };
-use crate::context::{BlockContext, BlockState, ContextResolver};
+use crate::context::{BlockContext, BlockExecutionOutput, BlockState, ContextResolver};
 use crate::document::{DocumentError, DocumentHandle};
 use crate::events::{EventBus, GCEvent};
 use crate::pty::PtyStoreHandle;

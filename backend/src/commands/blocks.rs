@@ -148,7 +148,10 @@ impl WorkspaceRunbookContentLoader {
             .content
             .as_array()
             .cloned()
-            .unwrap_or_default();
+            .ok_or_else(|| RunbookLoadError::LoadFailed {
+                runbook_id: display_id.to_string(),
+                message: "Runbook content is not an array".to_string(),
+            })?;
 
         Ok(atuin_desktop_runtime::client::LoadedRunbook {
             id: runbook_uuid,
@@ -707,7 +710,7 @@ pub async fn get_runbook_content(
         .content
         .as_array()
         .cloned()
-        .unwrap_or_default();
+        .ok_or_else(|| format!("Runbook {} content is not an array", runbook_id))?;
 
     Ok(content)
 }

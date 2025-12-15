@@ -1041,7 +1041,7 @@ mod tests {
 
         let sub_runbook_content = vec![json!({
             "id": env_block_id.to_string(),
-            "type": "environment",
+            "type": "env",
             "props": {
                 "name": "EXPORTED_VAR",
                 "value": "hello_from_sub"
@@ -1130,7 +1130,7 @@ mod tests {
 
         let sub_runbook_content = vec![json!({
             "id": env_block_id.to_string(),
-            "type": "environment",
+            "type": "env",
             "props": {
                 "name": "PRIVATE_VAR",
                 "value": "should_stay_private"

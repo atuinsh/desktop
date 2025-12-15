@@ -203,7 +203,11 @@ impl FileRunbookLoader {
         let id = json_value
             .get("id")
             .and_then(|v| v.as_str())
-            .and_then(|s| Uuid::parse_str(s).ok()).map_err(error!("Runbook at path {path} has no ID"));
+            .and_then(|s| Uuid::parse_str(s).ok())
+            .ok_or_else(|| RunbookLoadError::LoadFailed {
+                runbook_id: display_id.to_string(),
+                message: format!("Runbook at path {:?} has no valid 'id' field", path),
+            })?;
 
         // Extract content array
         let content = json_value

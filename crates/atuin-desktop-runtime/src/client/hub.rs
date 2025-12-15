@@ -144,15 +144,18 @@ impl HubClient {
         nwo: &str,
         tag: Option<&str>,
     ) -> Result<(HubRunbook, Option<HubSnapshot>), HubError> {
-        let mut url = format!("{}/resolve/runbook?nwo={}&with_content=true", self.base_url, nwo);
+        let url = format!("{}/resolve/runbook", self.base_url);
 
-        if let Some(tag) = tag {
-            url.push_str(&format!("&tag={}", tag));
-        }
-
-        let response = self
+        let mut request = self
             .client
             .get(&url)
+            .query(&[("nwo", nwo), ("with_content", "true")]);
+
+        if let Some(tag) = tag {
+            request = request.query(&[("tag", tag)]);
+        }
+
+        let response = request
             .send()
             .await
             .map_err(|e| HubError::NetworkError(e.to_string()))?;
