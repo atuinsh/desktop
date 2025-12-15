@@ -1,10 +1,16 @@
-import { generateOrEditBlock, AIFeatureDisabledError, AIGenerationError } from "@/api/ai";
+import {
+  generateOrEditBlock,
+  AIFeatureDisabledError,
+  AIGenerationError,
+  AIQuotaExceededError,
+} from "@/api/ai";
 
 export interface EditBlockRequest {
   prompt: string;
   currentBlock: any;
   documentMarkdown?: string;
   blockIndex?: number;
+  runbookId?: string;
 }
 
 export interface EditBlockResponse {
@@ -12,7 +18,7 @@ export interface EditBlockResponse {
   explanation?: string;
 }
 
-export { AIFeatureDisabledError, AIGenerationError };
+export { AIFeatureDisabledError, AIGenerationError, AIQuotaExceededError };
 
 export async function editBlock(request: EditBlockRequest): Promise<EditBlockResponse> {
   const response = await generateOrEditBlock({
@@ -22,6 +28,7 @@ export async function editBlock(request: EditBlockRequest): Promise<EditBlockRes
     block_type: request.currentBlock?.type,
     document_markdown: request.documentMarkdown,
     block_index: request.blockIndex,
+    runbook_id: request.runbookId,
   });
 
   // Always use the original block's ID, never trust AI-provided ones

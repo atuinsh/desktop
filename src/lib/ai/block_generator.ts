@@ -1,4 +1,9 @@
-import { generateOrEditBlock, AIFeatureDisabledError, AIGenerationError } from "@/api/ai";
+import {
+  generateOrEditBlock,
+  AIFeatureDisabledError,
+  AIGenerationError,
+  AIQuotaExceededError,
+} from "@/api/ai";
 import { uuidv7 } from "uuidv7";
 import DevConsole from "../dev/dev_console";
 
@@ -14,6 +19,7 @@ export interface GenerateBlocksRequest {
   documentMarkdown?: string;
   insertAfterIndex?: number;
   insertBeforeIndex?: number;
+  runbookId?: string;
 }
 
 export interface GenerateBlocksResponse {
@@ -21,7 +27,7 @@ export interface GenerateBlocksResponse {
   explanation?: string;
 }
 
-export { AIFeatureDisabledError, AIGenerationError };
+export { AIFeatureDisabledError, AIGenerationError, AIQuotaExceededError };
 
 export async function generateBlocks(
   request: GenerateBlocksRequest
@@ -33,6 +39,7 @@ export async function generateBlocks(
     document_markdown: request.documentMarkdown,
     insert_after_index: request.insertAfterIndex,
     insert_before_index: request.insertBeforeIndex,
+    runbook_id: request.runbookId,
   });
 
   // Always generate our own ID, don't trust AI-provided ones

@@ -18,6 +18,7 @@ export interface AIBlockRequest {
   insert_before_index?: number;
   insert_after_index?: number;
   system_info?: SystemInfo;
+  runbook_id?: string;
 }
 
 export interface AIBlockResponse {
@@ -48,6 +49,13 @@ export class AIGenerationError extends Error {
     super(message);
     this.name = "AIGenerationError";
     this.details = details;
+  }
+}
+
+export class AIQuotaExceededError extends Error {
+  constructor(message: string = "AI quota exceeded") {
+    super(message);
+    this.name = "AIQuotaExceededError";
   }
 }
 
@@ -94,6 +102,9 @@ export async function generateOrEditBlock(request: AIBlockRequest): Promise<AIBl
     if (request.insert_after_index !== undefined) {
       body.insert_after_index = request.insert_after_index;
     }
+    if (request.runbook_id !== undefined) {
+      body.runbook_id = request.runbook_id;
+    }
 
     const response = await post<AIBlockResponse>("/ai/blocks", body);
 
@@ -101,6 +112,10 @@ export async function generateOrEditBlock(request: AIBlockRequest): Promise<AIBl
   } catch (error: any) {
     if (error?.code === 403) {
       throw new AIFeatureDisabledError();
+    }
+
+    if (error?.code === 429) {
+      throw new AIQuotaExceededError();
     }
 
     if (error?.code === 400) {

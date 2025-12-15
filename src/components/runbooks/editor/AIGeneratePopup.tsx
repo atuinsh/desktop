@@ -1,5 +1,10 @@
 import { useCallback } from "react";
-import { generateBlocks, BlockSpec, AIFeatureDisabledError } from "@/lib/ai/block_generator";
+import {
+  generateBlocks,
+  BlockSpec,
+  AIFeatureDisabledError,
+  AIQuotaExceededError,
+} from "@/lib/ai/block_generator";
 import { AIPopupBase } from "./ui/AIPopupBase";
 import track_event from "@/tracking";
 
@@ -7,6 +12,7 @@ interface EditorContext {
   documentMarkdown?: string;
   currentBlockId: string;
   currentBlockIndex: number;
+  runbookId?: string;
 }
 
 interface AIGeneratePopupProps {
@@ -38,6 +44,7 @@ export function AIGeneratePopup({
           prompt,
           documentMarkdown: context?.documentMarkdown,
           insertAfterIndex: context?.currentBlockIndex,
+          runbookId: context?.runbookId,
         });
 
         if (result.blocks.length > 0) {
@@ -55,6 +62,10 @@ export function AIGeneratePopup({
       } catch (error) {
         if (error instanceof AIFeatureDisabledError) {
           track_event("runbooks.ai.generate_feature_disabled", {
+            prompt_length: prompt.length,
+          });
+        } else if (error instanceof AIQuotaExceededError) {
+          track_event("runbooks.ai.generate_quota_exceeded", {
             prompt_length: prompt.length,
           });
         } else {

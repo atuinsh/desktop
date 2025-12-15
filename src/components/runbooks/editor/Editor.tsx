@@ -30,7 +30,7 @@ import {
 } from "lucide-react";
 
 import { AIGeneratePopup } from "./AIGeneratePopup";
-import { AIFeatureDisabledError } from "@/lib/ai/block_generator";
+import { AIFeatureDisabledError, AIQuotaExceededError } from "@/lib/ai/block_generator";
 import AIPopup from "./ui/AIPopup";
 import { AILoadingOverlay } from "./ui/AILoadingBlock";
 import { AIFocusOverlay } from "./ui/AIFocusOverlay";
@@ -287,6 +287,7 @@ export default function Editor({ runbook, editable, runbookEditor }: EditorProps
   const [loadingStatus, setLoadingStatus] = useState<"loading" | "cancelled">("loading");
   const generatingBlockIdRef = useRef<string | null>(null); // For cancellation check
   const originalPromptRef = useRef<string | null>(null); // For cancellation detection
+  const errorToastShownRef = useRef(false); // Prevent duplicate error toasts
 
   // Post-generation mode state - after AI generates a block, user can Cmd+Enter to run or Tab to continue
   const [postGenerationBlockId, setPostGenerationBlockId] = useState<string | null>(null);
@@ -451,12 +452,13 @@ export default function Editor({ runbook, editable, runbookEditor }: EditorProps
         documentMarkdown,
         currentBlockId,
         currentBlockIndex: currentBlockIndex >= 0 ? currentBlockIndex : 0,
+        runbookId: runbook?.id,
       };
     } catch (error) {
       console.warn("Failed to get editor context:", error);
       return undefined;
     }
-  }, [editor, aiShareContext]);
+  }, [editor, aiShareContext, runbook?.id]);
 
   // Extract plain text from a BlockNote block's content
   const getBlockText = useCallback((block: any): string => {
@@ -479,6 +481,7 @@ export default function Editor({ runbook, editable, runbookEditor }: EditorProps
       setLoadingStatus("loading");
       generatingBlockIdRef.current = block.id;
       originalPromptRef.current = prompt;
+      errorToastShownRef.current = false;
 
       try {
         const context = await getEditorContext();
@@ -488,6 +491,7 @@ export default function Editor({ runbook, editable, runbookEditor }: EditorProps
           prompt,
           documentMarkdown: context?.documentMarkdown,
           insertAfterIndex: context?.currentBlockIndex,
+          runbookId: context?.runbookId,
         });
 
         // Check if the block was edited during generation (cancellation)
@@ -537,15 +541,25 @@ export default function Editor({ runbook, editable, runbookEditor }: EditorProps
         // Increment usage count for AI hint dismissal
         incrementAIHintUseCount();
       } catch (error) {
+        // Prevent duplicate error toasts
+        if (errorToastShownRef.current) {
+          console.log("[AI] Duplicate toast prevented", new Error().stack);
+          return;
+        }
+        errorToastShownRef.current = true;
+        console.log("[AI] Showing error toast", new Error().stack);
+
         const message =
           error instanceof AIFeatureDisabledError
             ? "AI feature is not enabled for your account"
+            : error instanceof AIQuotaExceededError
+            ? "AI quota exceeded"
             : error instanceof Error
             ? error.message
             : "Failed to generate blocks";
 
         addToast({
-          title: "Generation failed",
+          title: error instanceof AIQuotaExceededError ? "Quota exceeded" : "Generation failed",
           description: message,
           color: "danger",
         });
@@ -600,6 +614,7 @@ export default function Editor({ runbook, editable, runbookEditor }: EditorProps
         block: currentBlock,
         instruction: editPrompt,
         document_markdown: context?.documentMarkdown,
+        runbook_id: context?.runbookId,
       });
 
       // Replace the block with the edited version

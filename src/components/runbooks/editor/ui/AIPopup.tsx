@@ -1,12 +1,13 @@
 import { useCallback } from "react";
 import { AIPopupBase } from "./AIPopupBase";
-import { AIFeatureDisabledError } from "@/lib/ai/block_editor";
+import { AIFeatureDisabledError, AIQuotaExceededError } from "@/lib/ai/block_editor";
 import track_event from "@/tracking";
 
 interface EditorContext {
   documentMarkdown?: string;
   currentBlockId: string;
   currentBlockIndex: number;
+  runbookId?: string;
 }
 
 interface AIPopupProps {
@@ -151,6 +152,7 @@ export default function AIPopup({
           currentBlock,
           documentMarkdown: context?.documentMarkdown,
           blockIndex: context?.currentBlockIndex,
+          runbookId: context?.runbookId,
         });
 
         if (result.updatedBlock) {
@@ -164,6 +166,11 @@ export default function AIPopup({
       } catch (error) {
         if (error instanceof AIFeatureDisabledError) {
           track_event("runbooks.ai.edit_feature_disabled", {
+            blockType,
+            blockId: currentBlock.id,
+          });
+        } else if (error instanceof AIQuotaExceededError) {
+          track_event("runbooks.ai.edit_quota_exceeded", {
             blockType,
             blockId: currentBlock.id,
           });
