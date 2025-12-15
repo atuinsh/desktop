@@ -62,7 +62,7 @@ pub enum SubRunbookStatus {
 /// all its blocks sequentially. The sub-runbook inherits context from
 /// the parent (environment variables, working directory, variables, SSH host)
 /// but changes made within the sub-runbook do not propagate back to the parent
-/// unless `import_env` is enabled.
+/// unless `export_env` is enabled.
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, TypedBuilder)]
 #[serde(rename_all = "camelCase")]
 pub struct SubRunbook {
