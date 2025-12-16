@@ -99,13 +99,12 @@ impl WorkspaceRunbookContentLoader {
         &self,
         uri: &str,
         display_id: &str,
-    ) -> Result<atuin_desktop_runtime::client::LoadedRunbook, atuin_desktop_runtime::client::RunbookLoadError> {
-        atuin_desktop_runtime::client::load_runbook_from_uri(
-            &self.hub_client,
-            uri,
-            display_id,
-        )
-        .await
+    ) -> Result<
+        atuin_desktop_runtime::client::LoadedRunbook,
+        atuin_desktop_runtime::client::RunbookLoadError,
+    > {
+        atuin_desktop_runtime::client::load_runbook_from_uri(&self.hub_client, uri, display_id)
+            .await
     }
 
     /// Load runbook from workspace by ID
@@ -113,14 +112,19 @@ impl WorkspaceRunbookContentLoader {
         &self,
         id: &str,
         display_id: &str,
-    ) -> Result<atuin_desktop_runtime::client::LoadedRunbook, atuin_desktop_runtime::client::RunbookLoadError> {
+    ) -> Result<
+        atuin_desktop_runtime::client::LoadedRunbook,
+        atuin_desktop_runtime::client::RunbookLoadError,
+    > {
         use atuin_desktop_runtime::client::RunbookLoadError;
 
         let mut manager = self.workspaces.lock().await;
-        let manager = manager.as_mut().ok_or_else(|| RunbookLoadError::LoadFailed {
-            runbook_id: display_id.to_string(),
-            message: "Workspace manager not initialized".to_string(),
-        })?;
+        let manager = manager
+            .as_mut()
+            .ok_or_else(|| RunbookLoadError::LoadFailed {
+                runbook_id: display_id.to_string(),
+                message: "Workspace manager not initialized".to_string(),
+            })?;
 
         let runbook = manager.get_runbook(id).await.map_err(|e| {
             let err_str = e.to_string();
@@ -165,7 +169,10 @@ impl atuin_desktop_runtime::client::RunbookContentLoader for WorkspaceRunbookCon
     async fn load_runbook(
         &self,
         runbook_ref: &atuin_desktop_runtime::client::SubRunbookRef,
-    ) -> Result<atuin_desktop_runtime::client::LoadedRunbook, atuin_desktop_runtime::client::RunbookLoadError> {
+    ) -> Result<
+        atuin_desktop_runtime::client::LoadedRunbook,
+        atuin_desktop_runtime::client::RunbookLoadError,
+    > {
         use atuin_desktop_runtime::client::RunbookLoadError;
 
         let display_id = runbook_ref.display_id();
