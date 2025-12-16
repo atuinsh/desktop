@@ -16,6 +16,7 @@ use crate::context::{fs_var, BlockExecutionOutput, BlockVars};
 use crate::execution::{
     CancellationToken, ExecutionContext, ExecutionHandle, ExecutionStatus, StreamingBlockOutput,
 };
+use crate::ssh::OutputLine as SessionOutputLine;
 
 use super::FromDocument;
 
@@ -692,7 +693,7 @@ impl Script {
         let code_with_vars = format!("export ATUIN_OUTPUT_VARS='{}'\n{}", remote_temp_path, code);
 
         let channel_id = self.id.to_string();
-        let (output_sender, mut output_receiver) = mpsc::channel::<String>(100);
+        let (output_sender, mut output_receiver) = mpsc::channel::<SessionOutputLine>(100);
         let (result_tx, result_rx) = oneshot::channel::<()>();
 
         let captured_output = Arc::new(RwLock::new(Vec::new()));
@@ -749,28 +750,40 @@ impl Script {
         let ssh_pool_clone = ssh_pool.clone();
         let channel_id_clone = channel_id.clone();
 
-        tokio::spawn(async move {
-            while let Some(mut line) = output_receiver.recv().await {
-                if !line.ends_with('\n') {
-                    line.push('\n');
+        let output_task = tokio::spawn(async move {
+            while let Some(line) = output_receiver.recv().await {
+                let mut text = line.inner().to_string();
+
+                if !text.ends_with('\n') {
+                    text.push('\n');
                 }
 
-                let _ = context_clone
-                    .send_output(
-                        StreamingBlockOutput::builder()
-                            .block_id(block_id)
-                            .stdout(line.clone())
-                            .build(),
-                    )
-                    .await;
+                let streaming_output = if line.is_stdout() {
+                    StreamingBlockOutput::builder()
+                        .block_id(block_id)
+                        .stdout(text.clone())
+                        .build()
+                } else {
+                    StreamingBlockOutput::builder()
+                        .block_id(block_id)
+                        .stderr(text.clone())
+                        .build()
+                };
+
+                let _ = context_clone.send_output(streaming_output).await;
                 let mut captured = captured_output_clone.write().await;
-                captured.push(OutputLine::stdout(line.clone()));
+                if line.is_stdout() {
+                    captured.push(OutputLine::stdout(text));
+                } else {
+                    captured.push(OutputLine::stderr(text));
+                }
             }
         });
 
         let exit_code = tokio::select! {
             _ = cancel_rx => {
                 let _ = ssh_pool_clone.exec_cancel(&channel_id_clone).await;
+                let _ = output_task.await;
                 let captured = captured_output.read().await.clone();
 
                 let _ = context.block_cancelled().await;
@@ -783,6 +796,7 @@ impl Script {
             }
         };
 
+        let _ = output_task.await;
         let captured = captured_output.read().await.clone();
 
         // Read variables from remote temp file

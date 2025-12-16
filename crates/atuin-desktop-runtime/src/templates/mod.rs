@@ -54,7 +54,6 @@ pub struct BlockTemplateState {
 
 impl Object for BlockTemplateState {
     fn get_value(self: &Arc<Self>, key: &Value) -> Option<Value> {
-        tracing::debug!("BlockTemplateState::get_value: {key}", key = key.as_str()?);
         match key.as_str()? {
             "block_type" => Some(Value::from_serialize(&self.block_type)),
             "content" => Some(Value::from_serialize(&self.content)),
@@ -132,8 +131,6 @@ impl DocumentTemplateState {
         if flattened_doc.is_empty() {
             return None;
         }
-
-        tracing::debug!("block_outputs: {block_outputs:?}",);
 
         let named = flattened_doc
             .iter()
@@ -227,10 +224,6 @@ impl DocumentTemplateState {
 
 impl Object for DocumentTemplateState {
     fn get_value(self: &Arc<Self>, key: &Value) -> Option<Value> {
-        tracing::debug!(
-            "DocumentTemplateState::get_value: {key}",
-            key = key.as_str()?
-        );
         match key.as_str()? {
             "first" => Some(Value::from_object(self.first.clone())),
             "last" => Some(Value::from_object(self.last.clone())),
@@ -256,7 +249,6 @@ pub struct TemplateState {
 
 impl Object for TemplateState {
     fn get_value(self: &Arc<Self>, key: &Value) -> Option<Value> {
-        tracing::debug!("TemplateState::get_value: {key}", key = key.as_str()?);
         match key.as_str()? {
             "var" => Some(Value::make_object_map(
                 self.clone(),

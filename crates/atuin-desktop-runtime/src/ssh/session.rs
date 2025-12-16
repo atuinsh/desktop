@@ -48,6 +48,28 @@ pub enum Authentication {
     Password(String, String),
 }
 
+pub enum OutputLine {
+    Stdout(String),
+    Stderr(String),
+}
+
+impl OutputLine {
+    pub fn inner(&self) -> &str {
+        match self {
+            Self::Stdout(text) => text,
+            Self::Stderr(text) => text,
+        }
+    }
+
+    pub fn is_stdout(&self) -> bool {
+        matches!(self, Self::Stdout(_))
+    }
+
+    pub fn is_stderr(&self) -> bool {
+        matches!(self, Self::Stderr(_))
+    }
+}
+
 /// SSH client implementation for russh
 pub struct Client;
 
@@ -747,7 +769,7 @@ impl Session {
         &self,
         handle: SshPoolHandle,
         channel_id: String,
-        output_stream: Sender<String>,
+        output_stream: Sender<OutputLine>,
         mut cancel_rx: oneshot::Receiver<()>,
         interpreter: &str,
         command: &str,
@@ -801,7 +823,9 @@ impl Session {
         tokio::task::spawn(async move {
             if let Err(e) = channel.exec(true, full_command.as_str()).await {
                 tracing::error!("Failed to execute command: {e}");
-                let _ = output_stream_clone.send(e.to_string()).await;
+                let _ = output_stream_clone
+                    .send(OutputLine::Stderr(e.to_string()))
+                    .await;
                 return;
             }
 
@@ -824,6 +848,7 @@ impl Session {
 
                         match msg {
                             ChannelMsg::Data { data } => {
+                                tracing::trace!("Handling SSH Data message for stdout");
                                 if let Ok(data_str) = std::str::from_utf8(&data) {
                                     line_buffer.push_str(data_str);
 
@@ -832,13 +857,14 @@ impl Session {
                                         let line = line_buffer[..pos].to_string();
                                         line_buffer = line_buffer[pos + 1..].to_string();
 
-                                        if output_stream_clone.send(line).await.is_err() {
+                                        if output_stream_clone.send(OutputLine::Stdout(line)).await.is_err() {
                                             break;
                                         }
                                     }
                                 }
                             }
                             ChannelMsg::ExtendedData { data, ext: 1 } => {
+                                tracing::trace!("Handling SSH ExtendedData message for stderr");
                                 // stderr
                                 if let Ok(data_str) = std::str::from_utf8(&data) {
                                     stderr_line_buffer.push_str(data_str);
@@ -848,32 +874,40 @@ impl Session {
                                         let line = stderr_line_buffer[..pos].to_string();
                                         stderr_line_buffer = stderr_line_buffer[pos + 1..].to_string();
 
-                                        if output_stream_clone.send(line).await.is_err() {
+                                        if output_stream_clone.send(OutputLine::Stderr(line)).await.is_err() {
                                             break;
                                         }
                                     }
                                 }
                             }
                             ChannelMsg::ExitStatus { .. } => {
-                                // Send any remaining data
-                                if !line_buffer.is_empty() {
-                                    let _ = output_stream_clone.send(line_buffer).await;
-                                }
-                                if !stderr_line_buffer.is_empty() {
-                                    let _ = output_stream_clone.send(stderr_line_buffer).await;
-                                }
+                                tracing::trace!("Handling SSH ExitStatus message");
                                 break;
                             }
                             ChannelMsg::Eof => {
+                                tracing::trace!("Handling SSH EOF message");
                                 break;
                             }
                             ChannelMsg::Close => {
+                                tracing::trace!("Handling SSH Close message");
                                 break;
                             }
                             _ => {}
                         }
                     }
                 }
+            }
+
+            // Send any remaining data
+            if !line_buffer.is_empty() {
+                let _ = output_stream_clone
+                    .send(OutputLine::Stdout(line_buffer))
+                    .await;
+            }
+            if !stderr_line_buffer.is_empty() {
+                let _ = output_stream_clone
+                    .send(OutputLine::Stderr(stderr_line_buffer))
+                    .await;
             }
 
             tracing::debug!("Sending exec finished for channel {channel_id_clone}");

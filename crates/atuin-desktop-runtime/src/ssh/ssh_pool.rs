@@ -10,7 +10,7 @@ use tokio::time::interval;
 
 use crate::pty::PtyMetadata;
 use crate::ssh::pool::Pool;
-use crate::ssh::session::{Authentication, Session};
+use crate::ssh::session::{Authentication, OutputLine, Session};
 use eyre::Result;
 use std::sync::Arc;
 
@@ -83,7 +83,7 @@ pub enum SshPoolMessage {
         channel: String,
 
         // The stream of output from the exec command
-        output_stream: mpsc::Sender<String>,
+        output_stream: mpsc::Sender<OutputLine>,
 
         // The actual result of the exec command
         reply_to: oneshot::Sender<Result<()>>,
@@ -218,7 +218,7 @@ impl SshPoolHandle {
         interpreter: &str,
         command: &str,
         channel: &str,
-        output_stream: mpsc::Sender<String>,
+        output_stream: mpsc::Sender<OutputLine>,
         result_tx: oneshot::Sender<()>,
     ) -> Result<()> {
         let (sender, receiver) = oneshot::channel();
@@ -454,6 +454,7 @@ impl SshPool {
                 auth,
                 reply_to,
             } => {
+                tracing::trace!("Handling Connect message for {host} with username {username:?}");
                 let result = self
                     .pool
                     .write()
@@ -468,15 +469,18 @@ impl SshPool {
                 username,
                 reply_to,
             } => {
+                tracing::trace!("Handling Disconnect message for {host} with username {username}");
                 let result = self.pool.write().await.disconnect(&host, &username).await;
                 let _ = reply_to.send(result);
             }
             SshPoolMessage::ListConnections { reply_to } => {
+                tracing::trace!("Handling ListConnections message");
                 // Get the keys from the pool's connections
                 let connections = self.pool.read().await.connections.keys().cloned().collect();
                 let _ = reply_to.send(connections);
             }
             SshPoolMessage::Len { reply_to } => {
+                tracing::trace!("Handling Len message");
                 let len = self.pool.read().await.connections.len();
                 let _ = reply_to.send(len);
             }
@@ -490,6 +494,9 @@ impl SshPool {
                 reply_to,
                 result_tx,
             } => {
+                tracing::trace!(
+                    "Executing command on {host} with {interpreter} with username {username:?}"
+                );
                 let (cancel_tx, mut cancel_rx) = oneshot::channel();
 
                 // Resolve username from SSH config if not provided, same as pool.connect() does
@@ -594,6 +601,7 @@ impl SshPool {
                 });
             }
             SshPoolMessage::ExecFinished { channel, reply_to } => {
+                tracing::trace!("Handling ExecFinished message for channel {channel}");
                 tracing::debug!("ExecFinished for channel: {channel}");
 
                 if let Some(meta) = self.channels.remove(&channel) {
@@ -603,6 +611,7 @@ impl SshPool {
                 let _ = reply_to.send(Ok(()));
             }
             SshPoolMessage::ExecCancel { channel } => {
+                tracing::trace!("Handling ExecCancel message for channel {channel}");
                 tracing::debug!("ExecCancel for channel: {channel}");
 
                 if let Some(meta) = self.channels.remove(&channel) {
@@ -619,6 +628,7 @@ impl SshPool {
                 width,
                 height,
             } => {
+                tracing::trace!("Handling OpenPty message for {host} with username {username:?} with channel {channel}");
                 // Resolve username from SSH config if not provided, same as pool.connect() does
                 let ssh_config = Session::resolve_ssh_config(&host);
                 let username = username
@@ -712,6 +722,7 @@ impl SshPool {
                 input,
                 reply_to,
             } => {
+                tracing::trace!("Handling PtyWrite message for channel {channel}");
                 if let Some(meta) = self.channels.get_mut(&channel) {
                     if let Some(pty_input_tx) = meta.pty_input_tx.as_mut() {
                         let _ = pty_input_tx.send(input.clone()).await;
@@ -730,12 +741,14 @@ impl SshPool {
                 }
             }
             SshPoolMessage::ClosePty { channel } => {
+                tracing::trace!("Handling ClosePty message for channel {channel}");
                 tracing::debug!("Closing PTY for {channel}");
                 if let Some(meta) = self.channels.remove(&channel) {
                     let _ = meta.cancel_tx.send(());
                 }
             }
             SshPoolMessage::HealthCheck { reply_to } => {
+                tracing::trace!("Handling HealthCheck message");
                 let connection_count = self.pool.read().await.connections.len();
                 tracing::debug!(
                     "Running SSH connection health check with keepalives on {connection_count} connections"
@@ -773,6 +786,7 @@ impl SshPool {
                 prefix,
                 reply_to,
             } => {
+                tracing::trace!("Handling CreateTempFile message for {host} with username {username:?} with prefix {prefix}");
                 let mut pool_guard = self.pool.write().await;
                 let session = match pool_guard
                     .connect(&host, username.as_deref(), None, None)
@@ -795,6 +809,7 @@ impl SshPool {
                 path,
                 reply_to,
             } => {
+                tracing::trace!("Handling ReadFile message for {host} with username {username:?} with path {path}");
                 let mut pool_guard = self.pool.write().await;
                 let session = match pool_guard
                     .connect(&host, username.as_deref(), None, None)
@@ -817,6 +832,7 @@ impl SshPool {
                 path,
                 reply_to,
             } => {
+                tracing::trace!("Handling DeleteFile message for {host} with username {username:?} with path {path}");
                 let mut pool_guard = self.pool.write().await;
                 let session = match pool_guard
                     .connect(&host, username.as_deref(), None, None)
