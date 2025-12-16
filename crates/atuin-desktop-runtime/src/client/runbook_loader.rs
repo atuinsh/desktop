@@ -124,13 +124,13 @@ impl RunbookContentLoader for MemoryRunbookContentLoader {
         runbook_ref: &SubRunbookRef,
     ) -> Result<LoadedRunbook, RunbookLoadError> {
         let display_id = runbook_ref.display_id();
-        let (id, content) = self
-            .runbooks
-            .get(&display_id)
-            .cloned()
-            .ok_or_else(|| RunbookLoadError::NotFound {
-                runbook_id: display_id,
-            })?;
+        let (id, content) =
+            self.runbooks
+                .get(&display_id)
+                .cloned()
+                .ok_or_else(|| RunbookLoadError::NotFound {
+                    runbook_id: display_id,
+                })?;
         Ok(LoadedRunbook { id, content })
     }
 }

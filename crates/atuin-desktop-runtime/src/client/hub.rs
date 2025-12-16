@@ -240,24 +240,21 @@ pub async fn load_runbook_from_uri(
 
     // Default to "latest" tag if none specified
     let tag = parsed.tag.as_deref().or(Some("latest"));
-    tracing::debug!(
-        "Fetching runbook from hub: {} (tag: {:?})",
-        parsed.nwo,
-        tag
-    );
+    tracing::debug!("Fetching runbook from hub: {} (tag: {:?})", parsed.nwo, tag);
 
-    let (runbook, snapshot) = client
-        .resolve_by_nwo(&parsed.nwo, tag)
-        .await
-        .map_err(|e| match e {
-            HubError::NotFound(_) => RunbookLoadError::NotFound {
-                runbook_id: display_id.to_string(),
-            },
-            _ => RunbookLoadError::LoadFailed {
-                runbook_id: display_id.to_string(),
-                message: e.to_string(),
-            },
-        })?;
+    let (runbook, snapshot) =
+        client
+            .resolve_by_nwo(&parsed.nwo, tag)
+            .await
+            .map_err(|e| match e {
+                HubError::NotFound(_) => RunbookLoadError::NotFound {
+                    runbook_id: display_id.to_string(),
+                },
+                _ => RunbookLoadError::LoadFailed {
+                    runbook_id: display_id.to_string(),
+                    message: e.to_string(),
+                },
+            })?;
 
     // Parse the runbook ID
     let id = Uuid::parse_str(&runbook.id).map_err(|e| RunbookLoadError::LoadFailed {
@@ -316,10 +313,13 @@ pub async fn load_runbook_from_id(
     })?;
 
     // Require content to be present
-    let content = runbook.content.ok_or_else(|| RunbookLoadError::LoadFailed {
-        runbook_id: display_id.to_string(),
-        message: "Runbook has no content. Specify a tag to load a specific version.".to_string(),
-    })?;
+    let content = runbook
+        .content
+        .ok_or_else(|| RunbookLoadError::LoadFailed {
+            runbook_id: display_id.to_string(),
+            message: "Runbook has no content. Specify a tag to load a specific version."
+                .to_string(),
+        })?;
 
     Ok(super::LoadedRunbook {
         id: runbook_uuid,

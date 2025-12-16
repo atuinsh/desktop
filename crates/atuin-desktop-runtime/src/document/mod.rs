@@ -451,9 +451,7 @@ impl Document {
         let start = start_index.unwrap_or(0);
 
         let mut context_resolver = match &self.parent_context {
-            Some(parent) => {
-                ContextResolver::from_blocks_with_parent(&self.blocks[..start], parent)
-            }
+            Some(parent) => ContextResolver::from_blocks_with_parent(&self.blocks[..start], parent),
             None => ContextResolver::from_blocks(&self.blocks[..start]),
         };
         for i in start..self.blocks.len() {

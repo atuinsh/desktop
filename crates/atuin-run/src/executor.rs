@@ -568,7 +568,8 @@ impl Executor {
                                 BlockLifecycleEvent::Paused => {
                                     return Err(ExecutorError::BlockError(
                                         parent_block_id,
-                                        "Pause blocks are not supported in sub-runbooks".to_string(),
+                                        "Pause blocks are not supported in sub-runbooks"
+                                            .to_string(),
                                     ));
                                 }
                             }

@@ -312,7 +312,10 @@ impl BlockBehavior for SubRunbook {
             );
 
             // Set parent context so the sub-runbook inherits vars, env_vars, cwd, ssh_host
-            if let Err(e) = sub_document.set_parent_context(context.context_resolver.clone()).await {
+            if let Err(e) = sub_document
+                .set_parent_context(context.context_resolver.clone())
+                .await
+            {
                 let error = format!("Failed to set parent context: {}", e);
                 let _ = context
                     .update_block_state::<SubRunbookState, _>(block_id, move |state| {
@@ -542,7 +545,9 @@ impl BlockBehavior for SubRunbook {
 
                 let new_env_vars: Vec<(String, String)> = child_env_vars
                     .iter()
-                    .filter(|(k, v)| parent_env_vars.get(*k).map(|pv| pv.as_str()) != Some(v.as_str()))
+                    .filter(|(k, v)| {
+                        parent_env_vars.get(*k).map(|pv| pv.as_str()) != Some(v.as_str())
+                    })
                     .map(|(k, v)| (k.clone(), v.clone()))
                     .collect();
 
