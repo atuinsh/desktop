@@ -117,13 +117,6 @@ pub struct FileRunbookLoader {
 }
 
 impl FileRunbookLoader {
-    pub fn new(base_dir: PathBuf) -> Self {
-        Self {
-            base_dir,
-            hub_client: HubClient::new(),
-        }
-    }
-
     /// Create a loader from a runbook file path (uses the parent directory as base)
     pub fn from_runbook_path(runbook_path: &std::path::Path) -> Self {
         let base_dir = runbook_path
