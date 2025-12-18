@@ -38,6 +38,8 @@ pub enum WorkspaceError {
     RunbookSaveError { runbook_id: String, message: String },
     #[error("Failed to delete runbook {runbook_id}: {message}")]
     RunbookDeleteError { runbook_id: String, message: String },
+    #[error("Runbook {runbook_id} not found")]
+    RunbookNotFound { runbook_id: String },
     #[error("Failed to rename workspace {workspace_id}: {message}")]
     WorkspaceRenameError {
         workspace_id: String,
@@ -340,8 +342,8 @@ impl Workspace {
             if let Some(runbook) = state.runbooks.get(id) {
                 Ok(runbook.path.clone())
             } else {
-                Err(WorkspaceError::GenericWorkspaceError {
-                    message: format!("Runbook {id} not found"),
+                Err(WorkspaceError::RunbookNotFound {
+                    runbook_id: id.to_string(),
                 })
             }
         } else {

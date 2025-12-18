@@ -300,8 +300,8 @@ impl WorkspaceManager {
         if let Some(workspace) = workspace {
             workspace.get_runbook(runbook_id).await
         } else {
-            Err(WorkspaceError::GenericWorkspaceError {
-                message: format!("Runbook {runbook_id} not found"),
+            Err(WorkspaceError::RunbookNotFound {
+                runbook_id: runbook_id.to_string(),
             })
         }
     }

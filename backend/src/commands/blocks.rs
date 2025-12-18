@@ -126,18 +126,16 @@ impl WorkspaceRunbookContentLoader {
                 message: "Workspace manager not initialized".to_string(),
             })?;
 
-        let runbook = manager.get_runbook(id).await.map_err(|e| {
-            let err_str = e.to_string();
-            if err_str.contains("not found") || err_str.contains("NotFound") {
+        let runbook = manager.get_runbook(id).await.map_err(|e| match e {
+            crate::workspaces::workspace::WorkspaceError::RunbookNotFound { .. } => {
                 RunbookLoadError::NotFound {
                     runbook_id: display_id.to_string(),
                 }
-            } else {
-                RunbookLoadError::LoadFailed {
-                    runbook_id: display_id.to_string(),
-                    message: err_str,
-                }
             }
+            _ => RunbookLoadError::LoadFailed {
+                runbook_id: display_id.to_string(),
+                message: e.to_string(),
+            },
         })?;
 
         // Parse the runbook ID as UUID
