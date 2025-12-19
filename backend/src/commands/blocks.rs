@@ -321,7 +321,7 @@ pub async fn open_document(
         document_id.clone(),
         event_bus,
         document_bridge,
-        Some(Box::new(KvBlockLocalValueProvider::new(app.clone()))),
+        Some(Arc::new(KvBlockLocalValueProvider::new(app.clone()))),
         Some(Box::new(context_storage)),
         Some(runbook_loader),
     );

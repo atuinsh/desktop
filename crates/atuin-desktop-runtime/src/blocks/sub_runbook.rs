@@ -306,7 +306,7 @@ impl BlockBehavior for SubRunbook {
                 sub_document_id.clone(),
                 Arc::new(MemoryEventBus::new()),
                 Arc::new(NoOpChannel),
-                None, // block_local_value_provider
+                context.block_local_value_provider(), // inherit from parent
                 None, // context_storage (sub-runbooks don't persist context)
                 Some(runbook_loader.clone()),
             );

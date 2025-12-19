@@ -187,6 +187,7 @@ pub struct DocumentHandle {
     runbook_id: String,
     command_tx: mpsc::UnboundedSender<DocumentCommand>,
     event_bus: Arc<dyn EventBus>,
+    block_local_value_provider: Option<Arc<dyn LocalValueProvider>>,
 }
 
 impl DocumentHandle {
@@ -195,7 +196,7 @@ impl DocumentHandle {
         runbook_id: String,
         event_bus: Arc<dyn EventBus>,
         document_bridge: Arc<dyn MessageChannel<DocumentBridgeMessage>>,
-        block_local_value_provider: Option<Box<dyn LocalValueProvider>>,
+        block_local_value_provider: Option<Arc<dyn LocalValueProvider>>,
         context_storage: Option<Box<dyn BlockContextStorage>>,
         runbook_loader: Option<Arc<dyn RunbookContentLoader>>,
     ) -> Arc<Self> {
@@ -205,6 +206,7 @@ impl DocumentHandle {
             runbook_id: runbook_id.clone(),
             command_tx: tx.clone(),
             event_bus: event_bus.clone(),
+            block_local_value_provider: block_local_value_provider.clone(),
         });
 
         // Spawn the document actor
@@ -240,7 +242,13 @@ impl DocumentHandle {
             runbook_id,
             command_tx,
             event_bus,
+            block_local_value_provider: None,
         })
+    }
+
+    /// Get the block local value provider for sharing with sub-runbooks
+    pub fn block_local_value_provider(&self) -> Option<Arc<dyn LocalValueProvider>> {
+        self.block_local_value_provider.clone()
     }
 
     /// Get the runbook ID this document handle is for
@@ -595,7 +603,7 @@ impl DocumentActor {
         runbook_id: String,
         event_bus: Arc<dyn EventBus>,
         document_bridge: Arc<dyn MessageChannel<DocumentBridgeMessage>>,
-        block_local_value_provider: Option<Box<dyn LocalValueProvider>>,
+        block_local_value_provider: Option<Arc<dyn LocalValueProvider>>,
         context_storage: Option<Box<dyn BlockContextStorage>>,
         runbook_loader: Option<Arc<dyn RunbookContentLoader>>,
         handle: Arc<DocumentHandle>,

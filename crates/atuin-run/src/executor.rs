@@ -69,7 +69,7 @@ impl Executor {
             runbook.id.to_string(),
             Arc::new(NullEventBus),
             Arc::new(NullDocumentBridge),
-            Some(Box::new(TempNullLocalValueProvider)),
+            Some(Arc::new(TempNullLocalValueProvider)),
             Some(Box::new(TempNullContextStorage)),
             runbook_loader,
         );

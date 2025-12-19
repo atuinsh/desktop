@@ -18,7 +18,8 @@ use typed_builder::TypedBuilder;
 use uuid::Uuid;
 
 use crate::client::{
-    ClientPrompt, ClientPromptResult, DocumentBridgeMessage, MessageChannel, RunbookContentLoader,
+    ClientPrompt, ClientPromptResult, DocumentBridgeMessage, LocalValueProvider, MessageChannel,
+    RunbookContentLoader,
 };
 use crate::context::{BlockContext, BlockExecutionOutput, BlockState, ContextResolver};
 use crate::document::{DocumentError, DocumentHandle};
@@ -420,6 +421,11 @@ impl ExecutionContext {
     /// Get the PTY store (if available)
     pub fn pty_store(&self) -> Option<PtyStoreHandle> {
         self.pty_store.clone()
+    }
+
+    /// Get the block local value provider (for sharing with sub-runbooks)
+    pub fn block_local_value_provider(&self) -> Option<Arc<dyn LocalValueProvider>> {
+        self.document_handle.block_local_value_provider()
     }
 
     /// Create a new context with different resource handles

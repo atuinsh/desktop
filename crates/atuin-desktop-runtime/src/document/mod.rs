@@ -42,7 +42,7 @@ pub(crate) struct Document {
     pub(crate) blocks: Vec<DocumentBlock>,
     pub(crate) document_bridge: Arc<dyn MessageChannel<DocumentBridgeMessage>>,
     pub(crate) known_unsupported_blocks: HashSet<String>,
-    pub(crate) block_local_value_provider: Option<Box<dyn LocalValueProvider>>,
+    pub(crate) block_local_value_provider: Option<Arc<dyn LocalValueProvider>>,
     pub(crate) context_storage: Option<Box<dyn BlockContextStorage>>,
     /// Loader for sub-runbook content (optional - sub-runbooks won't work without this)
     pub(crate) runbook_loader: Option<Arc<dyn RunbookContentLoader>>,
@@ -60,7 +60,7 @@ impl Document {
         id: String,
         document: Vec<serde_json::Value>,
         document_bridge: Arc<dyn MessageChannel<DocumentBridgeMessage>>,
-        block_local_value_provider: Option<Box<dyn LocalValueProvider>>,
+        block_local_value_provider: Option<Arc<dyn LocalValueProvider>>,
         context_storage: Option<Box<dyn BlockContextStorage>>,
         runbook_loader: Option<Arc<dyn RunbookContentLoader>>,
     ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
