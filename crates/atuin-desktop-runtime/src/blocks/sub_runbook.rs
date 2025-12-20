@@ -62,7 +62,7 @@ pub enum SubRunbookStatus {
 /// all its blocks sequentially. The sub-runbook inherits context from
 /// the parent (environment variables, working directory, variables, SSH host)
 /// but changes made within the sub-runbook do not propagate back to the parent
-/// unless `export_env` is enabled.
+/// unless the corresponding export options are enabled.
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, TypedBuilder)]
 #[serde(rename_all = "camelCase")]
 pub struct SubRunbook {
@@ -85,6 +85,18 @@ pub struct SubRunbook {
     /// Export environment variables set by the sub-runbook to the parent
     #[builder(default)]
     pub export_env: bool,
+
+    /// Export template variables set by the sub-runbook to the parent
+    #[builder(default)]
+    pub export_vars: bool,
+
+    /// Export working directory from the sub-runbook to the parent
+    #[builder(default)]
+    pub export_cwd: bool,
+
+    /// Export SSH host from the sub-runbook to the parent
+    #[builder(default)]
+    pub export_ssh_host: bool,
 }
 
 impl FromDocument for SubRunbook {
@@ -125,6 +137,21 @@ impl FromDocument for SubRunbook {
             .and_then(|v| v.as_bool())
             .unwrap_or(false);
 
+        let export_vars = props
+            .get("exportVars")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+
+        let export_cwd = props
+            .get("exportCwd")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+
+        let export_ssh_host = props
+            .get("exportSshHost")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+
         let sub_runbook = SubRunbook::builder()
             .id(id)
             .name(
@@ -143,6 +170,9 @@ impl FromDocument for SubRunbook {
                     .map(|s| s.to_string()),
             )
             .export_env(export_env)
+            .export_vars(export_vars)
+            .export_cwd(export_cwd)
+            .export_ssh_host(export_ssh_host)
             .build();
 
         Ok(sub_runbook)
@@ -212,6 +242,9 @@ impl BlockBehavior for SubRunbook {
         let block_id = self.id;
         let runbook_ref = self.runbook_ref.clone();
         let export_env = self.export_env;
+        let export_vars = self.export_vars;
+        let export_cwd = self.export_cwd;
+        let export_ssh_host = self.export_ssh_host;
         // Use runbook_name if set, otherwise fall back to display_id
         let runbook_name = self
             .runbook_name
@@ -520,49 +553,128 @@ impl BlockBehavior for SubRunbook {
                 })
                 .await;
 
-            // Export environment variables to parent if requested
-            if export_env {
+            // Export context to parent if any export options are enabled
+            if export_env || export_vars || export_cwd || export_ssh_host {
                 // Get final context resolver from sub-document (includes all block contexts)
                 let final_resolver = match sub_document.get_context_resolver().await {
                     Ok(resolver) => resolver,
                     Err(e) => {
-                        tracing::warn!("Failed to get context resolver for env export: {}", e);
-                        // Don't fail the whole block just because we couldn't export env vars
+                        tracing::warn!("Failed to get context resolver for context export: {}", e);
+                        // Don't fail the whole block just because we couldn't export context
                         let _ = context.block_finished(Some(0), true).await;
                         return;
                     }
                 };
-                let child_env_vars = final_resolver.env_vars();
-                let parent_env_vars = context.context_resolver.env_vars();
 
-                tracing::debug!(
-                    "export_env: child has {} env vars, parent has {} env vars",
-                    child_env_vars.len(),
-                    parent_env_vars.len()
-                );
-                tracing::debug!("export_env: child env vars: {:?}", child_env_vars);
-                tracing::debug!("export_env: parent env vars: {:?}", parent_env_vars);
+                // Collect items to export
+                let mut new_env_vars: Vec<(String, String)> = Vec::new();
+                let mut new_vars: Vec<(String, String, String)> = Vec::new();
+                let mut new_cwd: Option<String> = None;
+                let mut new_ssh_host: Option<Option<String>> = None;
 
-                let new_env_vars: Vec<(String, String)> = child_env_vars
-                    .iter()
-                    .filter(|(k, v)| {
-                        parent_env_vars.get(*k).map(|pv| pv.as_str()) != Some(v.as_str())
-                    })
-                    .map(|(k, v)| (k.clone(), v.clone()))
-                    .collect();
+                // Export environment variables
+                if export_env {
+                    let child_env_vars = final_resolver.env_vars();
+                    let parent_env_vars = context.context_resolver.env_vars();
 
-                tracing::debug!("export_env: new env vars to export: {:?}", new_env_vars);
-
-                if !new_env_vars.is_empty() {
-                    tracing::info!(
-                        "Exporting {} env vars from sub-runbook to parent: {:?}",
-                        new_env_vars.len(),
-                        new_env_vars.iter().map(|(k, _)| k).collect::<Vec<_>>()
+                    tracing::debug!(
+                        "export_env: child has {} env vars, parent has {} env vars",
+                        child_env_vars.len(),
+                        parent_env_vars.len()
                     );
+
+                    new_env_vars = child_env_vars
+                        .iter()
+                        .filter(|(k, v)| {
+                            parent_env_vars.get(*k).map(|pv| pv.as_str()) != Some(v.as_str())
+                        })
+                        .map(|(k, v)| (k.clone(), v.clone()))
+                        .collect();
+
+                    if !new_env_vars.is_empty() {
+                        tracing::info!(
+                            "Exporting {} env vars from sub-runbook to parent: {:?}",
+                            new_env_vars.len(),
+                            new_env_vars.iter().map(|(k, _)| k).collect::<Vec<_>>()
+                        );
+                    }
+                }
+
+                // Export template variables
+                if export_vars {
+                    let child_vars = final_resolver.vars();
+                    let parent_vars = context.context_resolver.vars();
+
+                    tracing::debug!(
+                        "export_vars: child has {} vars, parent has {} vars",
+                        child_vars.len(),
+                        parent_vars.len()
+                    );
+
+                    new_vars = child_vars
+                        .iter()
+                        .filter(|(k, v)| parent_vars.get(*k).map(|pv| pv.as_str()) != Some(v.as_str()))
+                        .map(|(k, v)| (k.clone(), v.clone(), "(sub-runbook export)".to_string()))
+                        .collect();
+
+                    if !new_vars.is_empty() {
+                        tracing::info!(
+                            "Exporting {} vars from sub-runbook to parent: {:?}",
+                            new_vars.len(),
+                            new_vars.iter().map(|(k, _, _)| k).collect::<Vec<_>>()
+                        );
+                    }
+                }
+
+                // Export working directory
+                if export_cwd {
+                    let child_cwd = final_resolver.cwd();
+                    let parent_cwd = context.context_resolver.cwd();
+
+                    if child_cwd != parent_cwd {
+                        tracing::info!(
+                            "Exporting cwd from sub-runbook to parent: {} -> {}",
+                            parent_cwd,
+                            child_cwd
+                        );
+                        new_cwd = Some(child_cwd.to_string());
+                    }
+                }
+
+                // Export SSH host
+                if export_ssh_host {
+                    let child_ssh_host = final_resolver.ssh_host();
+                    let parent_ssh_host = context.context_resolver.ssh_host();
+
+                    if child_ssh_host != parent_ssh_host {
+                        tracing::info!(
+                            "Exporting ssh_host from sub-runbook to parent: {:?} -> {:?}",
+                            parent_ssh_host,
+                            child_ssh_host
+                        );
+                        new_ssh_host = Some(child_ssh_host.cloned());
+                    }
+                }
+
+                // Apply all context updates
+                if !new_env_vars.is_empty()
+                    || !new_vars.is_empty()
+                    || new_cwd.is_some()
+                    || new_ssh_host.is_some()
+                {
                     let _ = context
                         .update_active_context(block_id, move |ctx| {
                             for (name, value) in new_env_vars {
                                 ctx.add_env(name, value);
+                            }
+                            for (name, value, source) in new_vars {
+                                ctx.add_var(name, value, source);
+                            }
+                            if let Some(cwd) = new_cwd {
+                                ctx.set_cwd(cwd);
+                            }
+                            if let Some(ssh_host) = new_ssh_host {
+                                ctx.set_ssh_host(ssh_host);
                             }
                         })
                         .await;

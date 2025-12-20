@@ -85,6 +85,8 @@ impl BlockContext {
 pub trait BlockVars {
     fn add_var(&mut self, var_name: String, var_value: String, var_source: String);
     fn add_env(&mut self, env_name: String, env_value: String);
+    fn set_cwd(&mut self, cwd: String);
+    fn set_ssh_host(&mut self, ssh_host: Option<String>);
 }
 
 impl BlockVars for BlockContext {
@@ -106,6 +108,14 @@ impl BlockVars for BlockContext {
             envs.push(env_name, env_value);
             self.insert(envs);
         }
+    }
+
+    fn set_cwd(&mut self, cwd: String) {
+        self.insert(DocumentCwd(cwd));
+    }
+
+    fn set_ssh_host(&mut self, ssh_host: Option<String>) {
+        self.insert(DocumentSshHost(ssh_host));
     }
 }
 

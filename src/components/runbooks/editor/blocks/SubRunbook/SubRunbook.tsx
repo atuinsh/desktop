@@ -131,17 +131,24 @@ interface RunbookSelection {
   runbookUri: string | null;
 }
 
+interface ContextExportSettings {
+  exportEnv: boolean;
+  exportVars: boolean;
+  exportCwd: boolean;
+  exportSshHost: boolean;
+}
+
 interface SubRunbookProps {
   id: string;
   runbookId: string;
   runbookName: string;
   runbookPath: string;
   runbookUri: string;
-  exportEnv: boolean;
+  exportSettings: ContextExportSettings;
   isEditable: boolean;
   onRunbookSelect: (selection: RunbookSelection) => void;
   onTagChange: (tag: string) => void;
-  onExportEnvChange: (exportEnv: boolean) => void;
+  onExportSettingsChange: (settings: Partial<ContextExportSettings>) => void;
   currentRunbookId: string | null;
 }
 
@@ -492,11 +499,11 @@ const SubRunbook = ({
   runbookName,
   runbookPath,
   runbookUri,
-  exportEnv,
+  exportSettings,
   isEditable,
   onRunbookSelect,
   onTagChange,
-  onExportEnvChange,
+  onExportSettingsChange,
   currentRunbookId,
 }: SubRunbookProps) => {
   const [selectorVisible, setSelectorVisible] = useState(false);
@@ -662,21 +669,104 @@ const SubRunbook = ({
         <ModalContent>
           <ModalHeader className="text-base font-medium">Sub-Runbook Settings</ModalHeader>
           <ModalBody className="pb-6">
-            <div className="flex items-center justify-between gap-4">
-              <div className="flex flex-col">
-                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Export environment variables
-                </span>
-                <span className="text-xs text-gray-500 dark:text-gray-400">
-                  Merge env vars from the sub-runbook into the parent
-                </span>
+            <div className="space-y-4">
+              {/* Export All Context Button */}
+              <div className="pb-3 border-b border-gray-200 dark:border-gray-700">
+                <Button
+                  size="sm"
+                  variant="flat"
+                  color="primary"
+                  className="w-full"
+                  isDisabled={!isEditable}
+                  onPress={() => {
+                    const allEnabled = exportSettings.exportEnv && exportSettings.exportVars &&
+                                       exportSettings.exportCwd && exportSettings.exportSshHost;
+                    onExportSettingsChange({
+                      exportEnv: !allEnabled,
+                      exportVars: !allEnabled,
+                      exportCwd: !allEnabled,
+                      exportSshHost: !allEnabled,
+                    });
+                  }}
+                >
+                  {exportSettings.exportEnv && exportSettings.exportVars &&
+                   exportSettings.exportCwd && exportSettings.exportSshHost
+                    ? "Disable All Exports"
+                    : "Export All Context"}
+                </Button>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-2 text-center">
+                  Export all context from sub-runbook to parent
+                </p>
               </div>
-              <Switch
-                size="sm"
-                isSelected={exportEnv}
-                onValueChange={onExportEnvChange}
-                isDisabled={!isEditable}
-              />
+
+              {/* Individual Export Settings */}
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex flex-col">
+                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Environment variables
+                  </span>
+                  <span className="text-xs text-gray-500 dark:text-gray-400">
+                    Merge env vars into parent runbook
+                  </span>
+                </div>
+                <Switch
+                  size="sm"
+                  isSelected={exportSettings.exportEnv}
+                  onValueChange={(value) => onExportSettingsChange({ exportEnv: value })}
+                  isDisabled={!isEditable}
+                />
+              </div>
+
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex flex-col">
+                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Variables
+                  </span>
+                  <span className="text-xs text-gray-500 dark:text-gray-400">
+                    Merge template variables into parent
+                  </span>
+                </div>
+                <Switch
+                  size="sm"
+                  isSelected={exportSettings.exportVars}
+                  onValueChange={(value) => onExportSettingsChange({ exportVars: value })}
+                  isDisabled={!isEditable}
+                />
+              </div>
+
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex flex-col">
+                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Working directory
+                  </span>
+                  <span className="text-xs text-gray-500 dark:text-gray-400">
+                    Use sub-runbook&apos;s final working directory
+                  </span>
+                </div>
+                <Switch
+                  size="sm"
+                  isSelected={exportSettings.exportCwd}
+                  onValueChange={(value) => onExportSettingsChange({ exportCwd: value })}
+                  isDisabled={!isEditable}
+                />
+              </div>
+
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex flex-col">
+                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    SSH host
+                  </span>
+                  <span className="text-xs text-gray-500 dark:text-gray-400">
+                    Use sub-runbook&apos;s SSH connection
+                  </span>
+                </div>
+                <Switch
+                  size="sm"
+                  isSelected={exportSettings.exportSshHost}
+                  onValueChange={(value) => onExportSettingsChange({ exportSshHost: value })}
+                  isDisabled={!isEditable}
+                />
+              </div>
             </div>
           </ModalBody>
         </ModalContent>
@@ -705,14 +795,20 @@ export default createReactBlockSpec(
       runbookPath: { default: "" },  // File path for CLI use
       // Display name
       runbookName: { default: "" },
-      // Settings
-      exportEnv: { default: false }, // Export env vars to parent runbook
+      // Context export settings
+      exportEnv: { default: false },     // Export env vars to parent runbook
+      exportVars: { default: false },    // Export variables to parent runbook
+      exportCwd: { default: false },     // Export working directory to parent runbook
+      exportSshHost: { default: false }, // Export SSH host to parent runbook
     },
     content: "none",
   },
   {
     toExternalHTML: ({ block }) => {
-      const propMatter = exportPropMatter("sub-runbook", block.props, ["name", "runbookId", "runbookUri", "runbookPath", "runbookName", "exportEnv"]);
+      const propMatter = exportPropMatter("sub-runbook", block.props, [
+        "name", "runbookId", "runbookUri", "runbookPath", "runbookName",
+        "exportEnv", "exportVars", "exportCwd", "exportSshHost"
+      ]);
       return (
         <div>
           <pre lang="sub-runbook">{propMatter}</pre>
@@ -755,12 +851,15 @@ export default createReactBlockSpec(
         });
       };
 
-      const onExportEnvChange = (exportEnv: boolean): void => {
+      const onExportSettingsChange = (settings: Partial<ContextExportSettings>): void => {
         editor.updateBlock(block, {
           // @ts-ignore
           props: {
             ...block.props,
-            exportEnv,
+            ...(settings.exportEnv !== undefined && { exportEnv: settings.exportEnv }),
+            ...(settings.exportVars !== undefined && { exportVars: settings.exportVars }),
+            ...(settings.exportCwd !== undefined && { exportCwd: settings.exportCwd }),
+            ...(settings.exportSshHost !== undefined && { exportSshHost: settings.exportSshHost }),
           },
         });
       };
@@ -772,11 +871,16 @@ export default createReactBlockSpec(
           runbookName={block.props.runbookName}
           runbookPath={block.props.runbookPath}
           runbookUri={block.props.runbookUri}
-          exportEnv={block.props.exportEnv}
+          exportSettings={{
+            exportEnv: block.props.exportEnv,
+            exportVars: block.props.exportVars,
+            exportCwd: block.props.exportCwd,
+            exportSshHost: block.props.exportSshHost,
+          }}
           isEditable={editor.isEditable}
           onRunbookSelect={onRunbookSelect}
           onTagChange={onTagChange}
-          onExportEnvChange={onExportEnvChange}
+          onExportSettingsChange={onExportSettingsChange}
           currentRunbookId={currentRunbookId}
         />
       );
