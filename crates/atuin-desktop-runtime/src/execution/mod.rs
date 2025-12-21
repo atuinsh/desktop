@@ -408,6 +408,34 @@ impl ExecutionContext {
         })
     }
 
+    /// Configure this context for sub-runbook execution, inheriting output/events from parent
+    /// but keeping this context's document_handle (for proper context isolation).
+    ///
+    /// Unlike `with_sub_runbook`, this preserves the document_handle so that
+    /// active context updates go to the correct document.
+    pub fn configure_for_sub_runbook(
+        mut self,
+        parent: &ExecutionContext,
+        sub_runbook_id: String,
+    ) -> Result<Self, SubRunbookRecursionError> {
+        if parent.execution_stack.contains(&sub_runbook_id) {
+            return Err(SubRunbookRecursionError {
+                runbook_id: sub_runbook_id,
+                stack: parent.execution_stack.clone(),
+            });
+        }
+
+        let mut new_stack = parent.execution_stack.clone();
+        new_stack.push(sub_runbook_id);
+
+        self.output_channel = parent.output_channel.clone();
+        self.gc_event_bus = parent.gc_event_bus.clone();
+        self.execution_stack = new_stack;
+        self.runbook_loader = parent.runbook_loader.clone();
+
+        Ok(self)
+    }
+
     /// Get the runbook content loader (if available)
     pub fn runbook_loader(&self) -> Option<&Arc<dyn RunbookContentLoader>> {
         self.runbook_loader.as_ref()

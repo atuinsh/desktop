@@ -87,10 +87,13 @@ struct WorkspaceRunbookContentLoader {
 impl WorkspaceRunbookContentLoader {
     pub fn new(
         workspaces: Arc<tokio::sync::Mutex<Option<crate::workspaces::manager::WorkspaceManager>>>,
+        session_token: Option<String>,
     ) -> Self {
         Self {
             workspaces,
-            hub_client: Arc::new(atuin_desktop_runtime::client::HubClient::new()),
+            hub_client: Arc::new(atuin_desktop_runtime::client::HubClient::with_auth(
+                session_token,
+            )),
         }
     }
 
@@ -315,7 +318,13 @@ pub async fn open_document(
     .map_err(|e| format!("Failed to create context storage: {}", e))?;
 
     // Create runbook loader for sub-runbook support
-    let runbook_loader = Arc::new(WorkspaceRunbookContentLoader::new(state.workspaces.clone()));
+    let session_token = atuin_client::settings::Settings::new()
+        .ok()
+        .and_then(|s| s.session_token().ok());
+    let runbook_loader = Arc::new(WorkspaceRunbookContentLoader::new(
+        state.workspaces.clone(),
+        session_token,
+    ));
 
     let document_handle = DocumentHandle::new(
         document_id.clone(),

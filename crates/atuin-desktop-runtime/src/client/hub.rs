@@ -91,6 +91,8 @@ impl ParsedUri {
 pub struct HubClient {
     client: reqwest::Client,
     base_url: String,
+    /// Optional auth token for authenticated requests
+    auth_token: Option<String>,
 }
 
 impl HubClient {
@@ -98,6 +100,16 @@ impl HubClient {
         Self {
             client: reqwest::Client::new(),
             base_url: HUB_API_BASE.to_string(),
+            auth_token: None,
+        }
+    }
+
+    /// Create a new HubClient with an auth token for authenticated requests
+    pub fn with_auth(auth_token: Option<String>) -> Self {
+        Self {
+            client: reqwest::Client::new(),
+            base_url: HUB_API_BASE.to_string(),
+            auth_token,
         }
     }
 
@@ -108,9 +120,12 @@ impl HubClient {
             self.base_url, id
         );
 
-        let response = self
-            .client
-            .get(&url)
+        let mut request = self.client.get(&url);
+        if let Some(token) = &self.auth_token {
+            request = request.header("Authorization", format!("Bearer {}", token));
+        }
+
+        let response = request
             .send()
             .await
             .map_err(|e| HubError::NetworkError(e.to_string()))?;
@@ -155,6 +170,10 @@ impl HubClient {
             request = request.query(&[("tag", tag)]);
         }
 
+        if let Some(token) = &self.auth_token {
+            request = request.header("Authorization", format!("Bearer {}", token));
+        }
+
         let response = request
             .send()
             .await
@@ -184,9 +203,12 @@ impl HubClient {
     pub async fn get_snapshot(&self, id: &str) -> Result<HubSnapshot, HubError> {
         let url = format!("{}/snapshots/{}", self.base_url, id);
 
-        let response = self
-            .client
-            .get(&url)
+        let mut request = self.client.get(&url);
+        if let Some(token) = &self.auth_token {
+            request = request.header("Authorization", format!("Bearer {}", token));
+        }
+
+        let response = request
             .send()
             .await
             .map_err(|e| HubError::NetworkError(e.to_string()))?;

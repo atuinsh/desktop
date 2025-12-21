@@ -456,13 +456,10 @@ impl BlockBehavior for SubRunbook {
                     }
                 };
 
-                // Wrap the context with sub_runbook to forward output to parent and detect recursion
-                let sub_context = match context.with_sub_runbook(
-                    stack_id.clone(),
-                    block.id(),
-                    sub_block_context.context_resolver.clone(),
-                ) {
-                    Ok(ctx) => ctx,
+                let sub_context = match sub_block_context
+                    .configure_for_sub_runbook(&context, stack_id.clone())
+                {
+                    Ok(ctx) => ctx.with_resources(context.ssh_pool(), context.pty_store()),
                     Err(e) => {
                         let error = e.to_string();
                         let _ = context
@@ -474,10 +471,6 @@ impl BlockBehavior for SubRunbook {
                         return;
                     }
                 };
-
-                // Apply SSH pool and PTY store from parent
-                let sub_context =
-                    sub_context.with_resources(context.ssh_pool(), context.pty_store());
 
                 // Execute the block
                 let execution_handle = match block.clone().execute(sub_context).await {
@@ -1314,5 +1307,84 @@ mod tests {
             resolver_after.env_vars().get("PRIVATE_VAR").is_none(),
             "PRIVATE_VAR should NOT be exported to parent when export_env=false"
         );
+    }
+
+    #[tokio::test]
+    async fn test_sub_runbook_script_output_available_to_subsequent_blocks() {
+        let sub_runbook_id = "var-chain";
+        let script1_id = Uuid::new_v4();
+        let script2_id = Uuid::new_v4();
+
+        let sub_runbook_content = vec![
+            json!({
+                "id": script1_id.to_string(),
+                "type": "script",
+                "props": {
+                    "name": "Set Variable",
+                    "code": "echo -n 'generated-value-12345'",
+                    "interpreter": "bash",
+                    "outputVariable": "myvar"
+                }
+            }),
+            json!({
+                "id": script2_id.to_string(),
+                "type": "script",
+                "props": {
+                    "name": "Use Variable",
+                    "code": "test '{{ var.myvar }}' = 'generated-value-12345' || exit 1",
+                    "interpreter": "bash"
+                }
+            }),
+        ];
+
+        let parent_sub_block_id = Uuid::new_v4();
+        let parent_content = vec![json!({
+            "id": parent_sub_block_id.to_string(),
+            "type": "sub-runbook",
+            "props": {
+                "name": "Run Var Chain",
+                "runbookPath": sub_runbook_id
+            }
+        })];
+
+        let runbook_loader = Arc::new(
+            MemoryRunbookContentLoader::new().with_runbook(sub_runbook_id, sub_runbook_content),
+        );
+
+        let (document_handle, _event_bus) = setup_test_document(runbook_loader).await;
+
+        document_handle
+            .update_document(parent_content)
+            .await
+            .expect("Should load document");
+
+        let exec_context = document_handle
+            .create_execution_context(parent_sub_block_id, None, None, None)
+            .await
+            .expect("Should create execution context");
+
+        let sub_runbook_block = SubRunbook::builder()
+            .id(parent_sub_block_id)
+            .name("Run Var Chain")
+            .runbook_ref(SubRunbookRef {
+                id: None,
+                uri: None,
+                path: Some(sub_runbook_id.to_string()),
+            })
+            .build();
+
+        let handle = sub_runbook_block
+            .execute(exec_context)
+            .await
+            .expect("Should execute");
+
+        if let Some(handle) = handle {
+            let result = handle.wait_for_completion().await;
+            assert_eq!(
+                result,
+                ExecutionResult::Success,
+                "Script 2 should see the variable set by Script 1 and succeed"
+            );
+        }
     }
 }
