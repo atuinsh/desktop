@@ -1388,4 +1388,767 @@ mod tests {
             );
         }
     }
+
+    /// Test: Parent context (env vars) is inherited by sub-runbook
+    ///
+    /// Parent sets PARENT_VAR=from_parent, sub-runbook script should be able to read it
+    #[tokio::test]
+    async fn test_parent_env_inherited_by_sub_runbook() {
+        let sub_runbook_id = "inherit-test";
+        let script_id = Uuid::new_v4();
+
+        // Sub-runbook script checks that PARENT_VAR is visible
+        let sub_runbook_content = vec![json!({
+            "id": script_id.to_string(),
+            "type": "script",
+            "props": {
+                "name": "Check Parent Env",
+                "code": "test \"$PARENT_VAR\" = 'from_parent' || exit 1",
+                "interpreter": "bash"
+            }
+        })];
+
+        // Parent sets env var then calls sub-runbook
+        let env_block_id = Uuid::new_v4();
+        let parent_sub_block_id = Uuid::new_v4();
+        let parent_content = vec![
+            json!({
+                "id": env_block_id.to_string(),
+                "type": "env",
+                "props": {
+                    "name": "PARENT_VAR",
+                    "value": "from_parent"
+                }
+            }),
+            json!({
+                "id": parent_sub_block_id.to_string(),
+                "type": "sub-runbook",
+                "props": {
+                    "name": "Run Inherit Test",
+                    "runbookPath": sub_runbook_id
+                }
+            }),
+        ];
+
+        let runbook_loader = Arc::new(
+            MemoryRunbookContentLoader::new().with_runbook(sub_runbook_id, sub_runbook_content),
+        );
+
+        let (document_handle, _event_bus) = setup_test_document(runbook_loader).await;
+
+        document_handle
+            .update_document(parent_content)
+            .await
+            .expect("Should load document");
+
+        // First execute the env block to set PARENT_VAR
+        let env_context = document_handle
+            .create_execution_context(env_block_id, None, None, None)
+            .await
+            .expect("Should create env execution context");
+
+        let env_block = crate::blocks::environment::Environment::builder()
+            .id(env_block_id)
+            .name("PARENT_VAR")
+            .value("from_parent")
+            .build();
+
+        let env_handle = env_block.execute(env_context).await.expect("Should execute env");
+        if let Some(h) = env_handle {
+            h.wait_for_completion().await;
+        }
+
+        // Now execute the sub-runbook - it should inherit PARENT_VAR
+        let exec_context = document_handle
+            .create_execution_context(parent_sub_block_id, None, None, None)
+            .await
+            .expect("Should create execution context");
+
+        let sub_runbook_block = SubRunbook::builder()
+            .id(parent_sub_block_id)
+            .name("Run Inherit Test")
+            .runbook_ref(SubRunbookRef {
+                id: None,
+                uri: None,
+                path: Some(sub_runbook_id.to_string()),
+            })
+            .build();
+
+        let handle = sub_runbook_block
+            .execute(exec_context)
+            .await
+            .expect("Should execute");
+
+        if let Some(handle) = handle {
+            let result = handle.wait_for_completion().await;
+            assert_eq!(
+                result,
+                ExecutionResult::Success,
+                "Sub-runbook script should see PARENT_VAR from parent context"
+            );
+        }
+    }
+
+    /// Test: export_vars exports template variables to parent
+    ///
+    /// Sub-runbook sets a var via outputVariable, parent should see it with export_vars=true
+    #[tokio::test]
+    async fn test_vars_export_from_sub_runbook() {
+        let sub_runbook_id = "var-exporter";
+        let script_id = Uuid::new_v4();
+
+        let sub_runbook_content = vec![json!({
+            "id": script_id.to_string(),
+            "type": "script",
+            "props": {
+                "name": "Set Var",
+                "code": "echo -n 'exported_value'",
+                "interpreter": "bash",
+                "outputVariable": "exported_var"
+            }
+        })];
+
+        let parent_sub_block_id = Uuid::new_v4();
+        let parent_content = vec![json!({
+            "id": parent_sub_block_id.to_string(),
+            "type": "sub-runbook",
+            "props": {
+                "name": "Run Var Exporter",
+                "runbookPath": sub_runbook_id,
+                "exportVars": true
+            }
+        })];
+
+        let runbook_loader = Arc::new(
+            MemoryRunbookContentLoader::new().with_runbook(sub_runbook_id, sub_runbook_content),
+        );
+
+        let (document_handle, _event_bus) = setup_test_document(runbook_loader).await;
+
+        document_handle
+            .update_document(parent_content)
+            .await
+            .expect("Should load document");
+
+        // Verify var doesn't exist before
+        let resolver_before = document_handle
+            .get_context_resolver()
+            .await
+            .expect("Should get resolver");
+        assert!(
+            resolver_before.vars().get("exported_var").is_none(),
+            "exported_var should not exist before execution"
+        );
+
+        let exec_context = document_handle
+            .create_execution_context(parent_sub_block_id, None, None, None)
+            .await
+            .expect("Should create execution context");
+
+        let sub_runbook_block = SubRunbook::builder()
+            .id(parent_sub_block_id)
+            .name("Run Var Exporter")
+            .runbook_ref(SubRunbookRef {
+                id: None,
+                uri: None,
+                path: Some(sub_runbook_id.to_string()),
+            })
+            .export_vars(true)
+            .build();
+
+        let handle = sub_runbook_block
+            .execute(exec_context)
+            .await
+            .expect("Should execute");
+
+        if let Some(handle) = handle {
+            let result = handle.wait_for_completion().await;
+            assert_eq!(result, ExecutionResult::Success);
+        }
+
+        // Verify var IS exported to parent
+        let resolver_after = document_handle
+            .get_context_resolver()
+            .await
+            .expect("Should get resolver");
+        assert_eq!(
+            resolver_after.vars().get("exported_var"),
+            Some(&"exported_value".to_string()),
+            "exported_var should be exported to parent when export_vars=true"
+        );
+    }
+
+    /// Test: export_vars=false does NOT export template variables
+    #[tokio::test]
+    async fn test_vars_not_exported_by_default() {
+        let sub_runbook_id = "var-no-export";
+        let script_id = Uuid::new_v4();
+
+        let sub_runbook_content = vec![json!({
+            "id": script_id.to_string(),
+            "type": "script",
+            "props": {
+                "name": "Set Var",
+                "code": "echo -n 'private_value'",
+                "interpreter": "bash",
+                "outputVariable": "private_var"
+            }
+        })];
+
+        let parent_sub_block_id = Uuid::new_v4();
+        let parent_content = vec![json!({
+            "id": parent_sub_block_id.to_string(),
+            "type": "sub-runbook",
+            "props": {
+                "name": "Run Var No Export",
+                "runbookPath": sub_runbook_id
+                // exportVars defaults to false
+            }
+        })];
+
+        let runbook_loader = Arc::new(
+            MemoryRunbookContentLoader::new().with_runbook(sub_runbook_id, sub_runbook_content),
+        );
+
+        let (document_handle, _event_bus) = setup_test_document(runbook_loader).await;
+
+        document_handle
+            .update_document(parent_content)
+            .await
+            .expect("Should load document");
+
+        let exec_context = document_handle
+            .create_execution_context(parent_sub_block_id, None, None, None)
+            .await
+            .expect("Should create execution context");
+
+        let sub_runbook_block = SubRunbook::builder()
+            .id(parent_sub_block_id)
+            .name("Run Var No Export")
+            .runbook_ref(SubRunbookRef {
+                id: None,
+                uri: None,
+                path: Some(sub_runbook_id.to_string()),
+            })
+            .export_vars(false)
+            .build();
+
+        let handle = sub_runbook_block
+            .execute(exec_context)
+            .await
+            .expect("Should execute");
+
+        if let Some(handle) = handle {
+            let result = handle.wait_for_completion().await;
+            assert_eq!(result, ExecutionResult::Success);
+        }
+
+        // Verify var is NOT exported
+        let resolver_after = document_handle
+            .get_context_resolver()
+            .await
+            .expect("Should get resolver");
+        assert!(
+            resolver_after.vars().get("private_var").is_none(),
+            "private_var should NOT be exported when export_vars=false"
+        );
+    }
+
+    /// Test: export_cwd exports working directory to parent
+    #[tokio::test]
+    async fn test_cwd_export_from_sub_runbook() {
+        let sub_runbook_id = "cwd-exporter";
+        let dir_block_id = Uuid::new_v4();
+
+        // Sub-runbook changes to /tmp
+        let sub_runbook_content = vec![json!({
+            "id": dir_block_id.to_string(),
+            "type": "directory",
+            "props": {
+                "path": "/tmp"
+            }
+        })];
+
+        let parent_sub_block_id = Uuid::new_v4();
+        let parent_content = vec![json!({
+            "id": parent_sub_block_id.to_string(),
+            "type": "sub-runbook",
+            "props": {
+                "name": "Run CWD Exporter",
+                "runbookPath": sub_runbook_id,
+                "exportCwd": true
+            }
+        })];
+
+        let runbook_loader = Arc::new(
+            MemoryRunbookContentLoader::new().with_runbook(sub_runbook_id, sub_runbook_content),
+        );
+
+        let (document_handle, _event_bus) = setup_test_document(runbook_loader).await;
+
+        document_handle
+            .update_document(parent_content)
+            .await
+            .expect("Should load document");
+
+        let resolver_before = document_handle
+            .get_context_resolver()
+            .await
+            .expect("Should get resolver");
+        let cwd_before = resolver_before.cwd().to_string();
+
+        let exec_context = document_handle
+            .create_execution_context(parent_sub_block_id, None, None, None)
+            .await
+            .expect("Should create execution context");
+
+        let sub_runbook_block = SubRunbook::builder()
+            .id(parent_sub_block_id)
+            .name("Run CWD Exporter")
+            .runbook_ref(SubRunbookRef {
+                id: None,
+                uri: None,
+                path: Some(sub_runbook_id.to_string()),
+            })
+            .export_cwd(true)
+            .build();
+
+        let handle = sub_runbook_block
+            .execute(exec_context)
+            .await
+            .expect("Should execute");
+
+        if let Some(handle) = handle {
+            let result = handle.wait_for_completion().await;
+            assert_eq!(result, ExecutionResult::Success);
+        }
+
+        let resolver_after = document_handle
+            .get_context_resolver()
+            .await
+            .expect("Should get resolver");
+
+        // Parent cwd should now be /tmp (exported from sub-runbook)
+        assert_ne!(
+            cwd_before,
+            resolver_after.cwd(),
+            "CWD should have changed after export"
+        );
+        assert_eq!(
+            resolver_after.cwd(),
+            "/tmp",
+            "CWD should be exported from sub-runbook"
+        );
+    }
+
+    /// Test: Sub-runbook block failure propagates to parent
+    #[tokio::test]
+    async fn test_sub_runbook_failure_propagates() {
+        let sub_runbook_id = "failing-runbook";
+        let script_id = Uuid::new_v4();
+
+        // Sub-runbook has a failing script
+        let sub_runbook_content = vec![json!({
+            "id": script_id.to_string(),
+            "type": "script",
+            "props": {
+                "name": "Failing Script",
+                "code": "exit 1",
+                "interpreter": "bash"
+            }
+        })];
+
+        let parent_sub_block_id = Uuid::new_v4();
+        let parent_content = vec![json!({
+            "id": parent_sub_block_id.to_string(),
+            "type": "sub-runbook",
+            "props": {
+                "name": "Run Failing Runbook",
+                "runbookPath": sub_runbook_id
+            }
+        })];
+
+        let runbook_loader = Arc::new(
+            MemoryRunbookContentLoader::new().with_runbook(sub_runbook_id, sub_runbook_content),
+        );
+
+        let (document_handle, event_bus) = setup_test_document(runbook_loader).await;
+
+        document_handle
+            .update_document(parent_content)
+            .await
+            .expect("Should load document");
+
+        let exec_context = document_handle
+            .create_execution_context(parent_sub_block_id, None, None, None)
+            .await
+            .expect("Should create execution context");
+
+        let sub_runbook_block = SubRunbook::builder()
+            .id(parent_sub_block_id)
+            .name("Run Failing Runbook")
+            .runbook_ref(SubRunbookRef {
+                id: None,
+                uri: None,
+                path: Some(sub_runbook_id.to_string()),
+            })
+            .build();
+
+        let handle = sub_runbook_block
+            .execute(exec_context)
+            .await
+            .expect("Should execute");
+
+        if let Some(handle) = handle {
+            let result = handle.wait_for_completion().await;
+            assert_eq!(
+                result,
+                ExecutionResult::Failure,
+                "Sub-runbook should report failure when inner block fails"
+            );
+        }
+
+        // Verify failure event was emitted
+        let events = event_bus.events();
+        let has_failure = events.iter().any(|e| {
+            matches!(e, crate::events::GCEvent::BlockFailed { .. })
+        });
+        assert!(has_failure, "Should emit BlockFailed event");
+    }
+
+    /// Test: Indirect recursion detection (A -> B -> A)
+    #[tokio::test]
+    async fn test_indirect_recursion_detection() {
+        let runbook_a_id = "runbook-a";
+        let runbook_b_id = "runbook-b";
+
+        // Runbook A calls Runbook B
+        let sub_block_in_a = Uuid::new_v4();
+        let runbook_a_content = vec![json!({
+            "id": sub_block_in_a.to_string(),
+            "type": "sub-runbook",
+            "props": {
+                "name": "Call B",
+                "runbookPath": runbook_b_id
+            }
+        })];
+
+        // Runbook B calls Runbook A (creates cycle)
+        let sub_block_in_b = Uuid::new_v4();
+        let runbook_b_content = vec![json!({
+            "id": sub_block_in_b.to_string(),
+            "type": "sub-runbook",
+            "props": {
+                "name": "Call A",
+                "runbookPath": runbook_a_id
+            }
+        })];
+
+        let runbook_loader = Arc::new(
+            MemoryRunbookContentLoader::new()
+                .with_runbook(runbook_a_id, runbook_a_content.clone())
+                .with_runbook(runbook_b_id, runbook_b_content),
+        );
+
+        let (document_handle, event_bus) = setup_test_document(runbook_loader).await;
+
+        // Load runbook A as the main document
+        document_handle
+            .update_document(runbook_a_content)
+            .await
+            .expect("Should load document");
+
+        let exec_context = document_handle
+            .create_execution_context(sub_block_in_a, None, None, None)
+            .await
+            .expect("Should create execution context");
+
+        let sub_runbook_block = SubRunbook::builder()
+            .id(sub_block_in_a)
+            .name("Call B")
+            .runbook_ref(SubRunbookRef {
+                id: None,
+                uri: None,
+                path: Some(runbook_b_id.to_string()),
+            })
+            .build();
+
+        let handle = sub_runbook_block
+            .execute(exec_context)
+            .await
+            .expect("Should execute");
+
+        if let Some(handle) = handle {
+            let result = handle.wait_for_completion().await;
+            assert_eq!(
+                result,
+                ExecutionResult::Failure,
+                "Should fail due to indirect recursion"
+            );
+        }
+
+        // Check for recursion error
+        let events = event_bus.events();
+        let has_recursion_error = events.iter().any(|e| {
+            if let crate::events::GCEvent::BlockFailed { error, .. } = e {
+                error.contains("Recursion detected")
+            } else {
+                false
+            }
+        });
+        assert!(
+            has_recursion_error,
+            "Should detect indirect recursion (A -> B -> A)"
+        );
+    }
+
+    /// Test: Nested sub-runbooks pass context correctly (A -> B -> C)
+    #[tokio::test]
+    async fn test_nested_sub_runbooks_context_flow() {
+        let runbook_c_id = "runbook-c";
+        let runbook_b_id = "runbook-b";
+
+        // Runbook C: sets a variable
+        let script_in_c = Uuid::new_v4();
+        let runbook_c_content = vec![json!({
+            "id": script_in_c.to_string(),
+            "type": "script",
+            "props": {
+                "name": "Set Deep Var",
+                "code": "echo -n 'from_c'",
+                "interpreter": "bash",
+                "outputVariable": "deep_var"
+            }
+        })];
+
+        // Runbook B: calls C with export_vars, then uses the var
+        let sub_block_in_b = Uuid::new_v4();
+        let verify_in_b = Uuid::new_v4();
+        let runbook_b_content = vec![
+            json!({
+                "id": sub_block_in_b.to_string(),
+                "type": "sub-runbook",
+                "props": {
+                    "name": "Call C",
+                    "runbookPath": runbook_c_id,
+                    "exportVars": true
+                }
+            }),
+            json!({
+                "id": verify_in_b.to_string(),
+                "type": "script",
+                "props": {
+                    "name": "Verify Deep Var",
+                    "code": "test '{{ var.deep_var }}' = 'from_c' || exit 1",
+                    "interpreter": "bash"
+                }
+            }),
+        ];
+
+        // Parent (A): calls B
+        let sub_block_in_a = Uuid::new_v4();
+        let parent_content = vec![json!({
+            "id": sub_block_in_a.to_string(),
+            "type": "sub-runbook",
+            "props": {
+                "name": "Call B",
+                "runbookPath": runbook_b_id
+            }
+        })];
+
+        let runbook_loader = Arc::new(
+            MemoryRunbookContentLoader::new()
+                .with_runbook(runbook_c_id, runbook_c_content)
+                .with_runbook(runbook_b_id, runbook_b_content),
+        );
+
+        let (document_handle, _event_bus) = setup_test_document(runbook_loader).await;
+
+        document_handle
+            .update_document(parent_content)
+            .await
+            .expect("Should load document");
+
+        let exec_context = document_handle
+            .create_execution_context(sub_block_in_a, None, None, None)
+            .await
+            .expect("Should create execution context");
+
+        let sub_runbook_block = SubRunbook::builder()
+            .id(sub_block_in_a)
+            .name("Call B")
+            .runbook_ref(SubRunbookRef {
+                id: None,
+                uri: None,
+                path: Some(runbook_b_id.to_string()),
+            })
+            .build();
+
+        let handle = sub_runbook_block
+            .execute(exec_context)
+            .await
+            .expect("Should execute");
+
+        if let Some(handle) = handle {
+            let result = handle.wait_for_completion().await;
+            assert_eq!(
+                result,
+                ExecutionResult::Success,
+                "Nested chain A->B->C should work: C sets var, B sees it after export"
+            );
+        }
+    }
+
+    /// Test: export_ssh_host exports SSH connection to parent
+    #[tokio::test]
+    async fn test_ssh_host_export_from_sub_runbook() {
+        let sub_runbook_id = "ssh-exporter";
+        let host_block_id = Uuid::new_v4();
+
+        let sub_runbook_content = vec![json!({
+            "id": host_block_id.to_string(),
+            "type": "host-select",
+            "props": {
+                "host": "user@remote.example.com"
+            }
+        })];
+
+        let parent_sub_block_id = Uuid::new_v4();
+        let parent_content = vec![json!({
+            "id": parent_sub_block_id.to_string(),
+            "type": "sub-runbook",
+            "props": {
+                "name": "Run SSH Exporter",
+                "runbookPath": sub_runbook_id,
+                "exportSshHost": true
+            }
+        })];
+
+        let runbook_loader = Arc::new(
+            MemoryRunbookContentLoader::new().with_runbook(sub_runbook_id, sub_runbook_content),
+        );
+
+        let (document_handle, _event_bus) = setup_test_document(runbook_loader).await;
+
+        document_handle
+            .update_document(parent_content)
+            .await
+            .expect("Should load document");
+
+        let resolver_before = document_handle
+            .get_context_resolver()
+            .await
+            .expect("Should get resolver");
+        assert!(
+            resolver_before.ssh_host().is_none(),
+            "SSH host should be None before execution"
+        );
+
+        let exec_context = document_handle
+            .create_execution_context(parent_sub_block_id, None, None, None)
+            .await
+            .expect("Should create execution context");
+
+        let sub_runbook_block = SubRunbook::builder()
+            .id(parent_sub_block_id)
+            .name("Run SSH Exporter")
+            .runbook_ref(SubRunbookRef {
+                id: None,
+                uri: None,
+                path: Some(sub_runbook_id.to_string()),
+            })
+            .export_ssh_host(true)
+            .build();
+
+        let handle = sub_runbook_block
+            .execute(exec_context)
+            .await
+            .expect("Should execute");
+
+        if let Some(handle) = handle {
+            let result = handle.wait_for_completion().await;
+            assert_eq!(result, ExecutionResult::Success);
+        }
+
+        let resolver_after = document_handle
+            .get_context_resolver()
+            .await
+            .expect("Should get resolver");
+        assert_eq!(
+            resolver_after.ssh_host(),
+            Some(&"user@remote.example.com".to_string()),
+            "SSH host should be exported from sub-runbook"
+        );
+    }
+
+    /// Test: export_ssh_host=false does NOT export SSH connection
+    #[tokio::test]
+    async fn test_ssh_host_not_exported_by_default() {
+        let sub_runbook_id = "ssh-no-export";
+        let host_block_id = Uuid::new_v4();
+
+        let sub_runbook_content = vec![json!({
+            "id": host_block_id.to_string(),
+            "type": "host-select",
+            "props": {
+                "host": "private@internal.host"
+            }
+        })];
+
+        let parent_sub_block_id = Uuid::new_v4();
+        let parent_content = vec![json!({
+            "id": parent_sub_block_id.to_string(),
+            "type": "sub-runbook",
+            "props": {
+                "name": "Run SSH No Export",
+                "runbookPath": sub_runbook_id
+            }
+        })];
+
+        let runbook_loader = Arc::new(
+            MemoryRunbookContentLoader::new().with_runbook(sub_runbook_id, sub_runbook_content),
+        );
+
+        let (document_handle, _event_bus) = setup_test_document(runbook_loader).await;
+
+        document_handle
+            .update_document(parent_content)
+            .await
+            .expect("Should load document");
+
+        let exec_context = document_handle
+            .create_execution_context(parent_sub_block_id, None, None, None)
+            .await
+            .expect("Should create execution context");
+
+        let sub_runbook_block = SubRunbook::builder()
+            .id(parent_sub_block_id)
+            .name("Run SSH No Export")
+            .runbook_ref(SubRunbookRef {
+                id: None,
+                uri: None,
+                path: Some(sub_runbook_id.to_string()),
+            })
+            .export_ssh_host(false)
+            .build();
+
+        let handle = sub_runbook_block
+            .execute(exec_context)
+            .await
+            .expect("Should execute");
+
+        if let Some(handle) = handle {
+            let result = handle.wait_for_completion().await;
+            assert_eq!(result, ExecutionResult::Success);
+        }
+
+        let resolver_after = document_handle
+            .get_context_resolver()
+            .await
+            .expect("Should get resolver");
+        assert!(
+            resolver_after.ssh_host().is_none(),
+            "SSH host should NOT be exported when export_ssh_host=false"
+        );
+    }
 }
