@@ -1453,7 +1453,10 @@ mod tests {
             .value("from_parent")
             .build();
 
-        let env_handle = env_block.execute(env_context).await.expect("Should execute env");
+        let env_handle = env_block
+            .execute(env_context)
+            .await
+            .expect("Should execute env");
         if let Some(h) = env_handle {
             h.wait_for_completion().await;
         }
@@ -1810,9 +1813,9 @@ mod tests {
 
         // Verify failure event was emitted
         let events = event_bus.events();
-        let has_failure = events.iter().any(|e| {
-            matches!(e, crate::events::GCEvent::BlockFailed { .. })
-        });
+        let has_failure = events
+            .iter()
+            .any(|e| matches!(e, crate::events::GCEvent::BlockFailed { .. }));
         assert!(has_failure, "Should emit BlockFailed event");
     }
 
