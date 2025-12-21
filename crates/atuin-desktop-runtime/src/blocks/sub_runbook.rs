@@ -456,21 +456,20 @@ impl BlockBehavior for SubRunbook {
                     }
                 };
 
-                let sub_context = match sub_block_context
-                    .configure_for_sub_runbook(&context, stack_id.clone())
-                {
-                    Ok(ctx) => ctx.with_resources(context.ssh_pool(), context.pty_store()),
-                    Err(e) => {
-                        let error = e.to_string();
-                        let _ = context
-                            .update_block_state::<SubRunbookState, _>(block_id, move |state| {
-                                state.status = SubRunbookStatus::Failed { error };
-                            })
-                            .await;
-                        let _ = context.block_failed(e.to_string()).await;
-                        return;
-                    }
-                };
+                let sub_context =
+                    match sub_block_context.configure_for_sub_runbook(&context, stack_id.clone()) {
+                        Ok(ctx) => ctx.with_resources(context.ssh_pool(), context.pty_store()),
+                        Err(e) => {
+                            let error = e.to_string();
+                            let _ = context
+                                .update_block_state::<SubRunbookState, _>(block_id, move |state| {
+                                    state.status = SubRunbookStatus::Failed { error };
+                                })
+                                .await;
+                            let _ = context.block_failed(e.to_string()).await;
+                            return;
+                        }
+                    };
 
                 // Execute the block
                 let execution_handle = match block.clone().execute(sub_context).await {
@@ -606,7 +605,9 @@ impl BlockBehavior for SubRunbook {
 
                     new_vars = child_vars
                         .iter()
-                        .filter(|(k, v)| parent_vars.get(*k).map(|pv| pv.as_str()) != Some(v.as_str()))
+                        .filter(|(k, v)| {
+                            parent_vars.get(*k).map(|pv| pv.as_str()) != Some(v.as_str())
+                        })
                         .map(|(k, v)| (k.clone(), v.clone(), "(sub-runbook export)".to_string()))
                         .collect();
 
