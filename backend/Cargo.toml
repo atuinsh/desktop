@@ -47,7 +47,7 @@ tauri-plugin-process = "2.3.1"
 tauri-plugin-fs = "2.4.4"
 tauri-plugin-opener = "2.5.2"
 tauri-plugin-log = { version = "2.7.0", features = ["colored"] }
-tauri-plugin-notification = "2.2.1"
+tauri-plugin-notification = "2.3.3"
 
 rodio = { version = "0.19", default-features = false, features = ["vorbis"] }
 humantime = "2.3.0"
