@@ -967,8 +967,8 @@ impl Session {
 
                     resize = resize_stream.recv() => {
                         match resize {
-                            Some((width, height)) => {
-                                let _ = channel.window_change(width as u32, height as u32, 0, 0).await;
+                            Some((rows, cols)) => {
+                                let _ = channel.window_change(cols as u32, rows as u32, 0, 0).await;
                             }
                             None => {
                                 tracing::debug!("SSH resize stream closed");

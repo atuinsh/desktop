@@ -72,6 +72,12 @@ pub struct Terminal {
 
     #[builder(default = true)]
     pub output_visible: bool,
+
+    #[builder(default = 20)]
+    pub rows: u16,
+
+    #[builder(default = 120)]
+    pub cols: u16,
 }
 
 impl FromDocument for Terminal {
@@ -109,6 +115,20 @@ impl FromDocument for Terminal {
                     .get("outputVisible")
                     .and_then(|v| v.as_bool())
                     .unwrap_or(true),
+            )
+            .rows(
+                props
+                    .get("rows")
+                    .and_then(|v| v.as_u64())
+                    .map(|v| v as u16)
+                    .unwrap_or(20),
+            )
+            .cols(
+                props
+                    .get("cols")
+                    .and_then(|v| v.as_u64())
+                    .map(|v| v as u16)
+                    .unwrap_or(120),
             )
             .build();
 
@@ -246,15 +266,16 @@ impl Terminal {
             let pty_id_str = self.id.to_string();
             let ssh_pool_clone = ssh_pool.clone();
 
-            // Open SSH PTY with cancellation support - use the receiver we took earlier
+            let initial_cols = self.cols;
+            let initial_rows = self.rows;
             let ssh_result = tokio::select! {
                 result = ssh_pool_clone.open_pty(
                     &hostname_clone,
                     username_clone.as_deref(),
                     &pty_id_str,
                     output_sender.clone(),
-                    80,
-                    24,
+                    initial_cols,
+                    initial_rows,
                 ) => {
                     result.map_err(|e| format!("Failed to open SSH PTY: {}", e))
                 }
@@ -315,12 +336,12 @@ impl Terminal {
             }
 
             let pty = Pty::open(
-                24,
-                80,
+                self.rows,
+                self.cols,
                 Some(cwd.to_string()),
                 env_vars,
                 metadata.clone(),
-                None, // Use default shell
+                None,
             )
             .await
             .map_err(|e| format!("Failed to open local PTY: {}", e))?;
