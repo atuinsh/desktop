@@ -352,7 +352,7 @@ export default function Runbooks() {
       runbook_id: currentRunbook.id,
       content: currentRunbook.content,
     });
-    queryClient.invalidateQueries({ queryKey: snapshotsByRunbook(currentRunbook.id).queryKey });
+    // Note: Snapshot.create() already triggers dbHook which invalidates snapshotsByRunbook
 
     if (remoteRunbook) {
       shareSnapshot.mutate(snapshot, {

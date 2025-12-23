@@ -9,6 +9,7 @@ import * as api from "@/api/api";
 import { cn } from "@/lib/utils";
 import CollaborationManager from "@/routes/runbooks/CollaborationManager";
 import { open } from "@tauri-apps/plugin-shell";
+import { remoteRunbook } from "@/lib/queries/runbooks";
 
 interface RunbookControlsProps {
   runbook: Runbook;
@@ -196,10 +197,14 @@ export default function RunbookControls(props: RunbookControlsProps) {
   const slugInputRef = useRef<HTMLInputElement>(null);
   const visibilitySelectRef = useRef<HTMLSelectElement>(null);
 
+  const queryClient = useStore((state) => state.queryClient);
+
   const [slugState, slugApi] = useEditState(
     props.remoteRunbook?.slug || "",
     async (slug) => {
       await api.updateRunbook(props.runbook, slug, visibilityState.lastTrueValue);
+      // Invalidate the remote runbook cache so the UI reflects the updated slug
+      queryClient.invalidateQueries(remoteRunbook(props.runbook.id));
       return slug;
     },
     slugInputRef,
@@ -209,6 +214,8 @@ export default function RunbookControls(props: RunbookControlsProps) {
     props.remoteRunbook?.visibility || "public",
     async (visibility) => {
       await api.updateRunbook(props.runbook, slugState.lastTrueValue, visibility);
+      // Invalidate the remote runbook cache so the UI reflects the updated visibility
+      queryClient.invalidateQueries(remoteRunbook(props.runbook.id));
       return visibility;
     },
     visibilitySelectRef,
