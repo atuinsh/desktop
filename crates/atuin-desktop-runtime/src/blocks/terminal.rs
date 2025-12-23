@@ -249,10 +249,9 @@ impl Terminal {
             }
         } else {
             if uses_output_vars {
-                fs_var_handle =
-                    Some(crate::context::fs_var::setup().map_err(|e| {
-                        format!("Failed to setup temp file for output variables: {}", e)
-                    })?);
+                fs_var_handle = Some(crate::context::fs_var::setup().map_err(|e| {
+                    format!("Failed to setup temp file for output variables: {}", e)
+                })?);
             } else {
                 fs_var_handle = None;
             }

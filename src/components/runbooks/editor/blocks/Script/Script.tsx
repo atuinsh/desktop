@@ -128,6 +128,8 @@ const ScriptBlock = ({
   const blockContext = useBlockContext(script.id);
   const sshParent = blockContext.sshHost;
 
+  const showSpinner = (blockExecution.isStarting || blockExecution.isStopping) && !!sshParent;
+
   const onBlockOutput = useCallback(async (output: GenericBlockOutput<void>) => {
     if (output.stdout) {
       xtermRef.current?.write(output.stdout);
@@ -355,14 +357,16 @@ const ScriptBlock = ({
               color="danger"
             >
               <div>
-                <PlayButton
-                  eventName="runbooks.block.execute"
-                  eventProps={{ type: "script" }}
-                  onPlay={handlePlay}
-                  onStop={blockExecution.cancel}
-                  isRunning={blockExecution.isRunning}
-                  cancellable={true}
-                />
+              <PlayButton
+                eventName="runbooks.block.execute"
+                eventProps={{ type: "script" }}
+                onPlay={handlePlay}
+                onStop={blockExecution.cancel}
+                isRunning={blockExecution.isRunning}
+                cancellable={true}
+                isLoading={showSpinner}
+                disabled={showSpinner}
+              />
               </div>
             </Tooltip>
 

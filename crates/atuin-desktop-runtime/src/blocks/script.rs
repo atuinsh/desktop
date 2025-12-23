@@ -748,7 +748,9 @@ impl Script {
             let error_msg = format!("Failed to start SSH execution: {}", e);
             let _ = context.block_failed(error_msg.to_string()).await;
             if let Some(ref path) = remote_temp_path {
-                let _ = ssh_pool.delete_file(&hostname, username.as_deref(), path).await;
+                let _ = ssh_pool
+                    .delete_file(&hostname, username.as_deref(), path)
+                    .await;
             }
             return (Err(error_msg.into()), Vec::new(), None);
         }

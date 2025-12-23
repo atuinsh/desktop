@@ -328,7 +328,8 @@ export const RunBlock = ({
 
           <div className="flex flex-row gap-2 flex-grow w-full" ref={elementRef}>
             <PlayButton
-              isLoading={isLoading}
+              isLoading={isLoading || ((execution.isStarting || execution.isStopping) && !!sshParent)}
+              disabled={isLoading || ((execution.isStarting || execution.isStopping) && !!sshParent)}
               isRunning={execution.isRunning}
               cancellable={true}
               onPlay={handlePlay}

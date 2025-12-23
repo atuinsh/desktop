@@ -137,6 +137,7 @@ export function useBlockContext(blockId: string, suppressErrors: boolean = false
 export function useBlockOutput<T = JsonValue>(
   blockId: string,
   callback: (output: GenericBlockOutput<T>) => void,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): void {
   const documentBridge = useDocumentBridge();
   useEffect(() => {
@@ -175,6 +176,8 @@ export type ExecutionLifecycle = "idle" | "running" | "success" | "error" | "can
 
 export interface ClientExecutionHandle {
   isRunning: boolean;
+  isStarting: boolean;
+  isStopping: boolean;
   isSuccess: boolean;
   isError: boolean;
   isCancelled: boolean;
@@ -192,6 +195,8 @@ export function useBlockExecution(blockId: string): ClientExecutionHandle {
   const [lifecycle, setLifecycle] = useState<ExecutionLifecycle>("idle");
   const [error, setError] = useState<string | null>(null);
   const [executionId, setExecutionId] = useState<string | null>(null);
+  const [isStarting, setIsStarting] = useState(false);
+  const [isStopping, setIsStopping] = useState(false);
 
   const startExecution = useCallback(async () => {
     if (!documentBridge) {
@@ -203,6 +208,7 @@ export function useBlockExecution(blockId: string): ClientExecutionHandle {
       return;
     }
 
+    setIsStarting(true);
     setError(null);
     documentBridge.logger.info(
       `Starting execution of block ${blockId} in runbook ${documentBridge.runbookId}`,
@@ -212,6 +218,7 @@ export function useBlockExecution(blockId: string): ClientExecutionHandle {
     try {
       executionId = await executeBlock(documentBridge.runbookId, blockId);
     } catch (error) {
+      setIsStarting(false);
       documentBridge.logger.warn(
         `Failed to execute block ${blockId} in runbook ${documentBridge.runbookId} (block should send a BlockOutput with lifecycle set to error)`,
         error,
@@ -248,10 +255,16 @@ export function useBlockExecution(blockId: string): ClientExecutionHandle {
       return;
     }
 
+    setIsStopping(true);
     documentBridge.logger.info(
       `Cancelling execution of block ${blockId} in runbook ${documentBridge.runbookId} with execution ID: ${executionId}`,
     );
-    await cancelExecution(executionId);
+    try {
+      await cancelExecution(executionId);
+    } catch (error) {
+      setIsStopping(false);
+      documentBridge.logger.error("Failed to cancel execution", error);
+    }
     setExecutionId(null);
     setError(null);
   }, [documentBridge, blockId, executionId, lifecycle]);
@@ -262,19 +275,26 @@ export function useBlockExecution(blockId: string): ClientExecutionHandle {
         setLifecycle("success");
         setExecutionId(null);
         setError(null);
+        setIsStarting(false);
+        setIsStopping(false);
         break;
       case "cancelled":
         setLifecycle("cancelled");
         setExecutionId(null);
         setError(null);
+        setIsStarting(false);
+        setIsStopping(false);
         break;
       case "error":
         setLifecycle("error");
         setExecutionId(null);
         setError(output.lifecycle?.data.message);
+        setIsStarting(false);
+        setIsStopping(false);
         break;
       case "started":
         setLifecycle("running");
+        setIsStarting(false);
         if (output.lifecycle?.data) {
           setExecutionId(output.lifecycle.data);
         }
@@ -286,6 +306,8 @@ export function useBlockExecution(blockId: string): ClientExecutionHandle {
         setLifecycle("success");
         setExecutionId(null);
         setError(null);
+        setIsStarting(false);
+        setIsStopping(false);
         break;
 
       default:
@@ -300,6 +322,8 @@ export function useBlockExecution(blockId: string): ClientExecutionHandle {
 
   return {
     isRunning: lifecycle === "running",
+    isStarting,
+    isStopping,
     isSuccess: lifecycle === "success",
     isError: lifecycle === "error",
     isCancelled: lifecycle === "cancelled",
@@ -310,6 +334,8 @@ export function useBlockExecution(blockId: string): ClientExecutionHandle {
       setLifecycle("idle");
       setError(null);
       setExecutionId(null);
+      setIsStarting(false);
+      setIsStopping(false);
     },
   };
 }
