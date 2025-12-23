@@ -24,6 +24,7 @@ import { TreeRowData } from "@/components/runbooks/List/TreeView";
 import { ydocToBlocknote } from "../ydoc_to_blocknote";
 import * as Y from "yjs";
 import Snapshot from "@/state/runbooks/snapshot";
+import { runbookById } from "@/lib/queries/runbooks";
 
 export default class OnlineStrategy implements WorkspaceStrategy {
   constructor(private workspace: Workspace) {}
@@ -373,6 +374,11 @@ export default class OnlineStrategy implements WorkspaceStrategy {
         useStore.getState().setIsSyncing(false);
       }
     }
+
+    // Invalidate the query cache so that the runbook can be found when the tab opens.
+    // This fixes a race condition where the tab would open before the query cache
+    // knew about the newly created runbook.
+    useStore.getState().queryClient.invalidateQueries(runbookById(runbook.id));
 
     await activateRunbook(runbook.id);
 
