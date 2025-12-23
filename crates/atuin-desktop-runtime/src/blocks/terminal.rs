@@ -214,57 +214,65 @@ impl Terminal {
             .take_receiver()
             .ok_or("Cancellation receiver already taken")?;
 
-        // Accumulator for terminal output (shared between reader tasks)
         let output_accumulator: Arc<RwLock<Vec<u8>>> = Arc::new(RwLock::new(Vec::new()));
 
-        // Setup fs_var for local terminal or remote path for SSH
-        let fs_var_handle: Option<crate::context::fs_var::FsVarHandle>;
-        let remote_var_path: Option<(String, Option<String>, String)>; // (hostname, username, path)
+        let templated_code = if !self.code.is_empty() {
+            context.context_resolver.resolve_template(&self.code)?
+        } else {
+            String::new()
+        };
 
-        if let Some(ssh_host) = context.context_resolver.ssh_host() {
+        let uses_output_vars = templated_code.contains("ATUIN_OUTPUT_VARS");
+
+        let ssh_host = context.context_resolver.ssh_host().cloned();
+        let fs_var_handle: Option<crate::context::fs_var::FsVarHandle>;
+        let remote_var_path: Option<String>;
+
+        if let Some(ref host) = ssh_host {
             fs_var_handle = None;
 
-            // For SSH, create remote temp file
-            let (username, hostname) = Self::parse_ssh_host(ssh_host);
-            let ssh_pool = context
-                .ssh_pool
-                .clone()
-                .ok_or("SSH pool not available in execution context")?;
+            if uses_output_vars {
+                let (username, hostname) = Self::parse_ssh_host(host);
+                let ssh_pool = context
+                    .ssh_pool
+                    .clone()
+                    .ok_or("SSH pool not available in execution context")?;
 
-            let remote_path = ssh_pool
-                .create_temp_file(&hostname, username.as_deref(), "atuin-desktop-vars")
-                .await
-                .map_err(|e| format!("Failed to create remote temp file: {}", e))?;
+                let remote_path = ssh_pool
+                    .create_temp_file(&hostname, username.as_deref(), "atuin-desktop-vars")
+                    .await
+                    .map_err(|e| format!("Failed to create remote temp file: {}", e))?;
 
-            remote_var_path = Some((hostname, username, remote_path));
+                remote_var_path = Some(remote_path);
+            } else {
+                remote_var_path = None;
+            }
         } else {
-            fs_var_handle =
-                Some(crate::context::fs_var::setup().map_err(|e| {
-                    format!("Failed to setup temp file for output variables: {}", e)
-                })?);
+            if uses_output_vars {
+                fs_var_handle =
+                    Some(crate::context::fs_var::setup().map_err(|e| {
+                        format!("Failed to setup temp file for output variables: {}", e)
+                    })?);
+            } else {
+                fs_var_handle = None;
+            }
             remote_var_path = None;
         }
 
-        // Open PTY based on context (local or SSH)
         let cancellation_token_clone = cancellation_token.clone();
-        let pty: Box<dyn PtyLike + Send> = if let Some((
-            ref hostname,
-            ref username,
-            ref remote_path,
-        )) = remote_var_path
-        {
-            // Get SSH pool from context
+        let pty: Box<dyn PtyLike + Send> = if let Some(ref host) = ssh_host {
+            let (username, hostname) = Self::parse_ssh_host(host);
             let ssh_pool = context
                 .ssh_pool
                 .clone()
                 .ok_or("SSH pool not available in execution context")?;
 
-            // Create SSH PTY with cancellation support
             let (output_sender, mut output_receiver) = tokio::sync::mpsc::channel(100);
             let hostname_clone = hostname.clone();
             let username_clone = username.clone();
             let pty_id_str = self.id.to_string();
             let ssh_pool_clone = ssh_pool.clone();
+            let remote_path_clone = remote_var_path.clone();
 
             let initial_cols = self.cols;
             let initial_rows = self.rows;
@@ -282,8 +290,9 @@ impl Terminal {
                 _ = &mut cancel_rx => {
                     let _ = ssh_pool_clone.close_pty(&pty_id_str).await;
                     let _ = context.block_cancelled().await;
-                    // Cleanup remote temp file if it was created
-                    let _ = ssh_pool_clone.delete_file(&hostname_clone, username_clone.as_deref(), remote_path).await;
+                    if let Some(ref path) = remote_path_clone {
+                        let _ = ssh_pool_clone.delete_file(&hostname_clone, username_clone.as_deref(), path).await;
+                    }
                     return Err("SSH PTY connection cancelled".into());
                 }
             };
@@ -431,25 +440,21 @@ impl Terminal {
             .emit_gc_event(GCEvent::PtyOpened(metadata.clone()))
             .await;
 
-        // For SSH terminals, export ATUIN_OUTPUT_VARS first
-        if let Some((_, _, ref remote_path)) = remote_var_path {
+        if let Some(ref remote_path) = remote_var_path {
             let export_cmd = format!("export ATUIN_OUTPUT_VARS='{}'\n", remote_path);
             if let Err(e) = pty_store.write_pty(self.id, export_cmd.into()).await {
                 tracing::warn!("Failed to write export command to SSH PTY: {}", e);
             }
         }
 
-        // Write the command to the PTY after started event
-        if !self.code.is_empty() {
-            let command = context.context_resolver.resolve_template(&self.code)?;
-            let command = if command.ends_with('\n') {
-                command
+        if !templated_code.is_empty() {
+            let command = if templated_code.ends_with('\n') {
+                templated_code.clone()
             } else {
-                format!("{}\n", command)
+                format!("{}\n", templated_code)
             };
 
             if let Err(e) = pty_store.write_pty(self.id, command.into()).await {
-                // Send error event if command writing fails
                 let _ = context
                     .block_failed(format!("Failed to write command to PTY: {}", e))
                     .await;
@@ -490,12 +495,12 @@ impl Terminal {
                     tracing::warn!("Failed to read terminal output variables: {}", e);
                 }
             }
-        } else if let Some((hostname, username, remote_path)) = remote_var_path {
-            // SSH terminal
+        } else if let (Some(ref host), Some(ref remote_path)) = (&ssh_host, &remote_var_path) {
+            let (username, hostname) = Self::parse_ssh_host(host);
             let ssh_pool = context.ssh_pool.clone().unwrap();
 
             match ssh_pool
-                .read_file(&hostname, username.as_deref(), &remote_path)
+                .read_file(&hostname, username.as_deref(), remote_path)
                 .await
             {
                 Ok(contents) => {
@@ -520,9 +525,8 @@ impl Terminal {
                 }
             }
 
-            // Cleanup remote temp file
             let _ = ssh_pool
-                .delete_file(&hostname, username.as_deref(), &remote_path)
+                .delete_file(&hostname, username.as_deref(), remote_path)
                 .await;
         }
 
