@@ -3,7 +3,7 @@ name = "atuin-desktop"
 description = "Atuin Desktop"
 publish = false
 workspace = ".."
-version = "0.2.11"             # duplicated here as CN CLI can't handle workspace version
+version = "0.2.11"            # duplicated here as CN CLI can't handle workspace version
 edition.workspace = true
 
 [lints.clippy]
@@ -36,7 +36,12 @@ url = { workspace = true }
 sha2 = "0.10"
 bigdecimal = { workspace = true }
 
-tauri = { version = "2.9.4", features = ["tray-icon", "devtools"] }
+tauri = { version = "2.9.4", default-features = false, features = [
+    "tray-icon",
+    "devtools",
+    "compression",
+    "common-controls-v6",
+] }
 tauri-plugin-http = { version = "2.5.4", features = ["native-tls"] }
 tauri-plugin-deep-link = "2.4.5"
 tauri-plugin-single-instance = { version = "2.3.6", features = ["deep-link"] }
@@ -83,6 +88,9 @@ dirs = { workspace = true }
 tempfile = { workspace = true }
 config = "0.15.19"
 
+[dev-dependencies]
+tauri = { version = "2.9.4", features = ["test"] }
+
 [dependencies.tauri-plugin-sql]
 features = ["sqlite"] # or "postgres", or "mysql"
 version = "2.3.1"
@@ -94,6 +102,9 @@ cocoa = "0.26"
 tauri-plugin-updater = "2.9.0"
 
 [features]
+default = ["wry"]
 # this feature is used for production builds or when `devPath` points to the filesystem
 # DO NOT REMOVE!!
 custom-protocol = ["tauri/custom-protocol"]
+wry = ["tauri/wry"]
+cef = ["tauri/cef"]

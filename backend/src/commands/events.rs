@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use tauri::{ipc::Channel, AppHandle, Manager};
+use tauri::{ipc::Channel, AppHandle, Manager, Runtime};
 use tokio::sync::mpsc;
 
 use crate::state::AtuinState;
@@ -28,8 +28,8 @@ impl EventBus for ChannelEventBus {
 
 /// Subscribe to the Grand Central event stream
 #[tauri::command]
-pub async fn subscribe_to_events(
-    app_handle: AppHandle,
+pub async fn subscribe_to_events<R: Runtime>(
+    app_handle: AppHandle<R>,
     event_channel: Channel<GCEvent>,
 ) -> Result<(), String> {
     let state = app_handle

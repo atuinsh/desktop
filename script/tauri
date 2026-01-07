@@ -1,0 +1,73 @@
+#!/usr/bin/env node
+
+/**
+ * Script to run tauri commands for a given runtime (wry or cef) with prepended CLI args.
+ *
+ * Usage:
+ *   script/tauri <runtime> <command> [prepended-args...]
+ *
+ * Examples:
+ *   script/tauri cef dev --verbose
+ *   script/tauri cef dev -- --verbose
+ *   Both will run: cargo tauri dev --features cef -- --verbose --no-default-features
+ *
+ * Note: The '--' separator is optional. All args after the command are prepended.
+ */
+
+import { spawn } from "child_process";
+import { fileURLToPath } from "url";
+import { dirname, join } from "path";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+const cmdlineArgs = process.argv.slice(2);
+
+if (cmdlineArgs.length < 2) {
+  console.error("Usage: node script/tauri <runtime> <command> [prepended-args...]");
+  console.error("  command: dev or build");
+  console.error("  runtime: wry or cef");
+  console.error(
+    "  prepended-args: Arguments to prepend to the cargo args (-- separator is optional)",
+  );
+  process.exit(1);
+}
+
+const [runtime, cmd, ...tauriArgs] = cmdlineArgs;
+
+if (!["wry", "cef"].includes(runtime)) {
+  console.error(`Invalid runtime: ${runtime}. Must be 'wry' or 'cef'`);
+  process.exit(1);
+}
+if (!["dev", "build"].includes(cmd)) {
+  console.error(`Invalid command: ${cmd}. Must be 'dev' or 'build'`);
+  process.exit(1);
+}
+
+tauriArgs.unshift("--features", runtime);
+if (!tauriArgs.includes("--")) {
+  tauriArgs.push("--");
+}
+tauriArgs.push("--no-default-features");
+
+const args = ["tauri", cmd, ...tauriArgs];
+
+const command = "cargo";
+
+console.log(`Running: ${command} ${args.join(" ")}`);
+
+// Spawn the tauri process
+const proc = spawn(command, args, {
+  stdio: "inherit",
+  shell: false,
+  cwd: join(__dirname, ".."),
+});
+
+proc.on("error", (error) => {
+  console.error(`Failed to start process: ${error.message}`);
+  process.exit(1);
+});
+
+proc.on("exit", (code) => {
+  process.exit(code ?? 0);
+});
