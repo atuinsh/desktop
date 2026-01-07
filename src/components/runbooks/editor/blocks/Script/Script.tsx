@@ -29,7 +29,7 @@ import CodeEditor, { TabAutoComplete } from "@/lib/blocks/common/CodeEditor/Code
 import Block from "@/lib/blocks/common/Block.tsx";
 import InterpreterSelector, { supportedShells } from "@/lib/blocks/common/InterpreterSelector.tsx";
 import { exportPropMatter, cn } from "@/lib/utils";
-import { useBlockLocalState } from "@/lib/hooks/useBlockLocalState";
+import { useBlockKvValue } from "@/lib/hooks/useKvValue";
 import {
   GenericBlockOutput,
   useBlockContext,
@@ -476,7 +476,7 @@ export default createReactBlockSpec(
     },
     // @ts-ignore
     render: ({ block, editor }) => {
-      const [collapseCode, setCollapseCode] = useBlockLocalState<boolean>(
+      const [collapseCode, setCollapseCode] = useBlockKvValue<boolean>(
         block.id,
         "collapsed",
         false,

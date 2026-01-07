@@ -10,7 +10,7 @@ import { DependencySpec } from "@/lib/workflow/dependency";
 import track_event from "@/tracking";
 import SQL from "@/lib/blocks/common/SQL";
 import { exportPropMatter } from "@/lib/utils";
-import { useBlockLocalState } from "@/lib/hooks/useBlockLocalState";
+import { useBlockKvValue } from "@/lib/hooks/useKvValue";
 
 interface SQLProps {
   isEditable: boolean;
@@ -87,7 +87,7 @@ export default createReactBlockSpec(
     },
     // @ts-ignore
     render: ({ block, editor, code, type }) => {
-      const [collapseQuery, setCollapseQuery] = useBlockLocalState<boolean>(
+      const [collapseQuery, setCollapseQuery] = useBlockKvValue<boolean>(
         block.id,
         "collapsed",
         false

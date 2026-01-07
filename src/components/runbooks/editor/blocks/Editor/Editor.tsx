@@ -44,7 +44,7 @@ import Block from "@/lib/blocks/common/Block";
 import { setTemplateVar } from "@/state/templates";
 import { exportPropMatter, cn } from "@/lib/utils";
 import { useCurrentRunbookId } from "@/context/runbook_id_context";
-import { useBlockLocalState } from "@/lib/hooks/useBlockLocalState";
+import { useBlockKvValue } from "@/lib/hooks/useKvValue";
 import type { Extension as BlockNoteExtension } from "@blocknote/core";
 import { useBlockContext } from "@/lib/hooks/useDocumentBridge";
 
@@ -357,7 +357,7 @@ export default createReactBlockSpec(
     // @ts-ignore
     render: ({ block, editor, code, type }) => {
       const currentRunbookId = useCurrentRunbookId();
-      const [collapseCode, setCollapseCode] = useBlockLocalState<boolean>(
+      const [collapseCode, setCollapseCode] = useBlockKvValue<boolean>(
         block.id,
         "collapsed",
         false,

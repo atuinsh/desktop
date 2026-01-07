@@ -11,7 +11,7 @@ import { createReactBlockSpec } from "@blocknote/react";
 import { exportPropMatter } from "@/lib/utils";
 import track_event from "@/tracking";
 import { useBlockContext, useBlockExecution, useBlockState } from "@/lib/hooks/useDocumentBridge";
-import { useBlockLocalState } from "@/lib/hooks/useBlockLocalState";
+import { useBlockKvValue } from "@/lib/hooks/useKvValue";
 import { cn } from "@/lib/utils";
 import { MarkdownRenderState } from "@/rs-bindings/MarkdownRenderState";
 import Markdown from "../../components/Markdown";
@@ -39,8 +39,8 @@ interface MarkdownRenderProps {
  */
 const MarkdownRender = (props: MarkdownRenderProps) => {
   const context = useBlockContext(props.blockId);
-  const [collapsed, setCollapsed] = useBlockLocalState<boolean>(props.blockId, "collapsed", false);
-  const [isFullscreen, setIsFullscreen] = useBlockLocalState<boolean>(
+  const [collapsed, setCollapsed] = useBlockKvValue<boolean>(props.blockId, "collapsed", false);
+  const [isFullscreen, setIsFullscreen] = useBlockKvValue<boolean>(
     props.blockId,
     "fullscreen",
     false,
