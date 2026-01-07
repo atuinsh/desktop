@@ -39,19 +39,19 @@ jobs:
 
       - name: Build and start SSH test container
         run: |
-          docker-compose -f docker/ssh-test/docker-compose.yml build
-          docker-compose -f docker/ssh-test/docker-compose.yml up -d
+          docker compose -f docker/ssh-test/docker-compose.yml build
+          docker compose -f docker/ssh-test/docker-compose.yml up -d
 
       - name: Wait for SSH server to be ready
         run: |
           echo "Waiting for SSH server to be healthy..."
-          timeout 60 bash -c 'until docker-compose -f docker/ssh-test/docker-compose.yml ps | grep -q "healthy"; do echo "Waiting..."; sleep 2; done'
+          timeout 60 bash -c 'until docker compose -f docker/ssh-test/docker-compose.yml ps | grep -q "healthy"; do echo "Waiting..."; sleep 2; done'
           echo "SSH server is ready"
 
       - name: Verify SSH connection works
         run: |
           # Quick sanity check that we can connect
-          docker-compose -f docker/ssh-test/docker-compose.yml exec -T sshd nc -z localhost 22
+          docker compose -f docker/ssh-test/docker-compose.yml exec -T sshd nc -z localhost 22
           echo "SSH port is accessible"
 
       - name: Install Rust
@@ -81,12 +81,12 @@ jobs:
         if: failure()
         run: |
           echo "=== Docker Compose Status ==="
-          docker-compose -f docker/ssh-test/docker-compose.yml ps
+          docker compose -f docker/ssh-test/docker-compose.yml ps
           echo ""
           echo "=== SSH Server Logs ==="
-          docker-compose -f docker/ssh-test/docker-compose.yml logs sshd
+          docker compose -f docker/ssh-test/docker-compose.yml logs sshd
 
       - name: Stop SSH test container
         if: always()
         run: |
-          docker-compose -f docker/ssh-test/docker-compose.yml down
+          docker compose -f docker/ssh-test/docker-compose.yml down

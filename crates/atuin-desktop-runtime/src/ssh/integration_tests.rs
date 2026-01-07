@@ -79,9 +79,7 @@ async fn connect_with_key(key_name: &str) -> eyre::Result<Session> {
     let key_path = test_keys_dir().join(key_name);
 
     let mut session = Session::open(&host).await?;
-    session
-        .key_auth(&test_user(), key_path)
-        .await?;
+    session.key_auth(&test_user(), key_path).await?;
 
     Ok(session)
 }
@@ -112,7 +110,11 @@ async fn connect_default() -> eyre::Result<Session> {
 #[ignore]
 async fn test_auth_rsa_key() {
     let result = connect_with_key("id_rsa").await;
-    assert!(result.is_ok(), "RSA key authentication failed: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "RSA key authentication failed: {:?}",
+        result.err()
+    );
 }
 
 /// Test ECDSA key authentication (nistp256)
@@ -120,7 +122,11 @@ async fn test_auth_rsa_key() {
 #[ignore]
 async fn test_auth_ecdsa_key() {
     let result = connect_with_key("id_ecdsa").await;
-    assert!(result.is_ok(), "ECDSA key authentication failed: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "ECDSA key authentication failed: {:?}",
+        result.err()
+    );
 }
 
 /// Test Ed25519 key authentication
@@ -128,7 +134,11 @@ async fn test_auth_ecdsa_key() {
 #[ignore]
 async fn test_auth_ed25519_key() {
     let result = connect_with_key("id_ed25519").await;
-    assert!(result.is_ok(), "Ed25519 key authentication failed: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "Ed25519 key authentication failed: {:?}",
+        result.err()
+    );
 }
 
 /// Test password authentication
@@ -136,7 +146,11 @@ async fn test_auth_ed25519_key() {
 #[ignore]
 async fn test_auth_password() {
     let result = connect_with_password().await;
-    assert!(result.is_ok(), "Password authentication failed: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "Password authentication failed: {:?}",
+        result.err()
+    );
 }
 
 /// Test authentication with invalid key fails
@@ -179,7 +193,11 @@ async fn test_authenticate_with_explicit_key() {
         .authenticate(Some(Authentication::Key(key_path)), Some(&test_user()))
         .await;
 
-    assert!(result.is_ok(), "authenticate() with explicit key failed: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "authenticate() with explicit key failed: {:?}",
+        result.err()
+    );
 }
 
 // =============================================================================
@@ -214,7 +232,10 @@ async fn test_exec_with_exit_code() {
         .await
         .expect("Command execution failed");
 
-    assert_ne!(result.exit_code, 0, "false command should return non-zero exit code");
+    assert_ne!(
+        result.exit_code, 0,
+        "false command should return non-zero exit code"
+    );
 }
 
 /// Test command that outputs to stderr
@@ -328,7 +349,10 @@ async fn test_create_temp_file() {
     assert!(result.stdout.contains("exists"));
 
     // Cleanup
-    session.delete_file(&temp_path).await.expect("Failed to delete temp file");
+    session
+        .delete_file(&temp_path)
+        .await
+        .expect("Failed to delete temp file");
 }
 
 /// Test reading a file from the remote system
@@ -372,7 +396,10 @@ async fn test_delete_file() {
     assert_eq!(result.exit_code, 0, "File should exist before deletion");
 
     // Delete it
-    session.delete_file(&temp_path).await.expect("Failed to delete file");
+    session
+        .delete_file(&temp_path)
+        .await
+        .expect("Failed to delete file");
 
     // File should not exist
     let result = session
@@ -408,7 +435,11 @@ async fn test_pool_connect() {
     let key_path = test_keys_dir().join("id_ed25519");
 
     let result = pool
-        .connect(&host, Some(&test_user()), Some(Authentication::Key(key_path)))
+        .connect(
+            &host,
+            Some(&test_user()),
+            Some(Authentication::Key(key_path)),
+        )
         .await;
 
     assert!(result.is_ok(), "Pool connection failed: {:?}", result.err());
@@ -436,13 +467,21 @@ async fn test_pool_connection_reuse() {
 
     // First connection
     let session1 = pool
-        .connect(&host, Some(&test_user()), Some(Authentication::Key(key_path.clone())))
+        .connect(
+            &host,
+            Some(&test_user()),
+            Some(Authentication::Key(key_path.clone())),
+        )
         .await
         .expect("First connection failed");
 
     // Second connection should reuse the same session
     let session2 = pool
-        .connect(&host, Some(&test_user()), Some(Authentication::Key(key_path)))
+        .connect(
+            &host,
+            Some(&test_user()),
+            Some(Authentication::Key(key_path)),
+        )
         .await
         .expect("Second connection failed");
 
@@ -466,12 +505,16 @@ async fn test_connection_to_invalid_host_fails() {
 
     let result = tokio::time::timeout(
         Duration::from_secs(5),
-        Session::open("nonexistent.invalid:22")
-    ).await;
+        Session::open("nonexistent.invalid:22"),
+    )
+    .await;
 
     // Either timeout or connection error is acceptable
     match result {
-        Ok(conn_result) => assert!(conn_result.is_err(), "Connection to invalid host should fail"),
+        Ok(conn_result) => assert!(
+            conn_result.is_err(),
+            "Connection to invalid host should fail"
+        ),
         Err(_timeout) => (), // Timeout is fine - proves it would hang
     }
 }
@@ -485,10 +528,7 @@ async fn test_connection_to_wrong_port_fails() {
 
     let host = format!("{}@{}:9999", test_user(), test_host());
 
-    let result = tokio::time::timeout(
-        Duration::from_secs(5),
-        Session::open(&host)
-    ).await;
+    let result = tokio::time::timeout(Duration::from_secs(5), Session::open(&host)).await;
 
     // Either timeout or connection refused is acceptable
     match result {
