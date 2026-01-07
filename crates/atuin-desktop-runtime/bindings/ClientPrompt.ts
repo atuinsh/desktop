@@ -3,4 +3,9 @@ import type { PromptIcon } from "./PromptIcon";
 import type { PromptInput } from "./PromptInput";
 import type { PromptOption } from "./PromptOption";
 
+/**
+ * A prompt displayed to the user in the client application
+ *
+ * Prompts can include text input fields, dropdowns, and action buttons.
+ */
 export type ClientPrompt = { title: string, prompt: string, icon: PromptIcon | null, input: PromptInput | null, options: Array<PromptOption>, };

@@ -72,6 +72,30 @@ pub enum GCEvent {
     /// SSH connection closed
     SshDisconnected { host: String },
 
+    /// SSH certificate file exists but failed to load (likely corrupted or invalid)
+    /// This is a warning - authentication will fall back to key-based auth
+    SshCertificateLoadFailed {
+        host: String,
+        cert_path: String,
+        error: String,
+    },
+
+    /// SSH certificate has expired
+    /// This is a warning - authentication fell back to key-based auth
+    SshCertificateExpired {
+        host: String,
+        cert_path: String,
+        valid_until: String,
+    },
+
+    /// SSH certificate is not yet valid
+    /// This is a warning - authentication fell back to key-based auth
+    SshCertificateNotYetValid {
+        host: String,
+        cert_path: String,
+        valid_from: String,
+    },
+
     /// Runbook execution started
     RunbookStarted { runbook_id: Uuid },
 

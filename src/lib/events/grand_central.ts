@@ -15,6 +15,9 @@ export interface GrandCentralEvents {
   "block-finished": { block_id: string; runbook_id: string; success: boolean };
   "block-failed": { block_id: string; runbook_id: string; error: string };
   "block-cancelled": { block_id: string; runbook_id: string };
+  "ssh-certificate-load-failed": { host: string; cert_path: string; error: string };
+  "ssh-certificate-expired": { host: string; cert_path: string; valid_until: string };
+  "ssh-certificate-not-yet-valid": { host: string; cert_path: string; valid_from: string };
 }
 
 /**
@@ -168,6 +171,30 @@ export class GrandCentral extends Emittery<GrandCentralEvents> {
           });
           break;
 
+        case "sshCertificateLoadFailed":
+          this.emit("ssh-certificate-load-failed", {
+            host: event.data.host,
+            cert_path: event.data.cert_path,
+            error: event.data.error,
+          });
+          break;
+
+        case "sshCertificateExpired":
+          this.emit("ssh-certificate-expired", {
+            host: event.data.host,
+            cert_path: event.data.cert_path,
+            valid_until: event.data.valid_until,
+          });
+          break;
+
+        case "sshCertificateNotYetValid":
+          this.emit("ssh-certificate-not-yet-valid", {
+            host: event.data.host,
+            cert_path: event.data.cert_path,
+            valid_from: event.data.valid_from,
+          });
+          break;
+
         default:
           console.warn("Grand Central: Unhandled event type:", event);
       }
@@ -229,3 +256,15 @@ export const onBlockFailed = (
 export const onBlockCancelled = (
   handler: (data: GrandCentralEvents["block-cancelled"]) => void,
 ) => grandCentral.on("block-cancelled", handler);
+
+export const onSshCertificateLoadFailed = (
+  handler: (data: GrandCentralEvents["ssh-certificate-load-failed"]) => void,
+) => grandCentral.on("ssh-certificate-load-failed", handler);
+
+export const onSshCertificateExpired = (
+  handler: (data: GrandCentralEvents["ssh-certificate-expired"]) => void,
+) => grandCentral.on("ssh-certificate-expired", handler);
+
+export const onSshCertificateNotYetValid = (
+  handler: (data: GrandCentralEvents["ssh-certificate-not-yet-valid"]) => void,
+) => grandCentral.on("ssh-certificate-not-yet-valid", handler);

@@ -2,4 +2,9 @@
 import type { BlockErrorData } from "./BlockErrorData";
 import type { BlockFinishedData } from "./BlockFinishedData";
 
-export type BlockLifecycleEvent = { "type": "started" } | { "type": "finished", "data": BlockFinishedData } | { "type": "cancelled" } | { "type": "error", "data": BlockErrorData };
+/**
+ * Block lifecycle events
+ *
+ * Indicates state transitions during block execution.
+ */
+export type BlockLifecycleEvent = { "type": "started", "data": string } | { "type": "finished", "data": BlockFinishedData } | { "type": "cancelled" } | { "type": "error", "data": BlockErrorData } | { "type": "paused" };

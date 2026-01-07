@@ -14,7 +14,7 @@ use crate::execution::{
     CancellationToken, ExecutionContext, ExecutionHandle, ExecutionStatus, StreamingBlockOutput,
 };
 use crate::pty::{Pty, PtyLike};
-use crate::ssh::SshPty;
+use crate::ssh::{SshPty, SshWarning};
 
 /// Output structure for Terminal blocks that implements BlockExecutionOutput
 /// for template access to terminal output.
@@ -303,7 +303,52 @@ impl Terminal {
                 }
             };
 
-            let (pty_tx, resize_tx) = ssh_result?;
+            let (pty_tx, resize_tx, warnings) = ssh_result?;
+
+            // Emit events for any authentication warnings
+            for warning in warnings {
+                match warning {
+                    SshWarning::CertificateLoadFailed {
+                        host,
+                        cert_path,
+                        error,
+                    } => {
+                        let _ = context
+                            .emit_gc_event(GCEvent::SshCertificateLoadFailed {
+                                host,
+                                cert_path,
+                                error,
+                            })
+                            .await;
+                    }
+                    SshWarning::CertificateExpired {
+                        host,
+                        cert_path,
+                        valid_until,
+                    } => {
+                        let _ = context
+                            .emit_gc_event(GCEvent::SshCertificateExpired {
+                                host,
+                                cert_path,
+                                valid_until,
+                            })
+                            .await;
+                    }
+                    SshWarning::CertificateNotYetValid {
+                        host,
+                        cert_path,
+                        valid_from,
+                    } => {
+                        let _ = context
+                            .emit_gc_event(GCEvent::SshCertificateNotYetValid {
+                                host,
+                                cert_path,
+                                valid_from,
+                            })
+                            .await;
+                    }
+                }
+            }
 
             // Forward SSH output to binary channel and accumulate
             let context_clone = context.clone();
