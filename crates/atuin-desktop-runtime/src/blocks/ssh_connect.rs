@@ -1,7 +1,9 @@
 use crate::{
     blocks::{Block, BlockBehavior, FromDocument},
     client::LocalValueProvider,
-    context::{BlockContext, ContextResolver, DocumentSshConfig, DocumentSshHost, SshIdentityKeyConfig},
+    context::{
+        BlockContext, ContextResolver, DocumentSshConfig, DocumentSshHost, SshIdentityKeyConfig,
+    },
 };
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
@@ -69,9 +71,7 @@ impl FromDocument for SshConnect {
             Some(v) => match v.as_u64() {
                 Some(0) => None, // 0 means "not set"
                 Some(p) if p <= 65535 => Some(p as u16),
-                Some(p) => {
-                    return Err(format!("Invalid SSH port: {} (must be 1-65535)", p).into())
-                }
+                Some(p) => return Err(format!("Invalid SSH port: {} (must be 1-65535)", p).into()),
                 None => return Err("Invalid SSH port: expected a number".into()),
             },
             None => None,
@@ -102,14 +102,18 @@ impl SshConnect {
                 if key_value.is_empty() {
                     None
                 } else {
-                    Some(SshIdentityKeyConfig::Paste { content: key_value.to_string() })
+                    Some(SshIdentityKeyConfig::Paste {
+                        content: key_value.to_string(),
+                    })
                 }
             }
             "path" => {
                 if key_value.is_empty() {
                     None
                 } else {
-                    Some(SshIdentityKeyConfig::Path { path: key_value.to_string() })
+                    Some(SshIdentityKeyConfig::Path {
+                        path: key_value.to_string(),
+                    })
                 }
             }
             _ => None,
@@ -241,11 +245,7 @@ impl BlockBehavior for SshConnect {
         let identity_key = if let Some(provider) = block_local_value_provider {
             match provider.get_block_local_value(self.id, "identityKey").await {
                 Ok(Some(value)) => {
-                    tracing::debug!(
-                        "Block {} read identityKey from KV: {}",
-                        self.id,
-                        value
-                    );
+                    tracing::debug!("Block {} read identityKey from KV: {}", self.id, value);
                     Self::parse_identity_key_from_local(&value)
                 }
                 Ok(None) => {
@@ -642,7 +642,8 @@ mod tests {
         assert!(result.is_none());
 
         // Unknown mode
-        let result = SshConnect::parse_identity_key_from_local(r#"{"mode": "unknown", "value": "test"}"#);
+        let result =
+            SshConnect::parse_identity_key_from_local(r#"{"mode": "unknown", "value": "test"}"#);
         assert!(result.is_none());
     }
 

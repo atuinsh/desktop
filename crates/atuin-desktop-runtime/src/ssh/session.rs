@@ -485,7 +485,10 @@ impl Session {
 
     /// Open a new SSH session with optional configuration overrides from block settings.
     /// Block settings take precedence over SSH config file.
-    pub async fn open_with_config(host: &str, config_override: Option<&DocumentSshConfig>) -> Result<Self> {
+    pub async fn open_with_config(
+        host: &str,
+        config_override: Option<&DocumentSshConfig>,
+    ) -> Result<Self> {
         let mut ssh_config = Self::resolve_ssh_config(host);
 
         // Apply block-level overrides if provided
@@ -833,11 +836,16 @@ impl Session {
 
         // Step 0: Try block-provided identity key FIRST (overrides everything)
         // If an explicit key is configured and fails, we do NOT fall back to agent/defaults
-        tracing::debug!("authenticate_with_config called with identity_key_config: {:?}", identity_key_config);
+        tracing::debug!(
+            "authenticate_with_config called with identity_key_config: {:?}",
+            identity_key_config
+        );
         if let Some(key_config) = identity_key_config {
             match key_config {
                 SshIdentityKeyConfig::None => {
-                    tracing::debug!("Block identity key config is SshIdentityKeyConfig::None, using defaults");
+                    tracing::debug!(
+                        "Block identity key config is SshIdentityKeyConfig::None, using defaults"
+                    );
                 }
                 SshIdentityKeyConfig::Paste { content } => {
                     tracing::info!("Step 0: Trying block-provided pasted key");
@@ -907,7 +915,9 @@ impl Session {
                     remaining_methods,
                     partial_success
                 );
-                Err(eyre::eyre!("Pasted key authentication failed: server rejected key"))
+                Err(eyre::eyre!(
+                    "Pasted key authentication failed: server rejected key"
+                ))
             }
         }
     }

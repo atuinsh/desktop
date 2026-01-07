@@ -39,7 +39,8 @@ impl Pool {
         auth: Option<Authentication>,
         cancellation_rx: Option<oneshot::Receiver<()>>,
     ) -> Result<Arc<Session>> {
-        self.connect_with_config(host, username, auth, cancellation_rx, None).await
+        self.connect_with_config(host, username, auth, cancellation_rx, None)
+            .await
     }
 
     /// Connect to a host with optional block configuration overrides
@@ -78,8 +79,7 @@ impl Pool {
             }
         }
 
-        let identity_key_config = ssh_config_override
-            .and_then(|cfg| cfg.identity_key.as_ref());
+        let identity_key_config = ssh_config_override.and_then(|cfg| cfg.identity_key.as_ref());
         tracing::debug!(
             "Pool connect_with_config: ssh_config_override={:?}, identity_key_config={:?}",
             ssh_config_override,
@@ -88,7 +88,9 @@ impl Pool {
 
         let async_session = async {
             let mut session = Session::open_with_config(host, ssh_config_override).await?;
-            session.authenticate_with_config(auth, Some(&username), identity_key_config).await?;
+            session
+                .authenticate_with_config(auth, Some(&username), identity_key_config)
+                .await?;
             Ok::<_, eyre::Report>(session)
         };
 

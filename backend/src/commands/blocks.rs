@@ -369,7 +369,9 @@ pub async fn notify_block_kv_value_changed(
     key: String,
     _value: serde_json::Value,
 ) -> Result<(), String> {
-    log::debug!("notify_block_kv_value_changed: document={document_id}, block={block_id}, key={key}");
+    log::debug!(
+        "notify_block_kv_value_changed: document={document_id}, block={block_id}, key={key}"
+    );
 
     let documents = state.documents.read().await;
     let document = documents.get(&document_id).ok_or("Document not found")?;

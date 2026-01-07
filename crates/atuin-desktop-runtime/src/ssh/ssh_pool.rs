@@ -201,7 +201,10 @@ impl SshPoolHandle {
 
     /// Disconnect all connections to a given host, regardless of username.
     pub async fn disconnect_by_host(&self, host: &str) -> Result<()> {
-        let connections = self.list_connections().await.map_err(|_| eyre::eyre!("Failed to list connections"))?;
+        let connections = self
+            .list_connections()
+            .await
+            .map_err(|_| eyre::eyre!("Failed to list connections"))?;
 
         for key in connections {
             // Connection keys are "username@host" - split and match host exactly
@@ -246,7 +249,17 @@ impl SshPoolHandle {
         output_stream: mpsc::Sender<OutputLine>,
         result_tx: oneshot::Sender<()>,
     ) -> Result<()> {
-        self.exec_with_config(host, username, interpreter, command, channel, output_stream, result_tx, None).await
+        self.exec_with_config(
+            host,
+            username,
+            interpreter,
+            command,
+            channel,
+            output_stream,
+            result_tx,
+            None,
+        )
+        .await
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -307,7 +320,8 @@ impl SshPoolHandle {
         width: u16,
         height: u16,
     ) -> Result<(mpsc::Sender<Bytes>, mpsc::Sender<(u16, u16)>)> {
-        self.open_pty_with_config(host, username, channel, output_stream, width, height, None).await
+        self.open_pty_with_config(host, username, channel, output_stream, width, height, None)
+            .await
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -703,7 +717,13 @@ impl SshPool {
                     .pool
                     .write()
                     .await
-                    .connect_with_config(&host, Some(username.as_str()), None, None, ssh_config.as_ref())
+                    .connect_with_config(
+                        &host,
+                        Some(username.as_str()),
+                        None,
+                        None,
+                        ssh_config.as_ref(),
+                    )
                     .await;
 
                 let session = match session {
