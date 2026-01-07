@@ -72,7 +72,9 @@ impl LocalValueProvider for KvBlockLocalValueProvider {
             .await
             .map_err(|_| Box::new(std::io::Error::other("Failed to open KV database")))?;
         let key = format!("block.{block_id}.{property_name}");
-        kv::get(&db, &key).await.map_err(|e| e.into())
+        // KV stores JSON objects; serialize to string for the runtime to parse
+        let value: Option<serde_json::Value> = kv::get(&db, &key).await?;
+        Ok(value.map(|v| v.to_string()))
     }
 }
 
