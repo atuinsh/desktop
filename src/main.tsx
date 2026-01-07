@@ -213,8 +213,10 @@ window.addEventListener(
   "keydown",
   (event) => {
     const blocknoteBlock = (event.target as Element).closest(".bn-block");
+    const codemirrorEditor = (event.target as Element).closest(".cm-editor");
 
-    if (blocknoteBlock && event.key === "Escape") {
+    // Allow Escape to propagate to CodeMirror editors (needed for vim mode)
+    if (blocknoteBlock && event.key === "Escape" && !codemirrorEditor) {
       event.preventDefault();
       event.stopPropagation();
     }
