@@ -1,0 +1,33 @@
+# SSH Integration Test Server Configuration
+# Permissive settings to allow testing all authentication methods
+
+Port 22
+AddressFamily any
+ListenAddress 0.0.0.0
+
+# Authentication
+PermitRootLogin no
+PasswordAuthentication yes
+PubkeyAuthentication yes
+AuthorizedKeysFile .ssh/authorized_keys
+
+# Allow all key algorithms for comprehensive testing
+PubkeyAcceptedAlgorithms +ssh-rsa,rsa-sha2-256,rsa-sha2-512,ecdsa-sha2-nistp256,ecdsa-sha2-nistp384,ecdsa-sha2-nistp521,ssh-ed25519
+HostKeyAlgorithms +ssh-rsa,rsa-sha2-256,rsa-sha2-512,ecdsa-sha2-nistp256,ecdsa-sha2-nistp384,ecdsa-sha2-nistp521,ssh-ed25519
+
+# Subsystems
+Subsystem sftp /usr/lib/ssh/sftp-server
+
+# Logging for debugging
+LogLevel DEBUG
+
+# Keep connections alive
+ClientAliveInterval 60
+ClientAliveCountMax 3
+
+# Allow TCP forwarding for future ProxyJump tests
+AllowTcpForwarding yes
+GatewayPorts no
+
+# Performance
+UseDNS no

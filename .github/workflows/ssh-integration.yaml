@@ -1,0 +1,92 @@
+name: SSH Integration Tests
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "crates/atuin-desktop-runtime/src/ssh/**"
+      - "docker/ssh-test/**"
+      - ".github/workflows/ssh-integration.yaml"
+
+  pull_request:
+    paths:
+      - "crates/atuin-desktop-runtime/src/ssh/**"
+      - "docker/ssh-test/**"
+      - ".github/workflows/ssh-integration.yaml"
+
+  # Allow manual triggering for debugging
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  ssh-integration-tests:
+    name: SSH Integration Tests
+    runs-on: depot-ubuntu-22.04-4
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Generate test SSH keys
+        run: |
+          chmod +x docker/ssh-test/setup-keys.sh
+          docker/ssh-test/setup-keys.sh
+
+      - name: Build and start SSH test container
+        run: |
+          docker-compose -f docker/ssh-test/docker-compose.yml build
+          docker-compose -f docker/ssh-test/docker-compose.yml up -d
+
+      - name: Wait for SSH server to be ready
+        run: |
+          echo "Waiting for SSH server to be healthy..."
+          timeout 60 bash -c 'until docker-compose -f docker/ssh-test/docker-compose.yml ps | grep -q "healthy"; do echo "Waiting..."; sleep 2; done'
+          echo "SSH server is ready"
+
+      - name: Verify SSH connection works
+        run: |
+          # Quick sanity check that we can connect
+          docker-compose -f docker/ssh-test/docker-compose.yml exec -T sshd nc -z localhost 22
+          echo "SSH port is accessible"
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install system dependencies
+        uses: awalsh128/cache-apt-pkgs-action@latest
+        with:
+          packages: libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libasound2-dev
+          version: 1.0
+
+      - name: Run SSH Integration Tests
+        env:
+          SSH_TEST_HOST: localhost
+          SSH_TEST_PORT: 2222
+          SSH_TEST_USER: testuser
+          SSH_TEST_PASSWORD: testpassword
+          SSH_TEST_KEYS_DIR: ${{ github.workspace }}/docker/ssh-test/test-keys
+          RUST_LOG: debug
+        run: |
+          cargo test -p atuin-desktop-runtime ssh::integration_tests -- --ignored --test-threads=1 --nocapture
+
+      - name: Show container logs on failure
+        if: failure()
+        run: |
+          echo "=== Docker Compose Status ==="
+          docker-compose -f docker/ssh-test/docker-compose.yml ps
+          echo ""
+          echo "=== SSH Server Logs ==="
+          docker-compose -f docker/ssh-test/docker-compose.yml logs sshd
+
+      - name: Stop SSH test container
+        if: always()
+        run: |
+          docker-compose -f docker/ssh-test/docker-compose.yml down
