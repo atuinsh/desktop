@@ -71,7 +71,7 @@ impl FromDocument for SshConnect {
             Some(v) => match v.as_u64() {
                 Some(0) => None, // 0 means "not set"
                 Some(p) if p <= 65535 => Some(p as u16),
-                Some(p) => return Err(format!("Invalid SSH port: {} (must be 1-65535)", p).into()),
+                Some(p) => return Err(format!("Invalid SSH port: {} (must be 1-65535)", p)),
                 None => return Err("Invalid SSH port: expected a number".into()),
             },
             None => None,
