@@ -68,11 +68,20 @@ impl LocalValueProvider for KvBlockLocalValueProvider {
         block_id: Uuid,
         property_name: &str,
     ) -> Result<Option<String>, Box<dyn std::error::Error + Send + Sync>> {
+        let key = format!("block.{block_id}.{property_name}");
         let db = kv::open_db(&self.app_handle)
             .await
             .map_err(|_| Box::new(std::io::Error::other("Failed to open KV database")))?;
-        let key = format!("block.{block_id}.{property_name}");
-        kv::get(&db, &key).await.map_err(|e| e.into())
+
+        // Handle both storage formats:
+        // - New format: JSON-encoded string (frontend sends JSON.stringify, backend re-encodes)
+        // - Old format: JSON object stored directly
+        let value: Option<serde_json::Value> = kv::get(&db, &key).await?;
+        match value {
+            Some(serde_json::Value::String(s)) => Ok(Some(s)),
+            Some(v) => Ok(Some(v.to_string())),
+            None => Ok(None),
+        }
     }
 }
 
@@ -366,16 +375,32 @@ pub async fn notify_block_kv_value_changed(
     state: State<'_, AtuinState>,
     document_id: String,
     block_id: String,
-    _key: String,
-    _value: String,
+    key: String,
+    _value: serde_json::Value,
 ) -> Result<(), String> {
-    log::debug!("Notifying block KV value changed for document {document_id}, block {block_id}");
+    log::debug!("notify_block_kv_value_changed: document={document_id}, block={block_id}, key={key}");
 
     let documents = state.documents.read().await;
     let document = documents.get(&document_id).ok_or("Document not found")?;
-    let block_id = Uuid::parse_str(&block_id).map_err(|e| e.to_string())?;
+    let block_uuid = Uuid::parse_str(&block_id).map_err(|e| e.to_string())?;
+
+    // Invalidate SSH connections when credentials change
+    if key == "identityKey" {
+        if let Some(block) = document.get_block(block_uuid).await {
+            if let Some((_user, host, _port)) = block.ssh_connect_host_info() {
+                log::debug!(
+                    "Identity key changed for SSH host {host}, disconnecting existing connections"
+                );
+                let ssh_pool = state.ssh_pool();
+                if let Err(e) = ssh_pool.disconnect_by_host(&host).await {
+                    log::warn!("Failed to disconnect SSH connections for host {host}: {e}");
+                }
+            }
+        }
+    }
+
     document
-        .block_local_value_changed(block_id)
+        .block_local_value_changed(block_uuid)
         .await
         .map_err(|e| format!("Failed to notify block KV value changed: {}", e))?;
     Ok(())

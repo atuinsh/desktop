@@ -379,3 +379,38 @@ pub struct DocumentSshHost(pub Option<String>);
 
 #[typetag::serde]
 impl BlockContextItem for DocumentSshHost {}
+
+/// Identity key configuration from SSH Connect block
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "mode", rename_all = "camelCase")]
+pub enum SshIdentityKeyConfig {
+    /// No custom key - use SSH config/agent defaults
+    None,
+    /// Key content pasted directly
+    Paste { content: String },
+    /// Path to key file on local machine
+    Path { path: String },
+}
+
+/// Rich SSH configuration from SSH Connect block
+///
+/// This provides detailed SSH connection settings that override ~/.ssh/config.
+/// The `user_host` field is kept for backwards compatibility with the simpler
+/// `DocumentSshHost` context item.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DocumentSshConfig {
+    /// The original user@host:port string (for display/backwards compat)
+    pub user_host: String,
+    /// Optional user override
+    pub user: Option<String>,
+    /// Optional hostname override
+    pub hostname: Option<String>,
+    /// Optional port override
+    pub port: Option<u16>,
+    /// Identity key configuration
+    pub identity_key: Option<SshIdentityKeyConfig>,
+}
+
+#[typetag::serde]
+impl BlockContextItem for DocumentSshConfig {}

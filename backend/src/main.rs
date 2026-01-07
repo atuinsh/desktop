@@ -553,6 +553,7 @@ fn main() {
             commands::blocks::stop_serial_execution,
             commands::blocks::get_runbook_content,
             commands::events::subscribe_to_events,
+            commands::ssh::list_ssh_keys,
             commands::updates::check_for_updates,
             commands::workspaces::copy_welcome_workspace,
             commands::workspaces::reset_workspaces,

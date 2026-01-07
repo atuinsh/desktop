@@ -14,6 +14,7 @@ use russh::client::Handle;
 use russh::*;
 use russh_config::*;
 
+use crate::context::{DocumentSshConfig, SshIdentityKeyConfig};
 use crate::ssh::SshPoolHandle;
 
 /// Result of executing a simple command on the remote system
@@ -482,6 +483,69 @@ impl Session {
         })
     }
 
+    /// Open a new SSH session with optional configuration overrides from block settings.
+    /// Block settings take precedence over SSH config file.
+    pub async fn open_with_config(host: &str, config_override: Option<&DocumentSshConfig>) -> Result<Self> {
+        let mut ssh_config = Self::resolve_ssh_config(host);
+
+        // Apply block-level overrides if provided
+        if let Some(override_cfg) = config_override {
+            if let Some(ref user) = override_cfg.user {
+                if !user.is_empty() {
+                    tracing::debug!("Overriding username from block settings: {}", user);
+                    ssh_config.username = Some(user.clone());
+                }
+            }
+            if let Some(ref hostname) = override_cfg.hostname {
+                if !hostname.is_empty() {
+                    tracing::debug!("Overriding hostname from block settings: {}", hostname);
+                    ssh_config.hostname = hostname.clone();
+                }
+            }
+            if let Some(port) = override_cfg.port {
+                if port > 0 {
+                    tracing::debug!("Overriding port from block settings: {}", port);
+                    ssh_config.port = port;
+                }
+            }
+        }
+
+        let config = russh::client::Config::default();
+        let sh = Client;
+
+        // Handle ProxyCommand and ProxyJump
+        let session = if ssh_config.proxy_command.is_some() || ssh_config.proxy_jump.is_some() {
+            tracing::debug!(
+                "Using proxy for connection to {} (proxy_command: {:?}, proxy_jump: {:?})",
+                host,
+                ssh_config.proxy_command,
+                ssh_config.proxy_jump
+            );
+
+            match parse_home(&ssh_config.hostname) {
+                Ok(parsed_config) => {
+                    let stream = parsed_config.stream().await?;
+                    russh::client::connect_stream(Arc::new(config), stream, sh).await?
+                }
+                Err(e) => {
+                    tracing::warn!("Failed to create proxy stream: {e}");
+                    let address = format!("{}:{}", ssh_config.hostname, ssh_config.port);
+                    tracing::debug!("Falling back to direct connection: {address}");
+                    russh::client::connect(Arc::new(config), address.as_str(), sh).await?
+                }
+            }
+        } else {
+            let address = format!("{}:{}", ssh_config.hostname, ssh_config.port);
+            tracing::debug!("Connecting directly to: {address}");
+            russh::client::connect(Arc::new(config), address.as_str(), sh).await?
+        };
+
+        Ok(Session {
+            session,
+            ssh_config,
+        })
+    }
+
     /// Password authentication
     pub async fn password_auth(&mut self, username: &str, password: &str) -> Result<()> {
         let auth_res = self
@@ -736,6 +800,116 @@ impl Session {
         }
 
         Err(eyre::eyre!("All SSH authentication methods exhausted"))
+    }
+
+    /// Authenticate with optional block-provided identity key configuration.
+    /// If an identity key is provided from block settings, it is tried FIRST before other methods.
+    ///
+    /// Authentication order when identity_key_config is provided:
+    /// 0. Block-provided identity key (FIRST - overrides everything)
+    /// 1. SSH Agent authentication
+    /// 2. SSH config identity files
+    /// 3. Default SSH keys
+    /// 4. Provided authentication method (password or key)
+    pub async fn authenticate_with_config(
+        &mut self,
+        auth: Option<Authentication>,
+        username: Option<&str>,
+        identity_key_config: Option<&SshIdentityKeyConfig>,
+    ) -> Result<()> {
+        // Clone values we need before any mutable borrows
+        let config_username = self.ssh_config.username.clone();
+        let current_user = whoami::username();
+
+        // Use provided username, or SSH config username, or default to current user
+        let username = username
+            .or(config_username.as_deref())
+            .unwrap_or(&current_user);
+
+        tracing::info!(
+            "Starting SSH authentication for {username}@{}",
+            self.ssh_config.hostname
+        );
+
+        // Step 0: Try block-provided identity key FIRST (overrides everything)
+        // If an explicit key is configured and fails, we do NOT fall back to agent/defaults
+        tracing::debug!("authenticate_with_config called with identity_key_config: {:?}", identity_key_config);
+        if let Some(key_config) = identity_key_config {
+            match key_config {
+                SshIdentityKeyConfig::None => {
+                    tracing::debug!("Block identity key config is SshIdentityKeyConfig::None, using defaults");
+                }
+                SshIdentityKeyConfig::Paste { content } => {
+                    tracing::info!("Step 0: Trying block-provided pasted key");
+                    match self.key_auth_from_content(username, content).await {
+                        Ok(()) => {
+                            tracing::info!("✓ SSH authentication successful with pasted key");
+                            return Ok(());
+                        }
+                        Err(e) => {
+                            // Explicit key was configured but failed - do not fall back
+                            return Err(eyre::eyre!(
+                                "Authentication failed with configured identity key: {e}"
+                            ));
+                        }
+                    }
+                }
+                SshIdentityKeyConfig::Path { path } => {
+                    tracing::info!("Step 0: Trying block-provided key path: {}", path);
+                    match self.key_auth(username, PathBuf::from(path)).await {
+                        Ok(()) => {
+                            tracing::info!("✓ SSH authentication successful with key: {}", path);
+                            return Ok(());
+                        }
+                        Err(e) => {
+                            // Explicit key was configured but failed - do not fall back
+                            return Err(eyre::eyre!(
+                                "Authentication failed with configured identity key '{}': {e}",
+                                path
+                            ));
+                        }
+                    }
+                }
+            }
+        }
+
+        // Continue with normal authentication flow (only reached if no explicit key configured)
+        self.authenticate(auth, Some(username)).await
+    }
+
+    /// Authenticate using a key from pasted content
+    async fn key_auth_from_content(&mut self, username: &str, key_content: &str) -> Result<()> {
+        tracing::debug!("Attempting authentication with pasted key content");
+
+        let key_pair = russh::keys::decode_secret_key(key_content, None)
+            .map_err(|e| eyre::eyre!("Failed to decode pasted key: {e}"))?;
+
+        // Query the server for the best RSA hash algorithm it supports
+        let best_hash = self.session.best_supported_rsa_hash().await?.flatten();
+        let key_with_alg = russh::keys::PrivateKeyWithHashAlg::new(Arc::new(key_pair), best_hash);
+
+        let auth_res = self
+            .session
+            .authenticate_publickey(username, key_with_alg)
+            .await?;
+
+        match auth_res {
+            russh::client::AuthResult::Success => {
+                tracing::info!("✓ Pasted key authentication successful");
+                Ok(())
+            }
+            russh::client::AuthResult::Failure {
+                remaining_methods,
+                partial_success,
+            } => {
+                tracing::warn!(
+                    "Server rejected pasted key (remaining methods: {:?}, partial: {})",
+                    remaining_methods,
+                    partial_success
+                );
+                Err(eyre::eyre!("Pasted key authentication failed: server rejected key"))
+            }
+        }
     }
 
     pub async fn disconnect(&self) -> Result<()> {

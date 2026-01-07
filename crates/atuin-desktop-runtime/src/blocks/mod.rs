@@ -192,6 +192,25 @@ impl Block {
         }
     }
 
+    /// If this is an SshConnect block, returns the parsed host info: (user, host, port).
+    /// This is used to disconnect SSH connections when authentication settings change.
+    pub fn ssh_connect_host_info(&self) -> Option<(Option<String>, String, Option<u16>)> {
+        match self {
+            Block::SshConnect(ssh_connect) => {
+                // If explicit hostname is set, use that
+                if let Some(ref hostname) = ssh_connect.hostname {
+                    Some((ssh_connect.user.clone(), hostname.clone(), ssh_connect.port))
+                } else if !ssh_connect.user_host.is_empty() {
+                    // Parse from user_host string
+                    Some(ssh_connect.parse_user_host())
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        }
+    }
+
     /// Get the display name of this block
     #[allow(dead_code)]
     pub fn name(&self) -> String {

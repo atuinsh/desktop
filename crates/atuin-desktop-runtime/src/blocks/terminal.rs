@@ -176,10 +176,14 @@ impl BlockBehavior for Terminal {
         let handle_clone = context.handle();
 
         tokio::spawn(async move {
-            // `run_terminal` handles all lifecycle events.
-            let _ = self
+            // `run_terminal` handles all lifecycle events for successful execution.
+            // If it returns an error, we need to signal failure.
+            if let Err(e) = self
                 .run_terminal(context.clone(), metadata, context.cancellation_token())
-                .await;
+                .await
+            {
+                let _ = context.block_failed(e.to_string()).await;
+            }
         });
 
         Ok(Some(handle_clone))
@@ -225,6 +229,7 @@ impl Terminal {
         let uses_output_vars = templated_code.contains("ATUIN_OUTPUT_VARS");
 
         let ssh_host = context.context_resolver.ssh_host().cloned();
+        let ssh_config = context.context_resolver.ssh_config().cloned();
         let fs_var_handle: Option<crate::context::fs_var::FsVarHandle>;
         let remote_var_path: Option<String>;
 
@@ -275,14 +280,16 @@ impl Terminal {
 
             let initial_cols = self.cols;
             let initial_rows = self.rows;
+            let ssh_config_clone = ssh_config.clone();
             let ssh_result = tokio::select! {
-                result = ssh_pool_clone.open_pty(
+                result = ssh_pool_clone.open_pty_with_config(
                     &hostname_clone,
                     username_clone.as_deref(),
                     &pty_id_str,
                     output_sender.clone(),
                     initial_cols,
                     initial_rows,
+                    ssh_config_clone,
                 ) => {
                     result.map_err(|e| format!("Failed to open SSH PTY: {}", e))
                 }

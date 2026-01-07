@@ -9,7 +9,7 @@ import { useBlockNoteEditor } from "@blocknote/react";
 
 import "@xterm/xterm/css/xterm.css";
 import { AtuinState, useStore } from "@/state/store.ts";
-import { Button, Chip, Spinner, Tooltip } from "@heroui/react";
+import { Button, Chip, Spinner, Tooltip, addToast } from "@heroui/react";
 import { formatDuration, cn } from "@/lib/utils.ts";
 import { usePtyStore } from "@/state/ptyStore.ts";
 import track_event from "@/tracking.ts";
@@ -127,6 +127,18 @@ export const RunBlock = ({
   const context = useBlockContext(terminal.id);
   const execution = useBlockExecution(terminal.id);
   const sshParent = context.sshHost;
+
+  // Show error toast when execution fails (e.g., SSH connection error)
+  useEffect(() => {
+    if (execution.isError && execution.error) {
+      addToast({
+        title: "Terminal error",
+        description: execution.error,
+        color: "danger",
+      });
+      execution.reset();
+    }
+  }, [execution.isError, execution.error]);
 
   useBlockOutput<PtyMetadata>(terminal.id, (output) => {
     if (output.object) {

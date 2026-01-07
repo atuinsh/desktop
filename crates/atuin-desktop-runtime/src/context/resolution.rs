@@ -11,8 +11,8 @@ use crate::{
     blocks::BlockBehavior,
     client::LocalValueProvider,
     context::{
-        DocumentBlock, DocumentCwd, DocumentEnvVar, DocumentEnvVars, DocumentSshHost, DocumentVar,
-        DocumentVars,
+        DocumentBlock, DocumentCwd, DocumentEnvVar, DocumentEnvVars, DocumentSshConfig,
+        DocumentSshHost, DocumentVar, DocumentVars,
     },
 };
 
@@ -66,6 +66,8 @@ pub struct ContextResolver {
     cwd: String,
     env_vars: HashMap<String, String>,
     ssh_host: Option<String>,
+    /// Full SSH configuration from SSH Connect block (includes identity key, overrides, etc.)
+    ssh_config: Option<DocumentSshConfig>,
     extra_template_context: HashMap<String, Value>,
 }
 
@@ -77,6 +79,7 @@ impl ContextResolver {
             cwd: default_cwd(),
             env_vars: HashMap::new(),
             ssh_host: None,
+            ssh_config: None,
             extra_template_context: HashMap::new(),
         }
     }
@@ -126,6 +129,7 @@ impl ContextResolver {
                 .to_string(),
             env_vars: HashMap::new(),
             ssh_host: None,
+            ssh_config: None,
             extra_template_context: HashMap::new(),
         }
     }
@@ -230,6 +234,11 @@ impl ContextResolver {
                     self.ssh_host = None;
                 }
             }
+
+            // Process full SSH configuration (includes identity key, overrides, etc.)
+            if let Some(config) = ctx.get::<DocumentSshConfig>() {
+                self.ssh_config = Some(config.clone());
+            }
         }
     }
 
@@ -313,6 +322,11 @@ impl ContextResolver {
     pub fn ssh_host(&self) -> Option<&String> {
         self.ssh_host.as_ref()
     }
+
+    /// Get full SSH configuration (includes identity key, overrides, etc.)
+    pub fn ssh_config(&self) -> Option<&DocumentSshConfig> {
+        self.ssh_config.as_ref()
+    }
 }
 
 fn default_cwd() -> String {
@@ -389,6 +403,7 @@ impl ContextResolver {
             cwd: parent.cwd.clone(),
             env_vars: parent.env_vars.clone(),
             ssh_host: parent.ssh_host.clone(),
+            ssh_config: parent.ssh_config.clone(),
             extra_template_context: parent.extra_template_context.clone(),
         }
     }
@@ -468,6 +483,7 @@ impl ContextResolverBuilder {
             cwd: self.cwd.unwrap_or_default(),
             env_vars: self.env_vars.unwrap_or_default(),
             ssh_host: self.ssh_host,
+            ssh_config: None,
             extra_template_context: self.extra_template_context.unwrap_or_default(),
         }
     }

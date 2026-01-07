@@ -4,7 +4,7 @@ import { createReactBlockSpec } from "@blocknote/react";
 import { useMemo, useState, useEffect, useRef, useCallback, useContext } from "react";
 
 import { useStore } from "@/state/store.ts";
-import { Button, Input, Tooltip } from "@heroui/react";
+import { Button, Input, Tooltip, addToast } from "@heroui/react";
 import {
   FileTerminalIcon,
   Eye,
@@ -127,6 +127,18 @@ const ScriptBlock = ({
   const blockExecution = useBlockExecution(script.id);
   const blockContext = useBlockContext(script.id);
   const sshParent = blockContext.sshHost;
+
+  // Show error toast when execution fails (e.g., SSH connection error)
+  useEffect(() => {
+    if (blockExecution.isError && blockExecution.error) {
+      addToast({
+        title: "Script error",
+        description: blockExecution.error,
+        color: "danger",
+      });
+      blockExecution.reset();
+    }
+  }, [blockExecution.isError, blockExecution.error]);
 
   const showSpinner = (blockExecution.isStarting || blockExecution.isStopping) && !!sshParent;
 

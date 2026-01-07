@@ -391,6 +391,7 @@ impl Script {
 
         // Check if SSH execution is needed
         let ssh_host = context.context_resolver.ssh_host().cloned();
+        let ssh_config = context.context_resolver.ssh_config().cloned();
         if let Some(ssh_host) = ssh_host {
             tracing::trace!(
                 "Executing SSH script for script block {id} with SSH host {ssh_host}",
@@ -399,7 +400,7 @@ impl Script {
             );
 
             return self
-                .execute_ssh_script(&code, &ssh_host, context, cancellation_token)
+                .execute_ssh_script(&code, &ssh_host, ssh_config, context, cancellation_token)
                 .await;
         }
 
@@ -658,6 +659,7 @@ impl Script {
         &self,
         code: &str,
         ssh_host: &str,
+        ssh_config: Option<crate::context::DocumentSshConfig>,
         context: ExecutionContext,
         cancellation_token: CancellationToken,
     ) -> (
@@ -722,7 +724,7 @@ impl Script {
         };
 
         let exec_result = tokio::select! {
-            result = ssh_pool.exec(
+            result = ssh_pool.exec_with_config(
                 &hostname,
                 username.as_deref(),
                 &self.interpreter,
@@ -730,6 +732,7 @@ impl Script {
                 &channel_id,
                 output_sender,
                 result_tx,
+                ssh_config,
             ) => {
                 result
             }
