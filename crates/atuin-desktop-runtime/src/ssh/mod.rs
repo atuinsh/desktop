@@ -13,6 +13,9 @@ mod pool;
 mod session;
 mod ssh_pool;
 
+#[cfg(test)]
+mod integration_tests;
+
 pub use pool::Pool;
-pub use session::{Authentication, OutputLine, Session, SshConfig};
+pub use session::{Authentication, CommandResult, OutputLine, Session, SshConfig};
 pub use ssh_pool::{SshPoolHandle, SshPty};

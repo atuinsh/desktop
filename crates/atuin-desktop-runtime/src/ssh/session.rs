@@ -90,7 +90,7 @@ impl Session {
     /// Execute a simple command and capture its output
     /// This opens a new channel, runs the command through a shell, and returns stdout, stderr, and exit code
     /// Used for simple utility commands like mktemp, cat, rm
-    async fn exec_and_capture(&self, command: &str) -> Result<CommandResult> {
+    pub(crate) async fn exec_and_capture(&self, command: &str) -> Result<CommandResult> {
         let mut channel = self.session.channel_open_session().await?;
 
         // Run through shell to ensure proper PATH and environment
@@ -99,7 +99,8 @@ impl Session {
 
         let mut stdout = String::new();
         let mut stderr = String::new();
-        let mut exit_code = 0;
+        let mut exit_code: Option<i32> = None;
+        let mut got_eof = false;
 
         loop {
             let Some(msg) = channel.wait().await else {
@@ -119,9 +120,20 @@ impl Session {
                     }
                 }
                 ChannelMsg::ExitStatus { exit_status } => {
-                    exit_code = exit_status as i32;
+                    exit_code = Some(exit_status as i32);
+                    // If we already got EOF, we can break now
+                    if got_eof {
+                        break;
+                    }
                 }
-                ChannelMsg::Eof | ChannelMsg::Close => {
+                ChannelMsg::Eof => {
+                    got_eof = true;
+                    // If we already got exit status, we can break now
+                    if exit_code.is_some() {
+                        break;
+                    }
+                }
+                ChannelMsg::Close => {
                     break;
                 }
                 _ => {}
@@ -133,7 +145,7 @@ impl Session {
         Ok(CommandResult {
             stdout,
             stderr,
-            exit_code,
+            exit_code: exit_code.unwrap_or(0),
         })
     }
 
@@ -705,11 +717,13 @@ impl Session {
         match auth {
             Some(Authentication::Password(_user, password)) => {
                 tracing::info!("Trying password authentication");
-                self.password_auth(username, &password).await?
+                self.password_auth(username, &password).await?;
+                return Ok(());
             }
             Some(Authentication::Key(key_path)) => {
                 tracing::info!("Trying explicitly provided key: {}", key_path.display());
-                self.key_auth(username, key_path).await?
+                self.key_auth(username, key_path).await?;
+                return Ok(());
             }
             None => {
                 tracing::warn!("All SSH authentication methods exhausted");
