@@ -21,6 +21,9 @@ Subsystem sftp /usr/lib/ssh/sftp-server
 # Logging for debugging
 LogLevel DEBUG
 
+# Disable strict permission checks (test container only - allows bind-mounted authorized_keys)
+StrictModes no
+
 # Keep connections alive
 ClientAliveInterval 60
 ClientAliveCountMax 3
