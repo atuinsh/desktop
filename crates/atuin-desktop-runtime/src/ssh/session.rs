@@ -2,7 +2,7 @@
 // This is essentially a wrapper around the russh crate.
 
 use bytes::Bytes;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::mpsc;
@@ -644,7 +644,7 @@ impl Session {
 
     /// Find a companion certificate file for a given key path
     /// OpenSSH convention: certificate for `id_ed25519` is `id_ed25519-cert.pub`
-    async fn find_certificate_for_key(key_path: &PathBuf) -> Option<PathBuf> {
+    async fn find_certificate_for_key(key_path: &Path) -> Option<PathBuf> {
         let key_name = key_path.file_name()?.to_str()?;
         let cert_name = format!("{}-cert.pub", key_name);
         let cert_path = key_path.parent()?.join(cert_name);
