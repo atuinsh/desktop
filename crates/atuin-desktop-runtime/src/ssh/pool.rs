@@ -81,16 +81,18 @@ impl Pool {
         }
 
         let identity_key_config = ssh_config_override.and_then(|cfg| cfg.identity_key.as_ref());
+        let certificate_config = ssh_config_override.and_then(|cfg| cfg.certificate.as_ref());
         tracing::debug!(
-            "Pool connect_with_config: ssh_config_override={:?}, identity_key_config={:?}",
+            "Pool connect_with_config: ssh_config_override={:?}, identity_key_config={:?}, certificate_config={:?}",
             ssh_config_override,
-            identity_key_config
+            identity_key_config,
+            certificate_config
         );
 
         let async_session = async {
             let mut session = Session::open_with_config(host, ssh_config_override).await?;
             let auth_result = session
-                .authenticate_with_config(auth, Some(&username), identity_key_config)
+                .authenticate_with_config(auth, Some(&username), identity_key_config, certificate_config)
                 .await?;
             Ok::<_, eyre::Report>((session, auth_result))
         };

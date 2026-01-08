@@ -21,7 +21,7 @@
 
 use std::path::PathBuf;
 
-use super::{Authentication, Session};
+use super::{Authentication, Session, SshWarning};
 
 // CommandResult is returned by exec_and_capture
 #[allow(unused_imports)]
@@ -79,7 +79,9 @@ async fn connect_with_key(key_name: &str) -> eyre::Result<Session> {
     let key_path = test_keys_dir().join(key_name);
 
     let mut session = Session::open(&host).await?;
-    session.key_auth(&test_user(), key_path).await?;
+    session
+        .key_auth(&test_user(), &test_host(), key_path)
+        .await?;
 
     Ok(session)
 }
@@ -165,7 +167,7 @@ async fn test_auth_invalid_key_fails() {
     let fake_key = temp_dir.path().join("fake_key");
     std::fs::write(&fake_key, "not a valid key").unwrap();
 
-    let result = session.key_auth(&test_user(), fake_key).await;
+    let result = session.key_auth(&test_user(), &test_host(), fake_key).await;
     assert!(result.is_err(), "Invalid key should fail authentication");
 }
 
@@ -535,4 +537,182 @@ async fn test_connection_to_wrong_port_fails() {
         Ok(conn_result) => assert!(conn_result.is_err(), "Connection to wrong port should fail"),
         Err(_timeout) => (), // Timeout is fine - proves it would hang
     }
+}
+
+// =============================================================================
+// Certificate Authentication Tests
+// =============================================================================
+
+/// Test certificate authentication with a valid certificate
+/// This key has NO entry in authorized_keys - it can ONLY authenticate via certificate
+#[tokio::test]
+#[ignore]
+async fn test_auth_certificate_valid() {
+    let host = host_string();
+    let key_path = test_keys_dir().join("id_ed25519_cert_only");
+
+    let mut session = Session::open(&host).await.expect("Failed to open session");
+    let auth_result = session
+        .key_auth(&test_user(), &test_host(), key_path)
+        .await;
+
+    assert!(
+        auth_result.is_ok(),
+        "Certificate authentication should succeed: {:?}",
+        auth_result.err()
+    );
+
+    // Should have no warnings for a valid certificate
+    let auth_result = auth_result.unwrap();
+    assert!(
+        auth_result.warnings.is_empty(),
+        "Valid certificate should produce no warnings, got: {:?}",
+        auth_result.warnings
+    );
+
+    // Verify connection works by running a command
+    let cmd_result = session
+        .exec_and_capture("echo 'cert auth works'")
+        .await
+        .expect("Command execution failed");
+    assert_eq!(cmd_result.exit_code, 0);
+    assert!(cmd_result.stdout.contains("cert auth works"));
+}
+
+/// Test that expired certificate falls back to key auth with a warning
+/// This key has an entry in authorized_keys, so fallback should succeed
+#[tokio::test]
+#[ignore]
+async fn test_auth_certificate_expired_fallback() {
+    let host = host_string();
+    let key_path = test_keys_dir().join("id_ed25519_expired_cert");
+
+    let mut session = Session::open(&host).await.expect("Failed to open session");
+    let auth_result = session
+        .key_auth(&test_user(), &test_host(), key_path)
+        .await;
+
+    assert!(
+        auth_result.is_ok(),
+        "Expired cert should fall back to key auth: {:?}",
+        auth_result.err()
+    );
+
+    // Should have a warning about the expired certificate
+    let auth_result = auth_result.unwrap();
+    assert!(
+        !auth_result.warnings.is_empty(),
+        "Expired certificate should produce a warning"
+    );
+
+    // Check the warning type
+    let has_expired_warning = auth_result.warnings.iter().any(|w| {
+        matches!(w, SshWarning::CertificateExpired { .. })
+    });
+    assert!(
+        has_expired_warning,
+        "Should have CertificateExpired warning, got: {:?}",
+        auth_result.warnings
+    );
+}
+
+/// Test that not-yet-valid certificate falls back to key auth with a warning
+/// This key has an entry in authorized_keys, so fallback should succeed
+#[tokio::test]
+#[ignore]
+async fn test_auth_certificate_not_yet_valid_fallback() {
+    let host = host_string();
+    let key_path = test_keys_dir().join("id_ed25519_future_cert");
+
+    let mut session = Session::open(&host).await.expect("Failed to open session");
+    let auth_result = session
+        .key_auth(&test_user(), &test_host(), key_path)
+        .await;
+
+    assert!(
+        auth_result.is_ok(),
+        "Not-yet-valid cert should fall back to key auth: {:?}",
+        auth_result.err()
+    );
+
+    // Should have a warning about the not-yet-valid certificate
+    let auth_result = auth_result.unwrap();
+    assert!(
+        !auth_result.warnings.is_empty(),
+        "Not-yet-valid certificate should produce a warning"
+    );
+
+    // Check the warning type
+    let has_future_warning = auth_result.warnings.iter().any(|w| {
+        matches!(w, SshWarning::CertificateNotYetValid { .. })
+    });
+    assert!(
+        has_future_warning,
+        "Should have CertificateNotYetValid warning, got: {:?}",
+        auth_result.warnings
+    );
+}
+
+/// Test that certificate is automatically detected when present
+/// key_auth should find id_ed25519_cert_only-cert.pub automatically
+#[tokio::test]
+#[ignore]
+async fn test_auth_certificate_auto_detection() {
+    let host = host_string();
+    let key_path = test_keys_dir().join("id_ed25519_cert_only");
+    let cert_path = test_keys_dir().join("id_ed25519_cert_only-cert.pub");
+
+    // Verify the certificate file exists (sanity check)
+    assert!(
+        cert_path.exists(),
+        "Certificate file should exist at {:?}",
+        cert_path
+    );
+
+    let mut session = Session::open(&host).await.expect("Failed to open session");
+
+    // key_auth should automatically detect and use the certificate
+    let auth_result = session
+        .key_auth(&test_user(), &test_host(), key_path)
+        .await;
+
+    assert!(
+        auth_result.is_ok(),
+        "Auto-detected certificate auth should succeed: {:?}",
+        auth_result.err()
+    );
+}
+
+/// Test direct cert_auth method with explicit paths
+#[tokio::test]
+#[ignore]
+async fn test_auth_cert_auth_explicit() {
+    let host = host_string();
+    let key_path = test_keys_dir().join("id_ed25519_cert_only");
+    let cert_path = test_keys_dir().join("id_ed25519_cert_only-cert.pub");
+
+    let mut session = Session::open(&host).await.expect("Failed to open session");
+
+    let auth_result = session
+        .cert_auth(&test_user(), &test_host(), key_path, cert_path)
+        .await;
+
+    assert!(
+        auth_result.is_ok(),
+        "Explicit cert_auth should succeed: {:?}",
+        auth_result.err()
+    );
+}
+
+/// Test that a key without a certificate still works via authorized_keys
+#[tokio::test]
+#[ignore]
+async fn test_auth_key_without_cert_still_works() {
+    // id_ed25519 has an authorized_keys entry but no certificate
+    let result = connect_with_key("id_ed25519").await;
+    assert!(
+        result.is_ok(),
+        "Key without certificate should authenticate via authorized_keys: {:?}",
+        result.err()
+    );
 }

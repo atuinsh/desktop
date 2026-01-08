@@ -165,7 +165,16 @@ function Application() {
 
   return (
     <HeroUIProvider>
-      <ToastProvider placement="bottom-center" toastOffset={40} />
+      <ToastProvider
+        placement="bottom-center"
+        toastOffset={40}
+        toastProps={{
+          classNames: {
+            base: "overflow-hidden",
+            description: "break-all",
+          },
+        }}
+      />
       <QueryClientProvider client={queryClient}>
         <ReactQueryDevtools initialIsOpen={false} buttonPosition="bottom-right" />
         <main className="text-foreground bg-background overflow-hidden z-20 relative">

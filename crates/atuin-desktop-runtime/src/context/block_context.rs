@@ -392,6 +392,18 @@ pub enum SshIdentityKeyConfig {
     Path { path: String },
 }
 
+/// SSH certificate configuration from SSH Connect block
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "mode", rename_all = "camelCase")]
+pub enum SshCertificateConfig {
+    /// No custom certificate - auto-detect from key path or none
+    None,
+    /// Certificate content pasted directly
+    Paste { content: String },
+    /// Path to certificate file on local machine
+    Path { path: String },
+}
+
 /// Rich SSH configuration from SSH Connect block
 ///
 /// This provides detailed SSH connection settings that override ~/.ssh/config.
@@ -410,6 +422,8 @@ pub struct DocumentSshConfig {
     pub port: Option<u16>,
     /// Identity key configuration
     pub identity_key: Option<SshIdentityKeyConfig>,
+    /// SSH certificate configuration
+    pub certificate: Option<SshCertificateConfig>,
 }
 
 #[typetag::serde]

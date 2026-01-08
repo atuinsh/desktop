@@ -2,7 +2,8 @@ use crate::{
     blocks::{Block, BlockBehavior, FromDocument},
     client::LocalValueProvider,
     context::{
-        BlockContext, ContextResolver, DocumentSshConfig, DocumentSshHost, SshIdentityKeyConfig,
+        BlockContext, ContextResolver, DocumentSshConfig, DocumentSshHost, SshCertificateConfig,
+        SshIdentityKeyConfig,
     },
 };
 use async_trait::async_trait;
@@ -113,6 +114,38 @@ impl SshConnect {
                 } else {
                     Some(SshIdentityKeyConfig::Path {
                         path: key_value.to_string(),
+                    })
+                }
+            }
+            _ => None,
+        }
+    }
+
+    /// Parse certificate configuration from local storage value
+    fn parse_certificate_from_local(value: &str) -> Option<SshCertificateConfig> {
+        // The value is JSON-encoded: {"mode": "...", "value": "..."}
+        let parsed: serde_json::Value = serde_json::from_str(value).ok()?;
+
+        let mode = parsed.get("mode").and_then(|v| v.as_str())?;
+        let cert_value = parsed.get("value").and_then(|v| v.as_str()).unwrap_or("");
+
+        match mode {
+            "none" | "" => Some(SshCertificateConfig::None),
+            "paste" => {
+                if cert_value.is_empty() {
+                    None
+                } else {
+                    Some(SshCertificateConfig::Paste {
+                        content: cert_value.to_string(),
+                    })
+                }
+            }
+            "path" => {
+                if cert_value.is_empty() {
+                    None
+                } else {
+                    Some(SshCertificateConfig::Path {
+                        path: cert_value.to_string(),
                     })
                 }
             }
@@ -242,8 +275,8 @@ impl BlockBehavior for SshConnect {
             return Err("Invalid SSH user_host format".into());
         }
 
-        let identity_key = if let Some(provider) = block_local_value_provider {
-            match provider.get_block_local_value(self.id, "identityKey").await {
+        let (identity_key, certificate) = if let Some(provider) = block_local_value_provider {
+            let identity_key = match provider.get_block_local_value(self.id, "identityKey").await {
                 Ok(Some(value)) => {
                     tracing::debug!("Block {} read identityKey from KV: {}", self.id, value);
                     Self::parse_identity_key_from_local(&value)
@@ -256,15 +289,33 @@ impl BlockBehavior for SshConnect {
                     tracing::warn!("Failed to get identity key from local storage: {}", e);
                     None
                 }
-            }
+            };
+
+            let certificate = match provider.get_block_local_value(self.id, "certificate").await {
+                Ok(Some(value)) => {
+                    tracing::debug!("Block {} read certificate from KV: {}", self.id, value);
+                    Self::parse_certificate_from_local(&value)
+                }
+                Ok(None) => {
+                    tracing::debug!("Block {} has no certificate in KV", self.id);
+                    None
+                }
+                Err(e) => {
+                    tracing::warn!("Failed to get certificate from local storage: {}", e);
+                    None
+                }
+            };
+
+            (identity_key, certificate)
         } else {
             tracing::debug!("Block {} has no block_local_value_provider", self.id);
-            None
+            (None, None)
         };
         tracing::debug!(
-            "Block {} resolved identity_key to: {:?}",
+            "Block {} resolved identity_key to: {:?}, certificate to: {:?}",
             self.id,
-            identity_key
+            identity_key,
+            certificate
         );
 
         // Backwards compatibility with older blocks that only check DocumentSshHost
@@ -276,6 +327,7 @@ impl BlockBehavior for SshConnect {
             hostname: resolved_hostname,
             port: self.port,
             identity_key,
+            certificate,
         });
 
         Ok(Some(context))
