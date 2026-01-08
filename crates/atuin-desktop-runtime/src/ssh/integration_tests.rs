@@ -552,9 +552,7 @@ async fn test_auth_certificate_valid() {
     let key_path = test_keys_dir().join("id_ed25519_cert_only");
 
     let mut session = Session::open(&host).await.expect("Failed to open session");
-    let auth_result = session
-        .key_auth(&test_user(), &test_host(), key_path)
-        .await;
+    let auth_result = session.key_auth(&test_user(), &test_host(), key_path).await;
 
     assert!(
         auth_result.is_ok(),
@@ -588,9 +586,7 @@ async fn test_auth_certificate_expired_fallback() {
     let key_path = test_keys_dir().join("id_ed25519_expired_cert");
 
     let mut session = Session::open(&host).await.expect("Failed to open session");
-    let auth_result = session
-        .key_auth(&test_user(), &test_host(), key_path)
-        .await;
+    let auth_result = session.key_auth(&test_user(), &test_host(), key_path).await;
 
     assert!(
         auth_result.is_ok(),
@@ -606,9 +602,10 @@ async fn test_auth_certificate_expired_fallback() {
     );
 
     // Check the warning type
-    let has_expired_warning = auth_result.warnings.iter().any(|w| {
-        matches!(w, SshWarning::CertificateExpired { .. })
-    });
+    let has_expired_warning = auth_result
+        .warnings
+        .iter()
+        .any(|w| matches!(w, SshWarning::CertificateExpired { .. }));
     assert!(
         has_expired_warning,
         "Should have CertificateExpired warning, got: {:?}",
@@ -625,9 +622,7 @@ async fn test_auth_certificate_not_yet_valid_fallback() {
     let key_path = test_keys_dir().join("id_ed25519_future_cert");
 
     let mut session = Session::open(&host).await.expect("Failed to open session");
-    let auth_result = session
-        .key_auth(&test_user(), &test_host(), key_path)
-        .await;
+    let auth_result = session.key_auth(&test_user(), &test_host(), key_path).await;
 
     assert!(
         auth_result.is_ok(),
@@ -643,9 +638,10 @@ async fn test_auth_certificate_not_yet_valid_fallback() {
     );
 
     // Check the warning type
-    let has_future_warning = auth_result.warnings.iter().any(|w| {
-        matches!(w, SshWarning::CertificateNotYetValid { .. })
-    });
+    let has_future_warning = auth_result
+        .warnings
+        .iter()
+        .any(|w| matches!(w, SshWarning::CertificateNotYetValid { .. }));
     assert!(
         has_future_warning,
         "Should have CertificateNotYetValid warning, got: {:?}",
@@ -672,9 +668,7 @@ async fn test_auth_certificate_auto_detection() {
     let mut session = Session::open(&host).await.expect("Failed to open session");
 
     // key_auth should automatically detect and use the certificate
-    let auth_result = session
-        .key_auth(&test_user(), &test_host(), key_path)
-        .await;
+    let auth_result = session.key_auth(&test_user(), &test_host(), key_path).await;
 
     assert!(
         auth_result.is_ok(),

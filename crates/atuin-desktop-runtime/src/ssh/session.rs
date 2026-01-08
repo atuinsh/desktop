@@ -659,7 +659,12 @@ impl Session {
     /// Public key or certificate authentication
     /// If a companion certificate file exists (e.g., id_ed25519-cert.pub), uses certificate auth
     /// Returns AuthResult containing any warnings from the authentication process
-    pub async fn key_auth(&mut self, username: &str, host: &str, key_path: PathBuf) -> Result<AuthResult> {
+    pub async fn key_auth(
+        &mut self,
+        username: &str,
+        host: &str,
+        key_path: PathBuf,
+    ) -> Result<AuthResult> {
         // Check if there's a companion certificate for this key
         if let Some(cert_path) = Self::find_certificate_for_key(&key_path).await {
             return self.cert_auth(username, host, key_path, cert_path).await;
@@ -739,11 +744,16 @@ impl Session {
         };
 
         // Read certificate file content
-        let cert_content = std::fs::read_to_string(&cert_path)
-            .map_err(|e| eyre::eyre!("Failed to read certificate file {}: {e}", cert_path.display()))?;
+        let cert_content = std::fs::read_to_string(&cert_path).map_err(|e| {
+            eyre::eyre!(
+                "Failed to read certificate file {}: {e}",
+                cert_path.display()
+            )
+        })?;
 
         let cert_source = cert_path.display().to_string();
-        self.cert_auth_impl(username, host, key_pair, &cert_content, &cert_source).await
+        self.cert_auth_impl(username, host, key_pair, &cert_content, &cert_source)
+            .await
     }
 
     /// Attempt public key authentication with an already-loaded key.
@@ -784,7 +794,9 @@ impl Session {
             .map_err(|e| eyre::eyre!("Failed to write temp certificate: {e}"))?;
 
         // Guard ensures temp file is cleaned up on any exit path
-        let _temp_guard = TempFileGuard { path: temp_cert_path.clone() };
+        let _temp_guard = TempFileGuard {
+            path: temp_cert_path.clone(),
+        };
 
         // Load the certificate
         let cert = match russh::keys::load_openssh_certificate(&temp_cert_path) {
@@ -886,10 +898,16 @@ impl Session {
 
         match auth_res {
             russh::client::AuthResult::Success => {
-                tracing::info!("✓ Certificate authentication successful with {}", cert_source);
+                tracing::info!(
+                    "✓ Certificate authentication successful with {}",
+                    cert_source
+                );
                 Ok(AuthResult::default())
             }
-            russh::client::AuthResult::Failure { remaining_methods, partial_success } => {
+            russh::client::AuthResult::Failure {
+                remaining_methods,
+                partial_success,
+            } => {
                 tracing::warn!(
                     "Server rejected certificate {} (remaining methods: {:?}, partial: {})",
                     cert_source,
@@ -1014,7 +1032,10 @@ impl Session {
             identity_files.len()
         );
         for identity_file in &identity_files {
-            if let Ok(auth_result) = self.key_auth(username, &hostname, identity_file.clone()).await {
+            if let Ok(auth_result) = self
+                .key_auth(username, &hostname, identity_file.clone())
+                .await
+            {
                 return Ok(auth_result);
             }
         }
@@ -1121,7 +1142,12 @@ impl Session {
                     tracing::info!("Step 0: Trying block-provided pasted key");
                     // For pasted key content with explicit certificate, use cert_auth_from_content
                     match self
-                        .key_auth_from_content_with_cert(username, &hostname, content, certificate_config)
+                        .key_auth_from_content_with_cert(
+                            username,
+                            &hostname,
+                            content,
+                            certificate_config,
+                        )
                         .await
                     {
                         Ok(auth_result) => {
@@ -1139,7 +1165,12 @@ impl Session {
                 SshIdentityKeyConfig::Path { path } => {
                     tracing::info!("Step 0: Trying block-provided key path: {}", path);
                     match self
-                        .key_auth_with_cert_config(username, &hostname, PathBuf::from(path), certificate_config)
+                        .key_auth_with_cert_config(
+                            username,
+                            &hostname,
+                            PathBuf::from(path),
+                            certificate_config,
+                        )
                         .await
                     {
                         Ok(auth_result) => {
@@ -1238,11 +1269,16 @@ impl Session {
         cert_path: PathBuf,
     ) -> Result<AuthResult> {
         // Read certificate file content and delegate to impl
-        let cert_content = std::fs::read_to_string(&cert_path)
-            .map_err(|e| eyre::eyre!("Failed to read certificate file {}: {e}", cert_path.display()))?;
+        let cert_content = std::fs::read_to_string(&cert_path).map_err(|e| {
+            eyre::eyre!(
+                "Failed to read certificate file {}: {e}",
+                cert_path.display()
+            )
+        })?;
 
         let cert_source = cert_path.display().to_string();
-        self.cert_auth_impl(username, host, key_pair, &cert_content, &cert_source).await
+        self.cert_auth_impl(username, host, key_pair, &cert_content, &cert_source)
+            .await
     }
 
     /// Certificate auth with an already-loaded key pair and pasted certificate content
@@ -1254,7 +1290,8 @@ impl Session {
         cert_content: &str,
     ) -> Result<AuthResult> {
         // Delegate directly to impl with pasted content indicator
-        self.cert_auth_impl(username, host, key_pair, cert_content, "(pasted content)").await
+        self.cert_auth_impl(username, host, key_pair, cert_content, "(pasted content)")
+            .await
     }
 
     pub async fn disconnect(&self) -> Result<()> {

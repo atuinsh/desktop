@@ -116,7 +116,13 @@ pub enum SshPoolMessage {
         // The actual result of the open_pty command
         // returns a channel to send input to the pty, plus any auth warnings
         #[allow(clippy::type_complexity)]
-        reply_to: oneshot::Sender<Result<(mpsc::Sender<Bytes>, mpsc::Sender<(u16, u16)>, Vec<SshWarning>)>>,
+        reply_to: oneshot::Sender<
+            Result<(
+                mpsc::Sender<Bytes>,
+                mpsc::Sender<(u16, u16)>,
+                Vec<SshWarning>,
+            )>,
+        >,
     },
     ClosePty {
         channel: String,
@@ -319,7 +325,11 @@ impl SshPoolHandle {
         output_stream: mpsc::Sender<String>,
         width: u16,
         height: u16,
-    ) -> Result<(mpsc::Sender<Bytes>, mpsc::Sender<(u16, u16)>, Vec<SshWarning>)> {
+    ) -> Result<(
+        mpsc::Sender<Bytes>,
+        mpsc::Sender<(u16, u16)>,
+        Vec<SshWarning>,
+    )> {
         self.open_pty_with_config(host, username, channel, output_stream, width, height, None)
             .await
     }
@@ -334,7 +344,11 @@ impl SshPoolHandle {
         width: u16,
         height: u16,
         ssh_config: Option<DocumentSshConfig>,
-    ) -> Result<(mpsc::Sender<Bytes>, mpsc::Sender<(u16, u16)>, Vec<SshWarning>)> {
+    ) -> Result<(
+        mpsc::Sender<Bytes>,
+        mpsc::Sender<(u16, u16)>,
+        Vec<SshWarning>,
+    )> {
         let (reply_sender, reply_receiver) = oneshot::channel();
 
         let msg = SshPoolMessage::OpenPty {

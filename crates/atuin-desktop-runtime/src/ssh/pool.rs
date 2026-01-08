@@ -92,7 +92,12 @@ impl Pool {
         let async_session = async {
             let mut session = Session::open_with_config(host, ssh_config_override).await?;
             let auth_result = session
-                .authenticate_with_config(auth, Some(&username), identity_key_config, certificate_config)
+                .authenticate_with_config(
+                    auth,
+                    Some(&username),
+                    identity_key_config,
+                    certificate_config,
+                )
                 .await?;
             Ok::<_, eyre::Report>((session, auth_result))
         };
