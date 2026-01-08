@@ -1175,50 +1175,29 @@ impl Session {
         let key_pair = russh::keys::decode_secret_key(key_content, None)
             .map_err(|e| eyre::eyre!("Failed to decode pasted key: {e}"))?;
 
-        // Check if an explicit certificate was provided
-        match certificate_config {
-            Some(SshCertificateConfig::Path { path }) => {
-                tracing::info!("Using explicit certificate path: {}", path);
-                let cert_path = PathBuf::from(path);
-                // We can't use cert_auth directly because we have key content, not a key file
-                // Load the certificate and do cert auth with the decoded key
-                self.cert_auth_with_key(username, host, key_pair, cert_path).await
-            }
-            Some(SshCertificateConfig::Paste { content }) => {
-                tracing::info!("Using pasted certificate content");
-                self.cert_auth_with_key_and_cert_content(username, host, key_pair, content).await
-            }
-            Some(SshCertificateConfig::None) | None => {
-                // No explicit certificate, just do regular key auth
-                let best_hash = self.session.best_supported_rsa_hash().await?.flatten();
-                let key_with_alg = russh::keys::PrivateKeyWithHashAlg::new(Arc::new(key_pair), best_hash);
-
-                let auth_res = self
-                    .session
-                    .authenticate_publickey(username, key_with_alg)
-                    .await?;
-
-                match auth_res {
-                    russh::client::AuthResult::Success => {
-                        tracing::info!("✓ Pasted key authentication successful");
-                        Ok(AuthResult::default())
-                    }
-                    russh::client::AuthResult::Failure {
-                        remaining_methods,
-                        partial_success,
-                    } => {
-                        tracing::warn!(
-                            "Server rejected pasted key (remaining methods: {:?}, partial: {})",
-                            remaining_methods,
-                            partial_success
-                        );
-                        Err(eyre::eyre!(
-                            "Pasted key authentication failed: server rejected key"
-                        ))
-                    }
-                }
-            }
+        // If explicit certificate provided, use cert auth
+        if let Some(SshCertificateConfig::Path { path }) = certificate_config {
+            tracing::info!("Using explicit certificate path: {}", path);
+            return self
+                .cert_auth_with_key(username, host, key_pair, PathBuf::from(path))
+                .await;
         }
+
+        if let Some(SshCertificateConfig::Paste { content }) = certificate_config {
+            tracing::info!("Using pasted certificate content");
+            return self
+                .cert_auth_with_key_and_cert_content(username, host, key_pair, content)
+                .await;
+        }
+
+        // No certificate - regular key auth
+        self.try_publickey_auth(username, key_pair)
+            .await
+            .map(|()| {
+                tracing::info!("✓ Pasted key authentication successful");
+                AuthResult::default()
+            })
+            .map_err(|_| eyre::eyre!("Pasted key authentication failed: server rejected key"))
     }
 
     /// Authenticate using a key file path with optional certificate config
@@ -1230,23 +1209,24 @@ impl Session {
         key_path: PathBuf,
         certificate_config: Option<&SshCertificateConfig>,
     ) -> Result<AuthResult> {
-        match certificate_config {
-            Some(SshCertificateConfig::Path { path }) => {
-                tracing::info!("Using explicit certificate path: {}", path);
-                self.cert_auth(username, host, key_path, PathBuf::from(path)).await
-            }
-            Some(SshCertificateConfig::Paste { content }) => {
-                tracing::info!("Using pasted certificate content");
-                // Load the key and use cert auth with pasted cert content
-                let key_pair = russh::keys::load_secret_key(&key_path, None)
-                    .map_err(|e| eyre::eyre!("Failed to load key {}: {e}", key_path.display()))?;
-                self.cert_auth_with_key_and_cert_content(username, host, key_pair, content).await
-            }
-            Some(SshCertificateConfig::None) | None => {
-                // No explicit certificate, use default behavior (auto-detect)
-                self.key_auth(username, host, key_path).await
-            }
+        if let Some(SshCertificateConfig::Path { path }) = certificate_config {
+            tracing::info!("Using explicit certificate path: {}", path);
+            return self
+                .cert_auth(username, host, key_path, PathBuf::from(path))
+                .await;
         }
+
+        if let Some(SshCertificateConfig::Paste { content }) = certificate_config {
+            tracing::info!("Using pasted certificate content");
+            let key_pair = russh::keys::load_secret_key(&key_path, None)
+                .map_err(|e| eyre::eyre!("Failed to load key {}: {e}", key_path.display()))?;
+            return self
+                .cert_auth_with_key_and_cert_content(username, host, key_pair, content)
+                .await;
+        }
+
+        // No explicit certificate - use default behavior (auto-detect)
+        self.key_auth(username, host, key_path).await
     }
 
     /// Certificate auth with an already-loaded key pair and a certificate path
