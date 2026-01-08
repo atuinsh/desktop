@@ -746,6 +746,26 @@ impl Session {
         self.cert_auth_impl(username, host, key_pair, &cert_content, &cert_source).await
     }
 
+    /// Attempt public key authentication with an already-loaded key.
+    /// Returns Ok(()) on success, Err on failure.
+    async fn try_publickey_auth(
+        &mut self,
+        username: &str,
+        key_pair: russh::keys::PrivateKey,
+    ) -> Result<()> {
+        let best_hash = self.session.best_supported_rsa_hash().await?.flatten();
+        let key_with_alg = russh::keys::PrivateKeyWithHashAlg::new(Arc::new(key_pair), best_hash);
+        let auth_res = self
+            .session
+            .authenticate_publickey(username, key_with_alg)
+            .await?;
+
+        match auth_res {
+            russh::client::AuthResult::Success => Ok(()),
+            _ => Err(eyre::eyre!("Public key authentication failed")),
+        }
+    }
+
     /// Core certificate authentication implementation.
     /// Takes certificate content as a string (callers read file or pass directly).
     /// Handles parsing, validation, fallback to key auth, and returns warnings.
@@ -775,27 +795,19 @@ impl Session {
                     "Failed to load SSH certificate {}: {e}. Falling back to key authentication.",
                     cert_source
                 );
-                // Try key auth fallback
-                let best_hash = self.session.best_supported_rsa_hash().await?.flatten();
-                let key_with_alg = russh::keys::PrivateKeyWithHashAlg::new(Arc::new(key_pair), best_hash);
-                let auth_res = self.session.authenticate_publickey(username, key_with_alg).await?;
-                match auth_res {
-                    russh::client::AuthResult::Success => {
-                        return Ok(AuthResult {
-                            warnings: vec![SshWarning::CertificateLoadFailed {
-                                host: host.to_string(),
-                                cert_path: cert_source.to_string(),
-                                error: error_msg,
-                            }],
-                        });
-                    }
-                    _ => {
-                        return Err(eyre::eyre!(
-                            "Certificate load failed ({}) and fallback key authentication also failed",
-                            error_msg
-                        ));
-                    }
-                }
+                return match self.try_publickey_auth(username, key_pair).await {
+                    Ok(()) => Ok(AuthResult {
+                        warnings: vec![SshWarning::CertificateLoadFailed {
+                            host: host.to_string(),
+                            cert_path: cert_source.to_string(),
+                            error: error_msg,
+                        }],
+                    }),
+                    Err(_) => Err(eyre::eyre!(
+                        "Certificate load failed ({}) and fallback key authentication also failed",
+                        error_msg
+                    )),
+                };
             }
         };
 
@@ -811,26 +823,19 @@ impl Session {
                 cert_source,
                 valid_from_str
             );
-            let best_hash = self.session.best_supported_rsa_hash().await?.flatten();
-            let key_with_alg = russh::keys::PrivateKeyWithHashAlg::new(Arc::new(key_pair), best_hash);
-            let auth_res = self.session.authenticate_publickey(username, key_with_alg).await?;
-            match auth_res {
-                russh::client::AuthResult::Success => {
-                    return Ok(AuthResult {
-                        warnings: vec![SshWarning::CertificateNotYetValid {
-                            host: host.to_string(),
-                            cert_path: cert_source.to_string(),
-                            valid_from: valid_from_str,
-                        }],
-                    });
-                }
-                _ => {
-                    return Err(eyre::eyre!(
-                        "Certificate not yet valid (valid from {}) and fallback key authentication also failed",
-                        valid_from_str
-                    ));
-                }
-            }
+            return match self.try_publickey_auth(username, key_pair).await {
+                Ok(()) => Ok(AuthResult {
+                    warnings: vec![SshWarning::CertificateNotYetValid {
+                        host: host.to_string(),
+                        cert_path: cert_source.to_string(),
+                        valid_from: valid_from_str,
+                    }],
+                }),
+                Err(_) => Err(eyre::eyre!(
+                    "Certificate not yet valid (valid from {}) and fallback key authentication also failed",
+                    valid_from_str
+                )),
+            };
         }
 
         if now > valid_before {
@@ -840,26 +845,19 @@ impl Session {
                 cert_source,
                 valid_until_str
             );
-            let best_hash = self.session.best_supported_rsa_hash().await?.flatten();
-            let key_with_alg = russh::keys::PrivateKeyWithHashAlg::new(Arc::new(key_pair), best_hash);
-            let auth_res = self.session.authenticate_publickey(username, key_with_alg).await?;
-            match auth_res {
-                russh::client::AuthResult::Success => {
-                    return Ok(AuthResult {
-                        warnings: vec![SshWarning::CertificateExpired {
-                            host: host.to_string(),
-                            cert_path: cert_source.to_string(),
-                            valid_until: valid_until_str,
-                        }],
-                    });
-                }
-                _ => {
-                    return Err(eyre::eyre!(
-                        "Certificate expired (valid until {}) and fallback key authentication also failed",
-                        valid_until_str
-                    ));
-                }
-            }
+            return match self.try_publickey_auth(username, key_pair).await {
+                Ok(()) => Ok(AuthResult {
+                    warnings: vec![SshWarning::CertificateExpired {
+                        host: host.to_string(),
+                        cert_path: cert_source.to_string(),
+                        valid_until: valid_until_str,
+                    }],
+                }),
+                Err(_) => Err(eyre::eyre!(
+                    "Certificate expired (valid until {}) and fallback key authentication also failed",
+                    valid_until_str
+                )),
+            };
         }
 
         // Check if certificate authorizes the requested principal
