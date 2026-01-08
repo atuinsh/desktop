@@ -14,6 +14,8 @@ use russh::client::Handle;
 use russh::*;
 use russh_config::*;
 
+use time::OffsetDateTime;
+
 use crate::context::{DocumentSshConfig, SshCertificateConfig, SshIdentityKeyConfig};
 use crate::ssh::SshPoolHandle;
 
@@ -25,58 +27,6 @@ struct TempFileGuard {
 impl Drop for TempFileGuard {
     fn drop(&mut self) {
         let _ = std::fs::remove_file(&self.path);
-    }
-}
-
-/// Format a SystemTime as a human-readable string
-fn format_system_time(time: std::time::SystemTime) -> String {
-    match time.duration_since(std::time::UNIX_EPOCH) {
-        Ok(duration) => {
-            // Convert to a human-readable format
-            let secs = duration.as_secs();
-            // Use chrono-like formatting without the dependency
-            // Format as ISO 8601: YYYY-MM-DD HH:MM:SS UTC
-            let days_since_epoch = secs / 86400;
-            let time_of_day = secs % 86400;
-            let hours = time_of_day / 3600;
-            let minutes = (time_of_day % 3600) / 60;
-            let seconds = time_of_day % 60;
-
-            // Simple year/month/day calculation (approximate, doesn't handle leap years perfectly)
-            let mut year = 1970i32;
-            let mut remaining_days = days_since_epoch as i32;
-
-            loop {
-                let days_in_year = if year % 4 == 0 && (year % 100 != 0 || year % 400 == 0) { 366 } else { 365 };
-                if remaining_days < days_in_year {
-                    break;
-                }
-                remaining_days -= days_in_year;
-                year += 1;
-            }
-
-            let days_in_months: [i32; 12] = if year % 4 == 0 && (year % 100 != 0 || year % 400 == 0) {
-                [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
-            } else {
-                [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
-            };
-
-            let mut month = 1;
-            for days in days_in_months {
-                if remaining_days < days {
-                    break;
-                }
-                remaining_days -= days;
-                month += 1;
-            }
-            let day = remaining_days + 1;
-
-            format!("{:04}-{:02}-{:02} {:02}:{:02}:{:02} UTC", year, month, day, hours, minutes, seconds)
-        }
-        Err(_) => {
-            // Time is before UNIX epoch
-            format!("{:?}", time)
-        }
     }
 }
 
@@ -855,7 +805,7 @@ impl Session {
         let valid_before = cert.valid_before_time();
 
         if now < valid_after {
-            let valid_from_str = format_system_time(valid_after);
+            let valid_from_str = OffsetDateTime::from(valid_after).to_string();
             tracing::warn!(
                 "Certificate {} is not yet valid (valid from {}). Falling back to key authentication.",
                 cert_source,
@@ -884,7 +834,7 @@ impl Session {
         }
 
         if now > valid_before {
-            let valid_until_str = format_system_time(valid_before);
+            let valid_until_str = OffsetDateTime::from(valid_before).to_string();
             tracing::warn!(
                 "Certificate {} has expired (valid until {}). Falling back to key authentication.",
                 cert_source,
@@ -1929,21 +1879,5 @@ Host example.com
         let result = Session::find_certificate_for_key(&key_path).await;
         // Should return None since no certificate file exists at the relative path
         assert!(result.is_none());
-    }
-
-    #[test]
-    fn test_format_system_time_unix_epoch() {
-        let epoch = std::time::UNIX_EPOCH;
-        let result = super::format_system_time(epoch);
-        assert_eq!(result, "1970-01-01 00:00:00 UTC");
-    }
-
-    #[test]
-    fn test_format_system_time_known_date() {
-        // Use a known timestamp and verify the format looks correct
-        // 1705322445 = 2024-01-15 12:40:45 UTC (verified)
-        let time = std::time::UNIX_EPOCH + std::time::Duration::from_secs(1705322445);
-        let result = super::format_system_time(time);
-        assert_eq!(result, "2024-01-15 12:40:45 UTC");
     }
 }
