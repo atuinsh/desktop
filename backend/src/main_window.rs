@@ -2,7 +2,7 @@ use crate::{kv, state};
 use tauri::utils::config::BackgroundThrottlingPolicy;
 use tauri::webview::WebviewWindowBuilder;
 use tauri::{
-    AppHandle, LogicalSize, Manager, PhysicalPosition, PhysicalSize, WebviewUrl, WebviewWindow,
+    AppHandle, LogicalSize, Manager, PhysicalPosition, PhysicalSize, Runtime, WebviewUrl, WebviewWindow,
 };
 
 #[derive(Clone, serde::Serialize, serde::Deserialize, Debug)]
@@ -45,7 +45,7 @@ fn get_os() -> String {
     }
 }
 
-pub(crate) async fn create_main_window(app: &AppHandle) -> Result<(), String> {
+pub(crate) async fn create_main_window<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
     let dev_prefix = app.state::<state::AtuinState>().dev_prefix.clone();
     let channel = env!("APP_CHANNEL");
 
@@ -171,7 +171,7 @@ pub(crate) async fn create_main_window(app: &AppHandle) -> Result<(), String> {
     Ok(())
 }
 
-fn is_correctly_sized_and_positioned(window: &WebviewWindow, window_state: &WindowState) -> bool {
+fn is_correctly_sized_and_positioned<R: Runtime>(window: &WebviewWindow<R>, window_state: &WindowState) -> bool {
     let position = window.outer_position().unwrap();
     let size = window.outer_size().unwrap();
     position.x == window_state.x
@@ -181,7 +181,7 @@ fn is_correctly_sized_and_positioned(window: &WebviewWindow, window_state: &Wind
 }
 
 #[tauri::command]
-pub(crate) async fn save_window_info(app: AppHandle) -> Result<(), String> {
+pub(crate) async fn save_window_info<R: Runtime>(app: AppHandle<R>) -> Result<(), String> {
     let window = app.get_webview_window("main").unwrap();
     let position = window.outer_position().unwrap();
     let size = window.outer_size().unwrap();
@@ -193,19 +193,19 @@ pub(crate) async fn save_window_info(app: AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub(crate) async fn show_window(app: AppHandle) -> Result<(), String> {
+pub(crate) async fn show_window<R: Runtime>(app: AppHandle<R>) -> Result<(), String> {
     let window = app.get_webview_window("main").unwrap();
     window.show().unwrap();
     window.set_focus().unwrap();
     Ok(())
 }
 
-async fn save_window_state(app: &AppHandle, state: WindowState) -> Result<(), String> {
+async fn save_window_state<R: Runtime>(app: &AppHandle<R>, state: WindowState) -> Result<(), String> {
     let db = kv::open_db(app).await.map_err(|e| e.to_string())?;
     kv::set(&db, "window_state_u32", &state).await
 }
 
-async fn load_window_state(app: &AppHandle) -> Result<Option<WindowState>, String> {
+async fn load_window_state<R: Runtime>(app: &AppHandle<R>) -> Result<Option<WindowState>, String> {
     let db = kv::open_db(app).await.map_err(|e| e.to_string())?;
     kv::get(&db, "window_state_u32").await
 }

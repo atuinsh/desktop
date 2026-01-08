@@ -1,6 +1,6 @@
 use serde::{de::DeserializeOwned, Serialize};
 use sqlx::{Row, SqlitePool};
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Manager, Runtime};
 
 pub(crate) async fn get<T: DeserializeOwned>(
     db: &SqlitePool,
@@ -34,7 +34,7 @@ pub(crate) async fn set<T: Serialize>(db: &SqlitePool, key: &str, value: &T) -> 
         .map_err(|e| e.to_string())
 }
 
-pub(crate) async fn open_db(app: &AppHandle) -> eyre::Result<SqlitePool> {
+pub(crate) async fn open_db<R: Runtime>(app: &AppHandle<R>) -> eyre::Result<SqlitePool> {
     let state = app.state::<crate::state::AtuinState>();
     state.db_instances.get_pool("kv").await
 }

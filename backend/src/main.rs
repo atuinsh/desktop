@@ -7,7 +7,7 @@ use std::path::PathBuf;
 use std::{env, fs};
 
 use tauri::path::BaseDirectory;
-use tauri::{http, App, AppHandle, Manager, RunEvent};
+use tauri::{http, App, AppHandle, Manager, RunEvent, Runtime};
 use tauri_plugin_log::fern::colors::{Color, ColoredLevelConfig};
 use time::format_description::well_known::Rfc3339;
 
@@ -45,6 +45,13 @@ use dotfiles::aliases::aliases;
 
 use crate::advanced_settings::AdvancedSettings;
 use crate::menu::TabItem;
+
+#[cfg(all(not(test), feature = "cef"))]
+use tauri::Cef as BrowserEngine;
+#[cfg(all(not(test), not(feature = "cef"), feature = "wry"))]
+use tauri::Wry as BrowserEngine;
+#[cfg(test)]
+use tauri::test::MockRuntime as BrowserEngine;
 
 #[derive(Debug, serde::Serialize)]
 struct HomeInfo {
@@ -308,7 +315,7 @@ async fn cli_settings() -> Result<Settings, String> {
 }
 
 #[tauri::command]
-async fn get_app_version(app: AppHandle) -> Result<String, String> {
+async fn get_app_version<R: Runtime>(app: AppHandle<R>) -> Result<String, String> {
     let version = app.package_info().version.to_string();
     Ok(version)
 }
@@ -344,14 +351,14 @@ async fn get_platform_info() -> Result<String, String> {
 }
 
 #[tauri::command]
-async fn update_window_menu_tabs(app: AppHandle, tabs: Vec<TabItem>) -> Result<(), String> {
+async fn update_window_menu_tabs<R: Runtime>(app: AppHandle<R>, tabs: Vec<TabItem>) -> Result<(), String> {
     let new_menu = menu::menu(&app, &tabs).map_err(|e| e.to_string())?;
     let _ = app.set_menu(new_menu);
 
     Ok(())
 }
 
-fn backup_databases(app: &App) -> tauri::Result<()> {
+fn backup_databases<R: Runtime>(app: &App<R>) -> tauri::Result<()> {
     let version = app.package_info().version.to_string();
     // This seems like the wrong directory to use, but it's what the SQL plugin uses so ¯\_(ツ)_/¯
     let base_dir = app.path().app_config_dir()?;
@@ -383,7 +390,7 @@ fn backup_databases(app: &App) -> tauri::Result<()> {
     Ok(())
 }
 
-fn show_window(app: &AppHandle) {
+fn show_window<R: Runtime>(app: &AppHandle<R>) {
     let windows = app.webview_windows();
 
     windows
@@ -394,7 +401,7 @@ fn show_window(app: &AppHandle) {
         .expect("Can't Bring Window to Focus");
 }
 
-async fn apply_runbooks_migrations(app: &AppHandle) -> eyre::Result<()> {
+async fn apply_runbooks_migrations<R: Runtime>(app: &AppHandle<R>) -> eyre::Result<()> {
     let state = app.state::<crate::state::AtuinState>();
     let pool = state.db_instances.get_pool("runbooks").await?;
     sqlx::migrate!("./migrations/runbooks").run(&pool).await?;
@@ -416,7 +423,7 @@ fn main() {
         .debug(Color::Blue)
         .trace(Color::BrightBlack);
 
-    let builder = tauri::Builder::default().plugin(
+    let builder = tauri::Builder::<BrowserEngine>::new().plugin(
         tauri_plugin_log::Builder::new()
             .targets([
                 tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stderr),
