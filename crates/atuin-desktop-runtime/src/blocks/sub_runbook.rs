@@ -93,10 +93,6 @@ pub struct SubRunbook {
     /// Export working directory from the sub-runbook to the parent
     #[builder(default)]
     pub export_cwd: bool,
-
-    /// Export SSH host from the sub-runbook to the parent
-    #[builder(default)]
-    pub export_ssh_host: bool,
 }
 
 impl FromDocument for SubRunbook {
@@ -147,11 +143,6 @@ impl FromDocument for SubRunbook {
             .and_then(|v| v.as_bool())
             .unwrap_or(false);
 
-        let export_ssh_host = props
-            .get("exportSshHost")
-            .and_then(|v| v.as_bool())
-            .unwrap_or(false);
-
         let sub_runbook = SubRunbook::builder()
             .id(id)
             .name(
@@ -172,7 +163,6 @@ impl FromDocument for SubRunbook {
             .export_env(export_env)
             .export_vars(export_vars)
             .export_cwd(export_cwd)
-            .export_ssh_host(export_ssh_host)
             .build();
 
         Ok(sub_runbook)
@@ -244,7 +234,6 @@ impl BlockBehavior for SubRunbook {
         let export_env = self.export_env;
         let export_vars = self.export_vars;
         let export_cwd = self.export_cwd;
-        let export_ssh_host = self.export_ssh_host;
         // Use runbook_name if set, otherwise fall back to display_id
         let runbook_name = self
             .runbook_name
@@ -546,7 +535,7 @@ impl BlockBehavior for SubRunbook {
                 .await;
 
             // Export context to parent if any export options are enabled
-            if export_env || export_vars || export_cwd || export_ssh_host {
+            if export_env || export_vars || export_cwd {
                 // Get final context resolver from sub-document (includes all block contexts)
                 let final_resolver = match sub_document.get_context_resolver().await {
                     Ok(resolver) => resolver,
@@ -562,7 +551,6 @@ impl BlockBehavior for SubRunbook {
                 let mut new_env_vars: Vec<(String, String)> = Vec::new();
                 let mut new_vars: Vec<(String, String, String)> = Vec::new();
                 let mut new_cwd: Option<String> = None;
-                let mut new_ssh_host: Option<Option<String>> = None;
 
                 // Export environment variables
                 if export_env {
@@ -635,27 +623,8 @@ impl BlockBehavior for SubRunbook {
                     }
                 }
 
-                // Export SSH host
-                if export_ssh_host {
-                    let child_ssh_host = final_resolver.ssh_host();
-                    let parent_ssh_host = context.context_resolver.ssh_host();
-
-                    if child_ssh_host != parent_ssh_host {
-                        tracing::info!(
-                            "Exporting ssh_host from sub-runbook to parent: {:?} -> {:?}",
-                            parent_ssh_host,
-                            child_ssh_host
-                        );
-                        new_ssh_host = Some(child_ssh_host.cloned());
-                    }
-                }
-
                 // Apply all context updates
-                if !new_env_vars.is_empty()
-                    || !new_vars.is_empty()
-                    || new_cwd.is_some()
-                    || new_ssh_host.is_some()
-                {
+                if !new_env_vars.is_empty() || !new_vars.is_empty() || new_cwd.is_some() {
                     let _ = context
                         .update_active_context(block_id, move |ctx| {
                             for (name, value) in new_env_vars {
@@ -666,9 +635,6 @@ impl BlockBehavior for SubRunbook {
                             }
                             if let Some(cwd) = new_cwd {
                                 ctx.set_cwd(cwd);
-                            }
-                            if let Some(ssh_host) = new_ssh_host {
-                                ctx.set_ssh_host(ssh_host);
                             }
                         })
                         .await;
@@ -2000,158 +1966,5 @@ mod tests {
                 "Nested chain A->B->C should work: C sets var, B sees it after export"
             );
         }
-    }
-
-    /// Test: export_ssh_host exports SSH connection to parent
-    #[tokio::test]
-    async fn test_ssh_host_export_from_sub_runbook() {
-        let sub_runbook_id = "ssh-exporter";
-        let host_block_id = Uuid::new_v4();
-
-        let sub_runbook_content = vec![json!({
-            "id": host_block_id.to_string(),
-            "type": "host-select",
-            "props": {
-                "host": "user@remote.example.com"
-            }
-        })];
-
-        let parent_sub_block_id = Uuid::new_v4();
-        let parent_content = vec![json!({
-            "id": parent_sub_block_id.to_string(),
-            "type": "sub-runbook",
-            "props": {
-                "name": "Run SSH Exporter",
-                "runbookPath": sub_runbook_id,
-                "exportSshHost": true
-            }
-        })];
-
-        let runbook_loader = Arc::new(
-            MemoryRunbookContentLoader::new().with_runbook(sub_runbook_id, sub_runbook_content),
-        );
-
-        let (document_handle, _event_bus) = setup_test_document(runbook_loader).await;
-
-        document_handle
-            .update_document(parent_content)
-            .await
-            .expect("Should load document");
-
-        let resolver_before = document_handle
-            .get_context_resolver()
-            .await
-            .expect("Should get resolver");
-        assert!(
-            resolver_before.ssh_host().is_none(),
-            "SSH host should be None before execution"
-        );
-
-        let exec_context = document_handle
-            .create_execution_context(parent_sub_block_id, None, None, None)
-            .await
-            .expect("Should create execution context");
-
-        let sub_runbook_block = SubRunbook::builder()
-            .id(parent_sub_block_id)
-            .name("Run SSH Exporter")
-            .runbook_ref(SubRunbookRef {
-                id: None,
-                uri: None,
-                path: Some(sub_runbook_id.to_string()),
-            })
-            .export_ssh_host(true)
-            .build();
-
-        let handle = sub_runbook_block
-            .execute(exec_context)
-            .await
-            .expect("Should execute");
-
-        if let Some(handle) = handle {
-            let result = handle.wait_for_completion().await;
-            assert_eq!(result, ExecutionResult::Success);
-        }
-
-        let resolver_after = document_handle
-            .get_context_resolver()
-            .await
-            .expect("Should get resolver");
-        assert_eq!(
-            resolver_after.ssh_host(),
-            Some(&"user@remote.example.com".to_string()),
-            "SSH host should be exported from sub-runbook"
-        );
-    }
-
-    /// Test: export_ssh_host=false does NOT export SSH connection
-    #[tokio::test]
-    async fn test_ssh_host_not_exported_by_default() {
-        let sub_runbook_id = "ssh-no-export";
-        let host_block_id = Uuid::new_v4();
-
-        let sub_runbook_content = vec![json!({
-            "id": host_block_id.to_string(),
-            "type": "host-select",
-            "props": {
-                "host": "private@internal.host"
-            }
-        })];
-
-        let parent_sub_block_id = Uuid::new_v4();
-        let parent_content = vec![json!({
-            "id": parent_sub_block_id.to_string(),
-            "type": "sub-runbook",
-            "props": {
-                "name": "Run SSH No Export",
-                "runbookPath": sub_runbook_id
-            }
-        })];
-
-        let runbook_loader = Arc::new(
-            MemoryRunbookContentLoader::new().with_runbook(sub_runbook_id, sub_runbook_content),
-        );
-
-        let (document_handle, _event_bus) = setup_test_document(runbook_loader).await;
-
-        document_handle
-            .update_document(parent_content)
-            .await
-            .expect("Should load document");
-
-        let exec_context = document_handle
-            .create_execution_context(parent_sub_block_id, None, None, None)
-            .await
-            .expect("Should create execution context");
-
-        let sub_runbook_block = SubRunbook::builder()
-            .id(parent_sub_block_id)
-            .name("Run SSH No Export")
-            .runbook_ref(SubRunbookRef {
-                id: None,
-                uri: None,
-                path: Some(sub_runbook_id.to_string()),
-            })
-            .export_ssh_host(false)
-            .build();
-
-        let handle = sub_runbook_block
-            .execute(exec_context)
-            .await
-            .expect("Should execute");
-
-        if let Some(handle) = handle {
-            let result = handle.wait_for_completion().await;
-            assert_eq!(result, ExecutionResult::Success);
-        }
-
-        let resolver_after = document_handle
-            .get_context_resolver()
-            .await
-            .expect("Should get resolver");
-        assert!(
-            resolver_after.ssh_host().is_none(),
-            "SSH host should NOT be exported when export_ssh_host=false"
-        );
     }
 }

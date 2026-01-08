@@ -135,7 +135,6 @@ interface ContextExportSettings {
   exportEnv: boolean;
   exportVars: boolean;
   exportCwd: boolean;
-  exportSshHost: boolean;
 }
 
 interface SubRunbookProps {
@@ -680,17 +679,16 @@ const SubRunbook = ({
                   isDisabled={!isEditable}
                   onPress={() => {
                     const allEnabled = exportSettings.exportEnv && exportSettings.exportVars &&
-                                       exportSettings.exportCwd && exportSettings.exportSshHost;
+                                       exportSettings.exportCwd;
                     onExportSettingsChange({
                       exportEnv: !allEnabled,
                       exportVars: !allEnabled,
                       exportCwd: !allEnabled,
-                      exportSshHost: !allEnabled,
                     });
                   }}
                 >
                   {exportSettings.exportEnv && exportSettings.exportVars &&
-                   exportSettings.exportCwd && exportSettings.exportSshHost
+                   exportSettings.exportCwd
                     ? "Disable All Exports"
                     : "Export All Context"}
                 </Button>
@@ -750,23 +748,6 @@ const SubRunbook = ({
                   isDisabled={!isEditable}
                 />
               </div>
-
-              <div className="flex items-center justify-between gap-4">
-                <div className="flex flex-col">
-                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                    SSH host
-                  </span>
-                  <span className="text-xs text-gray-500 dark:text-gray-400">
-                    Use sub-runbook&apos;s SSH connection
-                  </span>
-                </div>
-                <Switch
-                  size="sm"
-                  isSelected={exportSettings.exportSshHost}
-                  onValueChange={(value) => onExportSettingsChange({ exportSshHost: value })}
-                  isDisabled={!isEditable}
-                />
-              </div>
             </div>
           </ModalBody>
         </ModalContent>
@@ -799,7 +780,6 @@ export default createReactBlockSpec(
       exportEnv: { default: false },     // Export env vars to parent runbook
       exportVars: { default: false },    // Export variables to parent runbook
       exportCwd: { default: false },     // Export working directory to parent runbook
-      exportSshHost: { default: false }, // Export SSH host to parent runbook
     },
     content: "none",
   },
@@ -807,7 +787,7 @@ export default createReactBlockSpec(
     toExternalHTML: ({ block }) => {
       const propMatter = exportPropMatter("sub-runbook", block.props, [
         "name", "runbookId", "runbookUri", "runbookPath", "runbookName",
-        "exportEnv", "exportVars", "exportCwd", "exportSshHost"
+        "exportEnv", "exportVars", "exportCwd"
       ]);
       return (
         <div>
@@ -859,7 +839,6 @@ export default createReactBlockSpec(
             ...(settings.exportEnv !== undefined && { exportEnv: settings.exportEnv }),
             ...(settings.exportVars !== undefined && { exportVars: settings.exportVars }),
             ...(settings.exportCwd !== undefined && { exportCwd: settings.exportCwd }),
-            ...(settings.exportSshHost !== undefined && { exportSshHost: settings.exportSshHost }),
           },
         });
       };
@@ -875,7 +854,6 @@ export default createReactBlockSpec(
             exportEnv: block.props.exportEnv,
             exportVars: block.props.exportVars,
             exportCwd: block.props.exportCwd,
-            exportSshHost: block.props.exportSshHost,
           }}
           isEditable={editor.isEditable}
           onRunbookSelect={onRunbookSelect}
