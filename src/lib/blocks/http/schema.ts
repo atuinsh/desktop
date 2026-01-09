@@ -1,5 +1,7 @@
 import { DependencySpec } from "../../workflow/dependency";
 import Block from "../../workflow/blocks/block";
+import undent from "undent";
+import AIBlockRegistry from "@/lib/ai/block_registry";
 
 export enum HttpVerb {
   GET = "GET",
@@ -64,14 +66,6 @@ export class HttpBlock extends Block {
   }
 }
 
-// LLM prompt for AI editing
-export const HTTP_LLM_PROMPT = `For 'http' blocks (HTTP requests):
-- Focus on 'url', 'method', 'headers', 'body' properties
-- Can reference template variables in URL, headers, body: {{ var.variable_name }}
-- Can store response in variables using 'outputVariable' prop
-- Common requests: add auth headers, change method, update endpoints, use dynamic values
-- Example: {"type": "http", "props": {"url": "{{ var.api_base }}/users/{{ var.user_id }}", "headers": {"Authorization": "Bearer {{ var.token }}"}, "outputVariable": "api_response"}, "id": "original-id"}`;
-
 // BlockNote schema properties
 export const HTTP_BLOCK_SCHEMA = {
   type: "http",
@@ -85,3 +79,34 @@ export const HTTP_BLOCK_SCHEMA = {
   },
   content: "none",
 } as const;
+
+AIBlockRegistry.getInstance().addBlock({
+  typeName: "http",
+  friendlyName: "HTTP",
+  shortDescription:
+    "Makes HTTP requests to a URL with a given endpoint, method, headers, and body.",
+  description: undent`
+    HTTP blocks are used to make HTTP requests to a URL with a given endpoint, method, and headers. The HTTP block supports all standard HTTP methods: GET, POST, PUT, DELETE, PATCH, HEAD, and OPTIONS.
+
+    The available props are:
+    - name (string): The display name of the block
+    - url (string): The URL to make the request to
+    - verb (string): The HTTP method to use
+    - headers (object): The headers to send with the request
+    - body (string): The body to send with the request, if any
+
+    When using the HTTP block, you can reference template variables in URL, headers, body: {{ var.variable_name }}.
+
+    Common requests: add auth headers, change method, update endpoints, use dynamic values.
+
+    Example: {
+      "type": "http",
+      "props": {
+        "url": "{{ var.api_base }}/users/{{ var.user_id }}",
+        "method": "POST",
+        "headers": {"Accepts": "application/json", "Authorization": "Bearer {{ var.token }}"},
+        "body": "{{ var.user_data }}"
+      }
+    }
+  `,
+});

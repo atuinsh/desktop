@@ -2,6 +2,8 @@ import { DatabaseIcon } from "lucide-react";
 
 // @ts-ignore
 import { createReactBlockSpec } from "@blocknote/react";
+import undent from "undent";
+import AIBlockRegistry from "@/lib/ai/block_registry";
 
 import { SQLiteBlock } from "@/lib/workflow/blocks/sqlite";
 import { DependencySpec } from "@/lib/workflow/dependency";
@@ -183,4 +185,30 @@ export const insertSQLite = (schema: any) => (editor: typeof schema.BlockNoteEdi
   },
   icon: <DatabaseIcon size={18} />,
   group: "Database",
+});
+
+AIBlockRegistry.getInstance().addBlock({
+  typeName: "sqlite",
+  friendlyName: "SQLite",
+  shortDescription: "Executes SQL queries against a SQLite database.",
+  description: undent`
+    SQLite blocks execute SQL queries against a local SQLite database file and display results in an interactive table.
+
+    The available props are:
+    - name (string): The display name of the block
+    - query (string): The SQL query to execute
+    - uri (string): Path to the SQLite database file
+    - autoRefresh (number): Auto-refresh interval in milliseconds (0 to disable)
+
+    You can reference template variables in the query and uri: {{ var.variable_name }}.
+
+    Example: {
+      "type": "sqlite",
+      "props": {
+        "name": "Users Table",
+        "uri": "/path/to/database.db",
+        "query": "SELECT * FROM users WHERE active = 1"
+      }
+    }
+  `,
 });

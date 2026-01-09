@@ -10,7 +10,11 @@ use crate::state::AtuinState;
 /// Create a new AI session.
 /// Returns the session ID.
 #[tauri::command]
-pub async fn ai_create_session(state: tauri::State<'_, AtuinState>) -> Result<Uuid, String> {
+pub async fn ai_create_session(
+    state: tauri::State<'_, AtuinState>,
+    block_types: Vec<String>,
+    block_summary: String,
+) -> Result<Uuid, String> {
     // Create output channel for session events
     let (output_tx, mut output_rx) = mpsc::channel::<SessionEvent>(32);
 
@@ -18,7 +22,7 @@ pub async fn ai_create_session(state: tauri::State<'_, AtuinState>) -> Result<Uu
     let model = ModelSelection::Claude(ModelToken::new("api token".to_string()));
 
     // Create the session
-    let (session, handle) = AISession::new(model, output_tx);
+    let (session, handle) = AISession::new(model, output_tx, block_types, block_summary);
     let session_id = session.id();
 
     // Store the handle

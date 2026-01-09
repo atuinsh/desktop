@@ -1,6 +1,8 @@
 import { Tooltip, Button, Input } from "@heroui/react";
 import { EyeIcon } from "lucide-react";
 import { createReactBlockSpec } from "@blocknote/react";
+import undent from "undent";
+import AIBlockRegistry from "@/lib/ai/block_registry";
 import { exportPropMatter } from "@/lib/utils";
 import { useBlockContext } from "@/lib/hooks/useDocumentBridge";
 
@@ -114,3 +116,25 @@ export default createReactBlockSpec(
     },
   },
 );
+
+AIBlockRegistry.getInstance().addBlock({
+  typeName: "var_display",
+  friendlyName: "Display Variable",
+  shortDescription:
+    "Displays the current value of a template variable.",
+  description: undent`
+    Display Variable blocks show the current value of a template variable in the runbook. The displayed value updates automatically as the variable changes.
+
+    The available props are:
+    - name (string): The name of the variable to display
+
+    This block is useful for debugging or showing computed values to users during runbook execution.
+
+    Example: {
+      "type": "var_display",
+      "props": {
+        "name": "current_branch"
+      }
+    }
+  `,
+});

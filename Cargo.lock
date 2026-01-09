@@ -3137,7 +3137,7 @@ dependencies = [
 [[package]]
 name = "genai"
 version = "0.5.0-alpha.10-WIP"
-source = "git+https://github.com/BinaryMuse/rust-genai?branch=mkt%2Ffix-anthropic-tool-call-no-params#425cf68f8a4ece03cea33b59aaf57008cf449f12"
+source = "git+https://github.com/BinaryMuse/rust-genai?branch=mkt%2Ffix-anthropic-tool-call-no-params#536248cc91aead006f983e87efd728e7e7cdb911"
 dependencies = [
  "base64 0.22.1",
  "bytes",

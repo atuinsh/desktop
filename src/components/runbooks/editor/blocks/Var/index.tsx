@@ -2,6 +2,8 @@ import React, { useEffect, useState } from "react";
 import { Input, Button } from "@heroui/react";
 import { TextCursorInputIcon } from "lucide-react";
 import { createReactBlockSpec } from "@blocknote/react";
+import undent from "undent";
+import AIBlockRegistry from "@/lib/ai/block_registry";
 import { exportPropMatter } from "@/lib/utils";
 import isValidVarName from "../../utils/varNames";
 
@@ -120,3 +122,27 @@ export default createReactBlockSpec(
     },
   },
 );
+
+AIBlockRegistry.getInstance().addBlock({
+  typeName: "var",
+  friendlyName: "Template Variable",
+  shortDescription: "Sets a template variable for use in subsequent blocks.",
+  description: undent`
+    Template Variable blocks define variables that can be referenced in other blocks using the {{ var.variable_name }} syntax. Values are synced with collaborators.
+    For sensitive data, or values that should not be synced, use a Local Variable block instead.
+
+    The available props are:
+    - name (string): The variable name (alphanumeric and underscores only)
+    - value (string): The variable value
+
+    Template variables are useful for parameterizing runbooks with values that may change between runs or environments.
+
+    Example: {
+      "type": "var",
+      "props": {
+        "name": "api_base_url",
+        "value": "https://api.example.com"
+      }
+    }
+  `,
+});

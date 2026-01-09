@@ -4,6 +4,8 @@
 import { Button, Tooltip } from "@heroui/react";
 import { HomeIcon } from "lucide-react";
 import { createReactBlockSpec } from "@blocknote/react";
+import undent from "undent";
+import AIBlockRegistry from "@/lib/ai/block_registry";
 import track_event from "@/tracking";
 import { exportPropMatter } from "@/lib/utils";
 
@@ -74,7 +76,7 @@ export const insertHostSelect = (schema: any) => (editor: typeof schema.BlockNot
   subtext: "Specify that commands run on localhost",
   onItemClick: () => {
     track_event("runbooks.block.create", { type: "host-select" });
-    
+
     editor.insertBlocks(
       [
         {
@@ -87,4 +89,24 @@ export const insertHostSelect = (schema: any) => (editor: typeof schema.BlockNot
   },
   icon: <HomeIcon size={18} />,
   group: "Network",
+});
+
+AIBlockRegistry.getInstance().addBlock({
+  typeName: "host-select",
+  friendlyName: "Host",
+  shortDescription:
+    "Switches execution back to localhost.",
+  description: undent`
+    Host blocks specify that subsequent Terminal and Script blocks should run on the local machine. Use this after an SSH Connect block to switch back to local execution.
+
+    The available props are:
+    - host (string): Currently only supports "local"
+
+    Example: {
+      "type": "host-select",
+      "props": {
+        "host": "local"
+      }
+    }
+  `,
 }); 

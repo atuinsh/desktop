@@ -5,8 +5,8 @@ import type { SessionEvent } from "../../rs-bindings/SessionEvent";
  * Create a new AI session.
  * Returns the session ID.
  */
-export async function createSession(): Promise<string> {
-  return await invoke<string>("ai_create_session");
+export async function createSession(blockTypes: string[], blockSummary: string): Promise<string> {
+  return await invoke<string>("ai_create_session", { blockTypes, blockSummary });
 }
 
 /**

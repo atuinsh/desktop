@@ -4,6 +4,8 @@
 import { Button, Input, Tooltip } from "@heroui/react";
 import { GlobeIcon } from "lucide-react";
 import { createReactBlockSpec } from "@blocknote/react";
+import undent from "undent";
+import AIBlockRegistry from "@/lib/ai/block_registry";
 import track_event from "@/tracking";
 import { exportPropMatter } from "@/lib/utils";
 
@@ -95,7 +97,7 @@ export const insertSshConnect = (schema: any) => (editor: typeof schema.BlockNot
   title: "SSH Connect",
   onItemClick: () => {
     track_event("runbooks.block.create", { type: "ssh-connect" });
-    
+
     editor.insertBlocks(
       [
         {
@@ -108,4 +110,26 @@ export const insertSshConnect = (schema: any) => (editor: typeof schema.BlockNot
   },
   icon: <GlobeIcon size={18} />,
   group: "Network",
+});
+
+AIBlockRegistry.getInstance().addBlock({
+  typeName: "ssh-connect",
+  friendlyName: "SSH Connect",
+  shortDescription:
+    "Establishes an SSH connection for subsequent blocks.",
+  description: undent`
+    SSH Connect blocks establish an SSH connection to a remote server. Subsequent Terminal and Script blocks will execute on the connected host until another SSH Connect or Host block is encountered.
+
+    The available props are:
+    - userHost (string): Connection string in format "user@host:port" or just "host" (uses SSH config)
+
+    Connections are pooled globally, so if already connected to the host, the existing connection is reused.
+
+    Example: {
+      "type": "ssh-connect",
+      "props": {
+        "userHost": "admin@production-server.example.com"
+      }
+    }
+  `,
 });

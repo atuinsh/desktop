@@ -96,6 +96,8 @@ pub struct AISession {
     id: Uuid,
     model: ModelSelection,
     client: genai::Client,
+    block_types: Vec<String>,
+    block_summary: String,
     agent: Arc<RwLock<Agent>>,
     event_tx: mpsc::Sender<Event>,
     event_rx: mpsc::Receiver<Event>,
@@ -107,6 +109,8 @@ impl AISession {
     pub fn new(
         model: ModelSelection,
         output_tx: mpsc::Sender<SessionEvent>,
+        block_types: Vec<String>,
+        block_summary: String,
     ) -> (Self, SessionHandle) {
         let client = genai::Client::builder().build();
         let (event_tx, event_rx) = mpsc::channel(32);
@@ -115,6 +119,8 @@ impl AISession {
             id: Uuid::new_v4(),
             model,
             client,
+            block_types,
+            block_summary,
             agent: Arc::new(RwLock::new(Agent::new())),
             event_tx: event_tx.clone(),
             event_rx,
@@ -204,8 +210,12 @@ impl AISession {
         };
 
         let chat_request = ChatRequest::new(messages)
-            .with_system(AIPrompts::system_prompt())
-            .with_tools(vec![AITools::get_runboook_document()]);
+            .with_system(AIPrompts::system_prompt(&self.block_summary))
+            .with_tools(vec![
+                AITools::get_runboook_document(),
+                AITools::get_block_docs(&self.block_types),
+                AITools::get_default_shell(),
+            ]);
 
         let chat_options = ChatOptions::default()
             .with_capture_tool_calls(true)

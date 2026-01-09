@@ -19,6 +19,10 @@ import { AIMessage } from "@/rs-bindings/AIMessage";
 import { AIToolCall } from "@/rs-bindings/AIToolCall";
 import useAIChat from "@/lib/ai/useAIChat";
 import { createSession, destroySession } from "@/lib/ai/commands";
+import AIBlockRegistry from "@/lib/ai/block_registry";
+import { Settings } from "@/state/settings";
+
+const AUTO_APPROVE_TOOLS = new Set(["get_block_docs"]);
 
 // Error boundary for Streamdown - falls back to plain text if it fails
 class MarkdownErrorBoundary extends Component<
@@ -242,6 +246,20 @@ async function executeGetRunbookDocument(editor: BlockNoteEditor): Promise<any> 
   return { blocks: editor.document };
 }
 
+async function executeGetBlockDocs(
+  _editor: BlockNoteEditor,
+  params: { block_types: string[] },
+): Promise<string> {
+  return params.block_types.reduce((acc, blockType) => {
+    acc += AIBlockRegistry.getInstance().getBlockDocs(blockType);
+    return acc;
+  }, "");
+}
+
+async function executeGetDefaultShell(): Promise<string> {
+  return await Settings.getSystemDefaultShell();
+}
+
 async function executeInsertBlocks(
   editor: BlockNoteEditor,
   params: { blocks: any[]; position: "before" | "after" | "end"; reference_block_id?: string },
@@ -304,6 +322,12 @@ async function executeTool(
       case "get_runbook_document":
         result = await executeGetRunbookDocument(editor);
         break;
+      case "get_block_docs":
+        result = await executeGetBlockDocs(editor, params);
+        break;
+      case "get_default_shell":
+        result = await executeGetDefaultShell();
+        break;
       case "insert_blocks":
         result = await executeInsertBlocks(editor, params);
         break;
@@ -339,11 +363,12 @@ export default function AIAssistant({
   // Create session on mount
   useEffect(() => {
     if (!isOpen) return;
+    const blockRegistry = AIBlockRegistry.getInstance();
 
     let mounted = true;
     setIsCreatingSession(true);
 
-    createSession()
+    createSession(blockRegistry.getBlockTypes(), blockRegistry.getBlockSummary())
       .then((id) => {
         if (mounted) {
           setSessionId(id);
@@ -450,10 +475,11 @@ export default function AIAssistant({
     // only create new sessions or delete old ones
     // keep history in sql
     if (sessionId) {
+      const blockRegistry = AIBlockRegistry.getInstance();
       destroySession(sessionId).catch(console.error);
       setSessionId(null);
       setIsCreatingSession(true);
-      createSession()
+      createSession(blockRegistry.getBlockTypes(), blockRegistry.getBlockSummary())
         .then((id) => {
           setSessionId(id);
           setIsCreatingSession(false);
@@ -464,6 +490,19 @@ export default function AIAssistant({
         });
     }
   }, [sessionId]);
+
+  const autoApprovedRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (!editor) return;
+
+    for (const toolCall of pendingToolCalls) {
+      if (AUTO_APPROVE_TOOLS.has(toolCall.name) && !autoApprovedRef.current.has(toolCall.id)) {
+        autoApprovedRef.current.add(toolCall.id);
+        handleApprove(toolCall);
+      }
+    }
+  }, [pendingToolCalls, editor, handleApprove]);
 
   if (!isOpen) return null;
 

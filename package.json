@@ -135,6 +135,7 @@
     "tailwind-variants": "^0.2.1",
     "tailwindcss-animate": "^1.0.7",
     "ts-tiny-activerecord": "git+https://github.com/atuinsh/ts-tiny-activerecord#v0.0.6",
+    "undent": "^1.0.0",
     "use-resize-observer": "^9.1.0",
     "usehooks-ts": "^3.1.1",
     "uuidv7": "^1.0.2",
