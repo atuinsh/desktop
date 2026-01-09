@@ -36,6 +36,7 @@ import { AILoadingOverlay } from "./ui/AILoadingBlock";
 import { AIFocusOverlay } from "./ui/AIFocusOverlay";
 import { AIHint, incrementAIHintUseCount } from "./ui/AIHint";
 import { RunbookLinkPopup } from "./ui/RunbookLinkPopup";
+import AIAssistant from "./ui/AIAssistant";
 import { SparklesIcon } from "lucide-react";
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
 
