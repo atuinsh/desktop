@@ -83,6 +83,7 @@ import { SaveBlockItem } from "./ui/SaveBlockItem";
 import { SavedBlockPopup } from "./ui/SavedBlockPopup";
 import { DeleteBlockItem } from "./ui/DeleteBlockItem";
 import { BlockNoteEditor } from "@blocknote/core";
+import useDocumentBridge from "@/lib/hooks/useDocumentBridge";
 
 // Fix for react-dnd interference with BlockNote drag-and-drop
 // React-dnd wraps dataTransfer in a proxy that blocks access during drag operations
@@ -317,6 +318,8 @@ export default function Editor({
   const username = user?.username?.toLowerCase() ?? "";
   const showAiHint = ["ellie", "binarymuse"].includes(username);
   const aiEnabledState = isLoggedIn() && aiEnabled;
+
+  const documentBridge = useDocumentBridge();
 
   const showAIPopup = useCallback((position: { x: number; y: number }) => {
     setAiPopupPosition(position);
