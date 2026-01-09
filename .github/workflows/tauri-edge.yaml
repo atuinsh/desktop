@@ -89,15 +89,15 @@ jobs:
       - name: Run sccache-cache
         uses: mozilla-actions/sccache-action@v0.0.7
 
-      - uses: pnpm/action-setup@v4
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
         with:
-          version: latest
+          bun-version: latest
 
       - name: setup node
         uses: actions/setup-node@v4
         with:
           node-version: lts/*
-          cache: "pnpm"
 
       - name: install Rust stable
         uses: dtolnay/rust-toolchain@stable
@@ -105,7 +105,7 @@ jobs:
           targets: ${{ matrix.platform == 'depot-macos-latest' && 'aarch64-apple-darwin' || '' }}
 
       - name: install frontend dependencies
-        run: pnpm install
+        run: bun install
 
       - name: update edge version
         id: update-edge-version
