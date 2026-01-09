@@ -366,6 +366,13 @@ impl Document {
             }
         }
 
+        // Add workspace template context if available
+        if let Some(ref workspace_root) = self.workspace_root {
+            let mut workspace_context = HashMap::new();
+            workspace_context.insert("root".to_string(), workspace_root.clone());
+            context_resolver.add_extra_template_context("workspace".to_string(), workspace_context);
+        }
+
         let mut runbook_template_context = HashMap::new();
         runbook_template_context.insert("id".to_string(), self.id.clone());
         context_resolver
