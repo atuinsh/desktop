@@ -47,10 +47,16 @@ class MarkdownErrorBoundary extends Component<
 }
 
 // Memoized markdown renderer with error boundary
-const MarkdownContent = memo(function MarkdownContent({ content }: { content: string }) {
+const MarkdownContent = memo(function MarkdownContent({
+  content,
+  isStreaming = false,
+}: {
+  content: string;
+  isStreaming?: boolean;
+}) {
   return (
     <MarkdownErrorBoundary fallback={<span>{content}</span>}>
-      <Streamdown>{content}</Streamdown>
+      <Streamdown isAnimating={isStreaming}>{content}</Streamdown>
     </MarkdownErrorBoundary>
   );
 });
@@ -192,14 +198,14 @@ function MessageBubble({
           return (
             <div
               key={toolCall.id}
-              className="mt-2 p-2 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded"
+              className="mt-2 p-2 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded overflow-x-auto"
             >
               <div className="flex items-center gap-2">
                 <WrenchIcon className="h-4 w-4 text-amber-600 dark:text-amber-400" />
                 <span className="text-sm font-medium text-amber-700 dark:text-amber-300">
                   Tool: {toolCall.name}
                 </span>
-                {isPending && <Spinner size="sm" className="h-3 w-3" />}
+                {isPending && <Spinner size="sm" variant="dots" />}
                 {!isPending && <CheckIcon className="h-3 w-3 text-green-500" />}
               </div>
               <ToolParamsDisplay params={toolCall.args} />
@@ -371,7 +377,15 @@ export default function AIAssistant({
   }, [runbookId]);
 
   const chat = useAIChat(sessionId || "");
-  const { messages, streamingContent, isStreaming, pendingToolCalls, error, sendMessage, addToolOutput } = chat;
+  const {
+    messages,
+    streamingContent,
+    isStreaming,
+    pendingToolCalls,
+    error,
+    sendMessage,
+    addToolOutput,
+  } = chat;
 
   // Auto-scroll to bottom when new messages arrive or streaming content updates
   // TODO: Only scroll if the user is at the bottom of the chat
@@ -524,16 +538,14 @@ export default function AIAssistant({
                 <span className="text-xs font-medium text-purple-700 dark:text-purple-300">
                   Assistant
                 </span>
-                <Spinner size="sm" className="h-3 w-3" />
+                <Spinner size="sm" variant="wave" className="ml-2" />
               </div>
               {streamingContent ? (
                 <div className="text-sm mt-1 whitespace-pre-wrap break-words text-gray-800 dark:text-gray-200">
-                  <MarkdownContent content={streamingContent} />
+                  <MarkdownContent content={streamingContent} isStreaming={true} />
                 </div>
               ) : (
-                <div className="text-sm mt-1 text-gray-500 dark:text-gray-400">
-                  Thinking...
-                </div>
+                <div className="text-sm mt-1 text-gray-500 dark:text-gray-400">Thinking...</div>
               )}
             </div>
           </div>
