@@ -1,5 +1,6 @@
 import { Command, CommandImplementation, CommandSearchResult, CommandContext } from "./types";
 import { useStore } from "@/state/store";
+import { TabUri } from "@/state/store/ui_state";
 import {
   FolderPlus,
   Download,
@@ -11,7 +12,9 @@ import {
   Moon,
   Sun,
   XCircle,
+  Link,
 } from "lucide-react";
+import { addToast } from "@heroui/react";
 import { emit } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
 import { fuzzyMatch } from "@/lib/fuzzy-matcher";
@@ -281,6 +284,48 @@ export function registerBuiltinCommands(): void {
         await invoke("runbook_kill_all_ptys", { runbook: runbookId });
       } catch (error) {
         console.error("Failed to kill terminals:", error);
+      }
+    },
+  });
+
+  commandRegistry.registerCommand({
+    id: "runbook.copy-deep-link",
+    title: "Copy Deep Link",
+    description: "Copy a deep link to the current runbook",
+    category: "Runbook",
+    icon: Link,
+    keywords: ["copy", "deep", "link", "url", "share"],
+    enabled: () => {
+      const state = useStore.getState();
+      const currentTab = state.tabs.find((tab) => tab.id === state.currentTabId);
+      if (!currentTab) return false;
+      return new TabUri(currentTab.url).isRunbook();
+    },
+    handler: async () => {
+      const state = useStore.getState();
+      const currentTab = state.tabs.find((tab) => tab.id === state.currentTabId);
+      if (!currentTab) return;
+      const tabUri = new TabUri(currentTab.url);
+      const runbookId = tabUri.getRunbookId();
+      if (!runbookId) {
+        console.error("Not in a runbook");
+        return;
+      }
+      const deepLink = `atuin://runbook/${runbookId}`;
+      try {
+        await navigator.clipboard.writeText(deepLink);
+        addToast({
+          title: "Deep link copied to clipboard",
+          color: "success",
+          radius: "sm",
+        });
+      } catch (error) {
+        console.error("Failed to copy deep link:", error);
+        addToast({
+          title: "Failed to copy deep link",
+          color: "danger",
+          radius: "sm",
+        });
       }
     },
   });

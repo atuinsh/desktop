@@ -308,6 +308,15 @@ pub async fn open_document(
 
     log::debug!("Opening document {document_id}");
 
+    // Get workspace root if this document belongs to an offline workspace
+    let workspace_root = if let Some(workspace_manager) = state.workspaces.lock().await.as_ref() {
+        workspace_manager
+            .workspace_root(&document_id)
+            .map(|path| path.to_string_lossy().to_string())
+    } else {
+        None
+    };
+
     let event_bus = Arc::new(ChannelEventBus::new(state.gc_event_sender()));
     let context_storage = SqliteContextStorage::new(
         state
@@ -335,6 +344,7 @@ pub async fn open_document(
         Some(Arc::new(KvBlockLocalValueProvider::new(app.clone()))),
         Some(Box::new(context_storage)),
         Some(runbook_loader),
+        workspace_root,
     );
 
     document_handle

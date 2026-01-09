@@ -115,6 +115,13 @@ impl ContextResolver {
         resolver
     }
 
+    /// Push multiple blocks to the resolver
+    pub fn push_blocks(&mut self, blocks: &[DocumentBlock]) {
+        for block in blocks {
+            self.push_block(block);
+        }
+    }
+
     /// Test-only constructor to create a resolver with specific vars
     #[cfg(test)]
     pub fn with_vars(vars: HashMap<String, String>) -> Self {

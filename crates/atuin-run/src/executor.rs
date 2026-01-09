@@ -65,6 +65,7 @@ impl Executor {
                 as Arc<dyn atuin_desktop_runtime::client::RunbookContentLoader>
         });
 
+        // TODO: Load workspace root from atuin.toml if present
         let document = DocumentHandle::new(
             runbook.id.to_string(),
             Arc::new(NullEventBus),
@@ -72,6 +73,7 @@ impl Executor {
             Some(Arc::new(TempNullLocalValueProvider)),
             Some(Box::new(TempNullContextStorage)),
             runbook_loader,
+            None, // workspace_root - not yet supported in CLI
         );
 
         // Choose renderer based on interactive mode
