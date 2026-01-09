@@ -7,7 +7,7 @@
 Developing on Atuin Desktop requires:
 
 * Node.js 24.11.1 (see `.tool-versions` for most up-to-date information)
-* [pnpm](https://pnpm.io/installation) — if using asdf, run `corepack enable pnpm` after installing Node, then `asdf reshim nodejs`
+* [Bun](https://bun.sh/docs/installation)
 * Latest Rust stable
 
 Since Atuin Desktop is a Tauri app, you'll also need all of the prerequisites listed in the [Tauri Prerequisites doc](https://tauri.app/start/prerequisites/) for your platform.
@@ -25,7 +25,7 @@ For documentation, you may find it useful to have the following tools installed:
 ## Installing dependencies
 
 ```
-pnpm install
+bun install
 ```
 
 ## Running development
@@ -54,19 +54,19 @@ By default, the app will use the profile `dev`. You can pass a different profile
 ### Building a binary (no packaging)
 
 ```
-pnpm run tauri dev --no-bundle
+bun run tauri dev --no-bundle
 ```
 
 ### Building a package
 
 ```
-pnpm run tauri build
+bun run tauri build
 ```
 
 ### Regenerating TS-RS bindings from Rust structs
 
 ```
-pnpm generate-bindings
+bun run generate-bindings
 ```
 
 ## Developer Tools
@@ -94,12 +94,12 @@ A global `app` object lives on the `window`. Items can be added to it via `DevCo
 
 ## Common Issues
 
-### Node.js runs out of memory running `pnpm tauri build`
+### Node.js runs out of memory running `bun run tauri build`
 
 You can increase the memory limit by setting the `NODE_OPTIONS` environment variable to `--max-old-space-size=6144`. For example:
 
 ```
-NODE_OPTIONS=--max-old-space-size=6144 pnpm tauri build
+NODE_OPTIONS=--max-old-space-size=6144 bun run tauri build
 ```
 
 This repository contains an `.envrc` file that sets this for you if you use [direnv](https://direnv.net/).

@@ -325,7 +325,7 @@ pub enum GCEvent {
 
 2. **Regenerate TypeScript bindings**:
 ```bash
-pnpm run generate-bindings
+bun run generate-bindings
 ```
 
 3. **Add frontend event mapping**:

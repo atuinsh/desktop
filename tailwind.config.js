@@ -214,5 +214,5 @@ export default {
       },
     },
   },
-  plugins: [tailwindAnimate, heroui(), require("tailwindcss-animate")],
+  plugins: [tailwindAnimate, heroui()],
 };
