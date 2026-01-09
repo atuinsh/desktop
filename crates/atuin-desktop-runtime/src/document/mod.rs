@@ -326,10 +326,19 @@ impl Document {
 
     /// Get the current context resolver (includes all blocks and parent context)
     pub fn get_context_resolver(&self) -> ContextResolver {
-        match &self.parent_context {
-            Some(parent) => ContextResolver::from_blocks_with_parent(&self.blocks, parent),
-            None => ContextResolver::from_blocks(&self.blocks),
+        let mut resolver = match &self.parent_context {
+            Some(parent) => ContextResolver::from_parent(parent),
+            None => ContextResolver::new(),
+        };
+
+        if let Some(ref workspace_root) = self.workspace_root {
+            let mut workspace_context = HashMap::new();
+            workspace_context.insert("root".to_string(), workspace_root.clone());
+            resolver.add_extra_template_context("workspace".to_string(), workspace_context);
         }
+
+        resolver.push_blocks(&self.blocks);
+        resolver
     }
 
     /// Build an execution context for a block, capturing all context from blocks above it
@@ -427,12 +436,18 @@ impl Document {
             .get_block_index(block_id)
             .ok_or(DocumentError::BlockNotFound(*block_id))?;
 
-        let resolver = match &self.parent_context {
-            Some(parent) => {
-                ContextResolver::from_blocks_with_parent(&self.blocks[..position], parent)
-            }
-            None => ContextResolver::from_blocks(&self.blocks[..position]),
+        let mut resolver = match &self.parent_context {
+            Some(parent) => ContextResolver::from_parent(parent),
+            None => ContextResolver::new(),
         };
+
+        if let Some(ref workspace_root) = self.workspace_root {
+            let mut workspace_context = HashMap::new();
+            workspace_context.insert("root".to_string(), workspace_root.clone());
+            resolver.add_extra_template_context("workspace".to_string(), workspace_context);
+        }
+
+        resolver.push_blocks(&self.blocks[..position]);
         Ok(ResolvedContext::from_resolver(&resolver))
     }
 
