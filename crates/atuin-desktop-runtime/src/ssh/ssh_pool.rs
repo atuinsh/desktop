@@ -94,6 +94,9 @@ pub enum SshPoolMessage {
 
         // Optional SSH config overrides from block settings
         ssh_config: Option<DocumentSshConfig>,
+
+        // Channel to send authentication warnings (certificate issues, etc.)
+        warnings_tx: Option<oneshot::Sender<Vec<SshWarning>>>,
     },
     ExecFinished {
         channel: String,
@@ -264,6 +267,7 @@ impl SshPoolHandle {
             output_stream,
             result_tx,
             None,
+            None,
         )
         .await
     }
@@ -279,6 +283,7 @@ impl SshPoolHandle {
         output_stream: mpsc::Sender<OutputLine>,
         result_tx: oneshot::Sender<()>,
         ssh_config: Option<DocumentSshConfig>,
+        warnings_tx: Option<oneshot::Sender<Vec<SshWarning>>>,
     ) -> Result<()> {
         let (sender, receiver) = oneshot::channel();
         let msg = SshPoolMessage::Exec {
@@ -291,6 +296,7 @@ impl SshPoolHandle {
             reply_to: sender,
             result_tx,
             ssh_config,
+            warnings_tx,
         };
 
         let _ = self.sender.send(msg).await;
@@ -579,6 +585,7 @@ impl SshPool {
                 reply_to,
                 result_tx,
                 ssh_config,
+                warnings_tx,
             } => {
                 tracing::trace!(
                     "Executing command on {host} with {interpreter} with username {username:?}"
@@ -612,19 +619,30 @@ impl SshPool {
                 tokio::spawn(async move {
                     tracing::trace!("Connecting to SSH host {host} with username {username}");
                     let mut pool_guard = pool.write().await;
-                    let session: Result<Arc<Session>, SshPoolConnectionError> = tokio::select! {
+                    let (session, warnings): (
+                        Result<Arc<Session>, SshPoolConnectionError>,
+                        Vec<SshWarning>,
+                    ) = tokio::select! {
                         result = pool_guard.connect_with_config(&host, Some(username.as_str()), None, Some(connect_cancel_rx), ssh_config.as_ref()) => {
                             tracing::trace!("SSH connection to {host} with username {username} successful");
-                            result.map(|(session, _auth_result)| session).map_err(SshPoolConnectionError::from)
+                            match result {
+                                Ok((session, auth_result)) => (Ok(session), auth_result.warnings),
+                                Err(e) => (Err(SshPoolConnectionError::from(e)), Vec::new()),
+                            }
                         }
                         _ = &mut cancel_rx => {
                             tracing::trace!("SSH connection to {host} with username {username} cancelled");
                             let _ = connect_cancel_tx.send(());
                             let _ = pool_guard.disconnect(&host, &username).await;
-                            Err(SshPoolConnectionError::Cancelled)
+                            (Err(SshPoolConnectionError::Cancelled), Vec::new())
                         }
                     };
                     drop(pool_guard);
+
+                    // Send warnings to caller if they requested them
+                    if let Some(tx) = warnings_tx {
+                        let _ = tx.send(warnings);
+                    }
 
                     let session = match session {
                         Ok(session) => session,

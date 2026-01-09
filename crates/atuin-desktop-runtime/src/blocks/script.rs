@@ -13,10 +13,11 @@ use uuid::Uuid;
 
 use crate::blocks::{Block, BlockBehavior};
 use crate::context::{fs_var, BlockExecutionOutput, BlockVars};
+use crate::events::GCEvent;
 use crate::execution::{
     CancellationToken, ExecutionContext, ExecutionHandle, ExecutionStatus, StreamingBlockOutput,
 };
-use crate::ssh::OutputLine as SessionOutputLine;
+use crate::ssh::{OutputLine as SessionOutputLine, SshWarning};
 
 use super::FromDocument;
 
@@ -705,6 +706,7 @@ impl Script {
         let channel_id = self.id.to_string();
         let (output_sender, mut output_receiver) = mpsc::channel::<SessionOutputLine>(100);
         let (result_tx, result_rx) = oneshot::channel::<()>();
+        let (warnings_tx, warnings_rx) = oneshot::channel::<Vec<SshWarning>>();
 
         let captured_output = Arc::new(RwLock::new(Vec::new()));
         let captured_output_clone = captured_output.clone();
@@ -733,6 +735,7 @@ impl Script {
                 output_sender,
                 result_tx,
                 ssh_config,
+                Some(warnings_tx),
             ) => {
                 result
             }
@@ -757,6 +760,54 @@ impl Script {
             }
             return (Err(error_msg.into()), Vec::new(), None);
         }
+
+        // Receive and emit SSH authentication warnings (certificate issues, etc.)
+        if let Ok(warnings) = warnings_rx.await {
+            for warning in warnings {
+                match warning {
+                    SshWarning::CertificateLoadFailed {
+                        host,
+                        cert_path,
+                        error,
+                    } => {
+                        let _ = context
+                            .emit_gc_event(GCEvent::SshCertificateLoadFailed {
+                                host,
+                                cert_path,
+                                error,
+                            })
+                            .await;
+                    }
+                    SshWarning::CertificateExpired {
+                        host,
+                        cert_path,
+                        valid_until,
+                    } => {
+                        let _ = context
+                            .emit_gc_event(GCEvent::SshCertificateExpired {
+                                host,
+                                cert_path,
+                                valid_until,
+                            })
+                            .await;
+                    }
+                    SshWarning::CertificateNotYetValid {
+                        host,
+                        cert_path,
+                        valid_from,
+                    } => {
+                        let _ = context
+                            .emit_gc_event(GCEvent::SshCertificateNotYetValid {
+                                host,
+                                cert_path,
+                                valid_from,
+                            })
+                            .await;
+                    }
+                }
+            }
+        }
+
         let context_clone = context.clone();
         let block_id = self.id;
         let ssh_pool_clone = ssh_pool.clone();
