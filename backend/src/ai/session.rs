@@ -207,7 +207,6 @@ impl AISession {
             .with_system(AIPrompts::system_prompt())
             .with_tools(vec![AITools::get_runboook_document()]);
 
-        log::info!("Chat request: {chat_request:?}");
         let chat_options = ChatOptions::default()
             .with_capture_tool_calls(true)
             .with_capture_content(true)
@@ -257,31 +256,35 @@ impl AISession {
                     return;
                 }
                 Ok(ChatStreamEvent::Start) => {
+                    log::trace!("Session {} received stream start", session_id);
                     // Already sent StreamStart above
                 }
                 Ok(ChatStreamEvent::Chunk(chunk)) => {
+                    log::trace!("Session {} received chunk", session_id);
                     let _ = event_tx
                         .send(Event::StreamChunk(StreamChunk {
                             content: chunk.content,
                         }))
                         .await;
                 }
-                Ok(ChatStreamEvent::ThoughtSignatureChunk(ts_chunk)) => {
-                    log::trace!(
-                        "Session {} thought signature chunk: {:?}",
-                        session_id,
-                        ts_chunk
-                    );
+                Ok(ChatStreamEvent::ThoughtSignatureChunk(_)) => {
+                    log::trace!("Session {} received thought signature chunk", session_id,);
                 }
                 Ok(ChatStreamEvent::ToolCallChunk(tc_chunk)) => {
                     // Tool call chunks are accumulated by genai internally
                     // We'll get the complete tool calls in the End event
-                    log::trace!("Session {} tool call chunk: {:?}", session_id, tc_chunk);
+                    log::trace!(
+                        "Session {} received tool call chunk: {:?}",
+                        session_id,
+                        tc_chunk
+                    );
                 }
                 Ok(ChatStreamEvent::ReasoningChunk(_)) => {
+                    log::trace!("Session {} received reasoning chunk", session_id);
                     // Ignore reasoning chunks for now
                 }
                 Ok(ChatStreamEvent::End(end)) => {
+                    log::trace!("Session {} received stream end", session_id);
                     // Extract tool calls from captured content
                     if let Some(content) = end.captured_content {
                         for part in content.into_parts() {
