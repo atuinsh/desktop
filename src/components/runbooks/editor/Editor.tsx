@@ -36,7 +36,7 @@ import { AILoadingOverlay } from "./ui/AILoadingBlock";
 import { AIFocusOverlay } from "./ui/AIFocusOverlay";
 import { AIHint, incrementAIHintUseCount } from "./ui/AIHint";
 import { RunbookLinkPopup } from "./ui/RunbookLinkPopup";
-import AIAssistant from "./ui/AIAssistant";
+import AIAssistant, { AIContext } from "./ui/AIAssistant";
 import { SparklesIcon } from "lucide-react";
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
 
@@ -469,6 +469,30 @@ export default function Editor({
       return undefined;
     }
   }, [editor, aiShareContext, runbook?.id]);
+
+  // Get context for AI Assistant channel
+  const getAIAssistantContext = useCallback(async (): Promise<AIContext> => {
+    const lastBlockContext = await documentBridge?.getLastBlockContext();
+
+    // Get named blocks (blocks with names for reference)
+    const namedBlocks: [string, string][] = [];
+    if (editor) {
+      for (const block of editor.document) {
+        const props = (block as any).props;
+        if (props?.name && typeof props.name === "string" && props.name.trim()) {
+          namedBlocks.push([props.name, block.type]);
+        }
+      }
+    }
+
+    return {
+      variables: Object.keys(lastBlockContext?.variables ?? {}),
+      named_blocks: namedBlocks,
+      working_directory: lastBlockContext?.cwd || null,
+      environment_variables: Object.keys(lastBlockContext?.envVars ?? {}),
+      ssh_host: lastBlockContext?.sshHost || null,
+    };
+  }, [editor, documentBridge]);
 
   // Extract plain text from a BlockNote block's content
   const getBlockText = useCallback((block: any): string => {
