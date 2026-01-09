@@ -601,6 +601,7 @@ struct DocumentActor {
 }
 
 impl DocumentActor {
+    #[allow(clippy::too_many_arguments)]
     async fn new(
         runbook_id: String,
         event_bus: Arc<dyn EventBus>,
