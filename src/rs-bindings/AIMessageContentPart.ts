@@ -3,4 +3,4 @@ import type { AIBinary } from "./AIBinary";
 import type { AIToolCall } from "./AIToolCall";
 import type { AIToolResponse } from "./AIToolResponse";
 
-export type AIMessageContentPart = { "type": "text", "data": string } | { "type": "binary", "data": AIBinary } | { "type": "toolCall", "data": AIToolCall } | { "type": "toolResponse", "data": AIToolResponse };
+export type AIMessageContentPart = { "type": "text", "data": string } | { "type": "binary", "data": AIBinary } | { "type": "toolCall", "data": AIToolCall } | { "type": "toolResponse", "data": AIToolResponse } | { "type": "thoughtSignature", "data": string };
