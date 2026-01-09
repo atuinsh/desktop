@@ -1,12 +1,12 @@
 # Atuin Desktop Memory
 
 ## Build & Test Commands
-- Build: `pnpm run build`
-- Development: `pnpm run dev` or `./script/dev` (recommended)
-- Test all: `pnpm run test`
-- Test single file: `pnpm run test src/path/to/test.ts`
-- Test once: `pnpm run test-once`
-- Tauri: `pnpm run tauri`
+- Build: `bun run build`
+- Development: `bun run dev` or `./script/dev` (recommended)
+- Test all: `bun test`
+- Test single file: `bun test src/path/to/test.ts`
+- Test once: `bun test-once`
+- Tauri: `bun run tauri`
 
 ## Code Style Guidelines
 - TypeScript: Strict mode, no unused locals/parameters
