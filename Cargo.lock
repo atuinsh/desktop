@@ -556,7 +556,6 @@ dependencies = [
  "atuin-desktop-runtime",
  "atuin-dotfiles",
  "atuin-history",
- "atuin-simple-actor",
  "bigdecimal",
  "bytes",
  "chrono",
