@@ -353,30 +353,34 @@ impl Document {
             .get_block_index(block_id)
             .ok_or(DocumentError::BlockNotFound(*block_id))?;
 
-        // Build context resolver from all blocks above this one (with parent context if set)
+        // Build context resolver - add extra context BEFORE processing blocks
+        // so that templates like {{ workspace.root }} can resolve during block processing
         let mut context_resolver = match &self.parent_context {
-            Some(parent) => {
-                ContextResolver::from_blocks_with_parent(&self.blocks[..position], parent)
-            }
-            None => ContextResolver::from_blocks(&self.blocks[..position]),
+            Some(parent) => ContextResolver::from_parent(parent),
+            None => ContextResolver::new(),
         };
-        if let Some(extra_template_context) = extra_template_context {
-            for (namespace, context) in extra_template_context {
-                context_resolver.add_extra_template_context(namespace.clone(), context.clone());
-            }
-        }
 
-        // Add workspace template context if available
+        // Add workspace template context first (before blocks are processed)
         if let Some(ref workspace_root) = self.workspace_root {
             let mut workspace_context = HashMap::new();
             workspace_context.insert("root".to_string(), workspace_root.clone());
             context_resolver.add_extra_template_context("workspace".to_string(), workspace_context);
         }
 
+        // Add any extra template context passed by caller
+        if let Some(extra_template_context) = extra_template_context {
+            for (namespace, context) in extra_template_context {
+                context_resolver.add_extra_template_context(namespace.clone(), context.clone());
+            }
+        }
+
         let mut runbook_template_context = HashMap::new();
         runbook_template_context.insert("id".to_string(), self.id.clone());
         context_resolver
             .add_extra_template_context("runbook".to_string(), runbook_template_context);
+
+        // Now process blocks - templates will resolve against the context we just set up
+        context_resolver.push_blocks(&self.blocks[..position]);
 
         let block_outputs = self
             .blocks
@@ -462,17 +466,22 @@ impl Document {
         let mut errors = Vec::new();
         let start = start_index.unwrap_or(0);
 
+        // Build context resolver - add extra context BEFORE processing blocks
+        // so that templates like {{ workspace.root }} can resolve during block processing
         let mut context_resolver = match &self.parent_context {
-            Some(parent) => ContextResolver::from_blocks_with_parent(&self.blocks[..start], parent),
-            None => ContextResolver::from_blocks(&self.blocks[..start]),
+            Some(parent) => ContextResolver::from_parent(parent),
+            None => ContextResolver::new(),
         };
 
-        // Add workspace template context if available
+        // Add workspace template context first (before blocks are processed)
         if let Some(ref workspace_root) = self.workspace_root {
             let mut workspace_context = HashMap::new();
             workspace_context.insert("root".to_string(), workspace_root.clone());
             context_resolver.add_extra_template_context("workspace".to_string(), workspace_context);
         }
+
+        // Now process blocks[..start] with workspace context available
+        context_resolver.push_blocks(&self.blocks[..start]);
 
         for i in start..self.blocks.len() {
             let block_id = self.blocks[i].id();
