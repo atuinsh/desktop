@@ -1,0 +1,300 @@
+//! AI Session - the driver that wraps the Agent FSM and executes effects.
+
+use std::sync::Arc;
+
+use futures_util::stream::StreamExt;
+use genai::chat::{ChatMessage, ChatOptions, ChatRequest, ChatStreamEvent, ToolCall};
+use serde::{Deserialize, Serialize};
+use tokio::sync::{mpsc, RwLock};
+use ts_rs::TS;
+use uuid::Uuid;
+
+use crate::ai::prompts::AIPrompts;
+use crate::ai::tools::AITools;
+
+use super::fsm::{Agent, Effect, Event, StreamChunk, ToolOutput, ToolResult};
+use super::types::{AIToolCall, ModelSelection};
+
+#[derive(Debug, thiserror::Error)]
+pub enum AISessionError {
+    #[error("Failed to start request: {0}")]
+    RequestError(#[from] genai::Error),
+
+    #[error("Session event channel closed")]
+    ChannelClosed,
+}
+
+/// Events emitted by the session to the frontend.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(tag = "type", rename_all = "camelCase")]
+#[ts(export)]
+pub enum SessionEvent {
+    /// Stream started
+    StreamStarted,
+    /// Content chunk received
+    Chunk { content: String },
+    /// Response complete (no more chunks)
+    ResponseComplete,
+    /// Tools need to be executed
+    ToolsRequested { calls: Vec<AIToolCall> },
+    /// An error occurred
+    Error { message: String },
+    /// Operation was cancelled
+    Cancelled,
+}
+
+/// Handle for sending events into the session from external sources.
+#[derive(Clone)]
+pub struct SessionHandle {
+    event_tx: mpsc::Sender<Event>,
+}
+
+impl SessionHandle {
+    /// Send a user message to the session.
+    pub async fn send_user_message(&self, content: String) -> Result<(), AISessionError> {
+        let msg = ChatMessage::user(content);
+        self.event_tx
+            .send(Event::UserMessage(msg))
+            .await
+            .map_err(|_| AISessionError::ChannelClosed)
+    }
+
+    /// Send a tool result to the session.
+    pub async fn send_tool_result(
+        &self,
+        call_id: String,
+        success: bool,
+        output: String,
+    ) -> Result<(), AISessionError> {
+        let result = ToolResult {
+            call_id,
+            output: if success {
+                ToolOutput::Success(output)
+            } else {
+                ToolOutput::Error(output)
+            },
+        };
+        self.event_tx
+            .send(Event::ToolResult(result))
+            .await
+            .map_err(|_| AISessionError::ChannelClosed)
+    }
+
+    /// Cancel the current operation.
+    pub async fn cancel(&self) -> Result<(), AISessionError> {
+        self.event_tx
+            .send(Event::Cancel)
+            .await
+            .map_err(|_| AISessionError::ChannelClosed)
+    }
+}
+
+/// The AI session driver.
+///
+/// Wraps the Agent FSM and handles effect execution.
+pub struct AISession {
+    id: Uuid,
+    model: ModelSelection,
+    client: genai::Client,
+    agent: Arc<RwLock<Agent>>,
+    event_tx: mpsc::Sender<Event>,
+    event_rx: mpsc::Receiver<Event>,
+    output_tx: mpsc::Sender<SessionEvent>,
+}
+
+impl AISession {
+    /// Create a new session, returning the session and a handle for sending events.
+    pub fn new(
+        model: ModelSelection,
+        output_tx: mpsc::Sender<SessionEvent>,
+    ) -> (Self, SessionHandle) {
+        let client = genai::Client::builder().build();
+        let (event_tx, event_rx) = mpsc::channel(32);
+
+        let session = Self {
+            id: Uuid::new_v4(),
+            model,
+            client,
+            agent: Arc::new(RwLock::new(Agent::new())),
+            event_tx: event_tx.clone(),
+            event_rx,
+            output_tx,
+        };
+
+        let handle = SessionHandle { event_tx };
+
+        (session, handle)
+    }
+
+    /// Get the session ID.
+    pub fn id(&self) -> Uuid {
+        self.id
+    }
+
+    /// Run the session event loop.
+    ///
+    /// This processes events and executes effects until the channel is closed.
+    pub async fn run(mut self) {
+        log::debug!("Starting session event loop for {}", self.id);
+
+        while let Some(event) = self.event_rx.recv().await {
+            log::trace!("Session {} received event: {:?}", self.id, event);
+
+            // Feed event to FSM
+            let transition = {
+                let mut agent = self.agent.write().await;
+                agent.handle(event)
+            };
+
+            // Execute effects
+            for effect in transition.effects {
+                if let Err(e) = self.execute_effect(effect).await {
+                    log::error!("Session {} effect execution failed: {}", self.id, e);
+                    let _ = self
+                        .output_tx
+                        .send(SessionEvent::Error {
+                            message: e.to_string(),
+                        })
+                        .await;
+                }
+            }
+        }
+
+        log::debug!("Session {} event loop ended", self.id);
+    }
+
+    /// Execute a single effect.
+    async fn execute_effect(&self, effect: Effect) -> Result<(), AISessionError> {
+        match effect {
+            Effect::StartRequest => {
+                self.start_request().await?;
+            }
+            Effect::EmitChunk { content } => {
+                let _ = self.output_tx.send(SessionEvent::Chunk { content }).await;
+            }
+            Effect::ExecuteTools { calls } => {
+                // Convert genai ToolCall to AIToolCall for frontend
+                let ai_calls: Vec<AIToolCall> = calls.into_iter().map(|c| c.into()).collect();
+                let _ = self
+                    .output_tx
+                    .send(SessionEvent::ToolsRequested { calls: ai_calls })
+                    .await;
+            }
+            Effect::ResponseComplete => {
+                let _ = self.output_tx.send(SessionEvent::ResponseComplete).await;
+            }
+            Effect::Error { message } => {
+                let _ = self.output_tx.send(SessionEvent::Error { message }).await;
+            }
+            Effect::Cancelled => {
+                let _ = self.output_tx.send(SessionEvent::Cancelled).await;
+            }
+        }
+        Ok(())
+    }
+
+    /// Start a new request to the model.
+    async fn start_request(&self) -> Result<(), AISessionError> {
+        log::debug!("Starting request for session {}", self.id);
+
+        // Build the request from conversation history (FSM uses ChatMessage directly)
+        let messages = {
+            let agent = self.agent.read().await;
+            agent.context().conversation.clone()
+        };
+
+        let chat_request = ChatRequest::new(messages)
+            .with_system(AIPrompts::system_prompt())
+            .with_tools(vec![AITools::get_runboook_document()]);
+
+        log::info!("Chat request: {chat_request:?}");
+        let chat_options = ChatOptions::default()
+            .with_capture_tool_calls(true)
+            .with_capture_content(true)
+            .with_capture_raw_body(true);
+
+        let stream = self
+            .client
+            .exec_chat_stream(&self.model.to_string(), chat_request, Some(&chat_options))
+            .await?;
+
+        // Spawn task to process the stream
+        let event_tx = self.event_tx.clone();
+        let session_id = self.id;
+
+        tokio::spawn(async move {
+            log::debug!("Processing stream for session {}", session_id);
+            Self::process_stream(session_id, stream, event_tx).await;
+        });
+
+        Ok(())
+    }
+
+    /// Process the streaming response, feeding events back to the FSM.
+    async fn process_stream(
+        session_id: Uuid,
+        stream_response: genai::chat::ChatStreamResponse,
+        event_tx: mpsc::Sender<Event>,
+    ) {
+        let mut stream = stream_response.stream;
+        let mut tool_calls: Vec<ToolCall> = Vec::new();
+
+        // Send StreamStart
+        if event_tx.send(Event::StreamStart).await.is_err() {
+            log::warn!("Session {} channel closed during stream", session_id);
+            return;
+        }
+
+        while let Some(result) = stream.next().await {
+            match result {
+                Err(e) => {
+                    log::error!("Session {} stream error: {}", session_id, e);
+                    let _ = event_tx
+                        .send(Event::RequestFailed {
+                            error: e.to_string(),
+                        })
+                        .await;
+                    return;
+                }
+                Ok(ChatStreamEvent::Start) => {
+                    // Already sent StreamStart above
+                }
+                Ok(ChatStreamEvent::Chunk(chunk)) => {
+                    let _ = event_tx
+                        .send(Event::StreamChunk(StreamChunk {
+                            content: chunk.content,
+                        }))
+                        .await;
+                }
+                Ok(ChatStreamEvent::ThoughtSignatureChunk(ts_chunk)) => {
+                    log::trace!(
+                        "Session {} thought signature chunk: {:?}",
+                        session_id,
+                        ts_chunk
+                    );
+                }
+                Ok(ChatStreamEvent::ToolCallChunk(tc_chunk)) => {
+                    // Tool call chunks are accumulated by genai internally
+                    // We'll get the complete tool calls in the End event
+                    log::trace!("Session {} tool call chunk: {:?}", session_id, tc_chunk);
+                }
+                Ok(ChatStreamEvent::ReasoningChunk(_)) => {
+                    // Ignore reasoning chunks for now
+                }
+                Ok(ChatStreamEvent::End(end)) => {
+                    // Extract tool calls from captured content
+                    if let Some(content) = end.captured_content {
+                        for part in content.into_parts() {
+                            if let genai::chat::ContentPart::ToolCall(tc) = part {
+                                tool_calls.push(tc);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Send StreamEnd with any tool calls
+        let _ = event_tx.send(Event::StreamEnd { tool_calls }).await;
+    }
+}

@@ -3,7 +3,7 @@ import useRemoteRunbook from "@/lib/useRemoteRunbook";
 import { usePtyStore } from "@/state/ptyStore";
 import { useStore } from "@/state/store";
 import Snapshot from "@/state/runbooks/snapshot";
-import React, { useContext, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { timeoutPromise, useMemory } from "@/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as api from "@/api/api";
@@ -80,6 +80,14 @@ export default function Runbooks() {
   const [editorKey, setEditorKey] = useState<boolean>(false);
   const [showTagMenu, setShowTagMenu] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [isAIAssistantOpen, setIsAIAssistantOpen] = useState(false);
+  const isAIFeaturesEnabled = useStore((state) => state.aiEnabled);
+  const closeAIAssistant = useCallback(() => {
+    setIsAIAssistantOpen(false);
+  }, []);
+  const toggleAIAssistant = useCallback(() => {
+    setIsAIAssistantOpen((prev) => !prev);
+  }, []);
   const [selectedTag, setSelectedTag] = useState<string | null>(() => {
     let tag = currentRunbook ? getLastTagForRunbook(currentRunbook.id) : null;
     if (tag == "(no tag)") tag = null;
@@ -518,6 +526,9 @@ export default function Runbooks() {
                 onDeleteFromHub={handleDeletedFromHub}
                 onToggleSettings={() => setShowSettings((show) => !show)}
                 isSettingsOpen={showSettings}
+                isAIFeaturesEnabled={isAIFeaturesEnabled}
+                isAIAssistantOpen={isAIAssistantOpen}
+                toggleAIAssistant={toggleAIAssistant}
               />
               {showSettings && runbookWorkspace && (
                 <RunbookControls
@@ -537,6 +548,8 @@ export default function Runbooks() {
                     runbook={currentRunbook}
                     runbookEditor={runbookEditor}
                     editable={editable && selectedTag == "latest"}
+                    isAIAssistantOpen={isAIAssistantOpen}
+                    closeAIAssistant={closeAIAssistant}
                   />
                 )}
                 {hasNoTags && (

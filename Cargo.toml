@@ -9,7 +9,7 @@ authors = ["ellie@atuin.sh", "michelle@atuin.sh"]
 
 [workspace.dependencies]
 atuin-desktop-runtime = { path = "crates/atuin-desktop-runtime" }
-atuin-desktop-templates = { path = "crates/atuin-desktop-templates" }
+atuin-simple-actor = { path = "crates/atuin-simple-actor" }
 sqlx = { version = "0.8", features = [
   "runtime-tokio",
   "tls-native-tls",

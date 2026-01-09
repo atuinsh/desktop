@@ -9,6 +9,7 @@ use tauri::{async_runtime::RwLock, AppHandle};
 use tokio::sync::{broadcast, mpsc, oneshot};
 use uuid::Uuid;
 
+use crate::ai::session::{SessionEvent, SessionHandle};
 use crate::{
     shared_state::SharedStateHandle, sqlite::DbInstances, workspaces::manager::WorkspaceManager,
 };
@@ -77,6 +78,12 @@ pub(crate) struct AtuinState {
 
     // Map of document handles per runbook
     pub documents: Arc<RwLock<HashMap<String, Arc<DocumentHandle>>>>,
+
+    // AI session handles for sending events to sessions
+    pub ai_sessions: Arc<RwLock<HashMap<Uuid, SessionHandle>>>,
+
+    // AI session event channels for sending events to frontend (per session)
+    pub ai_session_channels: Arc<RwLock<HashMap<Uuid, Channel<SessionEvent>>>>,
 }
 
 impl AtuinState {
@@ -102,6 +109,8 @@ impl AtuinState {
             runbook_output_variables: Default::default(),
             block_executions: Default::default(),
             documents: Default::default(),
+            ai_sessions: Default::default(),
+            ai_session_channels: Default::default(),
             dev_prefix,
             app_path,
             use_hub_updater_service,

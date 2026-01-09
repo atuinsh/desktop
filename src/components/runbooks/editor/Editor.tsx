@@ -37,6 +37,7 @@ import { AIFocusOverlay } from "./ui/AIFocusOverlay";
 import { AIHint, incrementAIHintUseCount } from "./ui/AIHint";
 import { RunbookLinkPopup } from "./ui/RunbookLinkPopup";
 import { SparklesIcon } from "lucide-react";
+import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
 
 import { insertSQLite } from "@/components/runbooks/editor/blocks/SQLite/SQLite";
 import { insertPostgres } from "@/components/runbooks/editor/blocks/Postgres/Postgres";
@@ -261,9 +262,17 @@ type EditorProps = {
   runbook: Runbook | null;
   editable: boolean;
   runbookEditor: RunbookEditor;
+  isAIAssistantOpen: boolean;
+  closeAIAssistant: () => void;
 };
 
-export default function Editor({ runbook, editable, runbookEditor }: EditorProps) {
+export default function Editor({
+  runbook,
+  editable,
+  runbookEditor,
+  isAIAssistantOpen,
+  closeAIAssistant,
+}: EditorProps) {
   const [editor, editorError] = usePromise<BlockNoteEditor, Error>(runbookEditor.getEditor());
   const colorMode = useStore((state) => state.functionalColorMode);
   const fontSize = useStore((state) => state.fontSize);
@@ -756,272 +765,303 @@ export default function Editor({ runbook, editable, runbookEditor }: EditorProps
 
   // Renders the editor instance.
   return (
-    <div
-      ref={scrollContainerRef}
-      className="overflow-y-scroll editor flex-grow pt-3 relative"
-      style={{
-        fontSize: `${fontSize}px`,
-        fontFamily: fontFamily,
-        visibility: isVisible ? "visible" : "hidden",
-      }}
-      onScroll={handleScroll}
-      onDragStart={(e) => {
-        // Don't interfere with AG-Grid drag operations
-        if ((e.target as Element).closest(".ag-theme-alpine, .ag-theme-alpine-dark, .ag-grid")) {
-          return;
-        }
+    <ResizablePanelGroup direction="horizontal" className="h-full w-full min-h-0">
+      {/* Main editor area */}
+      <ResizablePanel defaultSize={isAIAssistantOpen ? 70 : 100} minSize={40}>
+        <div
+          ref={scrollContainerRef}
+          className="overflow-y-scroll editor h-full min-h-0 pt-3 relative"
+          style={{
+            fontSize: `${fontSize}px`,
+            fontFamily: fontFamily,
+            visibility: isVisible ? "visible" : "hidden",
+          }}
+          onScroll={handleScroll}
+          onDragStart={(e) => {
+            // Don't interfere with AG-Grid drag operations
+            if (
+              (e.target as Element).closest(".ag-theme-alpine, .ag-theme-alpine-dark, .ag-grid")
+            ) {
+              return;
+            }
 
-        // Capture original drag data before react-dnd can wrap it
-        originalDragData = {
-          effectAllowed: e.dataTransfer.effectAllowed,
-          types: Array.from(e.dataTransfer.types),
-          data: {},
-        };
+            // Capture original drag data before react-dnd can wrap it
+            originalDragData = {
+              effectAllowed: e.dataTransfer.effectAllowed,
+              types: Array.from(e.dataTransfer.types),
+              data: {},
+            };
 
-        e.dataTransfer.types.forEach((type) => {
-          try {
-            originalDragData.data[type] = e.dataTransfer.getData(type);
-          } catch (err) {
-            // Some types may not be readable during dragstart
-          }
-        });
-      }}
-      onDrop={(e) => {
-        // Don't interfere with AG-Grid drop operations
-        if ((e.target as Element).closest(".ag-theme-alpine, .ag-theme-alpine-dark, .ag-grid")) {
-          return;
-        }
+            e.dataTransfer.types.forEach((type) => {
+              try {
+                originalDragData.data[type] = e.dataTransfer.getData(type);
+              } catch (err) {
+                // Some types may not be readable during dragstart
+              }
+            });
+          }}
+          onDrop={(e) => {
+            // Don't interfere with AG-Grid drop operations
+            if (
+              (e.target as Element).closest(".ag-theme-alpine, .ag-theme-alpine-dark, .ag-grid")
+            ) {
+              return;
+            }
 
-        if (!originalDragData) {
-          return;
-        }
+            if (!originalDragData) {
+              return;
+            }
 
-        // This is only the case if the user is dragging a block from the sidebar
-        if ((e.target as Element).matches(".bn-editor")) {
-          return;
-        }
+            // This is only the case if the user is dragging a block from the sidebar
+            if ((e.target as Element).matches(".bn-editor")) {
+              return;
+            }
 
-        const view = editor._tiptapEditor.view;
+            const view = editor._tiptapEditor.view;
 
-        if (!view || !originalDragData.data["blocknote/html"]) {
-          return;
-        }
+            if (!view || !originalDragData.data["blocknote/html"]) {
+              return;
+            }
 
-        e.preventDefault();
-        e.stopPropagation();
+            e.preventDefault();
+            e.stopPropagation();
 
-        // Create clean DataTransfer with preserved data
-        const cleanDataTransfer = new DataTransfer();
-        Object.keys(originalDragData.data).forEach((type) => {
-          cleanDataTransfer.setData(type, originalDragData.data[type]);
-        });
+            // Create clean DataTransfer with preserved data
+            const cleanDataTransfer = new DataTransfer();
+            Object.keys(originalDragData.data).forEach((type) => {
+              cleanDataTransfer.setData(type, originalDragData.data[type]);
+            });
 
-        // Create fresh drop event with clean DataTransfer
-        const syntheticEvent = new DragEvent("drop", {
-          bubbles: false,
-          cancelable: true,
-          clientX: e.clientX,
-          clientY: e.clientY,
-          dataTransfer: cleanDataTransfer,
-        });
+            // Create fresh drop event with clean DataTransfer
+            const syntheticEvent = new DragEvent("drop", {
+              bubbles: false,
+              cancelable: true,
+              clientX: e.clientX,
+              clientY: e.clientY,
+              dataTransfer: cleanDataTransfer,
+            });
 
-        // Mark as synthetic to prevent recursion
-        (syntheticEvent as any).synthetic = true;
+            // Mark as synthetic to prevent recursion
+            (syntheticEvent as any).synthetic = true;
 
-        view.dispatchEvent(syntheticEvent);
+            view.dispatchEvent(syntheticEvent);
 
-        originalDragData = null;
-      }}
-      onDragOver={(e) => {
-        // Don't interfere with AG-Grid drag operations
-        if ((e.target as Element).closest(".ag-theme-alpine, .ag-theme-alpine-dark, .ag-grid")) {
-          return;
-        }
-        e.preventDefault();
-      }}
-      onClick={(e) => {
-        // Clear post-generation mode on any click
-        if (postGenerationBlockId) {
-          clearPostGenerationMode();
-        }
+            originalDragData = null;
+          }}
+          onDragOver={(e) => {
+            // Don't interfere with AG-Grid drag operations
+            if (
+              (e.target as Element).closest(".ag-theme-alpine, .ag-theme-alpine-dark, .ag-grid")
+            ) {
+              return;
+            }
+            e.preventDefault();
+          }}
+          onClick={(e) => {
+            // Clear post-generation mode on any click
+            if (postGenerationBlockId) {
+              clearPostGenerationMode();
+            }
 
-        // Don't interfere with AG-Grid clicks
-        if ((e.target as Element).closest(".ag-theme-alpine, .ag-theme-alpine-dark, .ag-grid")) {
-          return;
-        }
+            // Don't interfere with AG-Grid clicks
+            if (
+              (e.target as Element).closest(".ag-theme-alpine, .ag-theme-alpine-dark, .ag-grid")
+            ) {
+              return;
+            }
 
-        // Only return if clicking inside editor content, not modals/inputs
-        if (
-          (e.target as Element).matches(".editor .bn-container *") ||
-          (e.target as HTMLElement).tagName === "INPUT"
-        )
-          return;
-        // If the user clicks below the document, focus on the last block
-        // But if the last block is not an empty paragraph, create it :D
-        let blocks = editor.document;
-        let lastBlock = blocks[blocks.length - 1];
-        let id = lastBlock.id;
-        if (lastBlock.type !== "paragraph" || lastBlock.content.length > 0) {
-          id = uuidv7();
-          editor.insertBlocks(
-            [
-              {
-                id,
-                type: "paragraph",
-                content: "",
-              },
-            ],
-            lastBlock.id,
-            "after",
-          );
-        }
-        editor.focus();
-        editor.setTextCursorPosition(id, "start");
-      }}
-    >
-      <BlockNoteView
-        editor={editor}
-        slashMenu={false}
-        className="pb-[200px]"
-        sideMenu={false}
-        onChange={() => {
-          runbookEditor.save(runbook, editor);
-          // Clear post-generation mode when user edits anything (but not programmatic edits)
-          if (postGenerationBlockId && !isProgrammaticEditRef.current) {
-            clearPostGenerationMode();
-          }
-        }}
-        theme={colorMode === "dark" ? "dark" : "light"}
-        editable={editable}
-      >
-        <SuggestionMenuController
-          triggerCharacter={"/"}
-          getItems={async (query: any) =>
-            filterSuggestionItems(
-              [
-                // Execute group
-                insertTerminal(editor as any),
-                insertKubernetes(editor as any),
-                insertEnv(editor as any),
-                insertVar(editor as any),
-                insertVarDisplay(editor as any),
-                insertLocalVar(schema)(editor),
-                insertScript(schema)(editor),
-                insertDirectory(editor as any),
-                insertLocalDirectory(editor as any),
-                insertDropdown(schema)(editor),
-                insertPause(schema)(editor),
-
-                // Content group
-                insertMarkdownRender(editor as any),
-                insertRunbookLink(editor as any, showRunbookLinkPopup),
-                insertSavedBlock(editor as any, showSavedBlockPopup),
-                insertHorizontalRule(editor as any),
-                ...(copiedBlock.isSome()
-                  ? [insertPastedBlock(editor as any, copiedBlock.unwrap())]
-                  : []),
-
-                // Monitoring group
-                insertPrometheus(schema)(editor),
-
-                // Database group
-                insertSQLite(schema)(editor),
-                insertPostgres(schema)(editor),
-                insertMySQL(schema)(editor),
-                insertClickhouse(schema)(editor),
-
-                // Network group
-                insertHttp(schema)(editor),
-                insertSshConnect(schema)(editor),
-                insertHostSelect(schema)(editor),
-
-                // Misc group
-                insertEditor(schema)(editor),
-
-                ...getDefaultReactSlashMenuItems(editor),
-                // AI group (only if enabled)
-                ...(aiEnabledState ? [insertAIGenerate(editor, showAIPopup)] : []),
-              ],
-              query,
+            // Only return if clicking inside editor content, not modals/inputs
+            if (
+              (e.target as Element).matches(".editor .bn-container *") ||
+              (e.target as HTMLElement).tagName === "INPUT"
             )
-          }
-        />
+              return;
+            // If the user clicks below the document, focus on the last block
+            // But if the last block is not an empty paragraph, create it :D
+            let blocks = editor.document;
+            let lastBlock = blocks[blocks.length - 1];
+            let id = lastBlock.id;
+            if (lastBlock.type !== "paragraph" || lastBlock.content.length > 0) {
+              id = uuidv7();
+              editor.insertBlocks(
+                [
+                  {
+                    id,
+                    type: "paragraph",
+                    content: "",
+                  },
+                ],
+                lastBlock.id,
+                "after",
+              );
+            }
+            editor.focus();
+            editor.setTextCursorPosition(id, "start");
+          }}
+        >
+          <BlockNoteView
+            editor={editor}
+            slashMenu={false}
+            className="pb-[200px]"
+            sideMenu={false}
+            onChange={() => {
+              runbookEditor.save(runbook, editor);
+              // Clear post-generation mode when user edits anything (but not programmatic edits)
+              if (postGenerationBlockId && !isProgrammaticEditRef.current) {
+                clearPostGenerationMode();
+              }
+            }}
+            theme={colorMode === "dark" ? "dark" : "light"}
+            editable={editable}
+          >
+            <SuggestionMenuController
+              triggerCharacter={"/"}
+              getItems={async (query: any) =>
+                filterSuggestionItems(
+                  [
+                    // Execute group
+                    insertTerminal(editor as any),
+                    insertKubernetes(editor as any),
+                    insertEnv(editor as any),
+                    insertVar(editor as any),
+                    insertVarDisplay(editor as any),
+                    insertLocalVar(schema)(editor),
+                    insertScript(schema)(editor),
+                    insertDirectory(editor as any),
+                    insertLocalDirectory(editor as any),
+                    insertDropdown(schema)(editor),
+                    insertPause(schema)(editor),
 
-        <SideMenuController
-          sideMenu={() => (
-            <SideMenu>
-              <AddBlockButton />
-              <DragHandleButton>
-                <DeleteBlockItem />
-                <DuplicateBlockItem />
-                <CopyBlockItem />
-                <SaveBlockItem />
-              </DragHandleButton>
-            </SideMenu>
+                    // Content group
+                    insertMarkdownRender(editor as any),
+                    insertRunbookLink(editor as any, showRunbookLinkPopup),
+                    insertSavedBlock(editor as any, showSavedBlockPopup),
+                    insertHorizontalRule(editor as any),
+                    ...(copiedBlock.isSome()
+                      ? [insertPastedBlock(editor as any, copiedBlock.unwrap())]
+                      : []),
+
+                    // Monitoring group
+                    insertPrometheus(schema)(editor),
+
+                    // Database group
+                    insertSQLite(schema)(editor),
+                    insertPostgres(schema)(editor),
+                    insertMySQL(schema)(editor),
+                    insertClickhouse(schema)(editor),
+
+                    // Network group
+                    insertHttp(schema)(editor),
+                    insertSshConnect(schema)(editor),
+                    insertHostSelect(schema)(editor),
+
+                    // Misc group
+                    insertEditor(schema)(editor),
+
+                    ...getDefaultReactSlashMenuItems(editor),
+                    // AI group (only if enabled)
+                    ...(aiEnabledState ? [insertAIGenerate(editor, showAIPopup)] : []),
+                  ],
+                  query,
+                )
+              }
+            />
+
+            <SideMenuController
+              sideMenu={() => (
+                <SideMenu>
+                  <AddBlockButton />
+                  <DragHandleButton>
+                    <DeleteBlockItem />
+                    <DuplicateBlockItem />
+                    <CopyBlockItem />
+                    <SaveBlockItem />
+                  </DragHandleButton>
+                </SideMenu>
+              )}
+            />
+          </BlockNoteView>
+
+          {/* AI popup positioned relative to editor container (only if AI is enabled) */}
+          {aiEnabledState && (
+            <AIGeneratePopup
+              isVisible={aiPopupVisible}
+              position={aiPopupPosition}
+              onBlockGenerated={handleBlockGenerated}
+              onGenerateComplete={handleGenerateComplete}
+              onClose={closeAIPopup}
+              getEditorContext={getEditorContext}
+            />
           )}
-        />
-      </BlockNoteView>
 
-      {/* AI popup positioned relative to editor container (only if AI is enabled) */}
-      {aiEnabledState && (
-        <AIGeneratePopup
-          isVisible={aiPopupVisible}
-          position={aiPopupPosition}
-          onBlockGenerated={handleBlockGenerated}
-          onGenerateComplete={handleGenerateComplete}
-          onClose={closeAIPopup}
-          getEditorContext={getEditorContext}
-        />
+          {/* AI edit popup for modifying existing blocks */}
+          {aiEnabledState && (
+            <AIPopup
+              isOpen={isAIEditPopupOpen}
+              onClose={() => setIsAIEditPopupOpen(false)}
+              editor={editor}
+              currentBlock={currentEditBlock}
+              position={aiEditPopupPosition}
+              getEditorContext={getEditorContext}
+            />
+          )}
+
+          {/* Subtle hint for AI generation */}
+          {aiEnabledState && showAiHint && !postGenerationBlockId && (
+            <AIHint editor={editor} isGenerating={isGeneratingInline} aiEnabled={aiEnabledState} />
+          )}
+
+          {/* Inline generation loading overlay */}
+          {isGeneratingInline && generatingBlockId && (
+            <AILoadingOverlay blockId={generatingBlockId} editor={editor} status={loadingStatus} />
+          )}
+
+          {/* Post-generation focus overlay - shows after AI generates a block */}
+          {postGenerationBlockId && !isGeneratingInline && (
+            <AIFocusOverlay
+              blockId={postGenerationBlockId}
+              editor={editor}
+              isEditing={isEditingGenerated}
+              editValue={editPrompt}
+              onEditChange={setEditPrompt}
+              onEditSubmit={handleEditSubmit}
+              onEditCancel={() => setIsEditingGenerated(false)}
+            />
+          )}
+
+          {/* Runbook link popup */}
+          <RunbookLinkPopup
+            isVisible={runbookLinkPopupVisible}
+            position={runbookLinkPopupPosition}
+            onSelect={handleRunbookLinkSelect}
+            onClose={closeRunbookLinkPopup}
+          />
+          <SavedBlockPopup
+            isVisible={savedBlockPopupVisible}
+            position={savedBlockPopupPosition}
+            onSelect={handleSavedBlockSelect}
+            onClose={closeSavedBlockPopup}
+          />
+
+          {/* AI Assistant toggle button */}
+        </div>
+      </ResizablePanel>
+
+      {/* AI Assistant sidebar */}
+      {aiEnabledState && isAIAssistantOpen && (
+        <>
+          <ResizableHandle withHandle />
+          <ResizablePanel defaultSize={30} minSize={20} maxSize={100}>
+            <AIAssistant
+              runbookId={runbook.id}
+              editor={editor}
+              getContext={getAIAssistantContext}
+              isOpen={isAIAssistantOpen}
+              onClose={closeAIAssistant}
+            />
+          </ResizablePanel>
+        </>
       )}
-
-      {/* AI edit popup for modifying existing blocks */}
-      {aiEnabledState && (
-        <AIPopup
-          isOpen={isAIEditPopupOpen}
-          onClose={() => setIsAIEditPopupOpen(false)}
-          editor={editor}
-          currentBlock={currentEditBlock}
-          position={aiEditPopupPosition}
-          getEditorContext={getEditorContext}
-        />
-      )}
-
-      {/* Subtle hint for AI generation */}
-      {aiEnabledState && showAiHint && !postGenerationBlockId && (
-        <AIHint editor={editor} isGenerating={isGeneratingInline} aiEnabled={aiEnabledState} />
-      )}
-
-      {/* Inline generation loading overlay */}
-      {isGeneratingInline && generatingBlockId && (
-        <AILoadingOverlay blockId={generatingBlockId} editor={editor} status={loadingStatus} />
-      )}
-
-      {/* Post-generation focus overlay - shows after AI generates a block */}
-      {postGenerationBlockId && !isGeneratingInline && (
-        <AIFocusOverlay
-          blockId={postGenerationBlockId}
-          editor={editor}
-          isEditing={isEditingGenerated}
-          editValue={editPrompt}
-          onEditChange={setEditPrompt}
-          onEditSubmit={handleEditSubmit}
-          onEditCancel={() => setIsEditingGenerated(false)}
-        />
-      )}
-
-      {/* Runbook link popup */}
-      <RunbookLinkPopup
-        isVisible={runbookLinkPopupVisible}
-        position={runbookLinkPopupPosition}
-        onSelect={handleRunbookLinkSelect}
-        onClose={closeRunbookLinkPopup}
-      />
-      <SavedBlockPopup
-        isVisible={savedBlockPopupVisible}
-        position={savedBlockPopupPosition}
-        onSelect={handleSavedBlockSelect}
-        onClose={closeSavedBlockPopup}
-      />
-    </div>
+    </ResizablePanelGroup>
   );
 }

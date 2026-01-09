@@ -12,6 +12,7 @@ use tauri_plugin_log::fern::colors::{Color, ColoredLevelConfig};
 use time::format_description::well_known::Rfc3339;
 
 mod advanced_settings;
+mod ai;
 mod blocks;
 mod db;
 mod dotfiles;
@@ -549,6 +550,7 @@ fn main() {
             commands::blocks::open_document,
             commands::blocks::update_document,
             commands::blocks::get_flattened_block_context,
+            commands::blocks::get_flattened_document_context,
             commands::blocks::get_block_state,
             commands::blocks::notify_block_kv_value_changed,
             commands::blocks::reset_runbook_state,
@@ -577,6 +579,13 @@ fn main() {
             commands::workspaces::move_items_between_workspaces,
             commands::audio::list_sounds,
             commands::audio::play_sound,
+            commands::ai::ai_create_session,
+            commands::ai::ai_subscribe_session,
+            commands::ai::ai_send_message,
+            commands::ai::ai_send_tool_result,
+            commands::ai::ai_cancel_session,
+            commands::ai::ai_destroy_session,
+            commands::ai::ai_get_history,
             shared_state::get_shared_state_document,
             shared_state::push_optimistic_update,
             shared_state::update_shared_state_document,

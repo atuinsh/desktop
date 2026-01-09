@@ -11,6 +11,7 @@ import {
   PencilOffIcon,
   RefreshCcwIcon,
   SettingsIcon,
+  SparklesIcon,
   TrashIcon,
 } from "lucide-react";
 import { PresenceUserInfo } from "@/lib/phoenix_provider";
@@ -24,6 +25,7 @@ import { cn } from "@/lib/utils";
 import { resetRunbookState } from "@/lib/runtime";
 import { useSerialExecution } from "@/lib/hooks/useSerialExecution";
 import { useEffect, useRef } from "react";
+import { DialogBuilder } from "@/components/Dialogs/dialog";
 
 type TopbarProps = {
   runbook: Runbook;
@@ -43,6 +45,9 @@ type TopbarProps = {
   onDeleteFromHub: () => void;
   onToggleSettings: () => void;
   isSettingsOpen: boolean;
+  isAIFeaturesEnabled: boolean;
+  isAIAssistantOpen: boolean;
+  toggleAIAssistant: () => void;
 };
 
 function openHubRunbook(e: React.MouseEvent<HTMLAnchorElement>) {
@@ -140,6 +145,18 @@ export default function Topbar(props: TopbarProps) {
 
   function handleStopSerialExecution() {
     serialExecution.stop();
+  }
+
+  function toggleAIAssistant() {
+    if (props.isAIFeaturesEnabled) {
+      props.toggleAIAssistant();
+    } else {
+      new DialogBuilder()
+        .title("AI Features Not Enabled")
+        .message("AI features are disabled. Enable in application settings.")
+        .action({ label: "OK", value: "ok", variant: "flat" })
+        .build();
+    }
   }
 
   const renderBarContents = () => {
@@ -283,6 +300,26 @@ export default function Topbar(props: TopbarProps) {
           >
             <SettingsIcon
               className={cn("h-4 w-4", props.isSettingsOpen && "stroke-white dark:stroke-gray-800")}
+            />
+          </Button>
+        </Tooltip>
+        <Tooltip content="Toggle AI assistant" placement="bottom">
+          <Button
+            isIconOnly
+            variant="flat"
+            size="sm"
+            className={cn(
+              "mt-1 ml-2",
+              props.isAIAssistantOpen && "bg-purple-400 dark:bg-purple-400",
+            )}
+            onPress={toggleAIAssistant}
+          >
+            <SparklesIcon
+              className={cn(
+                "h-4 w-4",
+                !props.isAIAssistantOpen && "stroke-purple-600 dark:stroke-purple-400",
+                props.isAIAssistantOpen && "stroke-white dark:stroke-gray-800",
+              )}
             />
           </Button>
         </Tooltip>

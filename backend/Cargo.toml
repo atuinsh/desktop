@@ -3,7 +3,7 @@ name = "atuin-desktop"
 description = "Atuin Desktop"
 publish = false
 workspace = ".."
-version = "0.2.11"             # duplicated here as CN CLI can't handle workspace version
+version = "0.2.11"            # duplicated here as CN CLI can't handle workspace version
 edition.workspace = true
 
 [lints.clippy]
@@ -20,6 +20,7 @@ atuin-common = { git = "https://github.com/atuinsh/atuin.git" }
 atuin-dotfiles = { git = "https://github.com/atuinsh/atuin.git" }
 atuin-history = { git = "https://github.com/atuinsh/atuin.git" }
 atuin-desktop-runtime = { workspace = true }
+atuin-simple-actor = { workspace = true }
 
 eyre = { workspace = true }
 time = { workspace = true }
@@ -82,6 +83,9 @@ log = { workspace = true }
 dirs = { workspace = true }
 tempfile = { workspace = true }
 config = "0.15.19"
+genai = { git = "https://github.com/BinaryMuse/rust-genai", branch = "mkt/fix-anthropic-tool-call-no-params" }
+futures-util = "0.3.31"
+indoc = "2.0.7"
 
 [dependencies.tauri-plugin-sql]
 features = ["sqlite"] # or "postgres", or "mysql"
