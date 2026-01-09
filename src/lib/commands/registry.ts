@@ -1,5 +1,6 @@
 import { Command, CommandImplementation, CommandSearchResult, CommandContext } from "./types";
 import { useStore } from "@/state/store";
+import { TabUri } from "@/state/store/ui_state";
 import {
   FolderPlus,
   Download,
@@ -298,18 +299,16 @@ export function registerBuiltinCommands(): void {
       const state = useStore.getState();
       const currentTab = state.tabs.find((tab) => tab.id === state.currentTabId);
       if (!currentTab) return false;
-      return currentTab.url.startsWith("/runbook/");
+      return new TabUri(currentTab.url).isRunbook();
     },
     handler: async () => {
       const state = useStore.getState();
       const currentTab = state.tabs.find((tab) => tab.id === state.currentTabId);
-      if (!currentTab || !currentTab.url.startsWith("/runbook/")) {
-        console.error("Not in a runbook");
-        return;
-      }
-      const runbookId = currentTab.url.split("/").pop();
+      if (!currentTab) return;
+      const tabUri = new TabUri(currentTab.url);
+      const runbookId = tabUri.getRunbookId();
       if (!runbookId) {
-        console.error("Could not get runbook ID");
+        console.error("Not in a runbook");
         return;
       }
       const deepLink = `atuin://runbook/${runbookId}`;
