@@ -260,4 +260,53 @@ mod tests {
         assert_eq!(dir.id, id);
         assert_eq!(dir.path, "/test/path");
     }
+
+    #[tokio::test]
+    async fn test_workspace_root_template() {
+        use std::collections::HashMap;
+
+        // Create a resolver with workspace context
+        let mut resolver = ContextResolver::new();
+        let mut workspace_context = HashMap::new();
+        workspace_context.insert("root".to_string(), "/home/user/project".to_string());
+        resolver.add_extra_template_context("workspace".to_string(), workspace_context);
+
+        // Create directory with workspace.root template
+        let dir = Directory::builder()
+            .id(Uuid::new_v4())
+            .path("{{ workspace.root }}/src/components")
+            .build();
+
+        let context = dir.passive_context(&resolver, None).await.unwrap().unwrap();
+
+        assert_eq!(
+            context.get::<DocumentCwd>().unwrap().0,
+            "/home/user/project/src/components"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_workspace_root_template_with_relative_path() {
+        use std::collections::HashMap;
+
+        // Create a resolver with workspace context
+        let mut resolver = ContextResolver::new();
+        let mut workspace_context = HashMap::new();
+        workspace_context.insert("root".to_string(), "/workspace/myproject".to_string());
+        resolver.add_extra_template_context("workspace".to_string(), workspace_context);
+
+        // Create directory with workspace.root and relative path
+        let dir = Directory::builder()
+            .id(Uuid::new_v4())
+            .path("{{ workspace.root }}/../other-project")
+            .build();
+
+        let context = dir.passive_context(&resolver, None).await.unwrap().unwrap();
+
+        // The template should resolve the path (normalization happens at context resolution level)
+        assert_eq!(
+            context.get::<DocumentCwd>().unwrap().0,
+            "/workspace/myproject/../other-project"
+        );
+    }
 }

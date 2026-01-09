@@ -331,6 +331,7 @@ impl BlockBehavior for SubRunbook {
                 context.block_local_value_provider(), // inherit from parent
                 None, // context_storage (sub-runbooks don't persist context)
                 Some(runbook_loader.clone()),
+                None, // workspace_root - sub-runbooks inherit context from parent
             );
 
             // Set parent context so the sub-runbook inherits vars, env_vars, cwd, ssh_host
@@ -750,6 +751,7 @@ mod tests {
             None, // block_local_value_provider
             Some(context_storage),
             Some(runbook_loader),
+            None, // workspace_root
         );
 
         (document_handle, event_bus)

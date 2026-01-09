@@ -49,6 +49,9 @@ pub(crate) struct Document {
     /// Parent context resolver for sub-runbooks. When set, this document inherits
     /// vars, env_vars, cwd, and ssh_host from the parent.
     pub(crate) parent_context: Option<Arc<ContextResolver>>,
+    /// The workspace root path, if this document belongs to an offline workspace.
+    /// Used for template resolution (e.g., `{{ workspace.root }}`).
+    pub(crate) workspace_root: Option<String>,
     /// Tracks the last ResolvedContext sent to the frontend for each block.
     /// Used to avoid sending redundant BlockContextUpdate messages when the
     /// resolved context hasn't actually changed.
@@ -63,6 +66,7 @@ impl Document {
         block_local_value_provider: Option<Arc<dyn LocalValueProvider>>,
         context_storage: Option<Box<dyn BlockContextStorage>>,
         runbook_loader: Option<Arc<dyn RunbookContentLoader>>,
+        workspace_root: Option<String>,
     ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         let mut doc = Self {
             id,
@@ -74,6 +78,7 @@ impl Document {
             context_storage,
             runbook_loader,
             parent_context: None,
+            workspace_root,
             last_sent_contexts: HashMap::new(),
         };
         doc.put_document(document).await?;
@@ -454,6 +459,14 @@ impl Document {
             Some(parent) => ContextResolver::from_blocks_with_parent(&self.blocks[..start], parent),
             None => ContextResolver::from_blocks(&self.blocks[..start]),
         };
+
+        // Add workspace template context if available
+        if let Some(ref workspace_root) = self.workspace_root {
+            let mut workspace_context = HashMap::new();
+            workspace_context.insert("root".to_string(), workspace_root.clone());
+            context_resolver.add_extra_template_context("workspace".to_string(), workspace_context);
+        }
+
         for i in start..self.blocks.len() {
             let block_id = self.blocks[i].id();
 

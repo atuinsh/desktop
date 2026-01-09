@@ -199,6 +199,7 @@ impl DocumentHandle {
         block_local_value_provider: Option<Arc<dyn LocalValueProvider>>,
         context_storage: Option<Box<dyn BlockContextStorage>>,
         runbook_loader: Option<Arc<dyn RunbookContentLoader>>,
+        workspace_root: Option<String>,
     ) -> Arc<Self> {
         let (tx, rx) = mpsc::unbounded_channel();
 
@@ -223,6 +224,7 @@ impl DocumentHandle {
                 block_local_value_provider,
                 context_storage,
                 runbook_loader,
+                workspace_root,
                 instance_clone,
             )
             .await;
@@ -606,6 +608,7 @@ impl DocumentActor {
         block_local_value_provider: Option<Arc<dyn LocalValueProvider>>,
         context_storage: Option<Box<dyn BlockContextStorage>>,
         runbook_loader: Option<Arc<dyn RunbookContentLoader>>,
+        workspace_root: Option<String>,
         handle: Arc<DocumentHandle>,
     ) -> Self {
         let document = Document::new(
@@ -615,6 +618,7 @@ impl DocumentActor {
             block_local_value_provider,
             context_storage,
             runbook_loader,
+            workspace_root,
         )
         .await
         .unwrap();
