@@ -387,6 +387,11 @@ impl Document {
         Ok(ResolvedContext::from_resolver(&resolver))
     }
 
+    pub fn get_last_block_resolved_context(&self) -> Result<ResolvedContext, DocumentError> {
+        let resolver = ContextResolver::from_blocks(&self.blocks);
+        Ok(ResolvedContext::from_resolver(&resolver))
+    }
+
     pub fn get_block_state(&self, block_id: &Uuid) -> Result<Value, DocumentError> {
         let position = self
             .get_block_index(block_id)
