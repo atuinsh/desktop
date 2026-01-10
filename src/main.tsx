@@ -29,7 +29,6 @@ import debounce from "lodash.debounce";
 import Workspace from "./state/runbooks/workspace";
 import { SharedStateManager } from "./lib/shared_state/manager";
 import { startup as startupOperationProcessor } from "./state/runbooks/operation_processor";
-import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 
 import ServerObserver from "./lib/sync/server_observer";
 import DevConsole from "./lib/dev/dev_console";
@@ -167,7 +166,7 @@ function Application() {
     <HeroUIProvider>
       <ToastProvider placement="bottom-center" toastOffset={40} />
       <QueryClientProvider client={queryClient}>
-        <ReactQueryDevtools initialIsOpen={false} buttonPosition="bottom-right" />
+        {/* <ReactQueryDevtools initialIsOpen={false} buttonPosition="bottom-right" /> */}
         <main className="text-foreground bg-background overflow-hidden z-20 relative">
           <Root />
         </main>
