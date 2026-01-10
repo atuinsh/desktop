@@ -41,4 +41,135 @@ impl AITools {
                 "required": ["block_types"],
             }))
     }
+
+    pub fn get_default_shell() -> Tool {
+        Tool::new("get_default_shell")
+            .with_description(indoc! {"
+                Get the default shell for the user. Use this to determine the shell to use for new script or terminal blocks.
+            "})
+            .with_schema(json!({
+                "type": "object",
+                "properties": {},
+                "required": [],
+            }))
+    }
+
+    pub fn insert_blocks(_block_types: &[String]) -> Tool {
+        Tool::new("insert_blocks")
+            .with_description(indoc! {"
+                Insert one or more blocks into the runbook at a specified position.
+                Use this to add new content to the runbook. Each block object is defined
+                by a 'type' property, which is the name of the block type, and a 'props' property,
+                which is an object containing the properties of the block as specified in the block documentation.
+
+                In addition to custom blocks, you can insert any of the built-in BlockNote blocks by using their
+                name as the 'type' property and their associated properties as the 'props' property.
+
+                Before you use this tool, you should use the 'get_block_docs' tool for the
+                block types you're planning on using to ensure you're using the correct block types and properties.
+            "})
+            .with_schema(json!({
+                "type": "object",
+                "properties": {
+                    "blocks": {
+                        "type": "array",
+                        "description": "Array of block objects to insert. Each block object must have a 'type' property and a 'props' property.",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "type": {
+                                    "type": "string",
+                                },
+                                "props": {
+                                    "type": "object"
+                                }
+                            }
+
+                        }
+                    },
+                    "position": {
+                        "type": "string",
+                        "enum": ["before", "after", "end"],
+                        "description": "Where to insert: 'before' or 'after' the reference block, or 'end' of document"
+                    },
+                    "reference_block_id": {
+                        "type": "string",
+                        "description": "ID of the block to insert before/after. Required unless position is 'end'"
+                    },
+                },
+                "required": ["blocks", "position"]
+            }))
+    }
+
+    pub fn update_block() -> Tool {
+        Tool::new("update_block")
+            .with_description(indoc! {"
+                Update an existing block in the runbook. Replaces the block's properties
+                and/or content while preserving its ID. Use this to make minor changes to
+                a single block's properties or content.
+
+                Before you use this tool, you should use the 'get_block_docs' tool for the
+                block types you're planning on using to ensure you're using the correct block types and properties.
+            "})
+            .with_schema(json!({
+                "type": "object",
+                "properties": {
+                    "block_id": {
+                        "type": "string",
+                        "description": "ID of the block to update"
+                    },
+                    "props": {
+                        "type": "object",
+                        "description": "New properties for the block"
+                    },
+                    "content": {
+                        "type": "array",
+                        "description": "New content for the block (for heading, paragraph, and other BlockNote blocks)",
+                        "items": { "type": "object" }
+                    }
+                },
+                "required": ["block_id"]
+            }))
+    }
+
+    pub fn replace_blocks() -> Tool {
+        Tool::new("replace_blocks")
+            .with_description(indoc! {"
+                Replace one or more existing blocks in the runbook with new blocks.
+                The blocks at the specified IDs will be removed and the new blocks
+                will be inserted in their place. You can delete blocks by specifying
+                their IDs in the 'block_ids' array and not including any blocks in the
+                'new_blocks' array.
+
+                Before you use this tool, you should use the 'get_block_docs' tool for the
+                block types you're planning on using to ensure you're using the correct block types and properties.
+            "})
+            .with_schema(json!({
+                "type": "object",
+                "properties": {
+                    "block_ids": {
+                        "type": "array",
+                        "description": "IDs of the blocks to be replaced",
+                        "items": { "type": "string" }
+                    },
+                    "new_blocks": {
+                        "type": "array",
+                        "description": "Array of new block objects to insert in place of the removed blocks. Each block object must have a 'type' property and a 'props' property.",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "type": {
+                                    "type": "string",
+                                },
+                                "props": {
+                                    "type": "object"
+                                }
+                            }
+
+                        }
+                    }
+                },
+                "required": ["block_ids", "new_blocks"]
+            }))
+    }
 }

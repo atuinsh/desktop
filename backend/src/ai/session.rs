@@ -215,6 +215,9 @@ impl AISession {
                 AITools::get_runboook_document(),
                 AITools::get_block_docs(&self.block_types),
                 AITools::get_default_shell(),
+                AITools::insert_blocks(&self.block_types),
+                AITools::update_block(),
+                AITools::replace_blocks(),
             ]);
 
         let chat_options = ChatOptions::default()

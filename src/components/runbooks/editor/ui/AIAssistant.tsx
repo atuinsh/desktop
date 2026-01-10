@@ -1,6 +1,17 @@
 import React, { useState, useRef, useEffect, useCallback, memo, Component, ReactNode } from "react";
 import { Streamdown } from "streamdown";
-import { Button, Textarea, Spinner, ScrollShadow } from "@heroui/react";
+import {
+  Button,
+  Textarea,
+  Spinner,
+  ScrollShadow,
+  ButtonGroup,
+  Dropdown,
+  DropdownTrigger,
+  DropdownMenu,
+  DropdownItem,
+  Selection,
+} from "@heroui/react";
 import {
   SparklesIcon,
   SendIcon,
@@ -22,6 +33,14 @@ import { createSession, destroySession } from "@/lib/ai/commands";
 import AIBlockRegistry from "@/lib/ai/block_registry";
 import { Settings } from "@/state/settings";
 
+const ALL_TOOL_NAMES = [
+  "get_runbook_document",
+  "get_block_docs",
+  "get_default_shell",
+  "insert_blocks",
+  "update_block",
+  "replace_blocks",
+];
 const AUTO_APPROVE_TOOLS = new Set(["get_block_docs"]);
 
 // Error boundary for Streamdown - falls back to plain text if it fails
@@ -119,6 +138,101 @@ function ToolParamsDisplay({ params }: { params: any }) {
   );
 }
 
+type ApprovalAction = "approve" | "approve-always";
+
+function ToolCallUI({
+  toolCall,
+  isPending,
+  isRejected,
+  onApprove,
+  onAlwaysApprove,
+  onDeny,
+}: {
+  toolCall: AIToolCall;
+  isPending: boolean;
+  isRejected: boolean;
+  onApprove: (toolCall: AIToolCall) => void;
+  onAlwaysApprove: (toolCall: AIToolCall) => void;
+  onDeny: (toolCall: AIToolCall) => void;
+}) {
+  const [selectedAction, setSelectedAction] = useState<ApprovalAction>("approve");
+  const isApproved = !isPending && !isRejected;
+
+  const handleButtonPress = () => {
+    if (selectedAction === "approve") {
+      onApprove(toolCall);
+    } else {
+      onAlwaysApprove(toolCall);
+    }
+  };
+
+  const handleSelectionChange = (keys: Selection) => {
+    const selected = Array.from(keys)[0] as ApprovalAction;
+    if (selected) {
+      setSelectedAction(selected);
+    }
+  };
+
+  const buttonLabel = selectedAction === "approve" ? "Allow" : "Always Allow";
+
+  return (
+    <div className="mt-2 p-2 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded overflow-x-auto">
+      <div className="flex items-center gap-2">
+        <WrenchIcon className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+        <span className="text-sm font-medium text-amber-700 dark:text-amber-300">
+          Tool: {toolCall.name}
+        </span>
+        {isPending && <Spinner size="sm" variant="dots" />}
+        {isApproved && <CheckIcon className="h-3 w-3 text-green-500" />}
+        {isRejected && <XIcon className="h-3 w-3 text-red-500" />}
+      </div>
+      <ToolParamsDisplay params={toolCall.args} />
+      {isPending && (
+        <div className="flex gap-2 mt-2">
+          <Button
+            size="sm"
+            variant="light"
+            onPress={() => onDeny(toolCall)}
+            className="text-red-600 dark:text-red-400"
+          >
+            Deny
+          </Button>
+          <ButtonGroup>
+            <Button
+              size="sm"
+              color="success"
+              onPress={handleButtonPress}
+              className="bg-green-600 text-white"
+            >
+              {buttonLabel}
+            </Button>
+            <Dropdown placement="bottom-end">
+              <DropdownTrigger>
+                <Button size="sm" isIconOnly color="success" className="bg-green-600 text-white">
+                  <ChevronDownIcon className="h-3 w-3" />
+                </Button>
+              </DropdownTrigger>
+              <DropdownMenu
+                disallowEmptySelection
+                aria-label="Tool approval options"
+                className="max-w-[300px]"
+                selectedKeys={new Set([selectedAction])}
+                selectionMode="single"
+                onSelectionChange={handleSelectionChange}
+              >
+                <DropdownItem key="approve">Allow this tool usage</DropdownItem>
+                <DropdownItem key="approve-always">
+                  Allow this and future uses of this tool
+                </DropdownItem>
+              </DropdownMenu>
+            </Dropdown>
+          </ButtonGroup>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Extract text content from AIMessage
 function getMessageText(message: AIMessage): string {
   return message.content.parts
@@ -137,12 +251,16 @@ function getToolCalls(message: AIMessage): AIToolCall[] {
 function MessageBubble({
   message,
   pendingToolCalls,
+  rejectedToolCalls,
   onApprove,
+  onAlwaysApprove,
   onDeny,
 }: {
   message: AIMessage;
   pendingToolCalls: AIToolCall[];
+  rejectedToolCalls: string[];
   onApprove: (toolCall: AIToolCall) => void;
+  onAlwaysApprove: (toolCall: AIToolCall) => void;
   onDeny: (toolCall: AIToolCall) => void;
 }) {
   const isUser = message.role === "user";
@@ -197,45 +315,17 @@ function MessageBubble({
         )}
 
         {/* Render tool calls */}
-        {toolCalls.map((toolCall) => {
-          const isPending = pendingToolCalls.some((tc) => tc.id === toolCall.id);
-          return (
-            <div
-              key={toolCall.id}
-              className="mt-2 p-2 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded overflow-x-auto"
-            >
-              <div className="flex items-center gap-2">
-                <WrenchIcon className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-                <span className="text-sm font-medium text-amber-700 dark:text-amber-300">
-                  Tool: {toolCall.name}
-                </span>
-                {isPending && <Spinner size="sm" variant="dots" />}
-                {!isPending && <CheckIcon className="h-3 w-3 text-green-500" />}
-              </div>
-              <ToolParamsDisplay params={toolCall.args} />
-              {isPending && (
-                <div className="flex gap-2 mt-2">
-                  <Button
-                    size="sm"
-                    variant="light"
-                    onPress={() => onDeny(toolCall)}
-                    className="text-red-600 dark:text-red-400"
-                  >
-                    Deny
-                  </Button>
-                  <Button
-                    size="sm"
-                    color="success"
-                    onPress={() => onApprove(toolCall)}
-                    className="bg-green-600 text-white"
-                  >
-                    Allow
-                  </Button>
-                </div>
-              )}
-            </div>
-          );
-        })}
+        {toolCalls.map((toolCall) => (
+          <ToolCallUI
+            key={toolCall.id}
+            toolCall={toolCall}
+            isPending={pendingToolCalls.some((tc) => tc.id === toolCall.id)}
+            isRejected={rejectedToolCalls.includes(toolCall.id)}
+            onApprove={onApprove}
+            onAlwaysApprove={onAlwaysApprove}
+            onDeny={onDeny}
+          />
+        ))}
       </div>
     </div>
   );
@@ -357,8 +447,10 @@ export default function AIAssistant({
   const [inputValue, setInputValue] = useState("");
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [isCreatingSession, setIsCreatingSession] = useState(false);
+  const [rejectedToolCalls, setRejectedToolCalls] = useState<string[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const autoApproveToolsRef = useRef<string[]>([...AUTO_APPROVE_TOOLS]);
 
   // Create session on mount
   useEffect(() => {
@@ -458,12 +550,21 @@ export default function AIAssistant({
     [editor, addToolOutput],
   );
 
-  const handleDeny = useCallback(
+  const handleAlwaysApprove = useCallback(
     (toolCall: AIToolCall) => {
+      autoApproveToolsRef.current.push(toolCall.name);
+      handleApprove(toolCall);
+    },
+    [handleApprove],
+  );
+
+  const handleDeny = useCallback(
+    (toolCall: AIToolCall, reason?: string) => {
+      setRejectedToolCalls((prev) => [...prev, toolCall.id]);
       addToolOutput({
         toolCallId: toolCall.id,
         success: false,
-        result: "User denied tool execution",
+        result: reason || "User denied tool execution",
       });
     },
     [addToolOutput],
@@ -497,7 +598,15 @@ export default function AIAssistant({
     if (!editor) return;
 
     for (const toolCall of pendingToolCalls) {
-      if (AUTO_APPROVE_TOOLS.has(toolCall.name) && !autoApprovedRef.current.has(toolCall.id)) {
+      if (!ALL_TOOL_NAMES.includes(toolCall.name)) {
+        handleDeny(toolCall, `Unknown tool: ${toolCall.name}`);
+        continue;
+      }
+
+      if (
+        autoApproveToolsRef.current.includes(toolCall.name) &&
+        !autoApprovedRef.current.has(toolCall.id)
+      ) {
         autoApprovedRef.current.add(toolCall.id);
         handleApprove(toolCall);
       }
@@ -562,7 +671,9 @@ export default function AIAssistant({
             key={idx}
             message={message}
             pendingToolCalls={pendingToolCalls}
+            rejectedToolCalls={rejectedToolCalls}
             onApprove={handleApprove}
+            onAlwaysApprove={handleAlwaysApprove}
             onDeny={handleDeny}
           />
         ))}
