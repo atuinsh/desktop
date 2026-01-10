@@ -123,7 +123,16 @@ AIBlockRegistry.getInstance().addBlock({
     The available props are:
     - userHost (string): Connection string in format "user@host:port" or just "host" (uses SSH config)
 
-    Connections are pooled globally, so if already connected to the host, the existing connection is reused.
+    AUTHENTICATION:
+    Uses your system's SSH configuration (~/.ssh/config) and SSH agent for authentication:
+    - SSH agent (recommended for key-based auth)
+    - SSH config file entries (Host aliases, IdentityFile, etc.)
+    - Interactive password prompt (if key auth fails)
+
+    CONNECTION LIFECYCLE:
+    - Connections are pooled globally; existing connections are reused
+    - Connection persists until another SSH Connect/Host block or document end
+    - HTTP, SQL, Kubernetes, Prometheus blocks always run locally regardless of SSH context
 
     Example: {
       "type": "ssh-connect",

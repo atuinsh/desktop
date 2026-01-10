@@ -202,6 +202,17 @@ AIBlockRegistry.getInstance().addBlock({
 
     You can reference template variables in the query and uri: {{ var.variable_name }}.
 
+    OUTPUT ACCESS (requires block to have a name):
+    - output.rows (array): Rows from the first SELECT query
+    - output.columns (array): Column names
+    - output.total_rows (number): Total row count
+    - output.total_rows_affected (number): Rows affected by INSERT/UPDATE/DELETE
+    - output.total_duration (number): Execution time in seconds
+    - output.results (array): All results for multi-statement queries
+
+    MULTI-STATEMENT QUERIES:
+    Multiple statements separated by semicolons are supported. Access via output.results[index].
+
     Example: {
       "type": "sqlite",
       "props": {

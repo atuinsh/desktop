@@ -522,6 +522,14 @@ AIBlockRegistry.getInstance().addBlock({
 
     You can reference template variables in the endpoint and query: {{ var.variable_name }}.
 
+    OUTPUT ACCESS (requires block to have a name):
+    - output.series (array): Time series data
+    - output.total_series (number): Number of series returned
+    - output.time_range (object): Query time range
+
+    AUTHENTICATION:
+    Supports basic auth via URL (e.g., https://user:pass@prometheus.example.com).
+
     Example: {
       "type": "prometheus",
       "props": {

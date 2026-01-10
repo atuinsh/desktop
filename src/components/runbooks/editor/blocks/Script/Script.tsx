@@ -622,7 +622,8 @@ export const insertScript = (schema: any) => (editor: typeof schema.BlockNoteEdi
 AIBlockRegistry.getInstance().addBlock({
   typeName: "script",
   friendlyName: "Script",
-  shortDescription: "Executes a non-interactive script and captures output.",
+  shortDescription:
+    "Executes a non-interactive script and captures output - note: non-interactive shells may not load the user's shell configuration.",
   description: undent`
     Script blocks execute non-interactive scripts and capture their output. Unlike Terminal blocks, scripts run to completion without user interaction and can store their output in a template variable for use by other blocks.
 
@@ -631,13 +632,22 @@ AIBlockRegistry.getInstance().addBlock({
     - code (string): The script code to execute
     - interpreter (string): The shell interpreter to use (bash, zsh, fish, python3, node, sh)
     - outputVariable (string): Optional variable name to store the script's stdout
+    - outputVisible (boolean): Whether to show terminal output. Defaults to true.
+
+    NOTE that Script blocks use 'interpreter' instead of 'type' to specify the shell interpreter to use.
 
     When using the Script block, you can reference template variables in code: {{ var.variable_name }}. You can escape variables with the 'shellquote' filter.
 
-    Script blocks are ideal for automation tasks where you need to capture output programmatically.
+    OUTPUT ACCESS (requires block to have a name):
+    - output.exit_code (number): Process exit code (0 = success)
+    - output.stdout (string): Standard output content
+    - output.stderr (string): Standard error content
+    - output.combined (string): Combined stdout and stderr in order received
+
+    Note: outputVariable captures stdout only. Use doc.named['name'].output for stderr or combined.
 
     A common issue users run into when using script blocks is that they try to use aliases, environment variables, and other shell features that are only available in interactive shells.
-    If a user runs into these issues, you havea the following options:
+    If a user runs into these issues, you have the following options:
 
     - If using zsh, the user can put their setup in '~/.zshenv' instead, since zsh loads '.zshenv' for all shells.
     - Use absolute paths instead of aliases or binary names that would usually be in the user's PATH.

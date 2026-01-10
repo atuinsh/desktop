@@ -35,7 +35,7 @@ impl AITools {
                             "type": "string",
                             "enum": block_types,
                         },
-                        "description": "The type of blocks to get documentation for. Only 'http' blocks are supported for now.",
+                        "description": "The block types to get documentation for.",
                     },
                 },
                 "required": ["block_types"],

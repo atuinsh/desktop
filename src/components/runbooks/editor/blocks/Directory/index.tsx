@@ -113,7 +113,8 @@ export default createReactBlockSpec(
 AIBlockRegistry.getInstance().addBlock({
   typeName: "directory",
   friendlyName: "Directory",
-  shortDescription: "Sets the working directory for subsequent code blocks (synced).",
+  shortDescription:
+    "Sets the working directory for subsequent code blocks (synced) via absolute or relative paths.",
   description: undent`
     Directory blocks set the working directory for all subsequent Terminal and Script blocks. The path is synced with collaborators.
 

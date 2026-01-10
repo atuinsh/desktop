@@ -614,7 +614,8 @@ export const insertDropdown = (schema: any) => (editor: typeof schema.BlockNoteE
 AIBlockRegistry.getInstance().addBlock({
   typeName: "dropdown",
   friendlyName: "Dropdown",
-  shortDescription: "Presents a dropdown selector that sets a template variable.",
+  shortDescription:
+    "Presents a dropdown selector that sets a template variable; choices are sourced from a fixed list, a variable, or a shell command.",
   description: undent`
     Dropdown blocks let users select from a list of options. The selected value is stored as a template variable. Options can be fixed, from a variable, or from a shell command.
 
@@ -625,9 +626,20 @@ AIBlockRegistry.getInstance().addBlock({
     - variableOptions (string): Variable name containing options
     - commandOptions (string): Shell command that outputs options
     - interpreter (string): Shell interpreter for command options
-    - value (string): Currently selected value
+    - value (string): Currently selected value (can be used to set default selection)
 
     Options support label:value format (e.g., "Display Name:actual-value").
+
+    DEFAULT SELECTION:
+    The 'value' prop sets the initial/default selection. Value should match the actual value, not the display label.
+
+    ERROR HANDLING:
+    - If commandOptions fails, the dropdown shows empty options
+    - If variableOptions references a non-existent variable, options are empty
+    - Invalid option formats are silently skipped
+
+    SERIAL EXECUTION:
+    Dropdown blocks do NOT pause serial execution. They immediately finish with whatever value is currently selected. If no value is selected, the template variable will be empty.
 
     Example (fixed options): {
       "type": "dropdown",
@@ -635,15 +647,6 @@ AIBlockRegistry.getInstance().addBlock({
         "name": "environment",
         "optionsType": "fixed",
         "fixedOptions": "Production:prod, Staging:staging, Development:dev"
-      }
-    }
-
-    Example (variable options): {
-      "type": "dropdown",
-      "props": {
-        "name": "environment",
-        "optionsType": "variable",
-        "variableOptions": "environment_list"
       }
     }
 
@@ -656,7 +659,5 @@ AIBlockRegistry.getInstance().addBlock({
         "interpreter": "bash"
       }
     }
-
-    Note: When using command output, the command should return a list of options in the format "DisplayName:actual-value".
   `,
 });

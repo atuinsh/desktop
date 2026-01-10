@@ -109,7 +109,7 @@ AIBlockRegistry.getInstance().addBlock({
 
     The available props are:
     - name (string): The display name of the block
-    - command (string): Either a preset key (pods, services, deployments, etc.) or a custom kubectl command
+    - command (string): The full kubectl command (see presets below)
     - mode (string): Either 'preset' or 'custom'
     - interpreter (string): The shell to use for execution (bash, zsh, etc.)
     - autoRefresh (boolean): Whether to automatically refresh the results
@@ -119,20 +119,24 @@ AIBlockRegistry.getInstance().addBlock({
 
     When using the Kubernetes Get block, you can reference template variables in the command: {{ var.variable_name }}.
 
-    When using the 'preset' mode, set 'command' to a value based on the preset:
+    PRESET MODE:
+    For preset mode, set 'command' to the full kubectl command:
+    - pods: "kubectl get pods -o json"
+    - services: "kubectl get services -o json"
+    - deployments: "kubectl get deployments -o json"
+    - configmaps: "kubectl get configmaps -o json"
+    - secrets: "kubectl get secrets -o json"
+    - nodes: "kubectl get nodes -o json"
+    - namespaces: "kubectl get namespaces -o json"
 
-    pods: "kubectl get pods -o json"
-    services: "kubectl get services -o json",
-    deployments: "kubectl get deployments -o json"
-    configmaps: "kubectl get configmaps -o json"
-    secrets: "kubectl get secrets -o json"
-    nodes: "kubectl get nodes -o json"
-    namespaces: "kubectl get namespaces -o json"
+    CUSTOM MODE:
+    Include '-o json' for proper parsing and table display. Non-JSON output displays in a less rich format.
 
-    When using the 'custom' mode, be sure the command includes '-o json' to return JSON output for proper parsing and table display. If the results cannot be parsed as JSON,
-    the block undergoes minimal parsing and displays in a less rich format.
-
-    Common uses: viewing pods, services, deployments, configmaps, secrets, and other Kubernetes resources.
+    OUTPUT ACCESS (requires block to have a name):
+    - output.data (array): Parsed Kubernetes items
+    - output.columns (array): Column definitions for display
+    - output.item_count (number): Number of items returned
+    - output.resource_kind (string): Type of resource queried
 
     Example: {
       "type": "kubernetes-get",

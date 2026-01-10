@@ -487,6 +487,10 @@ AIBlockRegistry.getInstance().addBlock({
     - language (string): The syntax highlighting language (e.g., "javascript", "python", "json")
     - variableName (string): Optional variable name to store the editor contents
 
+    TEMPLATE VARIABLE ACCESS:
+    When variableName is set, the editor's content is available as {{ var.variableName }} in other blocks.
+    This allows using editor content as input to scripts, HTTP bodies, etc.
+
     Can also be inserted by typing "\`\`\`" on an empty line.
 
     Example: {

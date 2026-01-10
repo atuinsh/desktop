@@ -148,7 +148,9 @@ AIBlockRegistry.getInstance().addBlock({
 
     The value is stored locally and can be referenced using {{ var.variable_name }} syntax. This is ideal for credentials, API keys, or other sensitive data that shouldn't be shared.
 
-    Note: You cannot set the value programmatically - users must enter it manually.
+    IMPORTANT: This block's value is UI-only - the user must manually enter the value in the runbook editor. You cannot set the value programmatically via props.
+
+    Use case: Add this block to let users enter credentials, paths, or other sensitive data that shouldn't be stored in the runbook document.
 
     Example: {
       "type": "local-var",

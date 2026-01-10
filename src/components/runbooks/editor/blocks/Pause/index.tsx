@@ -192,6 +192,10 @@ AIBlockRegistry.getInstance().addBlock({
     - condition (string): A template expression to evaluate (only used when pauseIfTruthy is true)
     - pauseIfTruthy (boolean): If true, only pauses when condition evaluates to a truthy value
 
+    TRUTHY VALUES:
+    Truthy values include: true, "true", "1", "yes", or any non-zero number.
+    All other values (including empty strings, "false", "0", "no") are considered falsy.
+
     Use pause blocks for manual checkpoints, confirmation steps, or conditional halts in automated workflows.
 
     Example: {
