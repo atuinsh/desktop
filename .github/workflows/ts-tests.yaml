@@ -11,15 +11,11 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
         with:
-          node-version: lts/*
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: latest
+          bun-version: latest
       - name: Install Dependencies
-        run: pnpm install
+        run: bun install
       - name: TypeScript Tests
-        run: pnpm test-once
+        run: bun test-once

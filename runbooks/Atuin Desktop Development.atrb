@@ -181,7 +181,7 @@ content:
   props:
     type: bash
     name: JS tests
-    code: pnpm test
+    code: bun test
     pty: ''
     global: false
     outputVisible: true
@@ -214,7 +214,7 @@ content:
   props:
     type: bash
     name: Regenerate bindings
-    code: pnpm generate-bindings
+    code: bun run generate-bindings
     pty: ''
     global: false
     outputVisible: true

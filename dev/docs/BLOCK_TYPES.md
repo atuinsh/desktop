@@ -32,7 +32,7 @@ Run one of the following to regenerate TypeScript types after changes:
 ```bash
 cargo test
 # or
-pnpm generate-bindings
+bun run generate-bindings
 ```
 
 Generated types will be placed in the `bindings/` directory.
@@ -78,7 +78,7 @@ To add a new shared type:
 
 1. Add `#[derive(TS)]` and `#[ts(export)]` to your Rust type
 2. For enums, use `#[ts(tag = "type", content = "data")]` for discriminated unions
-3. Run `cargo test` or `pnpm generate-bindings` to generate TypeScript
+3. Run `cargo test` or `bun run generate-bindings` to generate TypeScript
 4. Import and use the generated types in your frontend code
 
 Example:

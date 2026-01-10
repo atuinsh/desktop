@@ -6,8 +6,8 @@
     "windows": []
   },
   "build": {
-    "beforeBuildCommand": "pnpm build",
-    "beforeDevCommand": "pnpm dev",
+    "beforeBuildCommand": "bun run build",
+    "beforeDevCommand": "bun run dev",
     "devUrl": "http://localhost:1420",
     "frontendDist": "../dist"
   },
