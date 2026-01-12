@@ -256,14 +256,22 @@ impl Agent {
 
     /// Push accumulated tool results to conversation as tool response messages.
     fn push_tool_results_to_conversation(&mut self) {
-        for result in self.context.tool_results.drain(..) {
-            let result_str = match result.output {
-                ToolOutput::Success(s) => s,
-                ToolOutput::Error(e) => format!("Error: {}", e),
-            };
-            let response = ToolResponse::new(result.call_id, result_str);
-            // ToolResponse can be converted into ChatMessage
-            self.context.conversation.push(response.into());
+        if !self.context.tool_results.is_empty() {
+            let tool_result_parts = self
+                .context
+                .tool_results
+                .drain(..)
+                .map(|result| {
+                    let result_str = match result.output {
+                        ToolOutput::Success(s) => s,
+                        ToolOutput::Error(e) => format!("Error: {}", e),
+                    };
+                    ContentPart::ToolResponse(ToolResponse::new(result.call_id, result_str))
+                })
+                .collect::<Vec<ContentPart>>();
+            let tool_result_content = MessageContent::from_parts(tool_result_parts);
+            let tool_result_message = ChatMessage::user(tool_result_content);
+            self.context.conversation.push(tool_result_message);
         }
     }
 
