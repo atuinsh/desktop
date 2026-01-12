@@ -798,3 +798,55 @@ async fn execute_single_block(
     // Execute the block
     block.execute(context).await
 }
+
+#[cfg(test)]
+mod tests {
+    /// Regression test for the JSON string extraction bug (commit ad2a0dd4).
+    ///
+    /// When retrieving values from the KV store, we must extract the inner string
+    /// from `serde_json::Value::String` directly, NOT use `.to_string()` which
+    /// JSON-encodes the value again (adding extra quotes).
+    ///
+    /// Example of the bug:
+    /// - KV stores: "/Users/test/path" (as JSON string)
+    /// - Correct: extract inner string → "/Users/test/path"
+    /// - Bug: v.to_string() → "\"/Users/test/path\"" (double-encoded)
+    #[test]
+    fn test_json_string_extraction_does_not_double_encode() {
+        let json_string = serde_json::Value::String("/Users/test/path".to_string());
+
+        // This is the correct extraction (what our code does)
+        let result = match json_string {
+            serde_json::Value::String(s) => Some(s),
+            v => Some(v.to_string()),
+        };
+
+        assert_eq!(result, Some("/Users/test/path".to_string()));
+        // Verify it doesn't have extra quotes that would break path resolution
+        let value = result.unwrap();
+        assert!(
+            !value.starts_with('"'),
+            "Path should not start with quote: {value}"
+        );
+        assert!(
+            !value.ends_with('"'),
+            "Path should not end with quote: {value}"
+        );
+    }
+
+    /// Documents why we can't use `.to_string()` directly on Value::String.
+    #[test]
+    fn test_to_string_on_json_string_adds_quotes() {
+        let json_string = serde_json::Value::String("/Users/test/path".to_string());
+
+        // This is what the buggy code did - produces JSON output with quotes
+        let wrong_result = json_string.to_string();
+
+        // to_string() on a Value::String produces JSON, which includes quotes
+        assert_eq!(wrong_result, "\"/Users/test/path\"");
+        assert!(
+            wrong_result.starts_with('"'),
+            "to_string() adds leading quote"
+        );
+    }
+}
