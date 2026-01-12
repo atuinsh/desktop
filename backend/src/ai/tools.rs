@@ -67,6 +67,8 @@ impl AITools {
 
                 Before you use this tool, you should use the 'get_block_docs' tool for the
                 block types you're planning on using to ensure you're using the correct block types and properties.
+
+                The 'blocks' array should be a JavaScript array and not a serialized JSON string.
             "})
             .with_schema(json!({
                 "type": "object",
@@ -110,6 +112,8 @@ impl AITools {
 
                 Before you use this tool, you should use the 'get_block_docs' tool for the
                 block types you're planning on using to ensure you're using the correct block types and properties.
+
+                When updating blocks, take care to update its name as well, if it has one and the content has meaningfully changed.
             "})
             .with_schema(json!({
                 "type": "object",
