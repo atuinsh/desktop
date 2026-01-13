@@ -114,7 +114,7 @@ pub(crate) async fn create_main_window<R: Runtime>(app: &AppHandle<R>) -> Result
         .disable_drag_drop_handler()
         .min_inner_size(500.0, 500.0)
         .background_throttling(BackgroundThrottlingPolicy::Suspend)
-        .visible(false);
+        .visible(true);
 
     builder = {
         #[cfg(target_os = "macos")]
