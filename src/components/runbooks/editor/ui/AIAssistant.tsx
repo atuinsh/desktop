@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback, memo, Component, ReactNode } from "react";
+import React, { useState, useRef, useEffect, useLayoutEffect, useCallback, memo, Component, ReactNode } from "react";
 import { Streamdown } from "streamdown";
 import {
   Button,
@@ -23,6 +23,7 @@ import {
   WrenchIcon,
   ChevronRightIcon,
   ChevronDownIcon,
+  ArrowDownToLineIcon,
 } from "lucide-react";
 import { BlockNoteEditor } from "@blocknote/core";
 import { cn } from "@/lib/utils";
@@ -446,9 +447,10 @@ export default function AIAssistant({
 }: AIAssistantProps) {
   const [inputValue, setInputValue] = useState("");
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const [lockedToBottom, setLockedToBottom] = useState(true);
   const [isCreatingSession, setIsCreatingSession] = useState(false);
   const [rejectedToolCalls, setRejectedToolCalls] = useState<string[]>([]);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const scrollShadowRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const autoApproveToolsRef = useRef<string[]>([...AUTO_APPROVE_TOOLS]);
 
@@ -504,11 +506,58 @@ export default function AIAssistant({
     addToolOutput,
   } = chat;
 
-  // Auto-scroll to bottom when new messages arrive or streaming content updates
-  // TODO: Only scroll if the user is at the bottom of the chat
+  // Detect user scroll interactions (wheel/touch) to unlock from bottom
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, streamingContent]);
+    if (!scrollShadowRef.current) return;
+    const el = scrollShadowRef.current;
+
+    function checkIfAtBottom() {
+      const { scrollTop, clientHeight, scrollHeight } = el;
+      const isAtBottom = scrollTop + clientHeight >= scrollHeight - 5;
+      setLockedToBottom(isAtBottom);
+    }
+
+    // These events only fire on user interaction, not programmatic scrolls
+    function handleUserScroll() {
+      // Check position after the scroll has been applied
+      requestAnimationFrame(checkIfAtBottom);
+    }
+
+    el.addEventListener("wheel", handleUserScroll, { passive: true });
+    el.addEventListener("touchmove", handleUserScroll, { passive: true });
+
+    return () => {
+      el.removeEventListener("wheel", handleUserScroll);
+      el.removeEventListener("touchmove", handleUserScroll);
+    };
+  }, []);
+
+  // Keep a ref to lockedToBottom for use in ResizeObserver callback
+  const lockedToBottomRef = useRef(lockedToBottom);
+  useLayoutEffect(() => {
+    lockedToBottomRef.current = lockedToBottom;
+  }, [lockedToBottom]);
+
+  // Auto-scroll to bottom when content changes (messages added/removed, streaming updates)
+  // MutationObserver catches all DOM changes including text updates during streaming
+  useLayoutEffect(() => {
+    if (!scrollShadowRef.current) return;
+    const el = scrollShadowRef.current;
+
+    const observer = new MutationObserver(() => {
+      if (lockedToBottomRef.current) {
+        el.scrollTop = el.scrollHeight;
+      }
+    });
+
+    observer.observe(el, {
+      childList: true,
+      subtree: true,
+      characterData: true,
+    });
+
+    return () => observer.disconnect();
+  }, []);
 
   // Focus input when opened
   useEffect(() => {
@@ -643,7 +692,8 @@ export default function AIAssistant({
       </div>
 
       {/* Messages */}
-      <ScrollShadow className="flex-1 min-h-0 overflow-y-auto p-3 space-y-2">
+      <div className="flex-1 min-h-0 relative">
+        <ScrollShadow className="h-full overflow-y-auto p-3 space-y-2" ref={scrollShadowRef}>
         {isCreatingSession && (
           <div className="flex items-center justify-center h-full">
             <Spinner size="lg" />
@@ -700,8 +750,27 @@ export default function AIAssistant({
             </div>
           </div>
         )}
-        <div ref={messagesEndRef} />
-      </ScrollShadow>
+        </ScrollShadow>
+
+        {/* Scroll to bottom button */}
+        {!lockedToBottom && (messages.length > 0 || streamingContent !== null) && (
+          <Button
+            isIconOnly
+            size="sm"
+            variant="flat"
+            onPress={() => {
+              if (scrollShadowRef.current) {
+                scrollShadowRef.current.scrollTop = scrollShadowRef.current.scrollHeight;
+              }
+              setLockedToBottom(true);
+            }}
+            className="absolute bottom-2 right-2 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm shadow-md"
+            title="Scroll to bottom"
+          >
+            <ArrowDownToLineIcon className="h-4 w-4" />
+          </Button>
+        )}
+      </div>
 
       {/* Input */}
       <div className="flex-shrink-0 p-3 border-t border-gray-200 dark:border-gray-700">
