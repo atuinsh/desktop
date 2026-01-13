@@ -5,18 +5,23 @@ import {
   sendMessage as sendMessageCommand,
   sendToolResult,
   subscribeSession,
+  cancelSession,
 } from "./commands";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { State } from "@/rs-bindings/State";
 
 export interface AIChatAPI {
   sessionId: string;
   messages: Array<AIMessage>;
+  queuedMessages: Array<AIMessage>;
   streamingContent: string | null;
   isStreaming: boolean;
   pendingToolCalls: Array<AIToolCall>;
   error: string | null;
+  state: State["type"];
   sendMessage: (message: string) => void;
   addToolOutput: (output: AIToolOutput) => void;
+  cancel: () => void;
 }
 
 export interface AIToolOutput {
@@ -26,21 +31,35 @@ export interface AIToolOutput {
 }
 
 export default function useAIChat(sessionId: string): AIChatAPI {
+  const [state, setState] = useState<State["type"]>("idle");
   const [messages, setMessages] = useState<AIMessage[]>([]);
+  const [queuedMessages, setQueuedMessages] = useState<AIMessage[]>([]);
   const [streamingContent, setStreamingContent] = useState<string | null>(null);
   const [pendingToolCalls, setPendingToolCalls] = useState<AIToolCall[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   const isStreaming = streamingContent !== null;
+  const isIdle = state === "idle";
+  const isWaitingForTools = pendingToolCalls.length > 0;
 
   useEffect(() => {
     if (!sessionId) return;
 
     const handleEvent = (event: SessionEvent) => {
       switch (event.type) {
+        case "stateChanged":
+          setState(event.state.type);
+          break;
         case "streamStarted":
           setStreamingContent("");
           setError(null);
+          // Drain queued messages to main messages list - they've been sent to backend
+          setQueuedMessages((queued) => {
+            if (queued.length > 0) {
+              setMessages((prev) => [...prev, ...queued]);
+            }
+            return [];
+          });
           break;
 
         case "chunk":
@@ -74,10 +93,7 @@ export default function useAIChat(sessionId: string): AIChatAPI {
             event.calls.forEach((call) => {
               parts.push({ type: "toolCall", data: call });
             });
-            setMessages((prev) => [
-              ...prev,
-              { role: "assistant", content: { parts } },
-            ]);
+            setMessages((prev) => [...prev, { role: "assistant", content: { parts } }]);
             return null;
           });
           break;
@@ -89,6 +105,27 @@ export default function useAIChat(sessionId: string): AIChatAPI {
 
         case "cancelled":
           setStreamingContent(null);
+          // Add cancelled tool response messages for any pending tool calls
+          setPendingToolCalls((prev) => {
+            if (prev.length > 0) {
+              const cancelledMessages: AIMessage[] = prev.map((call) => ({
+                role: "tool" as const,
+                content: {
+                  parts: [
+                    {
+                      type: "toolResponse" as const,
+                      data: {
+                        callId: call.id,
+                        result: "User cancelled this operation",
+                      },
+                    },
+                  ],
+                },
+              }));
+              setMessages((msgs) => [...msgs, ...cancelledMessages]);
+            }
+            return [];
+          });
           break;
       }
     };
@@ -98,24 +135,28 @@ export default function useAIChat(sessionId: string): AIChatAPI {
 
   const sendMessage = useCallback(
     async (message: string) => {
-      // Add user message
       const userMessage: AIMessage = {
         role: "user",
         content: { parts: [{ type: "text", data: message }] },
       };
-      setMessages((prev) => [...prev, userMessage]);
+
+      // If busy (streaming or waiting for tools), queue the message for display
+      // The backend will also queue it and process when ready
+      if (!isIdle) {
+        setQueuedMessages((prev) => [...prev, userMessage]);
+      } else {
+        setMessages((prev) => [...prev, userMessage]);
+      }
       setError(null);
 
       await sendMessageCommand(sessionId, message);
     },
-    [sessionId],
+    [sessionId, isStreaming, isWaitingForTools],
   );
 
   const addToolOutput = useCallback(
     async (output: AIToolOutput) => {
-      setPendingToolCalls((prev) =>
-        prev.filter((call) => call.id !== output.toolCallId),
-      );
+      setPendingToolCalls((prev) => prev.filter((call) => call.id !== output.toolCallId));
 
       // Add tool response message
       const toolMessage: AIMessage = {
@@ -134,28 +175,43 @@ export default function useAIChat(sessionId: string): AIChatAPI {
       };
       setMessages((prev) => [...prev, toolMessage]);
 
-      await sendToolResult(
-        sessionId,
-        output.toolCallId,
-        output.success,
-        output.result,
-      );
+      await sendToolResult(sessionId, output.toolCallId, output.success, output.result);
     },
     [sessionId],
   );
 
-  const api = useMemo(
+  const cancel = useCallback(async () => {
+    await cancelSession(sessionId);
+  }, [sessionId]);
+
+  const api: AIChatAPI = useMemo(
     () => ({
       sessionId,
+      state,
       messages,
+      queuedMessages,
+      streamingContent,
+      isStreaming,
+      isIdle,
+      pendingToolCalls,
+      error,
+      sendMessage,
+      addToolOutput,
+      cancel,
+    }),
+    [
+      sessionId,
+      state,
+      messages,
+      queuedMessages,
       streamingContent,
       isStreaming,
       pendingToolCalls,
       error,
       sendMessage,
       addToolOutput,
-    }),
-    [sessionId, messages, streamingContent, isStreaming, pendingToolCalls, error, sendMessage, addToolOutput],
+      cancel,
+    ],
   );
 
   return api;

@@ -1,4 +1,13 @@
-import React, { useState, useRef, useEffect, useLayoutEffect, useCallback, memo, Component, ReactNode } from "react";
+import React, {
+  useState,
+  useRef,
+  useEffect,
+  useLayoutEffect,
+  useCallback,
+  memo,
+  Component,
+  ReactNode,
+} from "react";
 import { Streamdown } from "streamdown";
 import {
   Button,
@@ -24,6 +33,7 @@ import {
   ChevronRightIcon,
   ChevronDownIcon,
   ArrowDownToLineIcon,
+  StopCircleIcon,
 } from "lucide-react";
 import { BlockNoteEditor } from "@blocknote/core";
 import { cn } from "@/lib/utils";
@@ -332,6 +342,26 @@ function MessageBubble({
   );
 }
 
+// Queued message display - compact with expand/collapse
+function QueuedMessageItem({ message }: { message: AIMessage }) {
+  const [expanded, setExpanded] = useState(false);
+  const text = getMessageText(message);
+
+  return (
+    <div
+      className="flex items-start gap-1.5 px-2 py-1.5 bg-gray-100 dark:bg-gray-800 rounded text-sm text-gray-600 dark:text-gray-400 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700"
+      onClick={() => setExpanded(!expanded)}
+    >
+      {expanded ? (
+        <ChevronDownIcon className="h-3.5 w-3.5 flex-shrink-0 mt-0.5" />
+      ) : (
+        <ChevronRightIcon className="h-3.5 w-3.5 flex-shrink-0 mt-0.5" />
+      )}
+      <span className={expanded ? "whitespace-pre-wrap" : "truncate"}>{text}</span>
+    </div>
+  );
+}
+
 // Tool execution functions
 async function executeGetRunbookDocument(editor: BlockNoteEditor): Promise<any> {
   return { blocks: editor.document };
@@ -497,14 +527,20 @@ export default function AIAssistant({
 
   const chat = useAIChat(sessionId || "");
   const {
+    state,
     messages,
+    queuedMessages,
     streamingContent,
     isStreaming,
     pendingToolCalls,
     error,
     sendMessage,
     addToolOutput,
+    cancel,
   } = chat;
+
+  // Can cancel when streaming or waiting for tool calls
+  const canCancel = state !== "idle";
 
   // Detect user scroll interactions (wheel/touch) to unlock from bottom
   useEffect(() => {
@@ -694,62 +730,66 @@ export default function AIAssistant({
       {/* Messages */}
       <div className="flex-1 min-h-0 relative">
         <ScrollShadow className="h-full overflow-y-auto p-3 space-y-2" ref={scrollShadowRef}>
-        {isCreatingSession && (
-          <div className="flex items-center justify-center h-full">
-            <Spinner size="lg" />
-          </div>
-        )}
-        {!isCreatingSession && messages.length === 0 && (
-          <div className="flex flex-col items-center justify-center h-full text-center text-gray-500 dark:text-gray-400">
-            <BotIcon className="h-12 w-12 mb-4 opacity-50" />
-            <p className="text-sm">Ask me to help edit your runbook.</p>
-            <p className="text-xs mt-2 opacity-75">
-              I can read and modify blocks in your document.
-            </p>
-          </div>
-        )}
-        {error && (
-          <div className="p-3 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-lg">
-            <div className="flex items-center gap-2">
-              <AlertCircleIcon className="h-4 w-4 text-red-600 dark:text-red-400" />
-              <span className="text-sm text-red-800 dark:text-red-200">{error}</span>
+          {isCreatingSession && (
+            <div className="flex items-center justify-center h-full">
+              <Spinner size="lg" />
             </div>
-          </div>
-        )}
-        {messages.map((message, idx) => (
-          <MessageBubble
-            key={idx}
-            message={message}
-            pendingToolCalls={pendingToolCalls}
-            rejectedToolCalls={rejectedToolCalls}
-            onApprove={handleApprove}
-            onAlwaysApprove={handleAlwaysApprove}
-            onDeny={handleDeny}
-          />
-        ))}
-        {/* Show streaming content as it arrives */}
-        {streamingContent !== null && (
-          <div className="flex gap-2 py-2 px-3 rounded-lg bg-gray-50 dark:bg-gray-800/50">
-            <div className="flex-shrink-0 mt-0.5">
-              <BotIcon className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+          )}
+          {!isCreatingSession && messages.length === 0 && (
+            <div className="flex flex-col items-center justify-center h-full text-center text-gray-500 dark:text-gray-400">
+              <BotIcon className="h-12 w-12 mb-4 opacity-50" />
+              <p className="text-sm">Ask me to help edit your runbook.</p>
+              <p className="text-xs mt-2 opacity-75">
+                I can read and modify blocks in your document.
+              </p>
             </div>
-            <div className="flex-1 min-w-0">
+          )}
+          {error && (
+            <div className="p-3 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-lg">
               <div className="flex items-center gap-2">
-                <span className="text-xs font-medium text-purple-700 dark:text-purple-300">
-                  Assistant
-                </span>
-                <Spinner size="sm" variant="wave" className="ml-2" />
+                <AlertCircleIcon className="h-4 w-4 text-red-600 dark:text-red-400" />
+                <span className="text-sm text-red-800 dark:text-red-200">{error}</span>
               </div>
-              {streamingContent ? (
-                <div className="text-sm mt-1 whitespace-pre-wrap break-words text-gray-800 dark:text-gray-200">
-                  <MarkdownContent content={streamingContent} isStreaming={true} />
-                </div>
-              ) : (
-                <div className="text-sm mt-1 text-gray-500 dark:text-gray-400">Thinking...</div>
-              )}
             </div>
-          </div>
-        )}
+          )}
+          {messages.map((message, idx) => (
+            <MessageBubble
+              key={idx}
+              message={message}
+              pendingToolCalls={pendingToolCalls}
+              rejectedToolCalls={rejectedToolCalls}
+              onApprove={handleApprove}
+              onAlwaysApprove={handleAlwaysApprove}
+              onDeny={handleDeny}
+            />
+          ))}
+          {/* Show streaming content as it arrives */}
+          {streamingContent !== null && (
+            <div className="flex gap-2 py-2 px-3 rounded-lg bg-gray-50 dark:bg-gray-800/50">
+              <div className="flex-shrink-0 mt-0.5">
+                <BotIcon className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-medium text-purple-700 dark:text-purple-300">
+                    Assistant
+                  </span>
+                  <Spinner size="sm" variant="dots" className="ml-2" />
+                </div>
+                {streamingContent ? (
+                  <div className="text-sm mt-1 whitespace-pre-wrap break-words text-gray-800 dark:text-gray-200">
+                    <MarkdownContent content={streamingContent} isStreaming={true} />
+                  </div>
+                ) : (
+                  <div className="text-sm mt-1 text-gray-500 dark:text-gray-400">Thinking...</div>
+                )}
+              </div>
+            </div>
+          )}
+          {state === "sending" ||
+            (streamingContent === null && state === "streaming" && (
+              <Spinner size="sm" variant="wave" className="ml-2" />
+            ))}
         </ScrollShadow>
 
         {/* Scroll to bottom button */}
@@ -772,33 +812,64 @@ export default function AIAssistant({
         )}
       </div>
 
+      {/* Queued messages */}
+      {queuedMessages.length > 0 && (
+        <div className="flex-shrink-0 px-3 pt-2 space-y-1 border-t border-gray-200 dark:border-gray-700">
+          <span className="text-xs text-gray-500 dark:text-gray-400">Queued messages</span>
+          {queuedMessages.map((msg, idx) => (
+            <QueuedMessageItem key={idx} message={msg} />
+          ))}
+        </div>
+      )}
+
       {/* Input */}
-      <div className="flex-shrink-0 p-3 border-t border-gray-200 dark:border-gray-700">
+      <div
+        className={cn(
+          "flex-shrink-0 p-3 border-gray-200 dark:border-gray-700",
+          queuedMessages.length === 0 && "border-t",
+        )}
+      >
         <div className="flex gap-2">
           <Textarea
             ref={textareaRef}
             value={inputValue}
             onValueChange={(t) => setInputValue(t)}
             onKeyDown={handleKeyDown}
-            placeholder="Ask the AI to help..."
+            placeholder={
+              canCancel
+                ? "Message will be sent after current operation..."
+                : "Ask the AI to help..."
+            }
             minRows={1}
             maxRows={4}
-            disabled={isStreaming || !isConnected}
+            disabled={!isConnected}
             variant="bordered"
             classNames={{
               input: "text-sm",
               inputWrapper: "min-h-[40px]",
             }}
           />
-          <Button
-            isIconOnly
-            color="primary"
-            onPress={handleSend}
-            disabled={!inputValue.trim() || isStreaming || !isConnected}
-            className="bg-purple-600 text-white self-end"
-          >
-            {isStreaming ? <Spinner size="sm" /> : <SendIcon className="h-4 w-4" />}
-          </Button>
+          {canCancel ? (
+            <Button
+              isIconOnly
+              color="danger"
+              onPress={cancel}
+              className="self-end"
+              title="Cancel current operation"
+            >
+              <StopCircleIcon className="h-4 w-4" />
+            </Button>
+          ) : (
+            <Button
+              isIconOnly
+              color="primary"
+              onPress={handleSend}
+              disabled={!inputValue.trim() || !isConnected}
+              className="bg-purple-600 text-white self-end"
+            >
+              <SendIcon className="h-4 w-4" />
+            </Button>
+          )}
         </div>
         <div className="flex items-center justify-between mt-2">
           <span className="text-xs text-gray-400">

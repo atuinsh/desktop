@@ -8,13 +8,19 @@
 use std::collections::{HashMap, VecDeque};
 
 use genai::chat::{ChatMessage, ContentPart, MessageContent, ToolCall, ToolResponse};
+use serde::{Deserialize, Serialize};
+use ts_rs::TS;
+
+use crate::ai::types::ModelSelection;
 
 // ============================================================================
 // FSM State
 // ============================================================================
 
 /// The discrete states of the agent FSM.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+#[serde(tag = "type", rename_all = "camelCase")]
 pub enum State {
     /// Waiting for user input. No active request.
     Idle,
@@ -24,6 +30,9 @@ pub enum State {
 
     /// Actively receiving streamed response.
     Streaming,
+
+    /// Waiting for tool results before continuing.
+    PendingTools,
 }
 
 // ============================================================================
@@ -90,6 +99,9 @@ impl Context {
 /// Events that drive state transitions.
 #[derive(Debug, Clone)]
 pub enum Event {
+    /// User requests a new model.
+    ModelChange(ModelSelection),
+
     /// User submitted a message.
     UserMessage(ChatMessage),
 
@@ -121,6 +133,9 @@ pub enum Event {
 /// The FSM returns these; it never executes them directly.
 #[derive(Debug, Clone)]
 pub enum Effect {
+    /// Change the model.
+    ModelChange(ModelSelection),
+
     /// Start a new request to the model.
     /// Caller should use context.conversation to build the actual request.
     StartRequest,
@@ -251,7 +266,7 @@ impl Agent {
 
     /// Check if we're waiting for tool results.
     pub fn is_awaiting_tools(&self) -> bool {
-        self.state == State::Idle && !self.context.pending_tools.is_empty()
+        self.state == State::PendingTools
     }
 
     /// Push accumulated tool results to conversation as tool response messages.
@@ -283,29 +298,40 @@ impl Agent {
         // State-specific transitions
         match (&self.state, event) {
             // ================================================================
+            // Model change
+            // ================================================================
+            // TODO: should we handle this in any state, or require Idle?
+            (_, Event::ModelChange(model)) => Transition::single(Effect::ModelChange(model)),
+
+            // ================================================================
             // User messages
             // ================================================================
             (State::Idle, Event::UserMessage(msg)) => {
                 self.context.conversation.push(msg);
                 self.state = State::Sending;
-                return Transition::single(Effect::StartRequest);
+                Transition::single(Effect::StartRequest)
             }
 
+            // Queue messages during Sending, Streaming, or PendingTools
             (_, Event::UserMessage(msg)) => {
                 self.context.queued_messages.push_back(msg);
-                return Transition::none();
+                Transition::none()
             }
 
             // ================================================================
             // Tool results
             // ================================================================
-            (State::Idle, Event::ToolResult(result)) => {
+            (State::PendingTools, Event::ToolResult(result)) => {
                 self.context.pending_tools.remove(&result.call_id);
                 self.context.tool_results.push(result);
 
                 if self.context.pending_tools.is_empty() {
-                    // Push tool result messages to conversation
+                    // All tools complete - push results to conversation
                     self.push_tool_results_to_conversation();
+                    // Drain any queued messages
+                    for msg in self.context.queued_messages.drain(..) {
+                        self.context.conversation.push(msg);
+                    }
                     self.state = State::Sending;
                     Transition::single(Effect::StartRequest)
                 } else {
@@ -313,6 +339,7 @@ impl Agent {
                 }
             }
 
+            // Tool results during streaming are accumulated for later
             (_, Event::ToolResult(result)) => {
                 self.context.pending_tools.remove(&result.call_id);
                 self.context.tool_results.push(result);
@@ -356,14 +383,6 @@ impl Agent {
                     self.context.conversation.push(assistant_msg);
                 }
 
-                // Check for queued messages BEFORE draining
-                let had_queued_messages = !self.context.queued_messages.is_empty();
-
-                // Always drain queued messages to conversation (they'll be included in next request)
-                for msg in self.context.queued_messages.drain(..) {
-                    self.context.conversation.push(msg);
-                }
-
                 // Add new tools to pending
                 let has_new_tools = !tool_calls.is_empty();
                 let tools_to_execute: Vec<ToolCall> = tool_calls
@@ -379,33 +398,23 @@ impl Agent {
 
                 // Decide next action
                 if has_new_tools {
-                    // New tools to execute - go to Idle and request execution
-                    // unless we have queued messages
-                    if had_queued_messages {
-                        self.state = State::Sending;
-                        Transition::with(vec![
-                            Effect::ResponseComplete,
-                            Effect::ExecuteTools {
-                                calls: tools_to_execute,
-                            },
-                            Effect::StartRequest,
-                        ])
-                    } else {
-                        self.state = State::Idle;
-                        Transition::with(vec![
-                            Effect::ResponseComplete,
-                            Effect::ExecuteTools {
-                                calls: tools_to_execute,
-                            },
-                        ])
+                    // New tools to execute - go to PendingTools and request execution
+                    // Queued messages stay queued until tools complete
+                    self.state = State::PendingTools;
+                    Transition::with(vec![
+                        Effect::ResponseComplete,
+                        Effect::ExecuteTools {
+                            calls: tools_to_execute,
+                        },
+                    ])
+                } else if !self.context.queued_messages.is_empty() {
+                    // No new tools, but we have queued messages - drain and continue
+                    for msg in self.context.queued_messages.drain(..) {
+                        self.context.conversation.push(msg);
                     }
-                } else if had_queued_messages {
-                    // No new tools, but we had queued messages - continue the conversation
                     self.state = State::Sending;
                     Transition::with(vec![Effect::ResponseComplete, Effect::StartRequest])
-                } else if self.context.pending_tools.is_empty()
-                    && !self.context.tool_results.is_empty()
-                {
+                } else if !self.context.tool_results.is_empty() {
                     // No new tools, no queued messages, but we have completed tool results
                     // (from ToolResult events that arrived while streaming)
                     self.push_tool_results_to_conversation();
@@ -438,7 +447,7 @@ impl Agent {
             }
 
             // ================================================================
-            // Cancel - only cancels current request/stream, not pending tools
+            // Cancel
             // ================================================================
             (State::Sending, Event::Cancel) => {
                 self.state = State::Idle;
@@ -447,6 +456,22 @@ impl Agent {
 
             (State::Streaming, Event::Cancel) => {
                 self.context.current_response.clear();
+                self.state = State::Idle;
+                Transition::single(Effect::Cancelled)
+            }
+
+            // Cancel with pending tools - generate fake "cancelled" responses
+            // so Claude's API is satisfied (it requires tool responses after tool calls)
+            (State::PendingTools, Event::Cancel) => {
+                // Generate cancelled responses for all pending tools
+                for (call_id, _call) in self.context.pending_tools.drain() {
+                    self.context.tool_results.push(ToolResult {
+                        call_id,
+                        output: ToolOutput::Error("User cancelled this operation".to_string()),
+                    });
+                }
+                // Push to conversation so they're included in next request
+                self.push_tool_results_to_conversation();
                 self.state = State::Idle;
                 Transition::single(Effect::Cancelled)
             }
@@ -573,7 +598,7 @@ mod tests {
     }
 
     #[test]
-    fn stream_end_with_tools_goes_idle_with_pending() {
+    fn stream_end_with_tools_goes_to_pending_tools() {
         let mut agent = Agent::new();
         agent.handle(Event::UserMessage(user_msg("what time is it?")));
         agent.handle(Event::StreamStart);
@@ -586,7 +611,7 @@ mod tests {
             tool_calls: vec![tc.clone()],
         });
 
-        assert_eq!(agent.state(), &State::Idle);
+        assert_eq!(agent.state(), &State::PendingTools);
         assert!(agent.is_awaiting_tools());
         assert_eq!(
             t.effects,
@@ -643,7 +668,7 @@ mod tests {
             output: ToolOutput::Success("result_a".to_string()),
         }));
 
-        assert_eq!(agent.state(), &State::Idle);
+        assert_eq!(agent.state(), &State::PendingTools);
         assert!(agent.is_awaiting_tools());
         assert!(t.effects.is_empty());
 
@@ -714,7 +739,7 @@ mod tests {
     }
 
     #[test]
-    fn queued_messages_drained_even_with_new_tools() {
+    fn queued_messages_stay_queued_until_tools_complete() {
         let mut agent = Agent::new();
         agent.handle(Event::UserMessage(user_msg("first")));
         agent.handle(Event::UserMessage(user_msg("second"))); // queued
@@ -728,17 +753,29 @@ mod tests {
             tool_calls: vec![tc],
         });
 
-        // Even though there are new tool calls, queued messages should be drained
+        // Messages stay queued until tools complete
+        assert_eq!(agent.state(), &State::PendingTools);
+        assert_eq!(agent.context().queued_messages.len(), 1);
+        // Conversation: first msg, assistant msg
+        assert_eq!(agent.context().conversation.len(), 2);
+
+        // Tool completes - now queued messages are drained
+        agent.handle(Event::ToolResult(ToolResult {
+            call_id: "call_123".to_string(),
+            output: ToolOutput::Success("result".to_string()),
+        }));
+
+        assert_eq!(agent.state(), &State::Sending);
         assert!(agent.context().queued_messages.is_empty());
-        // Conversation: first msg, assistant msg, second msg (the queued one)
-        assert_eq!(agent.context().conversation.len(), 3);
-        // Verify the third message is the queued "second"
-        let third_msg = &agent.context().conversation[2];
-        assert!(matches!(third_msg.role, ChatRole::User));
+        // Conversation: first msg, assistant msg, tool response, second msg
+        assert_eq!(agent.context().conversation.len(), 4);
+        // Verify the fourth message is the queued "second"
+        let fourth_msg = &agent.context().conversation[3];
+        assert!(matches!(fourth_msg.role, ChatRole::User));
     }
 
     #[test]
-    fn tool_results_while_streaming_triggers_request_at_stream_end() {
+    fn user_message_during_pending_tools_gets_queued() {
         let mut agent = Agent::new();
         agent.handle(Event::UserMessage(user_msg("query")));
         agent.handle(Event::StreamStart);
@@ -746,41 +783,54 @@ mod tests {
             tool_calls: vec![make_tool_call("call_1", "tool_a")],
         });
 
-        // In Idle awaiting tools
+        // In PendingTools awaiting tools
+        assert_eq!(agent.state(), &State::PendingTools);
         assert!(agent.is_awaiting_tools());
 
-        // User sends new message while we're idle with pending tools
-        agent.handle(Event::UserMessage(user_msg("continue")));
+        // User sends new message while waiting for tools
+        let t = agent.handle(Event::UserMessage(user_msg("continue")));
 
-        // Now should be in Sending (user message triggers new request)
-        assert_eq!(agent.state(), &State::Sending);
+        // Message should be queued, not trigger a new request
+        assert_eq!(agent.state(), &State::PendingTools);
+        assert!(t.effects.is_empty());
+        assert_eq!(agent.context().queued_messages.len(), 1);
 
-        // Simulate new stream
-        agent.handle(Event::StreamStart);
-        agent.handle(Event::StreamChunk(StreamChunk {
-            content: "More response".to_string(),
-        }));
-
-        // Tool result arrives WHILE streaming
-        agent.handle(Event::ToolResult(ToolResult {
+        // Tool result completes - queued message is drained and request starts
+        let t = agent.handle(Event::ToolResult(ToolResult {
             call_id: "call_1".to_string(),
             output: ToolOutput::Success("result_a".to_string()),
         }));
 
-        // Still streaming - tool result just accumulated
-        assert_eq!(agent.state(), &State::Streaming);
-        assert!(agent.context().pending_tools.is_empty());
-        assert_eq!(agent.context().tool_results.len(), 1);
-
-        // Stream ends with no new tools
-        let t = agent.handle(Event::StreamEnd { tool_calls: vec![] });
-
-        // Should push tool results to conversation and start new request
         assert_eq!(agent.state(), &State::Sending);
-        assert_eq!(
-            t.effects,
-            vec![Effect::ResponseComplete, Effect::StartRequest]
-        );
-        assert!(agent.context().tool_results.is_empty());
+        assert_eq!(t.effects, vec![Effect::StartRequest]);
+        assert!(agent.context().queued_messages.is_empty());
+        // Conversation: user msg, assistant msg, tool response, queued msg
+        assert_eq!(agent.context().conversation.len(), 4);
+    }
+
+    #[test]
+    fn cancel_pending_tools_generates_cancelled_responses() {
+        let mut agent = Agent::new();
+        agent.handle(Event::UserMessage(user_msg("query")));
+        agent.handle(Event::StreamStart);
+        agent.handle(Event::StreamEnd {
+            tool_calls: vec![
+                make_tool_call("call_1", "tool_a"),
+                make_tool_call("call_2", "tool_b"),
+            ],
+        });
+
+        assert_eq!(agent.state(), &State::PendingTools);
+        assert_eq!(agent.context().pending_tools.len(), 2);
+
+        // Cancel while tools are pending
+        let t = agent.handle(Event::Cancel);
+
+        assert_eq!(agent.state(), &State::Idle);
+        assert_eq!(t.effects, vec![Effect::Cancelled]);
+        assert!(agent.context().pending_tools.is_empty());
+        // Tool results were pushed to conversation as error responses
+        // Conversation: user msg, assistant msg, tool response (with 2 cancelled results)
+        assert_eq!(agent.context().conversation.len(), 3);
     }
 }

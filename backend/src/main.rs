@@ -581,6 +581,7 @@ fn main() {
             commands::audio::play_sound,
             commands::ai::ai_create_session,
             commands::ai::ai_subscribe_session,
+            commands::ai::ai_change_model,
             commands::ai::ai_send_message,
             commands::ai::ai_send_tool_result,
             commands::ai::ai_cancel_session,

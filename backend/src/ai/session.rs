@@ -5,10 +5,11 @@ use std::sync::Arc;
 use futures_util::stream::StreamExt;
 use genai::chat::{ChatMessage, ChatOptions, ChatRequest, ChatStreamEvent, ToolCall};
 use serde::{Deserialize, Serialize};
-use tokio::sync::{mpsc, RwLock};
+use tokio::sync::{mpsc, watch, RwLock};
 use ts_rs::TS;
 use uuid::Uuid;
 
+use crate::ai::fsm::State;
 use crate::ai::prompts::AIPrompts;
 use crate::ai::tools::AITools;
 
@@ -29,6 +30,8 @@ pub enum AISessionError {
 #[serde(tag = "type", rename_all = "camelCase")]
 #[ts(export)]
 pub enum SessionEvent {
+    /// State changed
+    StateChanged { state: State },
     /// Stream started
     StreamStarted,
     /// Content chunk received
@@ -50,6 +53,14 @@ pub struct SessionHandle {
 }
 
 impl SessionHandle {
+    /// Change the model of the session.
+    pub async fn change_model(&self, model: ModelSelection) -> Result<(), AISessionError> {
+        self.event_tx
+            .send(Event::ModelChange(model))
+            .await
+            .map_err(|_| AISessionError::ChannelClosed)
+    }
+
     /// Send a user message to the session.
     pub async fn send_user_message(&self, content: String) -> Result<(), AISessionError> {
         let msg = ChatMessage::user(content);
@@ -102,6 +113,8 @@ pub struct AISession {
     event_tx: mpsc::Sender<Event>,
     event_rx: mpsc::Receiver<Event>,
     output_tx: mpsc::Sender<SessionEvent>,
+    /// Cancellation signal for the stream processing task.
+    cancel_tx: watch::Sender<bool>,
 }
 
 impl AISession {
@@ -114,6 +127,7 @@ impl AISession {
     ) -> (Self, SessionHandle) {
         let client = genai::Client::builder().build();
         let (event_tx, event_rx) = mpsc::channel(32);
+        let (cancel_tx, _cancel_rx) = watch::channel(false);
 
         let session = Self {
             id: Uuid::new_v4(),
@@ -125,6 +139,7 @@ impl AISession {
             event_tx: event_tx.clone(),
             event_rx,
             output_tx,
+            cancel_tx,
         };
 
         let handle = SessionHandle { event_tx };
@@ -164,14 +179,24 @@ impl AISession {
                         .await;
                 }
             }
+
+            let _ = self
+                .output_tx
+                .send(SessionEvent::StateChanged {
+                    state: self.agent.read().await.state().clone(),
+                })
+                .await;
         }
 
         log::debug!("Session {} event loop ended", self.id);
     }
 
     /// Execute a single effect.
-    async fn execute_effect(&self, effect: Effect) -> Result<(), AISessionError> {
+    async fn execute_effect(&mut self, effect: Effect) -> Result<(), AISessionError> {
         match effect {
+            Effect::ModelChange(model) => {
+                self.model = model;
+            }
             Effect::StartRequest => {
                 self.start_request().await?;
             }
@@ -193,6 +218,8 @@ impl AISession {
                 let _ = self.output_tx.send(SessionEvent::Error { message }).await;
             }
             Effect::Cancelled => {
+                // Signal the stream processing task to stop
+                let _ = self.cancel_tx.send(true);
                 let _ = self.output_tx.send(SessionEvent::Cancelled).await;
             }
         }
@@ -233,10 +260,13 @@ impl AISession {
         // Spawn task to process the stream
         let event_tx = self.event_tx.clone();
         let session_id = self.id;
+        // Reset cancellation signal before starting new stream
+        let _ = self.cancel_tx.send(false);
+        let cancel_rx = self.cancel_tx.subscribe();
 
         tokio::spawn(async move {
             log::debug!("Processing stream for session {}", session_id);
-            Self::process_stream(session_id, stream, event_tx).await;
+            Self::process_stream(session_id, stream, event_tx, cancel_rx).await;
         });
 
         Ok(())
@@ -247,6 +277,7 @@ impl AISession {
         session_id: Uuid,
         stream_response: genai::chat::ChatStreamResponse,
         event_tx: mpsc::Sender<Event>,
+        mut cancel_rx: watch::Receiver<bool>,
     ) {
         let mut stream = stream_response.stream;
         let mut tool_calls: Vec<ToolCall> = Vec::new();
@@ -257,52 +288,70 @@ impl AISession {
             return;
         }
 
-        while let Some(result) = stream.next().await {
-            match result {
-                Err(e) => {
-                    log::error!("Session {} stream error: {}", session_id, e);
-                    let _ = event_tx
-                        .send(Event::RequestFailed {
-                            error: e.to_string(),
-                        })
-                        .await;
-                    return;
+        loop {
+            tokio::select! {
+                // Check for cancellation
+                _ = cancel_rx.changed() => {
+                    if *cancel_rx.borrow() {
+                        log::debug!("Session {} stream cancelled", session_id);
+                        // Don't send StreamEnd - the FSM already handled the Cancel event
+                        return;
+                    }
                 }
-                Ok(ChatStreamEvent::Start) => {
-                    log::trace!("Session {} received stream start", session_id);
-                    // Already sent StreamStart above
-                }
-                Ok(ChatStreamEvent::Chunk(chunk)) => {
-                    log::trace!("Session {} received chunk", session_id);
-                    let _ = event_tx
-                        .send(Event::StreamChunk(StreamChunk {
-                            content: chunk.content,
-                        }))
-                        .await;
-                }
-                Ok(ChatStreamEvent::ThoughtSignatureChunk(_)) => {
-                    log::trace!("Session {} received thought signature chunk", session_id,);
-                }
-                Ok(ChatStreamEvent::ToolCallChunk(tc_chunk)) => {
-                    // Tool call chunks are accumulated by genai internally
-                    // We'll get the complete tool calls in the End event
-                    log::trace!(
-                        "Session {} received tool call chunk: {:?}",
-                        session_id,
-                        tc_chunk
-                    );
-                }
-                Ok(ChatStreamEvent::ReasoningChunk(_)) => {
-                    log::trace!("Session {} received reasoning chunk", session_id);
-                    // Ignore reasoning chunks for now
-                }
-                Ok(ChatStreamEvent::End(end)) => {
-                    log::trace!("Session {} received stream end", session_id);
-                    // Extract tool calls from captured content
-                    if let Some(content) = end.captured_content {
-                        for part in content.into_parts() {
-                            if let genai::chat::ContentPart::ToolCall(tc) = part {
-                                tool_calls.push(tc);
+                // Process stream events
+                maybe_result = stream.next() => {
+                    let Some(result) = maybe_result else {
+                        // Stream ended naturally
+                        break;
+                    };
+
+                    match result {
+                        Err(e) => {
+                            log::error!("Session {} stream error: {}", session_id, e);
+                            let _ = event_tx
+                                .send(Event::RequestFailed {
+                                    error: e.to_string(),
+                                })
+                                .await;
+                            return;
+                        }
+                        Ok(ChatStreamEvent::Start) => {
+                            log::trace!("Session {} received stream start", session_id);
+                            // Already sent StreamStart above
+                        }
+                        Ok(ChatStreamEvent::Chunk(chunk)) => {
+                            log::trace!("Session {} received chunk", session_id);
+                            let _ = event_tx
+                                .send(Event::StreamChunk(StreamChunk {
+                                    content: chunk.content,
+                                }))
+                                .await;
+                        }
+                        Ok(ChatStreamEvent::ThoughtSignatureChunk(_)) => {
+                            log::trace!("Session {} received thought signature chunk", session_id,);
+                        }
+                        Ok(ChatStreamEvent::ToolCallChunk(tc_chunk)) => {
+                            // Tool call chunks are accumulated by genai internally
+                            // We'll get the complete tool calls in the End event
+                            log::trace!(
+                                "Session {} received tool call chunk: {:?}",
+                                session_id,
+                                tc_chunk
+                            );
+                        }
+                        Ok(ChatStreamEvent::ReasoningChunk(_)) => {
+                            log::trace!("Session {} received reasoning chunk", session_id);
+                            // Ignore reasoning chunks for now
+                        }
+                        Ok(ChatStreamEvent::End(end)) => {
+                            log::trace!("Session {} received stream end", session_id);
+                            // Extract tool calls from captured content
+                            if let Some(content) = end.captured_content {
+                                for part in content.into_parts() {
+                                    if let genai::chat::ContentPart::ToolCall(tc) = part {
+                                        tool_calls.push(tc);
+                                    }
+                                }
                             }
                         }
                     }

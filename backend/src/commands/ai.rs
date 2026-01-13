@@ -82,6 +82,21 @@ pub async fn ai_subscribe_session(
     Ok(())
 }
 
+/// Change the model of an AI session.
+#[tauri::command]
+pub async fn ai_change_model(
+    state: tauri::State<'_, AtuinState>,
+    session_id: Uuid,
+    model: ModelSelection,
+) -> Result<(), String> {
+    let sessions = state.ai_sessions.read().await;
+    let handle = sessions
+        .get(&session_id)
+        .ok_or_else(|| format!("Session {} not found", session_id))?;
+
+    handle.change_model(model).await.map_err(|e| e.to_string())
+}
+
 /// Send a user message to an AI session.
 #[tauri::command]
 pub async fn ai_send_message(
