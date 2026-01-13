@@ -79,6 +79,7 @@ export interface AtuinUiState {
   uiScale: number;
   aiEnabled: boolean;
   aiShareContext: boolean;
+  openedRunbookAgents: Record<string, boolean>;
 
   setAdvancedSettings: (advancedSettings: AdvancedSettings) => void;
   setAppVersion: (version: string) => void;
@@ -128,6 +129,7 @@ export interface AtuinUiState {
   setUiScale: (scale: number) => void;
   setAiEnabled: (enabled: boolean) => void;
   setAiShareContext: (enabled: boolean) => void;
+  setOpenedRunbookAgent: (runbookId: string, opened: boolean) => void;
 
   getFolderState: (workspaceId: string) => Option<Record<string, boolean>>;
   toggleFolder: (workspaceId: string, folderId: string) => void;
@@ -155,6 +157,7 @@ export const persistUiKeys: (keyof AtuinUiState)[] = [
   "uiScale",
   "aiEnabled",
   "aiShareContext",
+  "openedRunbookAgents",
 ];
 
 export const createUiState: StateCreator<AtuinUiState> = (set, get, _store): AtuinUiState => ({
@@ -197,6 +200,7 @@ export const createUiState: StateCreator<AtuinUiState> = (set, get, _store): Atu
   uiScale: 100,
   aiEnabled: true,
   aiShareContext: true,
+  openedRunbookAgents: {},
 
   setAdvancedSettings: (advancedSettings: AdvancedSettings) =>
     set(() => ({ advancedSettings: advancedSettings })),
@@ -331,9 +335,7 @@ export const createUiState: StateCreator<AtuinUiState> = (set, get, _store): Atu
   },
   setTabTitle: (id: string, title: string) => {
     set((state) => ({
-      tabs: state.tabs.map((tab) =>
-        tab.id === id ? { ...tab, title } : tab
-      ),
+      tabs: state.tabs.map((tab) => (tab.id === id ? { ...tab, title } : tab)),
     }));
   },
 
@@ -452,6 +454,15 @@ export const createUiState: StateCreator<AtuinUiState> = (set, get, _store): Atu
   setUiScale: (scale: number) => set(() => ({ uiScale: scale })),
   setAiEnabled: (enabled: boolean) => set(() => ({ aiEnabled: enabled })),
   setAiShareContext: (enabled: boolean) => set(() => ({ aiShareContext: enabled })),
+  setOpenedRunbookAgent: (runbookId: string, opened: boolean) => {
+    const current = { ...get().openedRunbookAgents };
+    if (opened) {
+      current[runbookId] = true;
+    } else {
+      delete current[runbookId];
+    }
+    set(() => ({ openedRunbookAgents: current }));
+  },
 
   getFolderState: (workspaceId: string) => Some(get().folderState[workspaceId]),
   toggleFolder: (workspaceId: string, folderId: string) => {

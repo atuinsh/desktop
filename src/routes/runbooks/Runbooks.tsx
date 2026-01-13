@@ -80,14 +80,18 @@ export default function Runbooks() {
   const [editorKey, setEditorKey] = useState<boolean>(false);
   const [showTagMenu, setShowTagMenu] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [isAIAssistantOpen, setIsAIAssistantOpen] = useState(false);
+  const openedRunbookAgents = useStore((state) => state.openedRunbookAgents);
+  const setOpenedRunbookAgent = useStore((state) => state.setOpenedRunbookAgent);
+  const isAIAssistantOpen = openedRunbookAgents[runbookId || ""] || false;
   const isAIFeaturesEnabled = useStore((state) => state.aiEnabled);
   const closeAIAssistant = useCallback(() => {
-    setIsAIAssistantOpen(false);
-  }, []);
+    if (!runbookId) return;
+    setOpenedRunbookAgent(runbookId, false);
+  }, [runbookId]);
   const toggleAIAssistant = useCallback(() => {
-    setIsAIAssistantOpen((prev) => !prev);
-  }, []);
+    if (!runbookId) return;
+    setOpenedRunbookAgent(runbookId, !isAIAssistantOpen);
+  }, [runbookId, isAIAssistantOpen]);
   const [selectedTag, setSelectedTag] = useState<string | null>(() => {
     let tag = currentRunbook ? getLastTagForRunbook(currentRunbook.id) : null;
     if (tag == "(no tag)") tag = null;
