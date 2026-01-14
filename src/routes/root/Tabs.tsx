@@ -1,7 +1,15 @@
 import { cn } from "@/lib/utils";
 import { AtuinState, useStore } from "@/state/store";
 import { Tab as TabType, TabIcon } from "@/state/store/ui_state";
-import { BookTextIcon, ChartBarBigIcon, HistoryIcon, SettingsIcon, XIcon } from "lucide-react";
+import {
+  BookTextIcon,
+  ChartBarBigIcon,
+  HistoryIcon,
+  PanelLeftCloseIcon,
+  PanelLeftOpenIcon,
+  SettingsIcon,
+  XIcon,
+} from "lucide-react";
 import React, { useCallback, useEffect, useRef } from "react";
 import { useMemo, useState } from "react";
 import {
@@ -46,6 +54,8 @@ export default function Tabs() {
   // Use individual selectors to avoid creating new object references on every store update
   const tabs = useStore((state: AtuinState) => state.tabs);
   const currentTabId = useStore((state: AtuinState) => state.currentTabId);
+  const sidebarOpen = useStore((state: AtuinState) => state.sidebarOpen);
+  const setSidebarOpen = useStore((state: AtuinState) => state.setSidebarOpen);
   const openTab = useStore((state: AtuinState) => state.openTab);
   const closeTab = useStore((state: AtuinState) => state.closeTab);
   const setTabTitle = useStore((state: AtuinState) => state.setTabTitle);
@@ -133,21 +143,43 @@ export default function Tabs() {
     }),
   );
 
+  function handleToggleSidebar() {
+    setSidebarOpen(!sidebarOpen);
+  }
+
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full bg-background">
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
       >
-        <ul
-          ref={listRef}
-          className="flex flex-row w-full min-h-[40px] border-b overflow-x-auto tab-scrollbar overflow-y-hidden pt-2 px-1"
-          onWheel={handleWheel}
-          onContextMenu={handleTabBarContextMenu}
+        <div
+          className={cn(
+            "flex flex-row items-center w-full min-h-[40px] border-b overflow-x-hidden px-2",
+            !sidebarOpen && "pl-20"
+          )}
           data-tauri-drag-region
         >
+          <button
+            onClick={handleToggleSidebar}
+            className="flex items-center justify-center w-9 h-9 mr-1 rounded hover:bg-gray-100 dark:hover:bg-zinc-800 flex-shrink-0"
+            title={sidebarOpen ? "Collapse Sidebar" : "Expand Sidebar"}
+          >
+            {sidebarOpen ? (
+              <PanelLeftCloseIcon size={20} className="text-gray-500" />
+            ) : (
+              <PanelLeftOpenIcon size={20} className="text-gray-500" />
+            )}
+          </button>
+          <ul
+            ref={listRef}
+            className="flex flex-row flex-1 overflow-x-auto tab-scrollbar overflow-y-hidden"
+            onWheel={handleWheel}
+            onContextMenu={handleTabBarContextMenu}
+            data-tauri-drag-region
+          >
           <SortableContext items={tabs} strategy={horizontalListSortingStrategy}>
             {tabs.map((tab, index) => (
               <Tab
@@ -191,6 +223,7 @@ export default function Tabs() {
             )}
           </DragOverlay>
         </ul>
+        </div>
       </DndContext>
 
       {tabs.map((tab) => (

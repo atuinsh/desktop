@@ -1,29 +1,15 @@
-import { open } from "@tauri-apps/plugin-shell";
 import "./Root.css";
 import debounce from "lodash.debounce";
 
 import { AtuinState, useStore } from "@/state/store";
 
 import { Toaster } from "@/components/ui/toaster";
-import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
+// import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
 
-import icon from "@/assets/icon.svg";
 import { checkForAppUpdates } from "@/updater";
 import {
   addToast,
   Alert,
-  Avatar,
-  Button,
-  Dropdown,
-  DropdownItem,
-  DropdownMenu,
-  DropdownSection,
-  DropdownTrigger,
-  Kbd,
-  ScrollShadow,
-  Spacer,
-  Tooltip,
-  User,
 } from "@heroui/react";
 import { UnlistenFn } from "@tauri-apps/api/event";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -33,21 +19,10 @@ import { useTauriEvent } from "@/lib/tauri";
 import { onOpenUrl } from "@tauri-apps/plugin-deep-link";
 
 import handleDeepLink from "./deep";
-import * as api from "@/api/api";
-import SocketManager from "@/socket";
 import type { ListApi } from "@/components/runbooks/List/List";
 import { KVStore } from "@/state/kv";
 import Runbook from "@/state/runbooks/runbook";
 import RunbookIndexService from "@/state/runbooks/search";
-import {
-  ChartBarBigIcon,
-  HistoryIcon,
-  MailPlusIcon,
-  MessageCircleHeartIcon,
-  PanelLeftCloseIcon,
-  PanelLeftOpenIcon,
-  SettingsIcon,
-} from "lucide-react";
 import Workspace from "@/state/runbooks/workspace";
 import track_event from "@/tracking";
 import { invoke } from "@tauri-apps/api/core";
@@ -133,7 +108,6 @@ async function isOnboardingComplete(): Promise<boolean> {
 }
 
 function App() {
-  const refreshUser = useStore((state: AtuinState) => state.refreshUser);
   const refreshRunbooks = useStore((state: AtuinState) => state.refreshRunbooks);
   const setCurrentWorkspaceId = useStore((state: AtuinState) => state.setCurrentWorkspaceId);
   const openInDesktopImport = useStore((state: AtuinState) => state.openInDesktopImport);
@@ -155,8 +129,6 @@ function App() {
   const { data: workspaces } = useQuery(allWorkspaces());
 
   const queryClient = useQueryClient();
-  const user = useStore((state: AtuinState) => state.user);
-  const isLoggedIn = useStore((state: AtuinState) => state.isLoggedIn);
   const showDesktopConnect = useStore((state: AtuinState) => state.proposedDesktopConnectUser);
   const savingBlock = useStore((state: AtuinState) => state.savingBlock);
   const clearSavingBlock = useStore((state: AtuinState) => state.clearSavingBlock);
@@ -170,14 +142,6 @@ function App() {
 
   function onSettingsOpen() {
     openTab("/settings", "Settings", TabIcon.SETTINGS);
-  }
-
-  function handleOpenHistory() {
-    openTab("/history", "History", TabIcon.HISTORY);
-  }
-
-  function handleOpenStats() {
-    openTab("/stats", "Stats", TabIcon.STATS);
   }
 
   function handleOpenFeedback() {
@@ -202,14 +166,6 @@ function App() {
 
   function handleCloseDesktopImportModal() {
     setOpenInDesktopImport(null);
-  }
-
-  function handleOpenHelpAndFeedback() {
-    open("https://dub.sh/atuin-desktop-beta");
-  }
-
-  function handleOpenLogin() {
-    open(AtuinEnv.url("/settings/desktop-connect"));
   }
 
   useEffect(() => {
@@ -413,37 +369,6 @@ function App() {
 
     return () => {};
   }, []);
-
-  async function logOut() {
-    await api.clearHubApiToken();
-    SocketManager.setApiToken(null);
-    refreshUser();
-  }
-
-  function renderLogInOrOut() {
-    if (isLoggedIn()) {
-      return (
-        <DropdownItem
-          key="logout"
-          description="Sign out of Atuin Hub"
-          onPress={logOut}
-          color="danger"
-        >
-          Sign out
-        </DropdownItem>
-      );
-    } else {
-      return (
-        <DropdownItem
-          key="login"
-          description="Sign in to Atuin Hub"
-          onPress={handleOpenLogin}
-        >
-          Log in
-        </DropdownItem>
-      );
-    }
-  }
 
   const navigateToRunbook = useCallback(async (runbookId: string | null) => {
     let runbook: Runbook | null = null;
@@ -947,23 +872,18 @@ function App() {
 
   const sidebarPanelRef = useRef<ImperativePanelHandle>(null);
 
-  // Handle sidebar toggle with panel collapse/expand
-  const handleSidebarToggle = () => {
-    const newSidebarOpen = !sidebarOpen;
-    setSidebarOpen(newSidebarOpen);
-
-    // Use imperative API to collapse/expand the panel
+  // Watch sidebarOpen and sync panel state
+  useEffect(() => {
     if (sidebarPanelRef.current) {
-      if (newSidebarOpen) {
+      if (sidebarOpen) {
         sidebarPanelRef.current.expand();
-        // Trigger a resize event so that xterm will reflow contents
-        (window as any).dispatchEvent(new Event("resize"));
       } else {
         sidebarPanelRef.current.collapse();
-        (window as any).dispatchEvent(new Event("resize"));
       }
+      // Trigger a resize event so that xterm will reflow contents
+      (window as any).dispatchEvent(new Event("resize"));
     }
-  };
+  }, [sidebarOpen]);
 
   const handlePanelGroupResize = useCallback(
     debounce(() => {
@@ -1023,7 +943,7 @@ function App() {
 
   return (
     <div
-      className="flex w-screen dark:bg-default-50"
+      className="flex w-screen"
       style={{ maxWidth: "100vw", height: "100vh" }}
     >
       <RunbookContext.Provider value={runbookContextValue}>
@@ -1039,240 +959,41 @@ function App() {
           ))}
         </>
 
-        <div className="flex w-full">
-          <div
-            className="relative flex flex-col !border-r-small border-divider transition-width pb-6 pt-6 items-center select-none cursor-move"
-            data-tauri-drag-region
-          >
-            <div
-              className="flex items-center gap-0 px-3 justify-center"
-              style={{ pointerEvents: "none" }}
-            >
-              <div className="flex h-8 w-8">
-                <img src={icon} alt="icon" className="h-8 w-8" />
-              </div>
+        <div className="flex w-full h-full overflow-hidden">
+          {sidebarOpen && (
+            <div className="w-[280px] min-w-[280px] h-full">
+              <List
+                onStartCreateWorkspace={showWorkspaceDialog}
+                onStartCreateRunbook={handleStartCreateRunbook}
+                moveItemsToWorkspace={handleMoveItemsToWorkspace}
+                onOpenFeedback={handleOpenFeedback}
+                onOpenInvite={handleOpenInviteFriends}
+                ref={listRef}
+              />
             </div>
-
-            <ScrollShadow
-              className="ml-[-6px] h-full max-h-full mt-6 flex flex-col gap-2 items-center"
-              data-tauri-drag-region
-            >
-              {/* <Sidebar /> */}
-
-              <Tooltip content="History" placement="right">
-                <Button
-                  isIconOnly
-                  onPress={handleOpenHistory}
-                  size="md"
-                  variant="light"
-                  className="ml-2"
-                >
-                  <HistoryIcon size={24} className="stroke-gray-500" />
-                </Button>
-              </Tooltip>
-
-              <Tooltip content="Stats" placement="right">
-                <Button
-                  isIconOnly
-                  onPress={handleOpenStats}
-                  size="md"
-                  variant="light"
-                  className="ml-2"
-                >
-                  <ChartBarBigIcon size={24} className="stroke-gray-500" />
-                </Button>
-              </Tooltip>
-
-              <Tooltip content="Settings" placement="right">
-                <Button
-                  isIconOnly
-                  onPress={() => openTab("/settings", "Settings", TabIcon.SETTINGS)}
-                  size="md"
-                  variant="light"
-                  className="ml-2"
-                >
-                  <SettingsIcon size={24} className="stroke-gray-500" />
-                </Button>
-              </Tooltip>
-
-              <Tooltip
-                content={sidebarOpen ? "Collapse Sidebar" : "Expand Sidebar"}
-                placement="right"
-              >
-                <Button
-                  isIconOnly
-                  onPress={handleSidebarToggle}
-                  size="md"
-                  variant="light"
-                  className="ml-2 mt-6"
-                >
-                  {sidebarOpen ? (
-                    <PanelLeftCloseIcon size={24} className="stroke-gray-500" />
-                  ) : (
-                    <PanelLeftOpenIcon size={24} className="stroke-gray-500" />
-                  )}
-                </Button>
-              </Tooltip>
-            </ScrollShadow>
-
-            <Spacer y={2} />
-
-            <div className="flex flex-col items-center gap-4 px-3">
-              <Tooltip content="Share your feedback with us">
-                <Button isIconOnly variant="light" size="lg" onPress={handleOpenFeedback}>
-                  <MessageCircleHeartIcon className="w-6 h-6" size={24} />
-                </Button>
-              </Tooltip>
-
-              {isLoggedIn() && (
-                <Tooltip content="Invite friends and colleagues to try Atuin Desktop">
-                  <Button
-                    isIconOnly
-                    variant="light"
-                    size="lg"
-                    onPress={handleOpenInviteFriends}
-                  >
-                    <MailPlusIcon className="w-6 h-6" size={24} />
-                  </Button>
-                </Tooltip>
-              )}
-
-              <Dropdown showArrow placement="right-start">
-                <DropdownTrigger>
-                  <Button disableRipple isIconOnly radius="full" variant="light">
-                    <Avatar
-                      isBordered
-                      className="flex-none"
-                      size="sm"
-                      name={user.username || ""}
-                      src={user.avatar_url || "resources://images/ghost-turtle.png"}
-                    />
-                  </Button>
-                </DropdownTrigger>
-                <DropdownMenu aria-label="Custom item styles">
-                  <DropdownItem
-                    key="profile"
-                    isReadOnly
-                    className="h-14 opacity-100"
-                    textValue="Signed in as"
-                  >
-                    {!isLoggedIn() && (
-                      <User
-                        avatarProps={{
-                          size: "sm",
-                          name: "Anonymous User",
-                          showFallback: true,
-                          src: "resources://images/ghost-turtle.png",
-                          imgProps: {
-                            className: "transition-none",
-                          },
-                        }}
-                        classNames={{
-                          name: "text-default-600",
-                          description: "text-default-500",
-                        }}
-                        name={"Anonymous User"}
-                      />
-                    )}
-                    {isLoggedIn() && (
-                      <User
-                        avatarProps={{
-                          src: user.avatar_url || "",
-                          size: "sm",
-                          name: user.username || "",
-                          imgProps: {
-                            className: "transition-none",
-                          },
-                        }}
-                        classNames={{
-                          name: "text-default-600",
-                          description: "text-default-500",
-                        }}
-                        name={user.username || ""}
-                        description={user.bio || ""}
-                      />
-                    )}
-                  </DropdownItem>
-
-                  <DropdownItem
-                    key="settings"
-                    description="Configure Atuin"
-                    onPress={onSettingsOpen}
-                    endContent={
-                      <Kbd
-                        className="px-1 py-0.5 text-xs font-semibold text-gray-600 bg-gray-100 border border-gray-200 rounded-md"
-                        keys={["command"]}
-                      >
-                        ,
-                      </Kbd>
-                    }
-                  >
-                    Settings
-                  </DropdownItem>
-
-                  <DropdownSection aria-label="Help & Feedback" showDivider>
-                    <DropdownItem
-                      key="help_and_feedback"
-                      description="Get in touch"
-                      onPress={handleOpenHelpAndFeedback}
-                    >
-                      Help & Feedback
-                    </DropdownItem>
-                  </DropdownSection>
-
-                  {renderLogInOrOut()}
-                </DropdownMenu>
-              </Dropdown>
+          )}
+          <div className="flex-1 h-full overflow-hidden bg-background">
+            <div className="flex flex-col h-full overflow-y-auto">
+              <Tabs />
             </div>
           </div>
-
-          <ResizablePanelGroup
-            direction="horizontal"
-            className="flex-1"
-            autoSaveId="sidebar-panel"
-            onLayout={handlePanelGroupResize}
-          >
-            <ResizablePanel
-              ref={sidebarPanelRef}
-              defaultSize={sidebarOpen ? 25 : 0}
-              minSize={sidebarOpen ? 15 : 0}
-              maxSize={40}
-              collapsible={true}
-              className={sidebarOpen ? "min-w-[200px]" : ""}
-            >
-              {sidebarOpen && (
-                <List
-                  onStartCreateWorkspace={showWorkspaceDialog}
-                  onStartCreateRunbook={handleStartCreateRunbook}
-                  moveItemsToWorkspace={handleMoveItemsToWorkspace}
-                  ref={listRef}
-                />
-              )}
-            </ResizablePanel>
-            <ResizableHandle className={sidebarOpen ? "" : "hidden"} />
-            <ResizablePanel defaultSize={sidebarOpen ? 75 : 100} minSize={60}>
-              <div className="flex flex-col h-full overflow-y-auto">
-                <Tabs />
-              </div>
-            </ResizablePanel>
-          </ResizablePanelGroup>
-
-          <Toaster />
-
-          {showDesktopConnect && <DesktopConnect />}
-          {showOnboarding && <Onboarding />}
-          {showNewWorkspaceDialog && (
-            <NewWorkspaceDialog
-              onAccept={handleAcceptNewWorkspace}
-              onCancel={hideWorkspaceDialog}
-            />
-          )}
-          <InviteFriendsModal
-            isOpen={showInviteFriends}
-            onClose={handleCloseInviteFriends}
-          />
-          <FeedbackModal isOpen={showFeedback} onClose={handleCloseFeedback} />
         </div>
+
+        <Toaster />
+
+        {showDesktopConnect && <DesktopConnect />}
+        {showOnboarding && <Onboarding />}
+        {showNewWorkspaceDialog && (
+          <NewWorkspaceDialog
+            onAccept={handleAcceptNewWorkspace}
+            onCancel={hideWorkspaceDialog}
+          />
+        )}
+        <InviteFriendsModal
+          isOpen={showInviteFriends}
+          onClose={handleCloseInviteFriends}
+        />
+        <FeedbackModal isOpen={showFeedback} onClose={handleCloseFeedback} />
 
         <DialogManager />
         {runbookIdToDelete && (

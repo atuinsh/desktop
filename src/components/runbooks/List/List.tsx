@@ -13,11 +13,17 @@ import {
 } from "@heroui/react";
 import {
   ArrowUpDownIcon,
+  ChartBarBigIcon,
   ChevronDownIcon,
   ExternalLinkIcon,
   FileSearchIcon,
+  HistoryIcon,
+  LogOutIcon,
+  MailPlusIcon,
+  MessageCircleHeartIcon,
   Plus,
   PlusIcon,
+  SettingsIcon,
   UsersIcon,
 } from "lucide-react";
 import { AtuinState, useStore } from "@/state/store";
@@ -43,6 +49,9 @@ import track_event from "@/tracking";
 import { open } from "@tauri-apps/plugin-shell";
 import AtuinEnv from "@/atuin_env";
 import Workspace from "@/state/runbooks/workspace";
+import { TabIcon } from "@/state/store/ui_state";
+import { clearHubApiToken } from "@/api/auth";
+import SocketManager from "@/socket";
 
 const scrollWorkspaceIntoViewGenerator =
   (elRef: React.RefObject<HTMLDivElement | null>) => async (workspaceId: string) => {
@@ -101,6 +110,8 @@ interface NotesSidebarProps {
     newWorkspaceId: string,
     newParentFolderId: string | null,
   ) => void;
+  onOpenFeedback: () => void;
+  onOpenInvite: () => void;
 }
 
 const NoteSidebar = forwardRef((props: NotesSidebarProps, ref: React.ForwardedRef<ListApi>) => {
@@ -113,6 +124,9 @@ const NoteSidebar = forwardRef((props: NotesSidebarProps, ref: React.ForwardedRe
 
   const currentWorkspaceId = useStore((state: AtuinState) => state.currentWorkspaceId);
   const setCurrentWorkspaceId = useStore((state: AtuinState) => state.setCurrentWorkspaceId);
+  const openTab = useStore((state: AtuinState) => state.openTab);
+  const isLoggedIn = useStore((state: AtuinState) => state.isLoggedIn);
+  const refreshUser = useStore((state: AtuinState) => state.refreshUser);
 
   const elRef = useRef<HTMLDivElement>(null);
   const scrollWorkspaceIntoView = scrollWorkspaceIntoViewGenerator(elRef);
@@ -181,6 +195,24 @@ const NoteSidebar = forwardRef((props: NotesSidebarProps, ref: React.ForwardedRe
 
   function handleStartDeleteRunbook(_workspaceId: string, runbookId: string) {
     promptDeleteRunbook(runbookId);
+  }
+
+  function handleOpenHistory() {
+    openTab("/history", "History", TabIcon.HISTORY);
+  }
+
+  function handleOpenStats() {
+    openTab("/stats", "Stats", TabIcon.STATS);
+  }
+
+  function handleOpenSettings() {
+    openTab("/settings", "Settings", TabIcon.SETTINGS);
+  }
+
+  async function handleLogout() {
+    await clearHubApiToken();
+    SocketManager.setApiToken(null);
+    refreshUser();
   }
 
   async function handleOpenSortMenu() {
@@ -299,6 +331,7 @@ const NoteSidebar = forwardRef((props: NotesSidebarProps, ref: React.ForwardedRe
         height: "100%",
       }}
       ref={elRef}
+      data-tauri-drag-region
     >
       {pendingWorkspaceMigration && (
         <>
@@ -322,18 +355,20 @@ const NoteSidebar = forwardRef((props: NotesSidebarProps, ref: React.ForwardedRe
             classNames={{ track: "bg-transparent" }}
           />
           <PendingInvitations />
-          <div className="border-b border-gray-200 dark:border-gray-600">
+          <div
+            className="border-b border-gray-100 dark:border-gray-800 pt-4"
+          >
             <Dropdown showArrow size="lg" placement="bottom-end">
               <DropdownTrigger>
                 <div
                   className={cn(
-                    "flex flex-row justify-between items-center p-2 pl-4",
+                    "flex flex-row justify-between items-center pt-2 pb-3 px-2 pl-3",
                     "hover:bg-gray-100 dark:hover:bg-content2",
                     "cursor-pointer",
-                    "border-b border-gray-200 dark:border-gray-700",
-                    "h-[56px] max-h-[56px] min-h-[56px]",
+                    "border-b border-gray-100 dark:border-gray-800",
                   )}
                 >
+                  <div className="flex items-center gap-2">
                   {selectedOrg && (
                     <h2 className="text-lg font-semibold flex items-center gap-2">
                       {org?.avatar_url && (
@@ -368,6 +403,7 @@ const NoteSidebar = forwardRef((props: NotesSidebarProps, ref: React.ForwardedRe
                       )}
                     </h2>
                   )}
+                  </div>
                   <ChevronDownIcon size={16} />
                 </div>
               </DropdownTrigger>
@@ -462,7 +498,40 @@ const NoteSidebar = forwardRef((props: NotesSidebarProps, ref: React.ForwardedRe
               </DropdownMenu>
             </Dropdown>
 
-            <div className="flex justify-between items-center p-2">
+            {/* Nav Items */}
+            <div className="flex flex-col px-2 pt-3 gap-0.5 pb-2">
+              <Button
+                variant="light"
+                size="sm"
+                className="justify-start"
+                onPress={handleOpenHistory}
+              >
+                <HistoryIcon size={18} className="mr-2" />
+                History
+              </Button>
+              <Button
+                variant="light"
+                size="sm"
+                className="justify-start"
+                onPress={handleOpenSearch}
+              >
+                <FileSearchIcon size={18} className="mr-2" />
+                Search
+              </Button>
+              <Button
+                variant="light"
+                size="sm"
+                className="justify-start"
+                onPress={handleOpenStats}
+              >
+                <ChartBarBigIcon size={18} className="mr-2" />
+                Stats
+              </Button>
+            </div>
+          </div>
+
+          {/* Workspaces Section */}
+          <div className="flex justify-between items-center p-2">
               <ButtonGroup>
                 <Button
                   size="sm"
@@ -475,7 +544,7 @@ const NoteSidebar = forwardRef((props: NotesSidebarProps, ref: React.ForwardedRe
                   size="sm"
                   variant="flat"
                   isIconOnly
-                  className="border-l-2 border-gray-200 dark:border-gray-700"
+                  className="border-l-2 border-gray-100 dark:border-gray-800"
                   onPress={handleNewRunbookMenu}
                 >
                   <ChevronDownIcon size={18} />
@@ -498,7 +567,6 @@ const NoteSidebar = forwardRef((props: NotesSidebarProps, ref: React.ForwardedRe
                 </Tooltip>
               </div>
             </div>
-          </div>
           <div
             className="p-1 flex-grow overflow-y-auto cursor-default"
             onContextMenu={handleBaseContextMenu}
@@ -530,6 +598,79 @@ const NoteSidebar = forwardRef((props: NotesSidebarProps, ref: React.ForwardedRe
                 </div>
               )}
             </DndProvider>
+          </div>
+
+          {/* Bottom Section */}
+          <div className="border-t border-gray-100 dark:border-gray-800 px-2 py-2 flex flex-col gap-0.5">
+            <Button
+              variant="light"
+              size="sm"
+              className="justify-start"
+              onPress={handleOpenSettings}
+            >
+              <SettingsIcon size={18} className="mr-2" />
+              Settings
+            </Button>
+            <Button
+              variant="light"
+              size="sm"
+              className="justify-start"
+              onPress={props.onOpenFeedback}
+            >
+              <MessageCircleHeartIcon size={18} className="mr-2" />
+              Feedback
+            </Button>
+            {isLoggedIn() && (
+              <Button
+                variant="light"
+                size="sm"
+                className="justify-start"
+                onPress={props.onOpenInvite}
+              >
+                <MailPlusIcon size={18} className="mr-2" />
+                Invite
+              </Button>
+            )}
+            {/* User Info */}
+            {user.isLoggedIn() && (
+              <Dropdown placement="top-start">
+                <DropdownTrigger>
+                  <div className="flex items-center gap-2 px-1 py-2 mt-1 text-sm text-gray-500 dark:text-gray-400 border-t border-gray-100 dark:border-gray-800 cursor-pointer hover:bg-gray-100 dark:hover:bg-content2 rounded">
+                    <Avatar
+                      src={user.avatar_url || ""}
+                      size="sm"
+                      radius="full"
+                      classNames={{ base: "min-w-[24px] w-6 h-6" }}
+                      name={user.username}
+                    />
+                    <span className="truncate">{user.username}</span>
+                  </div>
+                </DropdownTrigger>
+                <DropdownMenu>
+                  <DropdownSection showDivider>
+                    <DropdownItem key="user-info" isReadOnly className="cursor-default">
+                      <div className="flex flex-col gap-1">
+                        <span className="font-medium">{user.username}</span>
+                        <span className="text-xs text-gray-500">{user.email}</span>
+                        {user.bio && (
+                          <span className="text-xs text-gray-400 mt-1">{user.bio}</span>
+                        )}
+                      </div>
+                    </DropdownItem>
+                  </DropdownSection>
+                  <DropdownSection>
+                    <DropdownItem
+                      key="logout"
+                      color="danger"
+                      startContent={<LogOutIcon size={16} />}
+                      onPress={handleLogout}
+                    >
+                      Sign out
+                    </DropdownItem>
+                  </DropdownSection>
+                </DropdownMenu>
+              </Dropdown>
+            )}
           </div>
         </>
       )}
