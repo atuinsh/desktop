@@ -569,3 +569,33 @@ export const insertSshConnect = (schema: any) => (editor: typeof schema.BlockNot
   icon: <GlobeIcon size={18} />,
   group: "Network",
 });
+
+AIBlockRegistry.getInstance().addBlock({
+  typeName: "ssh-connect",
+  friendlyName: "SSH Connect",
+  shortDescription: "Establishes an SSH connection for subsequent blocks.",
+  description: undent`
+    SSH Connect blocks establish an SSH connection to a remote server. Subsequent Terminal and Script blocks will execute on the connected host until another SSH Connect or Host block is encountered.
+
+    The available props are:
+    - userHost (string): Connection string in format "user@host:port" or just "host" (uses SSH config)
+
+    AUTHENTICATION:
+    Uses your system's SSH configuration (~/.ssh/config) and SSH agent for authentication:
+    - SSH agent (recommended for key-based auth)
+    - SSH config file entries (Host aliases, IdentityFile, etc.)
+    - Interactive password prompt (if key auth fails)
+
+    CONNECTION LIFECYCLE:
+    - Connections are pooled globally; existing connections are reused
+    - Connection persists until another SSH Connect/Host block or document end
+    - HTTP, SQL, Kubernetes, Prometheus blocks always run locally regardless of SSH context
+
+    Example: {
+      "type": "ssh-connect",
+      "props": {
+        "userHost": "admin@production-server.example.com"
+      }
+    }
+  `,
+});
