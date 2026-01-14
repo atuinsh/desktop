@@ -62,7 +62,7 @@ import { schema } from "./create_editor";
 import RunbookEditor from "@/lib/runbook_editor";
 import { useStore } from "@/state/store";
 import { usePromise } from "@/lib/utils";
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import track_event from "@/tracking";
 import {
   saveScrollPosition,
@@ -535,12 +535,20 @@ export default function Editor({
       try {
         const context = await getEditorContext();
         const { generateBlocks } = await import("@/lib/ai/block_generator");
+        const lastBlockContext = await documentBridge?.getLastBlockContext();
 
         const result = await generateBlocks({
           prompt,
           documentMarkdown: context?.documentMarkdown,
           insertAfterIndex: context?.currentBlockIndex,
           runbookId: context?.runbookId,
+          context: {
+            variables: Object.keys(lastBlockContext?.variables ?? {}),
+            named_blocks: [], // TODO: Implement named blocks
+            environment_variables: Object.keys(lastBlockContext?.envVars ?? {}),
+            working_directory: lastBlockContext?.cwd || null,
+            ssh_host: lastBlockContext?.sshHost || null,
+          },
         });
 
         // Check if the block was edited during generation (cancellation)
