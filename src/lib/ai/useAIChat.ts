@@ -40,7 +40,6 @@ export default function useAIChat(sessionId: string): AIChatAPI {
 
   const isStreaming = streamingContent !== null;
   const isIdle = state === "idle";
-  const isWaitingForTools = pendingToolCalls.length > 0;
 
   // Reset all state when sessionId changes - ensures clean slate for new/restored sessions
   useEffect(() => {
