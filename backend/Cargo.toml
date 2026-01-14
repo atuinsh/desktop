@@ -82,7 +82,7 @@ log = { workspace = true }
 dirs = { workspace = true }
 tempfile = { workspace = true }
 config = "0.15.19"
-genai = { git = "https://github.com/BinaryMuse/rust-genai", branch = "atuin-fixes" }
+genai = { git = "https://github.com/BinaryMuse/rust-genai", rev = "674535905a966b44104a327dd1e2ca80f4b4a444" }
 futures-util = "0.3.31"
 indoc = "2.0.7"
 
