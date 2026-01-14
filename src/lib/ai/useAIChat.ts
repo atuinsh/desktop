@@ -42,6 +42,16 @@ export default function useAIChat(sessionId: string): AIChatAPI {
   const isIdle = state === "idle";
   const isWaitingForTools = pendingToolCalls.length > 0;
 
+  // Reset all state when sessionId changes - ensures clean slate for new/restored sessions
+  useEffect(() => {
+    setState("idle");
+    setMessages([]);
+    setQueuedMessages([]);
+    setStreamingContent(null);
+    setPendingToolCalls([]);
+    setError(null);
+  }, [sessionId]);
+
   useEffect(() => {
     if (!sessionId) return;
 
@@ -127,6 +137,16 @@ export default function useAIChat(sessionId: string): AIChatAPI {
             return [];
           });
           break;
+
+        case "history":
+          // Set messages and pending tool calls from session history
+          console.log("[useAIChat] Received history event:", {
+            messageCount: event.messages.length,
+            pendingToolCalls: event.pendingToolCalls,
+          });
+          setMessages(event.messages);
+          setPendingToolCalls(event.pendingToolCalls ?? []);
+          break;
       }
     };
 
@@ -151,7 +171,7 @@ export default function useAIChat(sessionId: string): AIChatAPI {
 
       await sendMessageCommand(sessionId, message);
     },
-    [sessionId, isStreaming, isWaitingForTools],
+    [sessionId, isIdle],
   );
 
   const addToolOutput = useCallback(

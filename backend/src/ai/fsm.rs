@@ -40,13 +40,13 @@ pub enum State {
 // ============================================================================
 
 /// A tool result provided by the caller.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ToolResult {
     pub call_id: String,
     pub output: ToolOutput,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ToolOutput {
     Success(String),
     Error(String),
@@ -59,7 +59,7 @@ pub struct StreamChunk {
 }
 
 /// Shared context across all states.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Context {
     /// Messages queued while a request is in flight.
     pub queued_messages: VecDeque<ChatMessage>,
@@ -143,6 +143,10 @@ pub enum Effect {
     /// Request tool execution. Caller executes and feeds back ToolResult events.
     ExecuteTools { calls: Vec<ToolCall> },
 
+    /// A tool result was received and accumulated.
+    /// Emitted for each tool result to allow saving state.
+    ToolResultReceived,
+
     /// Notify that response is complete (for UI state).
     ResponseComplete,
 
@@ -165,6 +169,7 @@ impl PartialEq for Effect {
                         .zip(b.iter())
                         .all(|(x, y)| x.call_id == y.call_id && x.fn_name == y.fn_name)
             }
+            (Effect::ToolResultReceived, Effect::ToolResultReceived) => true,
             (Effect::ResponseComplete, Effect::ResponseComplete) => true,
             (Effect::Error { message: a }, Effect::Error { message: b }) => a == b,
             (Effect::Cancelled, Effect::Cancelled) => true,
@@ -234,6 +239,11 @@ impl Agent {
             state: State::Idle,
             context: Context::default(),
         }
+    }
+
+    /// Create an agent from saved state.
+    pub fn from_saved(state: State, context: Context) -> Self {
+        Agent { state, context }
     }
 
     /// Current state (for UI, debugging, assertions).
@@ -316,9 +326,11 @@ impl Agent {
                         self.context.conversation.push(msg);
                     }
                     self.state = State::Sending;
-                    Transition::single(Effect::StartRequest)
+                    // Emit ToolResultReceived to save state before starting request
+                    Transition::with(vec![Effect::ToolResultReceived, Effect::StartRequest])
                 } else {
-                    Transition::none()
+                    // Emit ToolResultReceived to save partial progress
+                    Transition::single(Effect::ToolResultReceived)
                 }
             }
 
@@ -618,7 +630,10 @@ mod tests {
         }));
 
         assert_eq!(agent.state(), &State::Sending);
-        assert_eq!(t.effects, vec![Effect::StartRequest]);
+        assert_eq!(
+            t.effects,
+            vec![Effect::ToolResultReceived, Effect::StartRequest]
+        );
         assert!(agent.context().pending_tools.is_empty());
         // Tool results are now pushed to conversation as ToolResponse messages
         assert!(agent.context().tool_results.is_empty());
@@ -638,14 +653,14 @@ mod tests {
             ],
         });
 
-        // First result - still waiting
+        // First result - still waiting, but emits ToolResultReceived for durability
         let t = agent.handle(Event::ToolResult(ToolResult {
             call_id: "call_1".to_string(),
             output: ToolOutput::Success("result_a".to_string()),
         }));
 
         assert_eq!(agent.state(), &State::PendingTools);
-        assert!(t.effects.is_empty());
+        assert_eq!(t.effects, vec![Effect::ToolResultReceived]);
 
         // Second result - now complete
         let t = agent.handle(Event::ToolResult(ToolResult {
@@ -654,7 +669,10 @@ mod tests {
         }));
 
         assert_eq!(agent.state(), &State::Sending);
-        assert_eq!(t.effects, vec![Effect::StartRequest]);
+        assert_eq!(
+            t.effects,
+            vec![Effect::ToolResultReceived, Effect::StartRequest]
+        );
     }
 
     #[test]
@@ -775,7 +793,10 @@ mod tests {
         }));
 
         assert_eq!(agent.state(), &State::Sending);
-        assert_eq!(t.effects, vec![Effect::StartRequest]);
+        assert_eq!(
+            t.effects,
+            vec![Effect::ToolResultReceived, Effect::StartRequest]
+        );
         assert!(agent.context().queued_messages.is_empty());
         // Conversation: user msg, assistant msg, tool response, queued msg
         assert_eq!(agent.context().conversation.len(), 4);

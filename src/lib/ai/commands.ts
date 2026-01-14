@@ -4,20 +4,27 @@ import { ModelSelection } from "@/rs-bindings/ModelSelection";
 import { ChargeTarget } from "@/rs-bindings/ChargeTarget";
 
 /**
- * Create a new AI session.
+ * Create or restore an AI session for a runbook.
  * Returns the session ID.
+ *
+ * @param restorePrevious - If true, attempts to restore the most recent session for this runbook.
+ *                          If false, always creates a fresh session.
  */
 export async function createSession(
+  runbookId: string,
   blockTypes: string[],
   blockSummary: string,
   desktopUsername: string,
   chargeTarget: ChargeTarget,
+  restorePrevious: boolean = true,
 ): Promise<string> {
   return await invoke<string>("ai_create_session", {
+    runbookId,
     blockTypes,
     blockSummary,
     desktopUsername,
     chargeTarget,
+    restorePrevious,
   });
 }
 

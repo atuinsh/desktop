@@ -251,9 +251,9 @@ impl From<genai::chat::BinarySource> for AIBinarySource {
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct AIToolCall {
-    id: String,
-    name: String,
-    args: Value,
+    pub id: String,
+    pub name: String,
+    pub args: Value,
 }
 
 impl From<genai::chat::ToolCall> for AIToolCall {

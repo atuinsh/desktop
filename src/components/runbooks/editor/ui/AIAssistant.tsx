@@ -498,10 +498,12 @@ export default function AIAssistant({
     setIsCreatingSession(true);
 
     createSession(
+      runbookId,
       blockRegistry.getBlockTypes(),
       blockRegistry.getBlockSummary(),
       user.username,
       chargeTarget,
+      true, // restore previous session if available
     )
       .then((id) => {
         if (mounted) {
@@ -686,10 +688,12 @@ export default function AIAssistant({
       setSessionId(null);
       setIsCreatingSession(true);
       createSession(
+        runbookId,
         blockRegistry.getBlockTypes(),
         blockRegistry.getBlockSummary(),
         user.username,
         chargeTarget,
+        false, // don't restore - create fresh session
       )
         .then((id) => {
           setSessionId(id);
@@ -700,7 +704,7 @@ export default function AIAssistant({
           setIsCreatingSession(false);
         });
     }
-  }, [sessionId]);
+  }, [sessionId, runbookId, user.username, chargeTarget]);
 
   const autoApprovedRef = useRef<Set<string>>(new Set());
 

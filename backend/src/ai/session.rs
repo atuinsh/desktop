@@ -21,7 +21,8 @@ use crate::ai::tools::AITools;
 use crate::secret_cache::{SecretCache, SecretCacheError};
 
 use super::fsm::{Agent, Effect, Event, StreamChunk, ToolOutput, ToolResult};
-use super::types::{AIToolCall, ModelSelection};
+use super::storage::{AISessionStorage, SerializedAISession};
+use super::types::{AIMessage, AIToolCall, ModelSelection};
 
 #[derive(Debug, thiserror::Error)]
 pub enum AISessionError {
@@ -71,6 +72,14 @@ pub enum SessionEvent {
     Error { message: String },
     /// Operation was cancelled
     Cancelled,
+    /// Full conversation history (sent when subscribing to a session)
+    /// Includes pending tool calls if session was restored in PendingTools state
+    History {
+        messages: Vec<AIMessage>,
+        #[serde(rename = "pendingToolCalls")]
+        #[ts(rename = "pendingToolCalls")]
+        pending_tool_calls: Vec<AIToolCall>,
+    },
 }
 
 /// Handle for sending events into the session from external sources.
@@ -151,6 +160,7 @@ impl SessionHandle {
 /// Wraps the Agent FSM and handles effect execution.
 pub struct AISession {
     id: Uuid,
+    runbook_id: Uuid,
     model: ModelSelection,
     client: genai::Client,
     block_types: Vec<String>,
@@ -160,6 +170,7 @@ pub struct AISession {
     event_rx: mpsc::Receiver<Event>,
     output_tx: mpsc::Sender<SessionEvent>,
     secret_cache: Arc<SecretCache>,
+    storage: Arc<AISessionStorage>,
     desktop_username: String,
     charge_target: ChargeTarget,
     /// Cancellation signal for the stream processing task.
@@ -218,6 +229,7 @@ fn resolve_service_target(
 impl AISession {
     /// Create a new session, returning the session and a handle for sending events.
     pub fn new(
+        runbook_id: Uuid,
         model: ModelSelection,
         output_tx: mpsc::Sender<SessionEvent>,
         block_types: Vec<String>,
@@ -225,6 +237,7 @@ impl AISession {
         desktop_username: String,
         charge_target: ChargeTarget,
         secret_cache: Arc<SecretCache>,
+        storage: Arc<AISessionStorage>,
     ) -> (Self, SessionHandle) {
         let target_resolver = ServiceTargetResolver::from_resolver_async_fn(resolve_service_target);
 
@@ -236,6 +249,7 @@ impl AISession {
 
         let session = Self {
             id: Uuid::new_v4(),
+            runbook_id,
             model,
             client,
             block_types,
@@ -247,6 +261,7 @@ impl AISession {
             desktop_username,
             charge_target,
             secret_cache,
+            storage,
             cancel_tx,
         };
 
@@ -258,6 +273,95 @@ impl AISession {
     /// Get the session ID.
     pub fn id(&self) -> Uuid {
         self.id
+    }
+
+    /// Create a session from saved state, returning the session and a handle for sending events.
+    pub fn from_saved(
+        saved: SerializedAISession,
+        output_tx: mpsc::Sender<SessionEvent>,
+        block_types: Vec<String>,
+        block_summary: String,
+        desktop_username: String,
+        charge_target: ChargeTarget,
+        secret_cache: Arc<SecretCache>,
+        storage: Arc<AISessionStorage>,
+    ) -> (Self, SessionHandle) {
+        let target_resolver = ServiceTargetResolver::from_resolver_async_fn(resolve_service_target);
+
+        let client = genai::Client::builder()
+            .with_config(ClientConfig::default().with_service_target_resolver(target_resolver))
+            .build();
+        let (event_tx, event_rx) = mpsc::channel(32);
+        let (cancel_tx, _cancel_rx) = watch::channel(false);
+
+        // Restore agent with saved state and context
+        let agent = Agent::from_saved(saved.agent_state, saved.agent_context);
+
+        let session = Self {
+            id: saved.id,
+            runbook_id: saved.runbook_id,
+            model: saved.model,
+            client,
+            block_types,
+            block_summary,
+            agent: Arc::new(RwLock::new(agent)),
+            event_tx: event_tx.clone(),
+            event_rx,
+            output_tx,
+            desktop_username,
+            charge_target,
+            secret_cache,
+            storage,
+            cancel_tx,
+        };
+
+        let handle = SessionHandle { event_tx };
+
+        (session, handle)
+    }
+
+    /// Get the conversation history as AIMessage format for the frontend.
+    pub async fn get_history(&self) -> Vec<AIMessage> {
+        let agent = self.agent.read().await;
+        agent
+            .context()
+            .conversation
+            .iter()
+            .map(|msg| AIMessage::from(msg.clone()))
+            .collect()
+    }
+
+    /// Save the current session state to storage.
+    async fn save_state(&self) {
+        let (state, context) = {
+            let agent = self.agent.read().await;
+            (agent.state().clone(), agent.context().clone())
+        };
+
+        log::debug!(
+            "Saving session {} - state: {:?}, pending_tools: {:?}",
+            self.id,
+            state,
+            context.pending_tools.keys().collect::<Vec<_>>()
+        );
+
+        let serialized = SerializedAISession {
+            id: self.id,
+            runbook_id: self.runbook_id,
+            model: self.model.clone(),
+            agent_state: state,
+            agent_context: context,
+            updated_at: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs() as i64,
+        };
+
+        if let Err(e) = self.storage.save(&serialized).await {
+            log::error!("Failed to save session state: {}", e);
+        } else {
+            log::debug!("Saved session {} state", self.id);
+        }
     }
 
     async fn get_api_key(
@@ -276,6 +380,10 @@ impl AISession {
     /// This processes events and executes effects until the channel is closed.
     pub async fn run(mut self) {
         log::debug!("Starting session event loop for {}", self.id);
+
+        // Save immediately so this session becomes the most recent for the runbook
+        // This ensures "clear chat" followed by quit will restore a blank session
+        self.save_state().await;
 
         while let Some(event) = self.event_rx.recv().await {
             log::trace!("Session {} received event: {:?}", self.id, event);
@@ -335,9 +443,17 @@ impl AISession {
                     .output_tx
                     .send(SessionEvent::ToolsRequested { calls: ai_calls })
                     .await;
+                // Save state when entering PendingTools
+                self.save_state().await;
+            }
+            Effect::ToolResultReceived => {
+                // Save state after each tool result for durability
+                self.save_state().await;
             }
             Effect::ResponseComplete => {
                 let _ = self.output_tx.send(SessionEvent::ResponseComplete).await;
+                // Save state on response complete
+                self.save_state().await;
             }
             Effect::Error { message } => {
                 let _ = self.output_tx.send(SessionEvent::Error { message }).await;
