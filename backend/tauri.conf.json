@@ -3,7 +3,8 @@
     "security": {
       "csp": null
     },
-    "windows": []
+    "windows": [],
+    "macOSPrivateApi": true
   },
   "build": {
     "beforeBuildCommand": "pnpm build",

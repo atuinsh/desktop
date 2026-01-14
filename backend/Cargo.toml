@@ -36,7 +36,7 @@ url = { workspace = true }
 sha2 = "0.10"
 bigdecimal = { workspace = true }
 
-tauri = { version = "2.9.4", features = ["tray-icon", "devtools"] }
+tauri = { version = "2.9.4", features = ["tray-icon", "devtools", "macos-private-api"] }
 tauri-plugin-http = { version = "2.5.4", features = ["native-tls"] }
 tauri-plugin-deep-link = "2.4.5"
 tauri-plugin-single-instance = { version = "2.3.6", features = ["deep-link"] }

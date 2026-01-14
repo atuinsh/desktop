@@ -109,6 +109,7 @@ pub(crate) async fn create_main_window(app: &AppHandle) -> Result<(), String> {
 
     let mut builder = WebviewWindowBuilder::new(app, "main", app_url)
         .title(title)
+        .transparent(true)
         .resizable(true)
         .fullscreen(false)
         .disable_drag_drop_handler()
@@ -122,6 +123,7 @@ pub(crate) async fn create_main_window(app: &AppHandle) -> Result<(), String> {
             builder
                 .title_bar_style(tauri::TitleBarStyle::Overlay)
                 .hidden_title(true)
+                .transparent(true)
         }
         #[cfg(not(target_os = "macos"))]
         {

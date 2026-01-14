@@ -177,7 +177,7 @@ function Application() {
       />
       <QueryClientProvider client={queryClient}>
         <ReactQueryDevtools initialIsOpen={false} buttonPosition="bottom-right" />
-        <main className="text-foreground bg-background overflow-hidden z-20 relative">
+        <main className="text-foreground bg-transparent overflow-hidden z-20 relative">
           <Root />
         </main>
       </QueryClientProvider>
