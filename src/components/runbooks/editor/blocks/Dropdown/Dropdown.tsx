@@ -323,7 +323,9 @@ const Dropdown = ({
         ref={() => setExecutionReady(true)}
         className="flex flex-col w-full bg-gradient-to-r from-blue-50 to-cyan-50 dark:from-slate-800 dark:to-cyan-950 rounded-lg p-3 border border-blue-200 dark:border-blue-900 shadow-sm hover:shadow-md transition-all duration-200"
       >
-        <span className="text-[10px] font-mono text-gray-400 dark:text-gray-500 mb-2">dropdown</span>
+        <span className="text-[10px] font-mono text-gray-400 dark:text-gray-500 mb-2">
+          dropdown
+        </span>
         <div className="flex flex-row items-center space-x-3">
           <div className="flex items-center">
             <Button
