@@ -45,6 +45,7 @@ import AIBlockRegistry from "@/lib/ai/block_registry";
 import { Settings } from "@/state/settings";
 import { useStore } from "@/state/store";
 import { ChargeTarget } from "@/rs-bindings/ChargeTarget";
+import AtuinEnv from "@/atuin_env";
 
 const ALL_TOOL_NAMES = [
   "get_runbook_document",
@@ -503,6 +504,7 @@ export default function AIAssistant({
       blockRegistry.getBlockSummary(),
       user.username,
       chargeTarget,
+      AtuinEnv.url("/api/ai/proxy/"),
       true, // restore previous session if available
     )
       .then((id) => {
@@ -693,6 +695,7 @@ export default function AIAssistant({
         blockRegistry.getBlockSummary(),
         user.username,
         chargeTarget,
+        AtuinEnv.url("/api/ai/proxy/"),
         false, // don't restore - create fresh session
       )
         .then((id) => {

@@ -16,6 +16,7 @@ export async function createSession(
   blockSummary: string,
   desktopUsername: string,
   chargeTarget: ChargeTarget,
+  hubEndpoint: string,
   restorePrevious: boolean = true,
 ): Promise<string> {
   return await invoke<string>("ai_create_session", {
@@ -24,6 +25,7 @@ export async function createSession(
     blockSummary,
     desktopUsername,
     chargeTarget,
+    hubEndpoint,
     restorePrevious,
   });
 }

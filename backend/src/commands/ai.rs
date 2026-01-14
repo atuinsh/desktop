@@ -37,6 +37,7 @@ pub async fn ai_create_session(
     block_summary: String,
     desktop_username: String,
     charge_target: ChargeTarget,
+    hub_endpoint: String,
     restore_previous: bool,
 ) -> Result<Uuid, String> {
     // Create storage from db pool
@@ -63,7 +64,7 @@ pub async fn ai_create_session(
     // TODO: Get model selection from settings/frontend
     let default_model = ModelSelection::AtuinHub {
         model: "claude-opus-4-5-20251101".to_string(),
-        uri: Some("http://localhost:4000/api/ai/proxy/".to_string()),
+        uri: Some(hub_endpoint),
     };
 
     let (session, handle, replay_data) = if let Some(saved) = existing {

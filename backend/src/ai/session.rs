@@ -218,10 +218,6 @@ fn resolve_service_target(
             service_target.endpoint = Endpoint::from_owned(parts[2].to_string());
         }
 
-        println!("service_target endpoint: {:?}", service_target.endpoint);
-        println!("service_target auth: {:?}", service_target.auth);
-        println!("service_target model: {:?}", service_target.model);
-
         Ok(service_target)
     })
 }
