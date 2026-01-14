@@ -100,6 +100,14 @@ curl --proto '=https' --tlsv1.2 -LsSf https://setup.atuin.sh | sh
 
     [:octicons-arrow-right-24: Collaboration Features](hub/getting-started.md)
 
+-   :material-robot:{ .lg .middle } **AI Assistant**
+
+    ---
+
+    Create and edit runbooks through natural language conversation.
+
+    [:octicons-arrow-right-24: AI Assistant](ai-assistant.md)
+
 </div>
 
 ## Common Use Cases

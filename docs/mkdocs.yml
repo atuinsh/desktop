@@ -14,6 +14,7 @@ extra_css:
 nav:
   - "Home": index.md
   - "Getting Started": getting-started.md
+  - "AI Assistant": ai-assistant.md
   - "Workspaces": workspaces.md
   - "Templating": templating.md
   - "Secrets": secrets.md
