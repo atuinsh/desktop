@@ -34,11 +34,10 @@ impl FromRow<'_, SqliteRow> for SerializedAISession {
             })?;
 
         let id_str: String = row.get("id");
-        let id: Uuid =
-            serde_json::from_str(&id_str).map_err(|e| sqlx::Error::ColumnDecode {
-                index: "id".to_string(),
-                source: Box::new(e),
-            })?;
+        let id: Uuid = serde_json::from_str(&id_str).map_err(|e| sqlx::Error::ColumnDecode {
+            index: "id".to_string(),
+            source: Box::new(e),
+        })?;
 
         let runbook_id_str: String = row.get("runbook_id");
         let runbook_id: Uuid =
@@ -121,10 +120,7 @@ impl AISessionStorage {
     }
 
     /// Delete a session by ID
-    pub async fn delete(
-        &self,
-        id: &Uuid,
-    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn delete(&self, id: &Uuid) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         sqlx::query("DELETE FROM ai_sessions WHERE id = ?")
             .bind(serde_json::to_string(id)?)
             .execute(&self.pool)
