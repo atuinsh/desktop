@@ -24,7 +24,7 @@ mod main_window;
 mod menu;
 mod run;
 mod runbooks;
-mod secret;
+mod secret_cache;
 mod shared_state;
 mod shellcheck;
 mod sqlite;
@@ -519,9 +519,9 @@ fn main() {
             dotfiles::vars::vars,
             dotfiles::vars::delete_var,
             dotfiles::vars::set_var,
-            secret::save_password,
-            secret::load_password,
-            secret::delete_password,
+            commands::secrets::save_password,
+            commands::secrets::load_password,
+            commands::secrets::delete_password,
             runbooks::ydoc::save_ydoc_for_runbook,
             runbooks::ydoc::load_ydoc_for_runbook,
             runbooks::runbook::export_atrb,
@@ -582,6 +582,8 @@ fn main() {
             commands::ai::ai_create_session,
             commands::ai::ai_subscribe_session,
             commands::ai::ai_change_model,
+            commands::ai::ai_change_charge_target,
+            commands::ai::ai_change_user,
             commands::ai::ai_send_message,
             commands::ai::ai_send_tool_result,
             commands::ai::ai_cancel_session,

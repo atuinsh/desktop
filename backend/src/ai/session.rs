@@ -1,9 +1,15 @@
 //! AI Session - the driver that wraps the Agent FSM and executes effects.
 
+use std::fmt::Display;
+use std::future::Future;
+use std::pin::Pin;
 use std::sync::Arc;
 
 use futures_util::stream::StreamExt;
+use genai::adapter::AdapterKind;
 use genai::chat::{ChatMessage, ChatOptions, ChatRequest, ChatStreamEvent, ToolCall};
+use genai::resolver::{AuthData, Endpoint, ServiceTargetResolver};
+use genai::{ClientConfig, ModelIden, ServiceTarget};
 use serde::{Deserialize, Serialize};
 use tokio::sync::{mpsc, watch, RwLock};
 use ts_rs::TS;
@@ -22,11 +28,35 @@ pub enum AISessionError {
     #[error("Failed to get credential: {0}")]
     CredentialError(#[from] SecretCacheError),
 
+    #[error("HTTP error: {status} {status_text}")]
+    HttpError {
+        status: u16,
+        status_text: String,
+        body: String,
+    },
+
     #[error("Failed to start request: {0}")]
     RequestError(#[from] genai::Error),
 
     #[error("Session event channel closed")]
     ChannelClosed,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub enum ChargeTarget {
+    User,
+    Org(String),
+}
+
+impl Display for ChargeTarget {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ChargeTarget::User => write!(f, "user"),
+            ChargeTarget::Org(org) => write!(f, "org:{}", org),
+        }
+    }
 }
 
 /// Events emitted by the session to the frontend.
@@ -143,6 +173,55 @@ pub struct AISession {
     cancel_tx: watch::Sender<bool>,
 }
 
+fn resolve_service_target(
+    mut service_target: ServiceTarget,
+) -> Pin<Box<dyn Future<Output = Result<ServiceTarget, genai::resolver::Error>> + Send>> {
+    Box::pin(async move {
+        let model_name = service_target.model.model_name.to_string();
+        let parts = model_name.splitn(3, "::").collect::<Vec<&str>>();
+
+        if parts.len() != 3 {
+            return Err(genai::resolver::Error::Custom(format!(
+                "Invalid Atuin Desktop model identifier format: {}",
+                model_name
+            )));
+        }
+
+        let adapter_kind = match parts[0] {
+            "atuinhub" => AdapterKind::Anthropic,
+            "claude" => AdapterKind::Anthropic,
+            "openai" => AdapterKind::OpenAI,
+            "ollama" => AdapterKind::Ollama,
+            _ => {
+                return Err(genai::resolver::Error::Custom(format!(
+                    "Invalid model identifier: {}",
+                    parts[0]
+                )))
+            }
+        };
+
+        let auth = AuthData::Key(
+            AISession::get_api_key(adapter_kind, parts[0] == "atuinhub")
+                .await
+                .map_err(|e| genai::resolver::Error::Custom(e.to_string()))?,
+        );
+        service_target.auth = auth;
+
+        let model_id = ModelIden::new(adapter_kind, parts[1]);
+        service_target.model = model_id;
+
+        if parts[2] != "default" {
+            service_target.endpoint = Endpoint::from_owned(parts[2].to_string());
+        }
+
+        println!("service_target endpoint: {:?}", service_target.endpoint);
+        println!("service_target auth: {:?}", service_target.auth);
+        println!("service_target model: {:?}", service_target.model);
+
+        Ok(service_target)
+    })
+}
+
 impl AISession {
     /// Create a new session, returning the session and a handle for sending events.
     pub fn new(
@@ -150,9 +229,15 @@ impl AISession {
         output_tx: mpsc::Sender<SessionEvent>,
         block_types: Vec<String>,
         block_summary: String,
+        desktop_username: String,
+        charge_target: ChargeTarget,
         secret_cache: Arc<SecretCache>,
     ) -> (Self, SessionHandle) {
-        let client = genai::Client::builder().build();
+        let target_resolver = ServiceTargetResolver::from_resolver_async_fn(resolve_service_target);
+
+        let client = genai::Client::builder()
+            .with_config(ClientConfig::default().with_service_target_resolver(target_resolver))
+            .build();
         let (event_tx, event_rx) = mpsc::channel(32);
         let (cancel_tx, _cancel_rx) = watch::channel(false);
 
@@ -166,6 +251,8 @@ impl AISession {
             event_tx: event_tx.clone(),
             event_rx,
             output_tx,
+            desktop_username,
+            charge_target,
             secret_cache,
             cancel_tx,
         };
@@ -178,6 +265,17 @@ impl AISession {
     /// Get the session ID.
     pub fn id(&self) -> Uuid {
         self.id
+    }
+
+    async fn get_api_key(
+        adapter_kind: AdapterKind,
+        is_hub: bool,
+    ) -> Result<String, AISessionError> {
+        if is_hub {
+            return Ok("".to_string());
+        }
+
+        return Ok("".to_string());
     }
 
     /// Run the session event loop.
@@ -362,9 +460,29 @@ impl AISession {
                     match result {
                         Err(e) => {
                             log::error!("Session {} stream error: {}", session_id, e);
+                            let mut message = e.to_string();
+
+                            if let genai::Error::WebStream { error, .. } = e {
+                                if let Some(genai::Error::HttpError { status, body, .. }) = error.downcast_ref::<genai::Error>() {
+                                    if let Ok(json) = serde_json::from_str::<serde_json::Value>(&body) {
+                                        if let Some(msg) = json.get("error").and_then(|m| m.as_str()) {
+                                            message = msg.to_string();
+                                        }
+
+                                        if let Some(details) = json.get("details").and_then(|d| d.as_object()) {
+                                            for (k, v) in details.iter() {
+                                                message += &format!("\n  {}: {}", k, v);
+                                            }
+                                        }
+                                    } else {
+                                        message = format!("HTTP error {}: {}", status, body);
+                                    }
+                                }
+                            }
+
                             let _ = event_tx
                                 .send(Event::RequestFailed {
-                                    error: e.to_string(),
+                                    error: message,
                                 })
                                 .await;
                             return;

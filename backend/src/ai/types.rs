@@ -1,46 +1,51 @@
 use std::{ops::Deref, sync::Arc};
 
+use genai::{adapter::AdapterKind, ModelIden};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use ts_rs::TS;
 
-#[derive(Debug, Clone)]
-pub struct ModelToken<T>(T);
-
-impl<T> ModelToken<T> {
-    pub fn new(token: T) -> Self {
-        Self(token)
-    }
-}
-
-impl<T> Deref for ModelToken<T> {
-    type Target = T;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(tag = "type", content = "data", rename_all = "camelCase")]
+#[ts(export)]
 pub enum ModelSelection {
-    AtuinHub(Option<String>),
-    Claude(ModelToken<String>),
-    OpenAI(String, Option<ModelToken<String>>),
+    AtuinHub { model: String, uri: Option<String> },
+    Claude { model: String },
+    OpenAI { model: String, uri: Option<String> },
+    Ollama { model: String, uri: Option<String> },
 }
 
 impl ModelSelection {
     pub fn to_string(&self) -> String {
         match self {
-            ModelSelection::AtuinHub(uri) => match uri {
-                Some(uri) => format!("atuinhub:{}", uri),
-                None => "atuinhub:default".to_string(),
+            ModelSelection::AtuinHub { model, uri } => match uri {
+                Some(uri) => format!("atuinhub::{model}::{}", uri.deref()),
+                None => format!("atuinhub::{model}::default"),
             },
-            ModelSelection::Claude(token) => "claude-opus-4-5-20251101".to_string(),
-            ModelSelection::OpenAI(endpoint, token) => {
-                todo!()
-            }
+            ModelSelection::Claude { model } => format!("claude::{model}::default"),
+            ModelSelection::OpenAI { model, uri } => match uri {
+                Some(uri) => format!("openai::{model}::{}", uri.deref()),
+                None => format!("openai::{model}::default"),
+            },
+            ModelSelection::Ollama { model, uri } => match uri {
+                Some(uri) => format!("ollama::{model}::{}", uri.deref()),
+                None => format!("ollama::{model}::default"),
+            },
         }
     }
 }
+
+// impl From<ModelSelection> for ModelIden {
+//     fn from(model: ModelSelection) -> Self {
+//         match model {
+//             ModelSelection::AtuinHub(model, uri) => ModelIden::new(AdapterKind::Anthropic, model),
+//             ModelSelection::Claude(token) => ModelIden::new(AdapterKind::Anthropic, "claude"),
+//             ModelSelection::OpenAI(endpoint, token) => {
+//                 ModelIden::new("openai", endpoint.deref().to_string())
+//             }
+//         }
+//     }
+// }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]

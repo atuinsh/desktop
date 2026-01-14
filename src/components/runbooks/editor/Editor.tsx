@@ -84,6 +84,7 @@ import { SavedBlockPopup } from "./ui/SavedBlockPopup";
 import { DeleteBlockItem } from "./ui/DeleteBlockItem";
 import { BlockNoteEditor } from "@blocknote/core";
 import useDocumentBridge from "@/lib/hooks/useDocumentBridge";
+import { ChargeTarget } from "@/rs-bindings/ChargeTarget";
 
 // Fix for react-dnd interference with BlockNote drag-and-drop
 // React-dnd wraps dataTransfer in a proxy that blocks access during drag operations

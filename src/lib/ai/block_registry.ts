@@ -30,7 +30,7 @@ export default class AIBlockRegistry {
     let summary = "";
 
     for (const block of this.blocks.values()) {
-      summary += `### ${block.typeName}\n\nKnown to users as: ${block.friendlyName}\n\n${block.shortDescription}\n\n`;
+      summary += `* ${block.typeName}\n  Known to users as: ${block.friendlyName}\n  ${block.shortDescription}\n`;
     }
 
     return summary.trim();
