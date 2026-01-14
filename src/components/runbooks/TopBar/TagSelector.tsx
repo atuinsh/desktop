@@ -161,20 +161,19 @@ export default function TagSelector(props: TagSelectorProps) {
     >
       <PopoverTrigger onClick={props.onTrigger}>
         <div
-          className={clsx({
-            "flex max-w-[220px] md:min-w-[90px] md:max-w-[55px] lg:max-w-[200px]": true,
-            "ml-0 md:ml-2 border-1 border-gray-300 rounded-md p-[5px] pb-[6px]": true,
-            "bg-gray-200 mt-[-5px] truncate": true,
-            "dark:bg-content2 dark:border-default-300 hover:dark:bg-content3": true,
-            "sm:grow md:grow-0": true,
-            "cursor-pointer": !serialExecution.isRunning,
-            "cursor-not-allowed": serialExecution.isRunning,
-            "text-gray-400 dark:text-gray-500": serialExecution.isRunning,
-            "text-gray-700 dark:text-gray-300": !serialExecution.isRunning,
-          })}
+          className={clsx(
+            "flex items-center max-w-[200px] rounded px-1.5 py-0.5",
+            "bg-transparent hover:bg-black/5 dark:hover:bg-white/5",
+            "transition-colors duration-150 text-xs",
+            "text-gray-500 dark:text-gray-400",
+            {
+              "cursor-pointer hover:text-gray-700 dark:hover:text-gray-300": !serialExecution.isRunning,
+              "cursor-not-allowed opacity-50": serialExecution.isRunning,
+            }
+          )}
         >
-          <span className="w-full truncate overflow-ellipsis">@ {tagLabel}</span>
-          <ChevronDownIcon className="inline mt-2 !min-w-[16px]" size={16} />
+          <span className="truncate">@ {tagLabel}</span>
+          <ChevronDownIcon className="ml-1 shrink-0" size={12} />
         </div>
       </PopoverTrigger>
       <PopoverContent>

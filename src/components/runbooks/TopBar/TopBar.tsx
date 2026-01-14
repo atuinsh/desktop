@@ -3,7 +3,7 @@ import RelativeTime from "@/components/relative_time.tsx";
 import TagSelector from "./TagSelector";
 import ColorAvatar from "@/components/ColorAvatar";
 import { DateTime } from "luxon";
-import { addToast, Avatar, AvatarGroup, Button, Tooltip } from "@heroui/react";
+import { addToast, Avatar, AvatarGroup, Button, ButtonGroup, Tooltip } from "@heroui/react";
 import { RemoteRunbook } from "@/state/models";
 import {
   BookTextIcon,
@@ -153,16 +153,17 @@ export default function Topbar(props: TopbarProps) {
     }
 
     return (
-      <div id="topbar" className="flex h-full w-full justify-between pr-4">
-        <div id="avatar-name" className="flex min-w-0 md:max-w-full md:grow mr-2">
-          {/* TODO: use org avatar for orgs once we have them */}
+      <div id="topbar" className="flex h-full w-full items-center justify-between pr-4">
+        {/* Left section: Avatar + Content */}
+        <div id="avatar-name" className="flex min-w-0 flex-1 mr-4">
+          {/* Avatar */}
           {remoteRunbook && owner?.type === "user" && (
             <Avatar
               size="sm"
               radius="sm"
               name={owner.user.username}
               src={owner.user.avatar_url}
-              classNames={{ base: "inline-block mr-2 mt-1 min-w-[32px]" }}
+              classNames={{ base: "inline-block mr-2 min-w-[32px] shrink-0" }}
             />
           )}
           {remoteRunbook && owner?.type === "org" && (
@@ -171,78 +172,91 @@ export default function Topbar(props: TopbarProps) {
               radius="sm"
               name={owner.org.name}
               src={owner.org.avatar_url || undefined}
-              classNames={{ base: "inline-block mr-2 mt-1 min-w-[32px]" }}
+              classNames={{ base: "inline-block mr-2 min-w-[32px] shrink-0" }}
             />
           )}
-          {!remoteRunbook && <BookTextIcon size={24} className="mt-2 mr-2 ml-1 min-w-[26px]" />}
-          <div className="flex-col truncate shrink">
-            <div className="hidden md:flex mb-[-1px] whitespace-nowrap md:flex-row items-center">
+          {!remoteRunbook && <BookTextIcon size={24} className="mr-2 ml-1 min-w-[26px] shrink-0" />}
+
+          {/* Two-row content area */}
+          <div className="flex flex-col min-w-0 flex-1">
+            {/* Row 1: Name/URL + Copy */}
+            <div className="hidden md:flex items-center whitespace-nowrap">
               {remoteRunbook ? (
-                <a href={AtuinEnv.url(remoteRunbook.nwo)} onClick={openHubRunbook}>
+                <a href={AtuinEnv.url(remoteRunbook.nwo)} onClick={openHubRunbook} className="truncate">
                   {name}
                 </a>
               ) : (
-                name
+                <span className="truncate">{name}</span>
               )}
               {remoteRunbook && (
                 <Tooltip content="Copy runbook URL" placement="bottom" showArrow>
                   <CopyIcon
-                    size={16}
-                    className="ml-2 cursor-pointer"
+                    size={14}
+                    className="ml-2 cursor-pointer text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 shrink-0"
                     onClick={handleCopyRunbookUrl}
                   />
                 </Tooltip>
               )}
             </div>
-            <div className="hidden md:block text-gray-400 text-xs italic whitespace-nowrap">
-              Updated <RelativeTime time={DateTime.fromJSDate(runbook.updated)} />
+
+            {/* Row 2: Updated time + Tag selector */}
+            <div className="hidden md:flex items-center">
+              <span className="text-gray-400 text-xs italic whitespace-nowrap">
+                Updated <RelativeTime time={DateTime.fromJSDate(runbook.updated)} />
+              </span>
+
+              {/* Tag selector + related controls - positioned near content */}
+              <div className="flex items-center ml-3">
+                {props.runbook.isOnline() && (props.tags.length > 0 || props.canEditTags) && (
+                  <TagSelector
+                    runbookId={runbook.id}
+                    isOpen={props.showTagMenu}
+                    onTrigger={props.onOpenTagMenu}
+                    onClose={props.onCloseTagMenu}
+                    tags={props.tags}
+                    currentTag={props.currentTag}
+                    canEditTags={props.canEditTags}
+                    onSelectTag={onSelectTag}
+                    onCreateTag={props.onCreateTag}
+                  />
+                )}
+                {props.currentTag && props.currentTag !== "latest" && (
+                  <>
+                    <Tooltip content="Delete this tag" placement="bottom" showArrow>
+                      <Button
+                        isIconOnly
+                        variant="light"
+                        size="sm"
+                        className="ml-1 text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30"
+                        onPress={handleDeleteTag}
+                      >
+                        <TrashIcon className="h-3.5 w-3.5" />
+                      </Button>
+                    </Tooltip>
+                    <Tooltip
+                      content="This runbook is in read-only mode because you are viewing a tag"
+                      placement="bottom"
+                      showArrow
+                    >
+                      <PencilOffIcon className="h-3.5 w-3.5 text-yellow-600 ml-2" />
+                    </Tooltip>
+                  </>
+                )}
+              </div>
             </div>
           </div>
-          <div className="mt-[7px] inline-block">
-            {props.runbook.isOnline() && (props.tags.length > 0 || props.canEditTags) && (
-              <TagSelector
-                runbookId={runbook.id}
-                isOpen={props.showTagMenu}
-                onTrigger={props.onOpenTagMenu}
-                onClose={props.onCloseTagMenu}
-                tags={props.tags}
-                currentTag={props.currentTag}
-                canEditTags={props.canEditTags}
-                onSelectTag={onSelectTag}
-                onCreateTag={props.onCreateTag}
-              />
-            )}
-          </div>
-          {props.currentTag && props.currentTag !== "latest" && (
-            <>
-              <div className="mx-2">
-                <Tooltip content="Delete this tag" placement="bottom" showArrow>
-                  <Button isIconOnly variant="faded" color="danger" onPress={handleDeleteTag}>
-                    <TrashIcon className="h-4 w-4 text-red-600" />
-                  </Button>
-                </Tooltip>
-              </div>
-              <div className="mt-[7px] basis-4 inline-block">
-                <Tooltip
-                  content="This runbook is in read-only mode because you are viewing a tag"
-                  placement="bottom"
-                  showArrow
-                >
-                  <PencilOffIcon className="h-4 w-4 text-yellow-600 ml-4 mr-4 inline" />
-                </Tooltip>
-              </div>
-            </>
-          )}
         </div>
-        <div className="basis-[100px] shrink-0 flex">
+
+        {/* Middle section: Presence avatars */}
+        <div className="shrink-0 flex mr-2">
           <AvatarGroup
             size="sm"
             max={5}
             total={props.presences.length}
-            classNames={{ base: "hidden lg:inline-block mr-2 mt-1" }}
+            classNames={{ base: "hidden lg:flex" }}
             renderCount={(count) => {
               if (count - 5 > 0) {
-                return <span className="ml-2 text-gray-500">+{count - 5} others</span>;
+                return <span className="ml-2 text-gray-500 text-xs">+{count - 5}</span>;
               } else {
                 return <span />;
               }
@@ -257,50 +271,55 @@ export default function Topbar(props: TopbarProps) {
                 src={user.avatar_url}
                 imgProps={{ title: user.username }}
                 outlineColor={user.color}
-                classNames={{ base: "inline-block mb-2" }}
               />
             ))}
           </AvatarGroup>
         </div>
-        <Tooltip content="Reset any runbook state changes from block executions" placement="bottom">
-          <Button
-            isIconOnly
-            variant="flat"
-            size="sm"
-            className="mt-1 ml-2"
-            onPress={handleResetRunbookState}
-          >
-            <RefreshCcwIcon className="h-4 w-4" />
-          </Button>
-        </Tooltip>
-        <Tooltip content="Toggle runbook settings" placement="bottom">
-          <Button
-            isIconOnly
-            variant="flat"
-            size="sm"
-            className={cn("mt-1 ml-2", props.isSettingsOpen && "bg-gray-400 dark:bg-gray-400")}
-            onPress={props.onToggleSettings}
-          >
-            <SettingsIcon
-              className={cn("h-4 w-4", props.isSettingsOpen && "stroke-white dark:stroke-gray-800")}
-            />
-          </Button>
-        </Tooltip>
-        <PlayButton
-          className="mt-1 ml-2"
-          isRunning={serialExecution.isRunning}
-          cancellable={true}
-          tooltip="Run this runbook in serial mode (top-to-bottom)"
-          tooltipPlacement="bottom"
-          onPlay={handleStartSerialExecution}
-          onStop={handleStopSerialExecution}
-        />
+
+        {/* Right section: Action buttons */}
+        <ButtonGroup size="sm" className="shrink-0">
+          <Tooltip content="Reset runbook state" placement="bottom">
+            <Button
+              isIconOnly
+              variant="flat"
+              size="sm"
+              className="bg-black/5 dark:bg-white/5 text-gray-600 dark:text-gray-300 hover:bg-black/10 dark:hover:bg-white/10"
+              onPress={handleResetRunbookState}
+            >
+              <RefreshCcwIcon className="h-4 w-4" />
+            </Button>
+          </Tooltip>
+          <Tooltip content="Runbook settings" placement="bottom">
+            <Button
+              isIconOnly
+              variant="flat"
+              size="sm"
+              className={cn(
+                "bg-black/5 dark:bg-white/5",
+                props.isSettingsOpen
+                  ? "bg-black/15 dark:bg-white/15 text-gray-800 dark:text-gray-100"
+                  : "text-gray-600 dark:text-gray-300 hover:bg-black/10 dark:hover:bg-white/10"
+              )}
+              onPress={props.onToggleSettings}
+            >
+              <SettingsIcon className="h-4 w-4" />
+            </Button>
+          </Tooltip>
+          <PlayButton
+            isRunning={serialExecution.isRunning}
+            cancellable={true}
+            tooltip="Run runbook"
+            tooltipPlacement="bottom"
+            onPlay={handleStartSerialExecution}
+            onStop={handleStopSerialExecution}
+          />
+        </ButtonGroup>
       </div>
     );
   };
 
   return (
-    <div className="flex w-full max-w-full overflow-hidden bg-gray-50 dark:bg-content1 h-[60px] min-h-[60px] flex-row border-b dark:border-default-300 px-2 justify-between pt-2">
+    <div className="flex w-full max-w-full overflow-hidden bg-gray-50 dark:bg-content1 h-[60px] min-h-[60px] flex-row items-center border-b dark:border-default-300 px-3">
       {workspace && renderBarContents()}
     </div>
   );
