@@ -24,6 +24,7 @@ import {
   Plus,
   PlusIcon,
   SettingsIcon,
+  TerminalIcon,
   UsersIcon,
 } from "lucide-react";
 import { AtuinState, useStore } from "@/state/store";
@@ -118,6 +119,8 @@ const NoteSidebar = forwardRef((props: NotesSidebarProps, ref: React.ForwardedRe
   const isSyncing = useStore((state: AtuinState) => state.isSyncing);
   const isSearchOpen = useStore((store: AtuinState) => store.searchOpen);
   const setSearchOpen = useStore((store: AtuinState) => store.setSearchOpen);
+  const isCommandPaletteOpen = useStore((store: AtuinState) => store.commandPaletteOpen);
+  const setCommandPaletteOpen = useStore((store: AtuinState) => store.setCommandPaletteOpen);
   const [sortBy, setSortBy] = useState<SortBy>(SortBy.Name);
   const [pendingWorkspaceMigration, setPendingWorkspaceMigration] = useState<boolean>(true);
   const [focusedWorkspaceId, setFocusedWorkspaceId] = useState<string | null>(null);
@@ -166,6 +169,10 @@ const NoteSidebar = forwardRef((props: NotesSidebarProps, ref: React.ForwardedRe
 
   const handleOpenSearch = async () => {
     if (!isSearchOpen) setSearchOpen(true);
+  };
+
+  const handleOpenCommandPalette = async () => {
+    if (!isCommandPaletteOpen) setCommandPaletteOpen(true);
   };
 
   const handleBrowseToOwner = (owner: string) => {
@@ -509,15 +516,44 @@ const NoteSidebar = forwardRef((props: NotesSidebarProps, ref: React.ForwardedRe
                 <HistoryIcon size={18} className="mr-2" />
                 History
               </Button>
-              <Button
-                variant="light"
-                size="sm"
-                className="justify-start"
-                onPress={handleOpenSearch}
+              <Tooltip
+                content={
+                  <span className="flex items-center gap-2">
+                    Search <kbd className="px-1.5 py-0.5 text-xs bg-gray-200 dark:bg-gray-700 rounded">⌘P</kbd>
+                  </span>
+                }
+                placement="right"
+                delay={300}
               >
-                <FileSearchIcon size={18} className="mr-2" />
-                Search
-              </Button>
+                <Button
+                  variant="light"
+                  size="sm"
+                  className="justify-start"
+                  onPress={handleOpenSearch}
+                >
+                  <FileSearchIcon size={18} className="mr-2" />
+                  Search
+                </Button>
+              </Tooltip>
+              <Tooltip
+                content={
+                  <span className="flex items-center gap-2">
+                    Commands <kbd className="px-1.5 py-0.5 text-xs bg-gray-200 dark:bg-gray-700 rounded">⇧⌘P</kbd>
+                  </span>
+                }
+                placement="right"
+                delay={300}
+              >
+                <Button
+                  variant="light"
+                  size="sm"
+                  className="justify-start"
+                  onPress={handleOpenCommandPalette}
+                >
+                  <TerminalIcon size={18} className="mr-2" />
+                  Commands
+                </Button>
+              </Tooltip>
               <Button
                 variant="light"
                 size="sm"
@@ -531,42 +567,27 @@ const NoteSidebar = forwardRef((props: NotesSidebarProps, ref: React.ForwardedRe
           </div>
 
           {/* Workspaces Section */}
-          <div className="flex justify-between items-center p-2">
-              <ButtonGroup>
-                <Button
-                  size="sm"
-                  variant="flat"
-                  onPress={handleNewRunbookInCurrentWorkspace}
-                >
-                  <Plus size={18} /> New Runbook
-                </Button>
-                <Button
-                  size="sm"
-                  variant="flat"
-                  isIconOnly
-                  className="border-l-2 border-gray-100 dark:border-gray-800"
-                  onPress={handleNewRunbookMenu}
-                >
-                  <ChevronDownIcon size={18} />
-                </Button>
-              </ButtonGroup>
-
-              <div>
-                {false && (
-                  <Tooltip content="Sort by...">
-                    <Button isIconOnly size="sm" variant="light" onPress={handleOpenSortMenu}>
-                      <ArrowUpDownIcon size={18} />
-                    </Button>
-                  </Tooltip>
-                )}
-
-                <Tooltip content="Search" placement="bottom">
-                  <Button isIconOnly size="sm" variant="light" onPress={handleOpenSearch}>
-                    <FileSearchIcon size={18} />
-                  </Button>
-                </Tooltip>
-              </div>
-            </div>
+          <div className="p-2">
+            <ButtonGroup className="w-full">
+              <Button
+                size="sm"
+                variant="flat"
+                className="flex-1"
+                onPress={handleNewRunbookInCurrentWorkspace}
+              >
+                <Plus size={18} /> New Runbook
+              </Button>
+              <Button
+                size="sm"
+                variant="flat"
+                isIconOnly
+                className="border-l-2 border-gray-100 dark:border-gray-800"
+                onPress={handleNewRunbookMenu}
+              >
+                <ChevronDownIcon size={18} />
+              </Button>
+            </ButtonGroup>
+          </div>
           <div
             className="p-1 flex-grow overflow-y-auto cursor-default"
             onContextMenu={handleBaseContextMenu}
