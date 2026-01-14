@@ -28,13 +28,6 @@ pub enum AISessionError {
     #[error("Failed to get credential: {0}")]
     CredentialError(#[from] SecretCacheError),
 
-    #[error("HTTP error: {status} {status_text}")]
-    HttpError {
-        status: u16,
-        status_text: String,
-        body: String,
-    },
-
     #[error("Failed to start request: {0}")]
     RequestError(#[from] genai::Error),
 
@@ -268,7 +261,7 @@ impl AISession {
     }
 
     async fn get_api_key(
-        adapter_kind: AdapterKind,
+        _adapter_kind: AdapterKind,
         is_hub: bool,
     ) -> Result<String, AISessionError> {
         if is_hub {

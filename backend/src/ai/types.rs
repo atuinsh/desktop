@@ -1,6 +1,5 @@
 use std::{ops::Deref, sync::Arc};
 
-use genai::{adapter::AdapterKind, ModelIden};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use ts_rs::TS;

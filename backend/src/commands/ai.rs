@@ -20,7 +20,6 @@ pub async fn ai_create_session(
     let (output_tx, mut output_rx) = mpsc::channel::<SessionEvent>(32);
 
     // TODO: Get model selection from settings/frontend
-    // let model = ModelSelection::Claude(ModelToken::new("api token".to_string()));
     let model = ModelSelection::AtuinHub {
         model: "claude-opus-4-5-20251101".to_string(),
         uri: Some("http://localhost:4000/api/ai/proxy/".to_string()),

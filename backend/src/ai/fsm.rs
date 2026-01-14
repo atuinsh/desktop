@@ -75,21 +75,6 @@ pub struct Context {
 
     /// Accumulated content from current stream (for building assistant message).
     pub current_response: String,
-
-    /// Accumulated tool calls from current stream.
-    pub current_tool_calls: Vec<ToolCall>,
-}
-
-impl Context {
-    /// Take all queued messages, leaving the queue empty.
-    pub fn take_queued(&mut self) -> Vec<ChatMessage> {
-        self.queued_messages.drain(..).collect()
-    }
-
-    /// Take all tool results, leaving the vec empty.
-    pub fn take_tool_results(&mut self) -> Vec<ToolResult> {
-        std::mem::take(&mut self.tool_results)
-    }
 }
 
 // ============================================================================
@@ -259,26 +244,6 @@ impl Agent {
     /// Read-only access to context.
     pub fn context(&self) -> &Context {
         &self.context
-    }
-
-    /// Mutable access to context (for caller to read conversation, etc.)
-    pub fn context_mut(&mut self) -> &mut Context {
-        &mut self.context
-    }
-
-    /// Check if the agent is idle (can accept new conversations).
-    pub fn is_idle(&self) -> bool {
-        self.state == State::Idle
-    }
-
-    /// Check if a request is in flight.
-    pub fn is_busy(&self) -> bool {
-        !self.is_idle()
-    }
-
-    /// Check if we're waiting for tool results.
-    pub fn is_awaiting_tools(&self) -> bool {
-        self.state == State::PendingTools
     }
 
     /// Push accumulated tool results to conversation as tool response messages.
@@ -505,8 +470,6 @@ impl Agent {
 
 #[cfg(test)]
 mod tests {
-    use crate::ai::prompts::AIPrompts;
-
     use super::*;
     use genai::chat::ChatRole;
 
@@ -630,7 +593,6 @@ mod tests {
         });
 
         assert_eq!(agent.state(), &State::PendingTools);
-        assert!(agent.is_awaiting_tools());
         assert_eq!(
             t.effects,
             vec![
@@ -650,16 +612,12 @@ mod tests {
             tool_calls: vec![make_tool_call("call_123", "get_time")],
         });
 
-        // Now in Idle with pending tools
-        assert!(agent.is_awaiting_tools());
-
         let t = agent.handle(Event::ToolResult(ToolResult {
             call_id: "call_123".to_string(),
             output: ToolOutput::Success("12:34 PM".to_string()),
         }));
 
         assert_eq!(agent.state(), &State::Sending);
-        assert!(!agent.is_awaiting_tools());
         assert_eq!(t.effects, vec![Effect::StartRequest]);
         assert!(agent.context().pending_tools.is_empty());
         // Tool results are now pushed to conversation as ToolResponse messages
@@ -687,7 +645,6 @@ mod tests {
         }));
 
         assert_eq!(agent.state(), &State::PendingTools);
-        assert!(agent.is_awaiting_tools());
         assert!(t.effects.is_empty());
 
         // Second result - now complete
@@ -697,7 +654,6 @@ mod tests {
         }));
 
         assert_eq!(agent.state(), &State::Sending);
-        assert!(!agent.is_awaiting_tools());
         assert_eq!(t.effects, vec![Effect::StartRequest]);
     }
 
@@ -803,7 +759,6 @@ mod tests {
 
         // In PendingTools awaiting tools
         assert_eq!(agent.state(), &State::PendingTools);
-        assert!(agent.is_awaiting_tools());
 
         // User sends new message while waiting for tools
         let t = agent.handle(Event::UserMessage(user_msg("continue")));
