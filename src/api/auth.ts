@@ -5,42 +5,39 @@ import SocketManager from "@/socket";
 import { KVStore } from "@/state/kv";
 import { invoke } from "@tauri-apps/api/core";
 
-type PasswordStore = {
-  get: (service: string, user: string) => Promise<string | null>;
-  set: (service: string, user: string, password: string) => Promise<void>;
-  remove: (service: string, user: string) => Promise<void>;
-};
-
-const keychainStore: PasswordStore = {
-  get: (service: string, user: string) => invoke("load_password", { service, user }),
-  set: (service: string, user: string, password: string) =>
+const tauriBackendStore = {
+  get: (service: string, user: string): Promise<string | null> =>
+    invoke("load_password", { service, user }),
+  set: (service: string, user: string, password: string): Promise<void> =>
     invoke("save_password", { service, user, value: password }),
-  remove: (service: string, user: string) => invoke("delete_password", { service, user }),
+  remove: (service: string, user: string): Promise<void> =>
+    invoke("delete_password", { service, user }),
 };
 
-const localStorageStore: PasswordStore = {
-  get: (service: string, user: string) =>
-    Promise.resolve(localStorage.getItem(`${service}:${user}`)),
-  set: (service: string, user: string, password: string) =>
-    Promise.resolve(localStorage.setItem(`${service}:${user}`, password)),
-  remove: (service: string, user: string) =>
-    Promise.resolve(localStorage.removeItem(`${service}:${user}`)),
-};
+async function _loadPassword(service: string, user: string): Promise<string | null> {
+  const password = await tauriBackendStore.get(service, user);
+  if (password) return password;
 
-function getStorage() {
+  // In dev mode, check localStorage for legacy secrets and migrate them
   if (AtuinEnv.isDev) {
-    return localStorageStore;
-  } else {
-    return keychainStore;
+    const localStorageKey = `${service}:${user}`;
+    const legacyPassword = localStorage.getItem(localStorageKey);
+    if (legacyPassword) {
+      // Migrate to backend storage
+      await tauriBackendStore.set(service, user, legacyPassword);
+      localStorage.removeItem(localStorageKey);
+      return legacyPassword;
+    }
   }
+
+  return null;
 }
 
-const _loadPassword = (service: string, user: string) => getStorage().get(service, user);
-
 const _savePassword = (service: string, user: string, password: string) =>
-  getStorage().set(service, user, password);
+  tauriBackendStore.set(service, user, password);
 
-const _deletePassword = (service: string, user: string) => getStorage().remove(service, user);
+const _deletePassword = (service: string, user: string) =>
+  tauriBackendStore.remove(service, user);
 
 // Convenience function for setting the hub credentials in development
 DevConsole.addAppObject("setHubCredentials", async (username: string, key: string) => {

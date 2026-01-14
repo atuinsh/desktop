@@ -12,12 +12,16 @@ use uuid::Uuid;
 use crate::ai::fsm::State;
 use crate::ai::prompts::AIPrompts;
 use crate::ai::tools::AITools;
+use crate::secret_cache::{SecretCache, SecretCacheError};
 
 use super::fsm::{Agent, Effect, Event, StreamChunk, ToolOutput, ToolResult};
 use super::types::{AIToolCall, ModelSelection};
 
 #[derive(Debug, thiserror::Error)]
 pub enum AISessionError {
+    #[error("Failed to get credential: {0}")]
+    CredentialError(#[from] SecretCacheError),
+
     #[error("Failed to start request: {0}")]
     RequestError(#[from] genai::Error),
 
@@ -57,6 +61,25 @@ impl SessionHandle {
     pub async fn change_model(&self, model: ModelSelection) -> Result<(), AISessionError> {
         self.event_tx
             .send(Event::ModelChange(model))
+            .await
+            .map_err(|_| AISessionError::ChannelClosed)
+    }
+
+    /// Change the charge target of the session.
+    pub async fn change_charge_target(
+        &self,
+        charge_target: ChargeTarget,
+    ) -> Result<(), AISessionError> {
+        self.event_tx
+            .send(Event::ChargeTargetChange(charge_target))
+            .await
+            .map_err(|_| AISessionError::ChannelClosed)
+    }
+
+    /// Change the active user of the session.
+    pub async fn change_user(&self, user: String) -> Result<(), AISessionError> {
+        self.event_tx
+            .send(Event::UserChange(user))
             .await
             .map_err(|_| AISessionError::ChannelClosed)
     }
@@ -113,6 +136,9 @@ pub struct AISession {
     event_tx: mpsc::Sender<Event>,
     event_rx: mpsc::Receiver<Event>,
     output_tx: mpsc::Sender<SessionEvent>,
+    secret_cache: Arc<SecretCache>,
+    desktop_username: String,
+    charge_target: ChargeTarget,
     /// Cancellation signal for the stream processing task.
     cancel_tx: watch::Sender<bool>,
 }
@@ -124,6 +150,7 @@ impl AISession {
         output_tx: mpsc::Sender<SessionEvent>,
         block_types: Vec<String>,
         block_summary: String,
+        secret_cache: Arc<SecretCache>,
     ) -> (Self, SessionHandle) {
         let client = genai::Client::builder().build();
         let (event_tx, event_rx) = mpsc::channel(32);
@@ -139,6 +166,7 @@ impl AISession {
             event_tx: event_tx.clone(),
             event_rx,
             output_tx,
+            secret_cache,
             cancel_tx,
         };
 
@@ -197,6 +225,12 @@ impl AISession {
             Effect::ModelChange(model) => {
                 self.model = model;
             }
+            Effect::ChargeTargetChange(charge_target) => {
+                self.charge_target = charge_target;
+            }
+            Effect::UserChange(user) => {
+                self.desktop_username = user;
+            }
             Effect::StartRequest => {
                 self.start_request().await?;
             }
@@ -247,10 +281,30 @@ impl AISession {
                 AITools::replace_blocks(),
             ]);
 
-        let chat_options = ChatOptions::default()
-            .with_capture_tool_calls(true)
-            .with_capture_content(true)
-            .with_capture_raw_body(true);
+        let mut chat_options = ChatOptions::default().with_capture_tool_calls(true);
+
+        if let ModelSelection::AtuinHub { .. } = self.model {
+            let secret = self
+                .secret_cache
+                .get("sh.atuin.runbooks.api", &self.desktop_username)
+                .await?
+                .ok_or(AISessionError::CredentialError(
+                    SecretCacheError::LookupFailed {
+                        service: "sh.atuin.runbooks.api".to_string(),
+                        user: self.desktop_username.clone(),
+                        context: "No Atuin Hub API key found".to_string(),
+                    },
+                ))?;
+
+            let extra_headers = vec![
+                ("x-atuin-hub-api-key".to_string(), secret),
+                (
+                    "x-atuin-charge-to".to_string(),
+                    self.charge_target.to_string(),
+                ),
+            ];
+            chat_options = chat_options.with_extra_headers(extra_headers);
+        }
 
         let stream = self
             .client

@@ -1,10 +1,9 @@
-use serde_json::Value;
 use tauri::ipc::Channel;
 use tokio::sync::mpsc;
 use uuid::Uuid;
 
-use crate::ai::session::{AISession, SessionEvent};
-use crate::ai::types::{AIMessage, ModelSelection, ModelToken};
+use crate::ai::session::{AISession, ChargeTarget, SessionEvent};
+use crate::ai::types::{AIMessage, ModelSelection};
 use crate::state::AtuinState;
 
 /// Create a new AI session.
@@ -14,15 +13,29 @@ pub async fn ai_create_session(
     state: tauri::State<'_, AtuinState>,
     block_types: Vec<String>,
     block_summary: String,
+    desktop_username: String,
+    charge_target: ChargeTarget,
 ) -> Result<Uuid, String> {
     // Create output channel for session events
     let (output_tx, mut output_rx) = mpsc::channel::<SessionEvent>(32);
 
     // TODO: Get model selection from settings/frontend
-    let model = ModelSelection::Claude(ModelToken::new("api token".to_string()));
+    // let model = ModelSelection::Claude(ModelToken::new("api token".to_string()));
+    let model = ModelSelection::AtuinHub {
+        model: "claude-opus-4-5-20251101".to_string(),
+        uri: Some("http://localhost:4000/api/ai/proxy/".to_string()),
+    };
 
     // Create the session
-    let (session, handle) = AISession::new(model, output_tx, block_types, block_summary);
+    let (session, handle) = AISession::new(
+        model,
+        output_tx,
+        block_types,
+        block_summary,
+        desktop_username,
+        charge_target,
+        state.secret_cache(),
+    );
     let session_id = session.id();
 
     // Store the handle
@@ -95,6 +108,41 @@ pub async fn ai_change_model(
         .ok_or_else(|| format!("Session {} not found", session_id))?;
 
     handle.change_model(model).await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn ai_change_charge_target(
+    state: tauri::State<'_, AtuinState>,
+    session_id: Uuid,
+    charge_target: ChargeTarget,
+) -> Result<(), String> {
+    let sessions = state.ai_sessions.read().await;
+    let handle = sessions
+        .get(&session_id)
+        .ok_or_else(|| format!("Session {} not found", session_id))?;
+
+    handle
+        .change_charge_target(charge_target)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn ai_change_user(
+    state: tauri::State<'_, AtuinState>,
+    session_id: Uuid,
+    user: String,
+) -> Result<(), String> {
+    let sessions = state.ai_sessions.read().await;
+    let handle = sessions
+        .get(&session_id)
+        .ok_or_else(|| format!("Session {} not found", session_id))?;
+
+    handle.change_user(user).await.map_err(|e| e.to_string())?;
+
+    Ok(())
 }
 
 /// Send a user message to an AI session.

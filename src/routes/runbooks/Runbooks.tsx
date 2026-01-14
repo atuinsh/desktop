@@ -99,6 +99,13 @@ export default function Runbooks() {
     return tag;
   });
 
+  const owningOrgId = useMemo(() => {
+    if (runbookWorkspace) {
+      return runbookWorkspace.isOrgOwned() ? runbookWorkspace.get("orgId") : null;
+    }
+    return null;
+  }, [runbookWorkspace]);
+
   useEffect(
     function syncRunbookIfNotSynced() {
       if (!runbookId) return;
@@ -550,6 +557,7 @@ export default function Runbooks() {
                   <Editor
                     key={editorKey ? "1" : "2"}
                     runbook={currentRunbook}
+                    owningOrgId={owningOrgId || null}
                     runbookEditor={runbookEditor}
                     editable={editable && selectedTag == "latest"}
                     isAIAssistantOpen={isAIAssistantOpen}

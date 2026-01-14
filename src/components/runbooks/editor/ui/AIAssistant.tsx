@@ -40,9 +40,11 @@ import { cn } from "@/lib/utils";
 import { AIMessage } from "@/rs-bindings/AIMessage";
 import { AIToolCall } from "@/rs-bindings/AIToolCall";
 import useAIChat from "@/lib/ai/useAIChat";
-import { createSession, destroySession } from "@/lib/ai/commands";
+import { changeChargeTarget, changeUser, createSession, destroySession } from "@/lib/ai/commands";
 import AIBlockRegistry from "@/lib/ai/block_registry";
 import { Settings } from "@/state/settings";
+import { useStore } from "@/state/store";
+import { ChargeTarget } from "@/rs-bindings/ChargeTarget";
 
 const ALL_TOOL_NAMES = [
   "get_runbook_document",
@@ -100,6 +102,7 @@ interface AIAssistantProps {
   editor: BlockNoteEditor | null;
   getContext: () => Promise<AIContext>;
   isOpen: boolean;
+  chargeTarget: ChargeTarget;
   onClose: () => void;
 }
 
@@ -473,6 +476,7 @@ export default function AIAssistant({
   editor,
   getContext: _getContext, // TODO: Use context in AI requests
   isOpen,
+  chargeTarget,
   onClose,
 }: AIAssistantProps) {
   const [inputValue, setInputValue] = useState("");
@@ -483,6 +487,7 @@ export default function AIAssistant({
   const scrollShadowRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const autoApproveToolsRef = useRef<string[]>([...AUTO_APPROVE_TOOLS]);
+  const user = useStore((state) => state.user);
 
   // Create session on mount
   useEffect(() => {
@@ -492,7 +497,12 @@ export default function AIAssistant({
     let mounted = true;
     setIsCreatingSession(true);
 
-    createSession(blockRegistry.getBlockTypes(), blockRegistry.getBlockSummary())
+    createSession(
+      blockRegistry.getBlockTypes(),
+      blockRegistry.getBlockSummary(),
+      user.username,
+      chargeTarget,
+    )
       .then((id) => {
         if (mounted) {
           setSessionId(id);
@@ -538,6 +548,16 @@ export default function AIAssistant({
     addToolOutput,
     cancel,
   } = chat;
+
+  useEffect(() => {
+    if (!sessionId) return;
+    changeChargeTarget(sessionId, chargeTarget);
+  }, [sessionId, chargeTarget]);
+
+  useEffect(() => {
+    if (!sessionId) return;
+    changeUser(sessionId, user.username);
+  }, [sessionId, user.username]);
 
   // Can cancel when streaming or waiting for tool calls
   const canCancel = state !== "idle";
@@ -665,7 +685,12 @@ export default function AIAssistant({
       destroySession(sessionId).catch(console.error);
       setSessionId(null);
       setIsCreatingSession(true);
-      createSession(blockRegistry.getBlockTypes(), blockRegistry.getBlockSummary())
+      createSession(
+        blockRegistry.getBlockTypes(),
+        blockRegistry.getBlockSummary(),
+        user.username,
+        chargeTarget,
+      )
         .then((id) => {
           setSessionId(id);
           setIsCreatingSession(false);
@@ -748,7 +773,9 @@ export default function AIAssistant({
             <div className="p-3 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-lg">
               <div className="flex items-center gap-2">
                 <AlertCircleIcon className="h-4 w-4 text-red-600 dark:text-red-400" />
-                <span className="text-sm text-red-800 dark:text-red-200">{error}</span>
+                <span className="text-sm text-red-800 dark:text-red-200 whitespace-pre-wrap break-words">
+                  {error}
+                </span>
               </div>
             </div>
           )}

@@ -11,7 +11,7 @@ use genai::chat::{ChatMessage, ContentPart, MessageContent, ToolCall, ToolRespon
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-use crate::ai::types::ModelSelection;
+use crate::ai::{session::ChargeTarget, types::ModelSelection};
 
 // ============================================================================
 // FSM State
@@ -99,6 +99,12 @@ impl Context {
 /// Events that drive state transitions.
 #[derive(Debug, Clone)]
 pub enum Event {
+    /// Change the charge target.
+    ChargeTargetChange(ChargeTarget),
+
+    /// Change active user.
+    UserChange(String),
+
     /// User requests a new model.
     ModelChange(ModelSelection),
 
@@ -135,6 +141,12 @@ pub enum Event {
 pub enum Effect {
     /// Change the model.
     ModelChange(ModelSelection),
+
+    /// Change the charge target.
+    ChargeTargetChange(ChargeTarget),
+
+    /// Change active user.
+    UserChange(String),
 
     /// Start a new request to the model.
     /// Caller should use context.conversation to build the actual request.
@@ -302,6 +314,12 @@ impl Agent {
             // ================================================================
             // TODO: should we handle this in any state, or require Idle?
             (_, Event::ModelChange(model)) => Transition::single(Effect::ModelChange(model)),
+
+            (_, Event::ChargeTargetChange(charge_target)) => {
+                Transition::single(Effect::ChargeTargetChange(charge_target))
+            }
+
+            (_, Event::UserChange(user)) => Transition::single(Effect::UserChange(user)),
 
             // ================================================================
             // User messages

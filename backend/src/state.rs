@@ -9,7 +9,10 @@ use tauri::{async_runtime::RwLock, AppHandle};
 use tokio::sync::{broadcast, mpsc, oneshot};
 use uuid::Uuid;
 
-use crate::ai::session::{SessionEvent, SessionHandle};
+use crate::{
+    ai::session::{SessionEvent, SessionHandle},
+    secret_cache::{KeychainSecretStorage, KvDbSecretStorage, SecretCache},
+};
 use crate::{
     shared_state::SharedStateHandle, sqlite::DbInstances, workspaces::manager::WorkspaceManager,
 };
@@ -84,6 +87,9 @@ pub(crate) struct AtuinState {
 
     // AI session event channels for sending events to frontend (per session)
     pub ai_session_channels: Arc<RwLock<HashMap<Uuid, Channel<SessionEvent>>>>,
+
+    // Secret cache for storing secrets (backed by keychain in prod, KV DB in dev)
+    secret_cache: Mutex<Option<Arc<SecretCache>>>,
 }
 
 impl AtuinState {
@@ -114,6 +120,7 @@ impl AtuinState {
             dev_prefix,
             app_path,
             use_hub_updater_service,
+            secret_cache: Mutex::new(None),
         }
     }
     pub async fn init(&self, _app: &AppHandle) -> Result<()> {
@@ -166,6 +173,22 @@ impl AtuinState {
         let (gc_sender, gc_receiver) = mpsc::unbounded_channel::<GCEvent>();
         self.gc_event_sender.lock().unwrap().replace(gc_sender);
         *self.event_receiver.lock().await = Some(gc_receiver);
+
+        // Initialize secret cache with appropriate storage backend
+        let secret_cache = if let Some(ref prefix) = self.dev_prefix {
+            // Dev mode: use KV DB storage
+            let pool = self.db_instances.get_pool("kv").await?;
+            let storage = Arc::new(KvDbSecretStorage::new(prefix.clone(), pool));
+            SecretCache::new(storage)
+        } else {
+            // Production: use keychain storage
+            let storage = Arc::new(KeychainSecretStorage);
+            SecretCache::new(storage)
+        };
+        self.secret_cache
+            .lock()
+            .unwrap()
+            .replace(Arc::new(secret_cache));
 
         Ok(())
     }
@@ -239,6 +262,14 @@ impl AtuinState {
             gc_event_sender.clone()
         } else {
             panic!("GC event sender not initialized");
+        }
+    }
+
+    pub fn secret_cache(&self) -> Arc<SecretCache> {
+        if let Some(secret_cache) = self.secret_cache.lock().unwrap().as_ref() {
+            secret_cache.clone()
+        } else {
+            panic!("Secret cache not initialized");
         }
     }
 }

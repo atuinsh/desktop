@@ -1,12 +1,24 @@
 import { invoke, Channel } from "@tauri-apps/api/core";
 import type { SessionEvent } from "../../rs-bindings/SessionEvent";
+import { ModelSelection } from "@/rs-bindings/ModelSelection";
+import { ChargeTarget } from "@/rs-bindings/ChargeTarget";
 
 /**
  * Create a new AI session.
  * Returns the session ID.
  */
-export async function createSession(blockTypes: string[], blockSummary: string): Promise<string> {
-  return await invoke<string>("ai_create_session", { blockTypes, blockSummary });
+export async function createSession(
+  blockTypes: string[],
+  blockSummary: string,
+  desktopUsername: string,
+  chargeTarget: ChargeTarget,
+): Promise<string> {
+  return await invoke<string>("ai_create_session", {
+    blockTypes,
+    blockSummary,
+    desktopUsername,
+    chargeTarget,
+  });
 }
 
 /**
@@ -20,6 +32,30 @@ export async function subscribeSession(
   const channel = new Channel<SessionEvent>();
   channel.onmessage = onEvent;
   await invoke("ai_subscribe_session", { sessionId, channel });
+}
+
+/**
+ * Change the model of an AI session.
+ */
+export async function changeModel(sessionId: string, model: ModelSelection): Promise<void> {
+  await invoke("ai_change_model", { sessionId, model });
+}
+
+/**
+ * Change the charge target of an AI session.
+ */
+export async function changeChargeTarget(
+  sessionId: string,
+  chargeTarget: ChargeTarget,
+): Promise<void> {
+  await invoke("ai_change_charge_target", { sessionId, chargeTarget });
+}
+
+/**
+ * Change the active user of an AI session.
+ */
+export async function changeUser(sessionId: string, user: string): Promise<void> {
+  await invoke("ai_change_user", { sessionId, user });
 }
 
 /**

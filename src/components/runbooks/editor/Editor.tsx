@@ -266,10 +266,12 @@ type EditorProps = {
   runbookEditor: RunbookEditor;
   isAIAssistantOpen: boolean;
   closeAIAssistant: () => void;
+  owningOrgId: string | null;
 };
 
 export default function Editor({
   runbook,
+  owningOrgId,
   editable,
   runbookEditor,
   isAIAssistantOpen,
@@ -291,6 +293,15 @@ export default function Editor({
   const [runbookLinkPopupPosition, setRunbookLinkPopupPosition] = useState({ x: 0, y: 0 });
   const [savedBlockPopupVisible, setSavedBlockPopupVisible] = useState(false);
   const [savedBlockPopupPosition, setSavedBlockPopupPosition] = useState({ x: 0, y: 0 });
+
+  const chargeTarget: ChargeTarget = useMemo(() => {
+    if (owningOrgId) {
+      return {
+        org: owningOrgId,
+      };
+    }
+    return "user";
+  }, [owningOrgId]);
 
   // Inline AI generation state
   const [isGeneratingInline, setIsGeneratingInline] = useState(false);
@@ -1085,6 +1096,7 @@ export default function Editor({
               editor={editor}
               getContext={getAIAssistantContext}
               isOpen={isAIAssistantOpen}
+              chargeTarget={chargeTarget}
               onClose={closeAIAssistant}
             />
           </ResizablePanel>
