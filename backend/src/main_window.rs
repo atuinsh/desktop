@@ -132,6 +132,23 @@ pub(crate) async fn create_main_window(app: &AppHandle) -> Result<(), String> {
     };
 
     let window = builder.build().unwrap();
+
+    // Apply native macOS vibrancy effect (blurs desktop behind window)
+    #[cfg(target_os = "macos")]
+    {
+        use tauri::window::{Effect, EffectState, EffectsBuilder};
+        if let Err(e) = window.set_effects(
+            EffectsBuilder::new()
+                .effects([Effect::Sidebar])
+                .state(EffectState::Active)
+                .build(),
+        ) {
+            log::error!("Failed to apply window effects: {:?}", e);
+        } else {
+            log::info!("Applied window effects successfully");
+        }
+    }
+
     if std::env::var("DEVTOOLS").is_ok() {
         window.open_devtools();
     }
