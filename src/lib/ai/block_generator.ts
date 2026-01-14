@@ -3,8 +3,10 @@ import {
   AIFeatureDisabledError,
   AIGenerationError,
   AIQuotaExceededError,
+  AIContext,
+  AIMultiBlockResponse,
+  AISingleBlockResponse,
 } from "@/api/ai";
-import { uuidv7 } from "uuidv7";
 import DevConsole from "../dev/dev_console";
 
 export interface BlockSpec {
@@ -20,6 +22,7 @@ export interface GenerateBlocksRequest {
   insertAfterIndex?: number;
   insertBeforeIndex?: number;
   runbookId?: string;
+  context?: AIContext;
 }
 
 export interface GenerateBlocksResponse {
@@ -30,9 +33,11 @@ export interface GenerateBlocksResponse {
 export { AIFeatureDisabledError, AIGenerationError, AIQuotaExceededError };
 
 export async function generateBlocks(
-  request: GenerateBlocksRequest
+  request: GenerateBlocksRequest,
 ): Promise<GenerateBlocksResponse> {
-  const response = await generateOrEditBlock({
+  console.log("generateBlocks", request);
+
+  let response = await generateOrEditBlock({
     action: "generate",
     instruction: request.prompt,
     block_type: request.blockType,
@@ -40,15 +45,23 @@ export async function generateBlocks(
     insert_after_index: request.insertAfterIndex,
     insert_before_index: request.insertBeforeIndex,
     runbook_id: request.runbookId,
+    context: request.context,
   });
 
   // Always generate our own ID, don't trust AI-provided ones
-  const block = { ...response.block, id: uuidv7() };
-
-  return {
-    blocks: [block],
-    explanation: `Generated block based on: "${request.prompt}"`,
-  };
+  if (response.hasOwnProperty("block")) {
+    response = response as AISingleBlockResponse;
+    return {
+      blocks: [response.block],
+      explanation: `Generated block based on: "${request.prompt}"`,
+    };
+  } else {
+    response = response as AIMultiBlockResponse;
+    return {
+      blocks: response.blocks,
+      explanation: `Generated blocks based on: "${request.prompt}"`,
+    };
+  }
 }
 
 // Helper function to create common block patterns
@@ -93,7 +106,7 @@ export const createBlockPatterns = {
     url: string,
     method = "GET",
     headers?: Record<string, string>,
-    body?: string
+    body?: string,
   ): BlockSpec => ({
     type: "http",
     props: { url, method, headers, body },

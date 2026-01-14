@@ -84,6 +84,7 @@ import { SavedBlockPopup } from "./ui/SavedBlockPopup";
 import { DeleteBlockItem } from "./ui/DeleteBlockItem";
 import { BlockNoteEditor } from "@blocknote/core";
 import useDocumentBridge from "@/lib/hooks/useDocumentBridge";
+import { AISingleBlockResponse } from "@/api/ai";
 import { ChargeTarget } from "@/rs-bindings/ChargeTarget";
 
 // Fix for react-dnd interference with BlockNote drag-and-drop
@@ -536,6 +537,7 @@ export default function Editor({
         const context = await getEditorContext();
         const { generateBlocks } = await import("@/lib/ai/block_generator");
         const lastBlockContext = await documentBridge?.getLastBlockContext();
+        console.log("lastBlockContext", lastBlockContext);
 
         const result = await generateBlocks({
           prompt,
@@ -666,13 +668,13 @@ export default function Editor({
       const context = await getEditorContext();
       const { generateOrEditBlock } = await import("@/api/ai");
 
-      const result = await generateOrEditBlock({
+      const result = (await generateOrEditBlock({
         action: "edit",
         block: currentBlock,
         instruction: editPrompt,
         document_markdown: context?.documentMarkdown,
         runbook_id: context?.runbookId,
-      });
+      })) as AISingleBlockResponse;
 
       // Replace the block with the edited version
       const newBlock = { ...result.block, id: currentBlock.id };

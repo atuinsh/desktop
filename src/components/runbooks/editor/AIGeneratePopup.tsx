@@ -7,6 +7,7 @@ import {
 } from "@/lib/ai/block_generator";
 import { AIPopupBase } from "./ui/AIPopupBase";
 import track_event from "@/tracking";
+import useDocumentBridge from "@/lib/hooks/useDocumentBridge";
 
 interface EditorContext {
   documentMarkdown?: string;
@@ -32,6 +33,9 @@ export function AIGeneratePopup({
   onClose,
   getEditorContext,
 }: AIGeneratePopupProps) {
+  const documentBridge = useDocumentBridge();
+  console.log("AIGeneratePopup", documentBridge);
+
   const handleGenerate = useCallback(
     async (prompt: string) => {
       track_event("runbooks.ai.generate_popup", { prompt_length: prompt.length });
@@ -39,12 +43,21 @@ export function AIGeneratePopup({
       try {
         // Get editor context for document-aware generation
         const context = getEditorContext ? await getEditorContext() : undefined;
+        const lastBlockContext = await documentBridge?.getLastBlockContext();
+        console.log("lastBlockContext", lastBlockContext);
 
         const result = await generateBlocks({
           prompt,
           documentMarkdown: context?.documentMarkdown,
           insertAfterIndex: context?.currentBlockIndex,
           runbookId: context?.runbookId,
+          context: {
+            variables: Object.keys(lastBlockContext?.variables ?? {}),
+            named_blocks: [], // TODO: Implement named blocks
+            environment_variables: Object.keys(lastBlockContext?.envVars ?? {}),
+            working_directory: lastBlockContext?.cwd || null,
+            ssh_host: lastBlockContext?.sshHost || null,
+          },
         });
 
         if (result.blocks.length > 0) {
@@ -77,7 +90,7 @@ export function AIGeneratePopup({
         throw error;
       }
     },
-    [onBlockGenerated, onGenerateComplete, getEditorContext]
+    [onBlockGenerated, onGenerateComplete, getEditorContext, documentBridge],
   );
 
   return (

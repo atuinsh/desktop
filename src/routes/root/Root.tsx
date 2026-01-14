@@ -162,7 +162,9 @@ function App() {
   const clearSavingBlock = useStore((state: AtuinState) => state.clearSavingBlock);
 
   const showNewWorkspaceDialog = useStore((state: AtuinState) => state.newWorkspaceDialogOpen);
-  const setShowNewWorkspaceDialog = useStore((state: AtuinState) => state.setNewWorkspaceDialogOpen);
+  const setShowNewWorkspaceDialog = useStore(
+    (state: AtuinState) => state.setNewWorkspaceDialogOpen,
+  );
 
   const listRef = useRef<ListApi>(null);
 
@@ -434,35 +436,34 @@ function App() {
       );
     } else {
       return (
-        <DropdownItem
-          key="login"
-          description="Sign in to Atuin Hub"
-          onPress={handleOpenLogin}
-        >
+        <DropdownItem key="login" description="Sign in to Atuin Hub" onPress={handleOpenLogin}>
           Log in
         </DropdownItem>
       );
     }
   }
 
-  const navigateToRunbook = useCallback(async (runbookId: string | null) => {
-    let runbook: Runbook | null = null;
-    if (runbookId) {
-      runbook = await Runbook.load(runbookId);
-    }
+  const navigateToRunbook = useCallback(
+    async (runbookId: string | null) => {
+      let runbook: Runbook | null = null;
+      if (runbookId) {
+        runbook = await Runbook.load(runbookId);
+      }
 
-    if (runbook) {
-      setCurrentWorkspaceId(runbook.workspaceId);
-    }
+      if (runbook) {
+        setCurrentWorkspaceId(runbook.workspaceId);
+      }
 
-    if (runbookId) {
-      track_event("runbooks.open", {
-        total: await Runbook.count(),
-      });
+      if (runbookId) {
+        track_event("runbooks.open", {
+          total: await Runbook.count(),
+        });
 
-      openTab(`/runbook/${runbookId}`, undefined, TabIcon.RUNBOOKS);
-    }
-  }, [setCurrentWorkspaceId, openTab]);
+        openTab(`/runbook/${runbookId}`, undefined, TabIcon.RUNBOOKS);
+      }
+    },
+    [setCurrentWorkspaceId, openTab],
+  );
 
   const handlePromptDeleteRunbook = useCallback(async (runbookId: string) => {
     const runbook = await Runbook.load(runbookId);
@@ -1126,12 +1127,7 @@ function App() {
 
               {isLoggedIn() && (
                 <Tooltip content="Invite friends and colleagues to try Atuin Desktop">
-                  <Button
-                    isIconOnly
-                    variant="light"
-                    size="lg"
-                    onPress={handleOpenInviteFriends}
-                  >
+                  <Button isIconOnly variant="light" size="lg" onPress={handleOpenInviteFriends}>
                     <MailPlusIcon className="w-6 h-6" size={24} />
                   </Button>
                 </Tooltip>
@@ -1267,10 +1263,7 @@ function App() {
               onCancel={hideWorkspaceDialog}
             />
           )}
-          <InviteFriendsModal
-            isOpen={showInviteFriends}
-            onClose={handleCloseInviteFriends}
-          />
+          <InviteFriendsModal isOpen={showInviteFriends} onClose={handleCloseInviteFriends} />
           <FeedbackModal isOpen={showFeedback} onClose={handleCloseFeedback} />
         </div>
 
