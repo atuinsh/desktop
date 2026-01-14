@@ -1,4 +1,4 @@
-use std::{ops::Deref, sync::Arc};
+use std::{fmt, ops::Deref, sync::Arc};
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -14,37 +14,25 @@ pub enum ModelSelection {
     Ollama { model: String, uri: Option<String> },
 }
 
-impl ModelSelection {
-    pub fn to_string(&self) -> String {
+impl fmt::Display for ModelSelection {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             ModelSelection::AtuinHub { model, uri } => match uri {
-                Some(uri) => format!("atuinhub::{model}::{}", uri.deref()),
-                None => format!("atuinhub::{model}::default"),
+                Some(uri) => write!(f, "atuinhub::{model}::{}", uri.deref()),
+                None => write!(f, "atuinhub::{model}::default"),
             },
-            ModelSelection::Claude { model } => format!("claude::{model}::default"),
+            ModelSelection::Claude { model } => write!(f, "claude::{model}::default"),
             ModelSelection::OpenAI { model, uri } => match uri {
-                Some(uri) => format!("openai::{model}::{}", uri.deref()),
-                None => format!("openai::{model}::default"),
+                Some(uri) => write!(f, "openai::{model}::{}", uri.deref()),
+                None => write!(f, "openai::{model}::default"),
             },
             ModelSelection::Ollama { model, uri } => match uri {
-                Some(uri) => format!("ollama::{model}::{}", uri.deref()),
-                None => format!("ollama::{model}::default"),
+                Some(uri) => write!(f, "ollama::{model}::{}", uri.deref()),
+                None => write!(f, "ollama::{model}::default"),
             },
         }
     }
 }
-
-// impl From<ModelSelection> for ModelIden {
-//     fn from(model: ModelSelection) -> Self {
-//         match model {
-//             ModelSelection::AtuinHub(model, uri) => ModelIden::new(AdapterKind::Anthropic, model),
-//             ModelSelection::Claude(token) => ModelIden::new(AdapterKind::Anthropic, "claude"),
-//             ModelSelection::OpenAI(endpoint, token) => {
-//                 ModelIden::new("openai", endpoint.deref().to_string())
-//             }
-//         }
-//     }
-// }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -52,20 +40,6 @@ impl ModelSelection {
 pub struct AIMessage {
     pub role: AIMessageRole,
     pub content: AIMessageContent,
-}
-
-impl AIMessage {
-    pub fn new(role: AIMessageRole, content: AIMessageContent) -> Self {
-        Self { role, content }
-    }
-
-    pub fn role(&self) -> &AIMessageRole {
-        &self.role
-    }
-
-    pub fn content(&self) -> &AIMessageContent {
-        &self.content
-    }
 }
 
 impl From<genai::chat::ChatMessage> for AIMessage {
@@ -115,10 +89,6 @@ pub struct AIMessageContent {
 }
 
 impl AIMessageContent {
-    pub fn new() -> Self {
-        Self { parts: Vec::new() }
-    }
-
     pub fn from_parts(parts: Vec<AIMessageContentPart>) -> Self {
         Self { parts }
     }
@@ -133,52 +103,6 @@ impl From<genai::chat::MessageContent> for AIMessageContent {
                 .map(|part| part.into())
                 .collect(),
         }
-    }
-}
-
-impl AIMessageContent {
-    pub fn parts(&self) -> &Vec<AIMessageContentPart> {
-        &self.parts
-    }
-
-    pub fn text(&self) -> Vec<&String> {
-        self.parts
-            .iter()
-            .filter_map(|part| match part {
-                AIMessageContentPart::Text(text) => Some(text),
-                _ => None,
-            })
-            .collect()
-    }
-
-    pub fn binaries(&self) -> Vec<&AIBinary> {
-        self.parts
-            .iter()
-            .filter_map(|part| match part {
-                AIMessageContentPart::Binary(binary) => Some(binary),
-                _ => None,
-            })
-            .collect()
-    }
-
-    pub fn tool_calls(&self) -> Vec<&AIToolCall> {
-        self.parts
-            .iter()
-            .filter_map(|part| match part {
-                AIMessageContentPart::ToolCall(tool_call) => Some(tool_call),
-                _ => None,
-            })
-            .collect()
-    }
-
-    pub fn tool_responses(&self) -> Vec<&AIToolResponse> {
-        self.parts
-            .iter()
-            .filter_map(|part| match part {
-                AIMessageContentPart::ToolResponse(tool_response) => Some(tool_response),
-                _ => None,
-            })
-            .collect()
     }
 }
 
@@ -205,7 +129,7 @@ impl From<genai::chat::ContentPart> for AIMessageContentPart {
                 AIMessageContentPart::ToolResponse(tool_response.into())
             }
             genai::chat::ContentPart::ThoughtSignature(thought_signature) => {
-                AIMessageContentPart::ThoughtSignature(thought_signature.into())
+                AIMessageContentPart::ThoughtSignature(thought_signature)
             }
         }
     }
@@ -266,44 +190,12 @@ impl From<genai::chat::ToolCall> for AIToolCall {
     }
 }
 
-impl AIToolCall {
-    pub fn new(id: String, name: String, args: Value) -> Self {
-        Self { id, name, args }
-    }
-
-    pub fn id(&self) -> &str {
-        &self.id
-    }
-
-    pub fn name(&self) -> &str {
-        &self.name
-    }
-
-    pub fn args(&self) -> &Value {
-        &self.args
-    }
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct AIToolResponse {
     call_id: String,
     result: String,
-}
-
-impl AIToolResponse {
-    pub fn new(call_id: String, result: String) -> Self {
-        Self { call_id, result }
-    }
-
-    pub fn call_id(&self) -> &str {
-        &self.call_id
-    }
-
-    pub fn result(&self) -> &str {
-        &self.result
-    }
 }
 
 impl From<genai::chat::ToolResponse> for AIToolResponse {

@@ -98,6 +98,6 @@ impl AIPrompts {
             - Use outputVariable to pass simple data between blocks
             - Use ATUIN_OUTPUT_VARS or block outputs to pass more complex data between blocks
             - Use the 'shellquote' MiniJinja filter to escape variables for safe shell use
-        "}.replace("{block_summary}", &block_summary)
+        "}.replace("{block_summary}", block_summary)
     }
 }

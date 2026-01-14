@@ -224,6 +224,7 @@ fn resolve_service_target(
 
 impl AISession {
     /// Create a new session, returning the session and a handle for sending events.
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         runbook_id: Uuid,
         model: ModelSelection,
@@ -272,6 +273,7 @@ impl AISession {
     }
 
     /// Create a session from saved state, returning the session and a handle for sending events.
+    #[allow(clippy::too_many_arguments)]
     pub fn from_saved(
         saved: SerializedAISession,
         output_tx: mpsc::Sender<SessionEvent>,
@@ -316,17 +318,6 @@ impl AISession {
         (session, handle)
     }
 
-    /// Get the conversation history as AIMessage format for the frontend.
-    pub async fn get_history(&self) -> Vec<AIMessage> {
-        let agent = self.agent.read().await;
-        agent
-            .context()
-            .conversation
-            .iter()
-            .map(|msg| AIMessage::from(msg.clone()))
-            .collect()
-    }
-
     /// Save the current session state to storage.
     async fn save_state(&self) {
         let (state, context) = {
@@ -368,7 +359,7 @@ impl AISession {
             return Ok("".to_string());
         }
 
-        return Ok("".to_string());
+        Ok("".to_string())
     }
 
     /// Run the session event loop.
@@ -569,7 +560,7 @@ impl AISession {
 
                             if let genai::Error::WebStream { error, .. } = e {
                                 if let Some(genai::Error::HttpError { status, body, .. }) = error.downcast_ref::<genai::Error>() {
-                                    if let Ok(json) = serde_json::from_str::<serde_json::Value>(&body) {
+                                    if let Ok(json) = serde_json::from_str::<serde_json::Value>(body) {
                                         if let Some(msg) = json.get("error").and_then(|m| m.as_str()) {
                                             message = msg.to_string();
                                         }

@@ -29,6 +29,7 @@ lazy_static::lazy_static! {
 ///
 /// If `restore_previous` is true, attempts to restore the most recent session for this runbook.
 /// If false, always creates a fresh session.
+#[allow(clippy::too_many_arguments)]
 #[tauri::command]
 pub async fn ai_create_session(
     state: tauri::State<'_, AtuinState>,

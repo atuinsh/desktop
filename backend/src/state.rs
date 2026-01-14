@@ -56,12 +56,6 @@ pub(crate) struct AtuinState {
     pub event_receiver: Arc<tokio::sync::Mutex<Option<mpsc::UnboundedReceiver<GCEvent>>>>,
     pub gc_frontend_channel: tokio::sync::Mutex<Option<Channel<GCEvent>>>,
 
-    // Persisted to the keychain, but cached here so that
-    // we don't keep asking the user for keychain access.
-    // Map of user -> password
-    // Service is hardcoded
-    pub runbooks_api_token: RwLock<HashMap<String, String>>,
-
     // The prefix to use for SQLite and local storage in development mode
     pub dev_prefix: Option<String>,
 
@@ -111,7 +105,6 @@ impl AtuinState {
             gc_event_sender: Mutex::new(None),
             event_receiver: Arc::new(tokio::sync::Mutex::new(None)),
             gc_frontend_channel: tokio::sync::Mutex::new(None),
-            runbooks_api_token: Default::default(),
             runbook_output_variables: Default::default(),
             block_executions: Default::default(),
             documents: Default::default(),

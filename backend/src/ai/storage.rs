@@ -90,20 +90,6 @@ impl AISessionStorage {
         Ok(())
     }
 
-    /// Load a session by ID
-    pub async fn load(
-        &self,
-        id: &Uuid,
-    ) -> Result<Option<SerializedAISession>, Box<dyn std::error::Error + Send + Sync>> {
-        let session: Option<SerializedAISession> =
-            sqlx::query_as("SELECT * FROM ai_sessions WHERE id = ?")
-                .bind(serde_json::to_string(id)?)
-                .fetch_optional(&self.pool)
-                .await?;
-
-        Ok(session)
-    }
-
     /// Find the most recent session for a runbook
     pub async fn find_most_recent_for_runbook(
         &self,
@@ -117,15 +103,5 @@ impl AISessionStorage {
         .await?;
 
         Ok(session)
-    }
-
-    /// Delete a session by ID
-    pub async fn delete(&self, id: &Uuid) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        sqlx::query("DELETE FROM ai_sessions WHERE id = ?")
-            .bind(serde_json::to_string(id)?)
-            .execute(&self.pool)
-            .await?;
-
-        Ok(())
     }
 }
