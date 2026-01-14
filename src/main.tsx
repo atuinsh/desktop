@@ -164,7 +164,16 @@ function Application() {
 
   return (
     <HeroUIProvider>
-      <ToastProvider placement="bottom-center" toastOffset={40} />
+      <ToastProvider
+        placement="bottom-center"
+        toastOffset={40}
+        toastProps={{
+          classNames: {
+            base: "overflow-hidden",
+            description: "break-all",
+          },
+        }}
+      />
       <QueryClientProvider client={queryClient}>
         {/* <ReactQueryDevtools initialIsOpen={false} buttonPosition="bottom-right" /> */}
         <main className="text-foreground bg-background overflow-hidden z-20 relative">
@@ -212,8 +221,10 @@ window.addEventListener(
   "keydown",
   (event) => {
     const blocknoteBlock = (event.target as Element).closest(".bn-block");
+    const codemirrorEditor = (event.target as Element).closest(".cm-editor");
 
-    if (blocknoteBlock && event.key === "Escape") {
+    // Allow Escape to propagate to CodeMirror editors (needed for vim mode)
+    if (blocknoteBlock && event.key === "Escape" && !codemirrorEditor) {
       event.preventDefault();
       event.stopPropagation();
     }

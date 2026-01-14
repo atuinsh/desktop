@@ -19,6 +19,8 @@ pub struct StreamingRenderer {
     blocks: Vec<BlockInfo>,
     /// Track last lines for terminal blocks to avoid duplicate output
     last_terminal_lines: Vec<Option<Vec<String>>>,
+    /// Current indentation level for nested sub-runbook output
+    indent_level: usize,
 }
 
 #[derive(Clone)]
@@ -27,6 +29,8 @@ struct BlockInfo {
     number: usize,
     title: String,
     is_complete: bool,
+    /// Indentation level when this block was created
+    indent_level: usize,
 }
 
 #[allow(dead_code)]
@@ -36,21 +40,38 @@ impl StreamingRenderer {
             stdout: io::stdout(),
             blocks: Vec::new(),
             last_terminal_lines: Vec::new(),
+            indent_level: 0,
+        }
+    }
+
+    /// Get the indentation prefix for the current level
+    fn indent_prefix(&self) -> String {
+        "    ".repeat(self.indent_level)
+    }
+
+    /// Get the indentation prefix for a specific block
+    fn block_indent_prefix(&self, index: usize) -> String {
+        if let Some(block) = self.blocks.get(index) {
+            "    ".repeat(block.indent_level)
+        } else {
+            String::new()
         }
     }
 
     /// Start a new block and print a header
     fn start_block(&mut self, title: String, is_terminal: bool) -> io::Result<usize> {
         let number = self.blocks.len() + 1;
+        let indent = self.indent_prefix();
         let block = BlockInfo {
             number,
             title: title.clone(),
             is_complete: false,
+            indent_level: self.indent_level,
         };
 
         // Print block header
         writeln!(self.stdout)?;
-        writeln!(self.stdout, "━━━ [{number}] {title} ━━━")?;
+        writeln!(self.stdout, "{indent}━━━ [{number}] {title} ━━━")?;
         self.stdout.flush()?;
 
         self.blocks.push(block);
@@ -86,14 +107,16 @@ impl Renderer for StreamingRenderer {
         self.start_block(title, true)
     }
 
-    fn add_line(&mut self, _index: usize, line: &str) -> io::Result<()> {
+    fn add_line(&mut self, index: usize, line: &str) -> io::Result<()> {
+        let indent = self.block_indent_prefix(index);
         // Print the line immediately
-        writeln!(self.stdout, "  │ {}", line)?;
+        writeln!(self.stdout, "{indent}  │ {}", line)?;
         self.stdout.flush()?;
         Ok(())
     }
 
     fn replace_lines(&mut self, index: usize, lines: Vec<String>) -> io::Result<()> {
+        let indent = self.block_indent_prefix(index);
         // For terminal blocks, we get the full viewport each time
         // We need to diff against last output to only print new content
         if let Some(Some(last_lines)) = self.last_terminal_lines.get_mut(index) {
@@ -107,7 +130,7 @@ impl Renderer for StreamingRenderer {
                 for (i, line) in lines.iter().enumerate() {
                     let is_new = i >= last_len || last_lines.get(i) != Some(line);
                     if is_new && !line.trim().is_empty() {
-                        writeln!(self.stdout, "  │ {}", line)?;
+                        writeln!(self.stdout, "{indent}  │ {}", line)?;
                     }
                 }
                 self.stdout.flush()?;
@@ -121,8 +144,14 @@ impl Renderer for StreamingRenderer {
 
     fn mark_complete(&mut self, index: usize) -> io::Result<()> {
         if let Some(block) = self.blocks.get_mut(index) {
+            let indent = "    ".repeat(block.indent_level);
             block.is_complete = true;
-            writeln!(self.stdout, "  ✓ [{}] {} complete", index + 1, block.title)?;
+            writeln!(
+                self.stdout,
+                "{indent}  ✓ [{}] {} complete",
+                index + 1,
+                block.title
+            )?;
             writeln!(self.stdout)?;
             self.stdout.flush()?;
         }
@@ -131,5 +160,13 @@ impl Renderer for StreamingRenderer {
 
     fn is_interactive(&self) -> bool {
         false
+    }
+
+    fn set_indent_level(&mut self, level: usize) {
+        self.indent_level = level;
+    }
+
+    fn indent_level(&self) -> usize {
+        self.indent_level
     }
 }

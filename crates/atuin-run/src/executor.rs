@@ -16,8 +16,8 @@ use uuid::Uuid;
 use crate::{
     runbooks::Runbook,
     runtime::{
-        ChannelDocumentBridge, NullDocumentBridge, NullEventBus, TempNullContextStorage,
-        TempNullLocalValueProvider,
+        ChannelDocumentBridge, FileRunbookLoader, NullDocumentBridge, NullEventBus,
+        TempNullContextStorage, TempNullLocalValueProvider,
     },
     ui::{Renderer, StreamingRenderer, TerminalViewport, ViewportManager},
 };
@@ -59,12 +59,21 @@ pub struct Executor {
 
 impl Executor {
     pub fn new(runbook: Runbook, interactive: bool) -> Self {
+        // Create runbook loader based on source path
+        let runbook_loader = runbook.source_path.as_ref().map(|path| {
+            Arc::new(FileRunbookLoader::from_runbook_path(path))
+                as Arc<dyn atuin_desktop_runtime::client::RunbookContentLoader>
+        });
+
+        // TODO: Load workspace root from atuin.toml if present
         let document = DocumentHandle::new(
             runbook.id.to_string(),
             Arc::new(NullEventBus),
             Arc::new(NullDocumentBridge),
-            Some(Box::new(TempNullLocalValueProvider)),
+            Some(Arc::new(TempNullLocalValueProvider)),
             Some(Box::new(TempNullContextStorage)),
+            runbook_loader,
+            None, // workspace_root - not yet supported in CLI
         );
 
         // Choose renderer based on interactive mode
@@ -110,6 +119,11 @@ impl Executor {
         block: Block,
         mut receiver: mpsc::Receiver<DocumentBridgeMessage>,
     ) -> Result<()> {
+        // Handle SubRunbook blocks specially to show nested output (non-interactive only)
+        if matches!(block, Block::SubRunbook(_)) && !self.interactive {
+            return self.execute_sub_runbook_block(block, &mut receiver).await;
+        }
+
         let title = self.get_viewport_title(&block);
         let is_terminal = matches!(block, Block::Terminal(_));
 
@@ -451,6 +465,126 @@ impl Executor {
         Ok(())
     }
 
+    /// Execute a SubRunbook block with a simple title showing name and source
+    async fn execute_sub_runbook_block(
+        &mut self,
+        block: Block,
+        receiver: &mut mpsc::Receiver<DocumentBridgeMessage>,
+    ) -> Result<()> {
+        let parent_block_id = block.id();
+
+        // Build title with name and source
+        let title = if let Block::SubRunbook(ref sub) = block {
+            let source = sub.runbook_ref.display_id();
+            let name = if !sub.name.is_empty() {
+                sub.name.clone()
+            } else if let Some(ref rn) = sub.runbook_name {
+                rn.clone()
+            } else {
+                "Sub-Runbook".to_string()
+            };
+            format!("{} ({})", name, source)
+        } else {
+            "Sub-Runbook".to_string()
+        };
+
+        // Create viewport for sub-runbook
+        let viewport = self.renderer.add_block(title, 1)?;
+
+        // Start execution
+        let context = self
+            .document
+            .create_execution_context(
+                parent_block_id,
+                Some(self.ssh_pool.clone()),
+                Some(self.pty_store.clone()),
+                None,
+            )
+            .await?;
+
+        let execution_handle = block
+            .execute(context)
+            .await
+            .map_err(|e| ExecutorError::GenericError(e.to_string()))?;
+
+        if execution_handle.is_none() {
+            let _ = self.renderer.mark_complete(viewport);
+            return Ok(());
+        }
+
+        // Track the last displayed block name to avoid duplicate output
+        let mut last_block_name: Option<String> = None;
+
+        // Wait for completion, process lifecycle and state change events
+        loop {
+            let Some(message) = receiver.recv().await else {
+                break;
+            };
+
+            match message {
+                DocumentBridgeMessage::BlockStateChanged { block_id, state } => {
+                    // Show current block name when it changes
+                    if block_id == parent_block_id {
+                        if let Some(current_name) = state
+                            .get("currentBlockName")
+                            .and_then(|v| v.as_str())
+                            .map(|s| s.to_string())
+                        {
+                            // Only display if the block name changed
+                            if last_block_name.as_ref() != Some(&current_name) {
+                                let _ = self
+                                    .renderer
+                                    .add_line(viewport, &format!("▶ {}", current_name));
+                                last_block_name = Some(current_name);
+                            }
+                        }
+                    }
+                }
+                DocumentBridgeMessage::BlockOutput { block_id, output } => {
+                    if block_id == parent_block_id {
+                        if let Some(lifecycle) = output.lifecycle {
+                            match lifecycle {
+                                BlockLifecycleEvent::Started(_) => {}
+                                BlockLifecycleEvent::Finished(data) => {
+                                    let _ = self.renderer.mark_complete(viewport);
+                                    if let Some(exit_code) = data.exit_code {
+                                        if exit_code != 0 {
+                                            return Err(ExecutorError::BlockFailed(
+                                                parent_block_id,
+                                                String::new(),
+                                                Some(exit_code),
+                                            ));
+                                        }
+                                    }
+                                    break;
+                                }
+                                BlockLifecycleEvent::Cancelled => {
+                                    return Err(ExecutorError::BlockCancelled(parent_block_id));
+                                }
+                                BlockLifecycleEvent::Error(data) => {
+                                    return Err(ExecutorError::BlockError(
+                                        parent_block_id,
+                                        data.message,
+                                    ));
+                                }
+                                BlockLifecycleEvent::Paused => {
+                                    return Err(ExecutorError::BlockError(
+                                        parent_block_id,
+                                        "Pause blocks are not supported in sub-runbooks"
+                                            .to_string(),
+                                    ));
+                                }
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        Ok(())
+    }
+
     fn get_output_lines(&self, block: Block, resolver: &ContextResolver) -> Vec<String> {
         match block {
             Block::Directory(dir) => {
@@ -503,6 +637,7 @@ impl Executor {
             Block::Kubernetes(_) => "Kubernetes".to_string(),
             Block::Dropdown(_) => "Dropdown".to_string(),
             Block::Pause(_) => "Pause".to_string(),
+            Block::SubRunbook(_) => "Sub-Runbook".to_string(),
         }
     }
 }

@@ -1,4 +1,5 @@
-use super::session::{Authentication, Session};
+use super::session::{AuthResult, Authentication, Session};
+use crate::context::DocumentSshConfig;
 use eyre::Result;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -28,8 +29,8 @@ impl Pool {
         }
     }
 
-    /// Connect to a host and return a session
-    /// If the session already exists, return it
+    /// Connect to a host and return a session along with any authentication warnings
+    /// If the session already exists, return it (with no warnings)
     /// If the existing session is dead, remove it and create a new one
     pub async fn connect(
         &mut self,
@@ -37,39 +38,72 @@ impl Pool {
         username: Option<&str>,
         auth: Option<Authentication>,
         cancellation_rx: Option<oneshot::Receiver<()>>,
-    ) -> Result<Arc<Session>> {
+    ) -> Result<(Arc<Session>, AuthResult)> {
+        self.connect_with_config(host, username, auth, cancellation_rx, None)
+            .await
+    }
+
+    /// Connect to a host with optional block configuration overrides
+    /// If the session already exists, return it (with no warnings)
+    /// If the existing session is dead, remove it and create a new one
+    pub async fn connect_with_config(
+        &mut self,
+        host: &str,
+        username: Option<&str>,
+        auth: Option<Authentication>,
+        cancellation_rx: Option<oneshot::Receiver<()>>,
+        ssh_config_override: Option<&DocumentSshConfig>,
+    ) -> Result<(Arc<Session>, AuthResult)> {
         let ssh_config = Session::resolve_ssh_config(host);
-        let username = username
+
+        // Determine username: block override > provided > SSH config > current user
+        let username = ssh_config_override
+            .and_then(|cfg| cfg.user.as_deref())
+            .or(username)
             .map(|u| u.to_string())
             .or(ssh_config.username)
             .unwrap_or_else(whoami::username);
+
         let key = format!("{username}@{host}");
 
         tracing::debug!("connecting to {key}");
 
-        // Check if we have an existing connection
         if let Some(session) = self.get(host, &username) {
             tracing::debug!("found existing ssh session in pool");
-            // Test if the connection is still alive
             if session.send_keepalive().await {
                 tracing::debug!("session keepalive success");
-                return Ok(session);
+                // Existing connection, no new warnings
+                return Ok((session, AuthResult::default()));
             } else {
-                // Connection is dead, remove it from the pool
                 tracing::debug!("Removing dead SSH connection for {key}");
                 self.connections.remove(&key);
             }
         }
 
+        let identity_key_config = ssh_config_override.and_then(|cfg| cfg.identity_key.as_ref());
+        let certificate_config = ssh_config_override.and_then(|cfg| cfg.certificate.as_ref());
+        tracing::debug!(
+            "Pool connect_with_config: ssh_config_override={:?}, identity_key_config={:?}, certificate_config={:?}",
+            ssh_config_override,
+            identity_key_config,
+            certificate_config
+        );
+
         let async_session = async {
-            let mut session = Session::open(host).await?;
-            session.authenticate(auth, Some(&username)).await?;
-            Ok::<_, eyre::Report>(session)
+            let mut session = Session::open_with_config(host, ssh_config_override).await?;
+            let auth_result = session
+                .authenticate_with_config(
+                    auth,
+                    Some(&username),
+                    identity_key_config,
+                    certificate_config,
+                )
+                .await?;
+            Ok::<_, eyre::Report>((session, auth_result))
         };
 
-        // Create a new connection
         tracing::debug!("Creating new SSH connection for {key}");
-        let session = if let Some(mut cancellation_rx) = cancellation_rx {
+        let (session, auth_result) = if let Some(mut cancellation_rx) = cancellation_rx {
             tokio::select! {
                 result = async_session => {
                     result?
@@ -86,7 +120,7 @@ impl Pool {
         let session = Arc::new(session);
         self.connections.insert(key, session.clone());
 
-        Ok(session)
+        Ok((session, auth_result))
     }
 
     pub fn get(&self, host: &str, username: &str) -> Option<Arc<Session>> {

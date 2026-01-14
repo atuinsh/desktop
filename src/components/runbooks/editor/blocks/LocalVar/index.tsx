@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Input, Button } from "@heroui/react";
-import { CloudOffIcon, LockIcon } from "lucide-react";
+import { CloudOffIcon, LockIcon, EyeIcon, EyeOffIcon } from "lucide-react";
 import { createReactBlockSpec } from "@blocknote/react";
 import undent from "undent";
 import AIBlockRegistry from "@/lib/ai/block_registry";
@@ -12,8 +12,10 @@ import isValidVarName from "../../utils/varNames";
 interface LocalVarProps {
   blockId: string;
   name: string;
+  obscured: boolean;
   isEditable: boolean;
   onNameUpdate: (name: string) => void;
+  onObscuredUpdate: (obscured: boolean) => void;
 }
 
 const LocalVar = (props: LocalVarProps) => {
@@ -68,8 +70,19 @@ const LocalVar = (props: LocalVarProps) => {
           spellCheck="false"
           className="flex-1 border-purple-200 dark:border-purple-800 focus:ring-purple-500"
           disabled={!props.isEditable}
-          type="password"
+          type={props.obscured ? "password" : "text"}
         />
+
+        <Button
+          isIconOnly
+          variant="ghost"
+          size="sm"
+          className="text-gray-400 dark:text-gray-500 hover:text-purple-600 dark:hover:text-purple-300 min-w-6 w-6 h-6 border-none"
+          onPress={() => props.onObscuredUpdate(!props.obscured)}
+          isDisabled={!props.isEditable}
+        >
+          {props.obscured ? <EyeOffIcon className="h-3.5 w-3.5" /> : <EyeIcon className="h-3.5 w-3.5" />}
+        </Button>
       </div>
     </div>
   );
@@ -81,12 +94,14 @@ export default createReactBlockSpec(
     propSchema: {
       name: { default: "" },
       // No value stored in props - only the key/name is synced
+      // obscured defaults to true for backward compatibility with existing blocks
+      obscured: { default: true },
     },
     content: "none",
   },
   {
     toExternalHTML: ({ block }) => {
-      let propMatter = exportPropMatter("local-var", block.props, ["name"]);
+      let propMatter = exportPropMatter("local-var", block.props, ["name", "obscured"]);
       return (
         <pre lang="local-var">
           <code>{propMatter}</code>
@@ -102,11 +117,20 @@ export default createReactBlockSpec(
         });
       };
 
+      const onObscuredUpdate = (obscured: boolean): void => {
+        editor.updateBlock(block, {
+          // @ts-ignore
+          props: { ...block.props, obscured },
+        });
+      };
+
       return (
         <LocalVar
           blockId={block.id}
           name={block.props.name}
+          obscured={block.props.obscured}
           onNameUpdate={onNameUpdate}
+          onObscuredUpdate={onObscuredUpdate}
           isEditable={editor.isEditable}
         />
       );
@@ -117,7 +141,7 @@ export default createReactBlockSpec(
 // Component to insert this block from the editor menu
 export const insertLocalVar = (schema: any) => (editor: typeof schema.BlockNoteEditor) => ({
   title: "Local Variable",
-  subtext: "Variable stored only on your device - useful for credentials",
+  subtext: "Variable stored only on your device",
   onItemClick: () => {
     track_event("runbooks.block.create", { type: "local-var" });
 
@@ -125,6 +149,10 @@ export const insertLocalVar = (schema: any) => (editor: typeof schema.BlockNoteE
       [
         {
           type: "local-var",
+          props: {
+            // New blocks default to not obscured for better UX
+            obscured: false,
+          },
         },
       ],
       editor.getTextCursorPosition().block.id,

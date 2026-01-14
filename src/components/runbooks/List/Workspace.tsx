@@ -862,7 +862,7 @@ export default function WorkspaceComponent(props: WorkspaceProps) {
         break;
       default:
         errorType = "Unknown Error";
-        errorText = `An unknown error occurred: ${error.data.message}`;
+        errorText = `An unknown error occurred: ${"message" in error.data ? error.data.message : error.type}`;
     }
 
     async function confirmDeleteWorkspace() {

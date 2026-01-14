@@ -84,6 +84,9 @@ impl BlockContext {
 /// This trait is implemented for `BlockContext` and can be used to add variables to a block context.
 pub trait BlockVars {
     fn add_var(&mut self, var_name: String, var_value: String, var_source: String);
+    fn add_env(&mut self, env_name: String, env_value: String);
+    fn set_cwd(&mut self, cwd: String);
+    fn set_ssh_host(&mut self, ssh_host: Option<String>);
 }
 
 impl BlockVars for BlockContext {
@@ -95,6 +98,24 @@ impl BlockVars for BlockContext {
             vars.push(DocumentVar::new(var_name, var_value, var_source));
             self.insert(vars);
         }
+    }
+
+    fn add_env(&mut self, env_name: String, env_value: String) {
+        if let Some(envs) = self.get_mut::<DocumentEnvVars>() {
+            envs.push(env_name, env_value);
+        } else {
+            let mut envs = DocumentEnvVars::new();
+            envs.push(env_name, env_value);
+            self.insert(envs);
+        }
+    }
+
+    fn set_cwd(&mut self, cwd: String) {
+        self.insert(DocumentCwd(cwd));
+    }
+
+    fn set_ssh_host(&mut self, ssh_host: Option<String>) {
+        self.insert(DocumentSshHost(ssh_host));
     }
 }
 
@@ -325,9 +346,85 @@ pub struct DocumentEnvVar(pub String, pub String);
 #[typetag::serde]
 impl BlockContextItem for DocumentEnvVar {}
 
+/// Container for multiple environment variables (used when importing from sub-runbooks)
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DocumentEnvVars {
+    vars: Vec<DocumentEnvVar>,
+}
+
+impl DocumentEnvVars {
+    pub fn new() -> Self {
+        Self { vars: Vec::new() }
+    }
+
+    pub fn push(&mut self, name: String, value: String) {
+        self.vars.push(DocumentEnvVar(name, value));
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = &DocumentEnvVar> {
+        self.vars.iter()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.vars.is_empty()
+    }
+}
+
+#[typetag::serde]
+impl BlockContextItem for DocumentEnvVars {}
+
 /// SSH connection information from SSH connection and host blocks
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DocumentSshHost(pub Option<String>);
 
 #[typetag::serde]
 impl BlockContextItem for DocumentSshHost {}
+
+/// Identity key configuration from SSH Connect block
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "mode", rename_all = "camelCase")]
+pub enum SshIdentityKeyConfig {
+    /// No custom key - use SSH config/agent defaults
+    None,
+    /// Key content pasted directly
+    Paste { content: String },
+    /// Path to key file on local machine
+    Path { path: String },
+}
+
+/// SSH certificate configuration from SSH Connect block
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "mode", rename_all = "camelCase")]
+pub enum SshCertificateConfig {
+    /// No custom certificate - auto-detect from key path or none
+    None,
+    /// Certificate content pasted directly
+    Paste { content: String },
+    /// Path to certificate file on local machine
+    Path { path: String },
+}
+
+/// Rich SSH configuration from SSH Connect block
+///
+/// This provides detailed SSH connection settings that override ~/.ssh/config.
+/// The `user_host` field is kept for backwards compatibility with the simpler
+/// `DocumentSshHost` context item.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DocumentSshConfig {
+    /// The original user@host:port string (for display/backwards compat)
+    pub user_host: String,
+    /// Optional user override
+    pub user: Option<String>,
+    /// Optional hostname override
+    pub hostname: Option<String>,
+    /// Optional port override
+    pub port: Option<u16>,
+    /// Identity key configuration
+    pub identity_key: Option<SshIdentityKeyConfig>,
+    /// SSH certificate configuration
+    pub certificate: Option<SshCertificateConfig>,
+}
+
+#[typetag::serde]
+impl BlockContextItem for DocumentSshConfig {}

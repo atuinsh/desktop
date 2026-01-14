@@ -1,6 +1,5 @@
 pub(crate) mod ai;
 pub(crate) mod audio;
-pub(crate) mod block_state;
 pub(crate) mod blocks;
 pub(crate) mod dependency;
 pub(crate) mod events;
@@ -8,6 +7,7 @@ pub(crate) mod exec_log;
 pub(crate) mod feedback;
 pub(crate) mod pty_store;
 pub(crate) mod secrets;
+pub(crate) mod ssh;
 pub(crate) mod stats;
 pub(crate) mod template;
 pub(crate) mod updates;

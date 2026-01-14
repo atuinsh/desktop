@@ -12,8 +12,8 @@ vi.mock("@/lib/hooks/useDocumentBridge", () => ({
   useBlockContext: vi.fn(() => ({ variables: {} })),
 }));
 
-vi.mock("@/lib/hooks/useBlockLocalState", () => ({
-  useBlockLocalState: vi.fn(() => [false, vi.fn()]),
+vi.mock("@/lib/hooks/useKvValue", () => ({
+  useBlockKvValue: vi.fn(() => [false, vi.fn()]),
 }));
 
 vi.mock("@/tracking", () => ({

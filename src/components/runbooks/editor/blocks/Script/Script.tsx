@@ -6,7 +6,7 @@ import AIBlockRegistry from "@/lib/ai/block_registry";
 import { useMemo, useState, useEffect, useRef, useCallback, useContext } from "react";
 
 import { useStore } from "@/state/store.ts";
-import { Button, Input, Tooltip } from "@heroui/react";
+import { Button, Input, Tooltip, addToast } from "@heroui/react";
 import {
   FileTerminalIcon,
   Eye,
@@ -31,7 +31,7 @@ import CodeEditor, { TabAutoComplete } from "@/lib/blocks/common/CodeEditor/Code
 import Block from "@/lib/blocks/common/Block.tsx";
 import InterpreterSelector, { supportedShells } from "@/lib/blocks/common/InterpreterSelector.tsx";
 import { exportPropMatter, cn } from "@/lib/utils";
-import { useBlockLocalState } from "@/lib/hooks/useBlockLocalState";
+import { useBlockKvValue } from "@/lib/hooks/useKvValue";
 import {
   GenericBlockOutput,
   useBlockContext,
@@ -132,6 +132,20 @@ const ScriptBlock = ({
   const blockExecution = useBlockExecution(script.id);
   const blockContext = useBlockContext(script.id);
   const sshParent = blockContext.sshHost;
+
+  // Show error toast when execution fails (e.g., SSH connection error)
+  useEffect(() => {
+    if (blockExecution.isError && blockExecution.error) {
+      addToast({
+        title: "Script error",
+        description: blockExecution.error,
+        color: "danger",
+      });
+      blockExecution.reset();
+    }
+  }, [blockExecution.isError, blockExecution.error]);
+
+  const showSpinner = (blockExecution.isStarting || blockExecution.isStopping) && !!sshParent;
 
   const onBlockOutput = useCallback(async (output: GenericBlockOutput<void>) => {
     if (output.stdout) {
@@ -360,14 +374,16 @@ const ScriptBlock = ({
               color="danger"
             >
               <div>
-                <PlayButton
-                  eventName="runbooks.block.execute"
-                  eventProps={{ type: "script" }}
-                  onPlay={handlePlay}
-                  onStop={blockExecution.cancel}
-                  isRunning={blockExecution.isRunning}
-                  cancellable={true}
-                />
+              <PlayButton
+                eventName="runbooks.block.execute"
+                eventProps={{ type: "script" }}
+                onPlay={handlePlay}
+                onStop={blockExecution.cancel}
+                isRunning={blockExecution.isRunning}
+                cancellable={true}
+                isLoading={showSpinner}
+                disabled={showSpinner}
+              />
               </div>
             </Tooltip>
 
@@ -477,7 +493,7 @@ export default createReactBlockSpec(
     },
     // @ts-ignore
     render: ({ block, editor }) => {
-      const [collapseCode, setCollapseCode] = useBlockLocalState<boolean>(
+      const [collapseCode, setCollapseCode] = useBlockKvValue<boolean>(
         block.id,
         "collapsed",
         false,

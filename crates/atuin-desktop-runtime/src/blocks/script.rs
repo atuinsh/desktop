@@ -13,10 +13,11 @@ use uuid::Uuid;
 
 use crate::blocks::{Block, BlockBehavior};
 use crate::context::{fs_var, BlockExecutionOutput, BlockVars};
+use crate::events::GCEvent;
 use crate::execution::{
     CancellationToken, ExecutionContext, ExecutionHandle, ExecutionStatus, StreamingBlockOutput,
 };
-use crate::ssh::OutputLine as SessionOutputLine;
+use crate::ssh::{OutputLine as SessionOutputLine, SshWarning};
 
 use super::FromDocument;
 
@@ -391,6 +392,7 @@ impl Script {
 
         // Check if SSH execution is needed
         let ssh_host = context.context_resolver.ssh_host().cloned();
+        let ssh_config = context.context_resolver.ssh_config().cloned();
         if let Some(ssh_host) = ssh_host {
             tracing::trace!(
                 "Executing SSH script for script block {id} with SSH host {ssh_host}",
@@ -399,7 +401,7 @@ impl Script {
             );
 
             return self
-                .execute_ssh_script(&code, &ssh_host, context, cancellation_token)
+                .execute_ssh_script(&code, &ssh_host, ssh_config, context, cancellation_token)
                 .await;
         }
 
@@ -658,6 +660,7 @@ impl Script {
         &self,
         code: &str,
         ssh_host: &str,
+        ssh_config: Option<crate::context::DocumentSshConfig>,
         context: ExecutionContext,
         cancellation_token: CancellationToken,
     ) -> (
@@ -676,53 +679,63 @@ impl Script {
             }
         };
 
-        // Create remote temp file for variable output
-        let remote_temp_path = match ssh_pool
-            .create_temp_file(&hostname, username.as_deref(), "atuin-desktop-vars")
-            .await
-        {
-            Ok(path) => path,
-            Err(e) => {
-                let error_msg = format!("Failed to create remote temp file: {}", e);
-                let _ = context.block_failed(error_msg.clone()).await;
-                return (Err(error_msg.into()), Vec::new(), None);
+        let uses_output_vars = code.contains("ATUIN_OUTPUT_VARS");
+
+        let remote_temp_path: Option<String> = if uses_output_vars {
+            match ssh_pool
+                .create_temp_file(&hostname, username.as_deref(), "atuin-desktop-vars")
+                .await
+            {
+                Ok(path) => Some(path),
+                Err(e) => {
+                    let error_msg = format!("Failed to create remote temp file: {}", e);
+                    let _ = context.block_failed(error_msg.clone()).await;
+                    return (Err(error_msg.into()), Vec::new(), None);
+                }
             }
+        } else {
+            None
         };
 
-        // Prepend environment variable export to the code
-        let code_with_vars = format!("export ATUIN_OUTPUT_VARS='{}'\n{}", remote_temp_path, code);
+        let code_to_run = if let Some(ref path) = remote_temp_path {
+            format!("export ATUIN_OUTPUT_VARS='{}'\n{}", path, code)
+        } else {
+            code.to_string()
+        };
 
         let channel_id = self.id.to_string();
         let (output_sender, mut output_receiver) = mpsc::channel::<SessionOutputLine>(100);
         let (result_tx, result_rx) = oneshot::channel::<()>();
+        let (warnings_tx, warnings_rx) = oneshot::channel::<Vec<SshWarning>>();
 
         let captured_output = Arc::new(RwLock::new(Vec::new()));
         let captured_output_clone = captured_output.clone();
 
-        // Take the cancellation receiver once at the start
         let mut cancel_rx = match cancellation_token.take_receiver() {
             Some(rx) => rx,
             None => {
                 let error_msg = "Cancellation receiver already taken";
                 let _ = context.block_failed(error_msg.to_string()).await;
-                // Cleanup remote temp file
-                let _ = ssh_pool
-                    .delete_file(&hostname, username.as_deref(), &remote_temp_path)
-                    .await;
+                if let Some(ref path) = remote_temp_path {
+                    let _ = ssh_pool
+                        .delete_file(&hostname, username.as_deref(), path)
+                        .await;
+                }
                 return (Err(error_msg.into()), Vec::new(), None);
             }
         };
 
-        // Execute SSH command with cancellation support
         let exec_result = tokio::select! {
-            result = ssh_pool.exec(
+            result = ssh_pool.exec_with_config(
                 &hostname,
                 username.as_deref(),
                 &self.interpreter,
-                &code_with_vars,
+                &code_to_run,
                 &channel_id,
                 output_sender,
                 result_tx,
+                ssh_config,
+                Some(warnings_tx),
             ) => {
                 result
             }
@@ -730,8 +743,9 @@ impl Script {
                 tracing::trace!("Sending cancel to SSH execution for channel {channel_id}");
                 let _ = ssh_pool.exec_cancel(&channel_id).await;
                 let _ = context.block_cancelled().await;
-                // Cleanup remote temp file
-                let _ = ssh_pool.delete_file(&hostname, username.as_deref(), &remote_temp_path).await;
+                if let Some(ref path) = remote_temp_path {
+                    let _ = ssh_pool.delete_file(&hostname, username.as_deref(), path).await;
+                }
                 return (Err("SSH script execution cancelled before start".into()), Vec::new(), None);
             }
         };
@@ -739,12 +753,61 @@ impl Script {
         if let Err(e) = exec_result {
             let error_msg = format!("Failed to start SSH execution: {}", e);
             let _ = context.block_failed(error_msg.to_string()).await;
-            // Cleanup remote temp file
-            let _ = ssh_pool
-                .delete_file(&hostname, username.as_deref(), &remote_temp_path)
-                .await;
+            if let Some(ref path) = remote_temp_path {
+                let _ = ssh_pool
+                    .delete_file(&hostname, username.as_deref(), path)
+                    .await;
+            }
             return (Err(error_msg.into()), Vec::new(), None);
         }
+
+        // Receive and emit SSH authentication warnings (certificate issues, etc.)
+        if let Ok(warnings) = warnings_rx.await {
+            for warning in warnings {
+                match warning {
+                    SshWarning::CertificateLoadFailed {
+                        host,
+                        cert_path,
+                        error,
+                    } => {
+                        let _ = context
+                            .emit_gc_event(GCEvent::SshCertificateLoadFailed {
+                                host,
+                                cert_path,
+                                error,
+                            })
+                            .await;
+                    }
+                    SshWarning::CertificateExpired {
+                        host,
+                        cert_path,
+                        valid_until,
+                    } => {
+                        let _ = context
+                            .emit_gc_event(GCEvent::SshCertificateExpired {
+                                host,
+                                cert_path,
+                                valid_until,
+                            })
+                            .await;
+                    }
+                    SshWarning::CertificateNotYetValid {
+                        host,
+                        cert_path,
+                        valid_from,
+                    } => {
+                        let _ = context
+                            .emit_gc_event(GCEvent::SshCertificateNotYetValid {
+                                host,
+                                cert_path,
+                                valid_from,
+                            })
+                            .await;
+                    }
+                }
+            }
+        }
+
         let context_clone = context.clone();
         let block_id = self.id;
         let ssh_pool_clone = ssh_pool.clone();
@@ -787,8 +850,9 @@ impl Script {
                 let captured = captured_output.read().await.clone();
 
                 let _ = context.block_cancelled().await;
-                // Cleanup remote temp file
-                let _ = ssh_pool.delete_file(&hostname, username.as_deref(), &remote_temp_path).await;
+                if let Some(ref path) = remote_temp_path {
+                    let _ = ssh_pool.delete_file(&hostname, username.as_deref(), path).await;
+                }
                 return (Err("SSH script execution cancelled".into()), captured, None);
             }
             _ = result_rx => {
@@ -799,25 +863,26 @@ impl Script {
         let _ = output_task.await;
         let captured = captured_output.read().await.clone();
 
-        // Read variables from remote temp file
-        let vars = match ssh_pool
-            .read_file(&hostname, username.as_deref(), &remote_temp_path)
-            .await
-        {
-            Ok(contents) => {
-                // Parse the file contents using fs_var::parse_vars
-                Some(fs_var::parse_vars(&contents))
+        let vars = if let Some(ref path) = remote_temp_path {
+            match ssh_pool
+                .read_file(&hostname, username.as_deref(), path)
+                .await
+            {
+                Ok(contents) => Some(fs_var::parse_vars(&contents)),
+                Err(e) => {
+                    tracing::warn!("Failed to read remote temp file for variables: {}", e);
+                    None
+                }
             }
-            Err(e) => {
-                tracing::warn!("Failed to read remote temp file for variables: {}", e);
-                None
-            }
+        } else {
+            None
         };
 
-        // Cleanup remote temp file
-        let _ = ssh_pool
-            .delete_file(&hostname, username.as_deref(), &remote_temp_path)
-            .await;
+        if let Some(ref path) = remote_temp_path {
+            let _ = ssh_pool
+                .delete_file(&hostname, username.as_deref(), path)
+                .await;
+        }
 
         (Ok(exit_code), captured, vars)
     }

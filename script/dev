@@ -83,30 +83,30 @@ EOF
     # Run Tauri with custom config and optional profile
     if [ -n "$PROFILE" ]; then
         if [ -n "$DEVTOOLS" ]; then
-            DEV_PREFIX="$PROFILE" DEVTOOLS="$DEVTOOLS" pnpm run tauri dev --config "$CONFIG_FILE"
+            DEV_PREFIX="$PROFILE" DEVTOOLS="$DEVTOOLS" bun run tauri dev --config "$CONFIG_FILE"
         else
-            DEV_PREFIX="$PROFILE" pnpm run tauri dev --config "$CONFIG_FILE"
+            DEV_PREFIX="$PROFILE" bun run tauri dev --config "$CONFIG_FILE"
         fi
     else
         if [ -n "$DEVTOOLS" ]; then
-            DEVTOOLS="$DEVTOOLS" pnpm run tauri dev --config "$CONFIG_FILE"
+            DEVTOOLS="$DEVTOOLS" bun run tauri dev --config "$CONFIG_FILE"
         else
-            pnpm run tauri dev --config "$CONFIG_FILE"
+            bun run tauri dev --config "$CONFIG_FILE"
         fi
     fi
 else
     # Run Tauri with default config and optional profile
     if [ -n "$PROFILE" ]; then
         if [ -n "$DEVTOOLS" ]; then
-            DEV_PREFIX="$PROFILE" DEVTOOLS="$DEVTOOLS" pnpm run tauri dev
+            DEV_PREFIX="$PROFILE" DEVTOOLS="$DEVTOOLS" bun run tauri dev
         else
-            DEV_PREFIX="$PROFILE" pnpm run tauri dev
+            DEV_PREFIX="$PROFILE" bun run tauri dev
         fi
     else
         if [ -n "$DEVTOOLS" ]; then
-            DEVTOOLS="$DEVTOOLS" pnpm run tauri dev
+            DEVTOOLS="$DEVTOOLS" bun run tauri dev
         else
-            pnpm run tauri dev
+            bun run tauri dev
         fi
     fi
 fi

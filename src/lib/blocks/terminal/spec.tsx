@@ -5,12 +5,12 @@ import { RunBlock } from "./component";
 import track_event from "@/tracking";
 import { CodeIcon } from "lucide-react";
 import { exportPropMatter } from "@/lib/utils";
-import { useBlockLocalState } from "@/lib/hooks/useBlockLocalState";
+import { useBlockKvValue } from "@/lib/hooks/useKvValue";
 
 export default createReactBlockSpec(TERMINAL_BLOCK_SCHEMA, {
   // @ts-ignore
   render: ({ block, editor, code, type }) => {
-    const [collapseCode, setCollapseCode] = useBlockLocalState<boolean>(
+    const [collapseCode, setCollapseCode] = useBlockKvValue<boolean>(
       block.id,
       "collapsed",
       false,

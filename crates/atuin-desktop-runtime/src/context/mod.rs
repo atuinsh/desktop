@@ -20,7 +20,8 @@ mod storage;
 pub use block_context::BlockState;
 pub use block_context::{
     BlockContext, BlockContextItem, BlockExecutionOutput, BlockStateUpdater, BlockVars,
-    DocumentBlock, DocumentCwd, DocumentEnvVar, DocumentSshHost, DocumentVar, DocumentVars,
+    DocumentBlock, DocumentCwd, DocumentEnvVar, DocumentEnvVars, DocumentSshConfig,
+    DocumentSshHost, DocumentVar, DocumentVars, SshCertificateConfig, SshIdentityKeyConfig,
 };
 
 pub use resolution::{ContextResolver, ResolvedContext};

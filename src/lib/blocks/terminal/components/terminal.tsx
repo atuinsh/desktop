@@ -125,7 +125,6 @@ const TerminalComponent = ({
         terminalRef.current.appendChild(terminalData.terminal.element);
       }
 
-      // Initial fit
       if (terminalData.fitAddon) {
         terminalData.fitAddon.fit();
       }

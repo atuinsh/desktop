@@ -13,6 +13,9 @@ import {
   onSerialExecutionCompleted,
   onSerialExecutionFailed,
   onSerialExecutionPaused,
+  onSshCertificateLoadFailed,
+  onSshCertificateExpired,
+  onSshCertificateNotYetValid,
 } from "@/lib/events/grand_central";
 import { Settings } from "@/state/settings";
 import Runbook from "@/state/runbooks/runbook";
@@ -537,6 +540,48 @@ export default function NotificationManager() {
     [notify],
   );
 
+  // Handler for SSH certificate load failures - always show toast as this is a configuration issue
+  const handleSshCertificateLoadFailed = useCallback(
+    (data: GrandCentralEvents["ssh-certificate-load-failed"]) => {
+      logger.warn("SSH certificate load failed", data);
+      addToast({
+        title: "SSH Certificate Error",
+        description: `Failed to load certificate for ${data.host}. Using key authentication instead.`,
+        color: "warning",
+        timeout: 8000,
+      });
+    },
+    [],
+  );
+
+  // Handler for SSH certificate expired - always show toast as this is a configuration issue
+  const handleSshCertificateExpired = useCallback(
+    (data: GrandCentralEvents["ssh-certificate-expired"]) => {
+      logger.warn("SSH certificate expired", data);
+      addToast({
+        title: "SSH Certificate Expired",
+        description: `Certificate for ${data.host} has expired. Using key authentication instead.`,
+        color: "warning",
+        timeout: 8000,
+      });
+    },
+    [],
+  );
+
+  // Handler for SSH certificate not yet valid - always show toast as this is a configuration issue
+  const handleSshCertificateNotYetValid = useCallback(
+    (data: GrandCentralEvents["ssh-certificate-not-yet-valid"]) => {
+      logger.warn("SSH certificate not yet valid", data);
+      addToast({
+        title: "SSH Certificate Not Yet Valid",
+        description: `Certificate for ${data.host} is not yet valid. Using key authentication instead.`,
+        color: "warning",
+        timeout: 8000,
+      });
+    },
+    [],
+  );
+
   useEffect(() => {
     // Load initial settings
     refreshSettings();
@@ -556,6 +601,11 @@ export default function NotificationManager() {
     const unsubSerialFailed = onSerialExecutionFailed(handleSerialFailed);
     const unsubSerialPaused = onSerialExecutionPaused(handleSerialPaused);
 
+    // Subscribe to SSH certificate events
+    const unsubSshCertFailed = onSshCertificateLoadFailed(handleSshCertificateLoadFailed);
+    const unsubSshCertExpired = onSshCertificateExpired(handleSshCertificateExpired);
+    const unsubSshCertNotYetValid = onSshCertificateNotYetValid(handleSshCertificateNotYetValid);
+
     return () => {
       clearInterval(settingsInterval);
       unsubStarted();
@@ -566,6 +616,9 @@ export default function NotificationManager() {
       unsubSerialCompleted();
       unsubSerialFailed();
       unsubSerialPaused();
+      unsubSshCertFailed();
+      unsubSshCertExpired();
+      unsubSshCertNotYetValid();
     };
   }, [
     refreshSettings,
@@ -577,6 +630,9 @@ export default function NotificationManager() {
     handleSerialCompleted,
     handleSerialFailed,
     handleSerialPaused,
+    handleSshCertificateLoadFailed,
+    handleSshCertificateExpired,
+    handleSshCertificateNotYetValid,
   ]);
 
   // This component doesn't render anything

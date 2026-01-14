@@ -548,7 +548,7 @@ dependencies = [
 
 [[package]]
 name = "atuin-desktop"
-version = "0.2.11"
+version = "0.2.12"
 dependencies = [
  "async-trait",
  "atuin-client",
@@ -621,7 +621,7 @@ dependencies = [
 
 [[package]]
 name = "atuin-desktop-runtime"
-version = "0.2.11"
+version = "0.2.12"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
@@ -692,7 +692,7 @@ dependencies = [
 
 [[package]]
 name = "atuin-run"
-version = "0.2.11"
+version = "0.2.12"
 dependencies = [
  "async-trait",
  "atuin-desktop-runtime",
@@ -700,6 +700,7 @@ dependencies = [
  "clap",
  "crossterm 0.29.0",
  "eyre",
+ "reqwest 0.12.15",
  "serde",
  "serde_json",
  "serde_yaml",
@@ -7108,9 +7109,9 @@ dependencies = [
 
 [[package]]
 name = "russh-config"
-version = "0.54.0"
+version = "0.50.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "11b47b8b07e035afc29f98e015dc2b1a2dbed2c961d8cd99534f4a98c7d02bdc"
+checksum = "dc844810b5b8fd3d3a0cb53adc549a771ea2db85a26f72d9587bbcc5d29e912f"
 dependencies = [
  "futures",
  "globset 0.3.0",

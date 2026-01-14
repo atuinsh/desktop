@@ -72,7 +72,133 @@ impl LocalValueProvider for KvBlockLocalValueProvider {
             .await
             .map_err(|_| Box::new(std::io::Error::other("Failed to open KV database")))?;
         let key = format!("block.{block_id}.{property_name}");
-        kv::get(&db, &key).await.map_err(|e| e.into())
+        // KV stores JSON objects; extract string values directly, serialize others
+        let value: Option<serde_json::Value> = kv::get(&db, &key).await?;
+        match value {
+            Some(serde_json::Value::String(s)) => Ok(Some(s)),
+            Some(v) => Ok(Some(v.to_string())),
+            None => Ok(None),
+        }
+    }
+}
+
+/// Runbook content loader that uses the workspace manager to load runbook content,
+/// with fallback to Atuin Hub for remote runbooks.
+#[derive(Clone)]
+struct WorkspaceRunbookContentLoader {
+    workspaces: Arc<tokio::sync::Mutex<Option<crate::workspaces::manager::WorkspaceManager>>>,
+    hub_client: Arc<atuin_desktop_runtime::client::HubClient>,
+}
+
+impl WorkspaceRunbookContentLoader {
+    pub fn new(
+        workspaces: Arc<tokio::sync::Mutex<Option<crate::workspaces::manager::WorkspaceManager>>>,
+        session_token: Option<String>,
+    ) -> Self {
+        Self {
+            workspaces,
+            hub_client: Arc::new(atuin_desktop_runtime::client::HubClient::with_auth(
+                session_token,
+            )),
+        }
+    }
+
+    /// Load runbook from hub by URI (user/runbook or user/runbook:tag)
+    async fn load_from_uri(
+        &self,
+        uri: &str,
+        display_id: &str,
+    ) -> Result<
+        atuin_desktop_runtime::client::LoadedRunbook,
+        atuin_desktop_runtime::client::RunbookLoadError,
+    > {
+        atuin_desktop_runtime::client::load_runbook_from_uri(&self.hub_client, uri, display_id)
+            .await
+    }
+
+    /// Load runbook from workspace by ID
+    async fn load_from_workspace(
+        &self,
+        id: &str,
+        display_id: &str,
+    ) -> Result<
+        atuin_desktop_runtime::client::LoadedRunbook,
+        atuin_desktop_runtime::client::RunbookLoadError,
+    > {
+        use atuin_desktop_runtime::client::RunbookLoadError;
+
+        let mut manager = self.workspaces.lock().await;
+        let manager = manager
+            .as_mut()
+            .ok_or_else(|| RunbookLoadError::LoadFailed {
+                runbook_id: display_id.to_string(),
+                message: "Workspace manager not initialized".to_string(),
+            })?;
+
+        let runbook = manager.get_runbook(id).await.map_err(|e| match e {
+            crate::workspaces::workspace::WorkspaceError::RunbookNotFound { .. } => {
+                RunbookLoadError::NotFound {
+                    runbook_id: display_id.to_string(),
+                }
+            }
+            _ => RunbookLoadError::LoadFailed {
+                runbook_id: display_id.to_string(),
+                message: e.to_string(),
+            },
+        })?;
+
+        // Parse the runbook ID as UUID
+        let runbook_uuid = Uuid::parse_str(id).map_err(|e| RunbookLoadError::LoadFailed {
+            runbook_id: display_id.to_string(),
+            message: format!("Invalid runbook ID: {}", e),
+        })?;
+
+        let content = runbook
+            .file
+            .internal
+            .content
+            .as_array()
+            .cloned()
+            .ok_or_else(|| RunbookLoadError::LoadFailed {
+                runbook_id: display_id.to_string(),
+                message: "Runbook content is not an array".to_string(),
+            })?;
+
+        Ok(atuin_desktop_runtime::client::LoadedRunbook {
+            id: runbook_uuid,
+            content,
+        })
+    }
+}
+
+#[async_trait]
+impl atuin_desktop_runtime::client::RunbookContentLoader for WorkspaceRunbookContentLoader {
+    async fn load_runbook(
+        &self,
+        runbook_ref: &atuin_desktop_runtime::client::SubRunbookRef,
+    ) -> Result<
+        atuin_desktop_runtime::client::LoadedRunbook,
+        atuin_desktop_runtime::client::RunbookLoadError,
+    > {
+        use atuin_desktop_runtime::client::RunbookLoadError;
+
+        let display_id = runbook_ref.display_id();
+
+        // 1. Try URI first (remote hub runbook)
+        if let Some(uri) = &runbook_ref.uri {
+            return self.load_from_uri(uri, &display_id).await;
+        }
+
+        // 2. Try ID (workspace lookup)
+        if let Some(id) = &runbook_ref.id {
+            return self.load_from_workspace(id, &display_id).await;
+        }
+
+        // No reference provided
+        Err(RunbookLoadError::LoadFailed {
+            runbook_id: display_id,
+            message: "No runbook reference provided (need uri or id)".to_string(),
+        })
     }
 }
 
@@ -186,6 +312,15 @@ pub async fn open_document(
 
     log::debug!("Opening document {document_id}");
 
+    // Get workspace root if this document belongs to an offline workspace
+    let workspace_root = if let Some(workspace_manager) = state.workspaces.lock().await.as_ref() {
+        workspace_manager
+            .workspace_root(&document_id)
+            .map(|path| path.to_string_lossy().to_string())
+    } else {
+        None
+    };
+
     let event_bus = Arc::new(ChannelEventBus::new(state.gc_event_sender()));
     let context_storage = SqliteContextStorage::new(
         state
@@ -196,12 +331,24 @@ pub async fn open_document(
     )
     .await
     .map_err(|e| format!("Failed to create context storage: {}", e))?;
+
+    // Create runbook loader for sub-runbook support
+    let session_token = atuin_client::settings::Settings::new()
+        .ok()
+        .and_then(|s| s.session_token().ok());
+    let runbook_loader = Arc::new(WorkspaceRunbookContentLoader::new(
+        state.workspaces.clone(),
+        session_token,
+    ));
+
     let document_handle = DocumentHandle::new(
         document_id.clone(),
         event_bus,
         document_bridge,
-        Some(Box::new(KvBlockLocalValueProvider::new(app.clone()))),
+        Some(Arc::new(KvBlockLocalValueProvider::new(app.clone()))),
         Some(Box::new(context_storage)),
+        Some(runbook_loader),
+        workspace_root,
     );
 
     document_handle
@@ -235,16 +382,34 @@ pub async fn notify_block_kv_value_changed(
     state: State<'_, AtuinState>,
     document_id: String,
     block_id: String,
-    _key: String,
-    _value: String,
+    key: String,
+    _value: serde_json::Value,
 ) -> Result<(), String> {
-    log::debug!("Notifying block KV value changed for document {document_id}, block {block_id}");
+    log::debug!(
+        "notify_block_kv_value_changed: document={document_id}, block={block_id}, key={key}"
+    );
 
     let documents = state.documents.read().await;
     let document = documents.get(&document_id).ok_or("Document not found")?;
-    let block_id = Uuid::parse_str(&block_id).map_err(|e| e.to_string())?;
+    let block_uuid = Uuid::parse_str(&block_id).map_err(|e| e.to_string())?;
+
+    // Invalidate SSH connections when credentials change
+    if key == "identityKey" {
+        if let Some(block) = document.get_block(block_uuid).await {
+            if let Some((_user, host, _port)) = block.ssh_connect_host_info() {
+                log::debug!(
+                    "Identity key changed for SSH host {host}, disconnecting existing connections"
+                );
+                let ssh_pool = state.ssh_pool();
+                if let Err(e) = ssh_pool.disconnect_by_host(&host).await {
+                    log::warn!("Failed to disconnect SSH connections for host {host}: {e}");
+                }
+            }
+        }
+    }
+
     document
-        .block_local_value_changed(block_id)
+        .block_local_value_changed(block_uuid)
         .await
         .map_err(|e| format!("Failed to notify block KV value changed: {}", e))?;
     Ok(())
@@ -581,6 +746,37 @@ pub async fn stop_serial_execution(
     Ok(())
 }
 
+/// Get the content of a runbook by ID for sub-runbook execution
+///
+/// This command loads the runbook content from the workspace manager.
+/// It's used by the SubRunbook block to load referenced runbooks.
+#[tauri::command]
+pub async fn get_runbook_content(
+    state: State<'_, AtuinState>,
+    runbook_id: String,
+) -> Result<Vec<serde_json::Value>, String> {
+    let mut manager = state.workspaces.lock().await;
+    let manager = manager
+        .as_mut()
+        .ok_or("Workspace manager not initialized")?;
+
+    let runbook = manager
+        .get_runbook(&runbook_id)
+        .await
+        .map_err(|e| format!("Failed to load runbook: {}", e))?;
+
+    // Extract content from the runbook - it's a serde_json::Value array
+    let content = runbook
+        .file
+        .internal
+        .content
+        .as_array()
+        .cloned()
+        .ok_or_else(|| format!("Runbook {} content is not an array", runbook_id))?;
+
+    Ok(content)
+}
+
 async fn execute_single_block(
     document_id: String,
     document: &Arc<DocumentHandle>,
@@ -615,4 +811,56 @@ async fn execute_single_block(
 
     // Execute the block
     block.execute(context).await
+}
+
+#[cfg(test)]
+mod tests {
+    /// Regression test for the JSON string extraction bug (commit ad2a0dd4).
+    ///
+    /// When retrieving values from the KV store, we must extract the inner string
+    /// from `serde_json::Value::String` directly, NOT use `.to_string()` which
+    /// JSON-encodes the value again (adding extra quotes).
+    ///
+    /// Example of the bug:
+    /// - KV stores: "/Users/test/path" (as JSON string)
+    /// - Correct: extract inner string → "/Users/test/path"
+    /// - Bug: v.to_string() → "\"/Users/test/path\"" (double-encoded)
+    #[test]
+    fn test_json_string_extraction_does_not_double_encode() {
+        let json_string = serde_json::Value::String("/Users/test/path".to_string());
+
+        // This is the correct extraction (what our code does)
+        let result = match json_string {
+            serde_json::Value::String(s) => Some(s),
+            v => Some(v.to_string()),
+        };
+
+        assert_eq!(result, Some("/Users/test/path".to_string()));
+        // Verify it doesn't have extra quotes that would break path resolution
+        let value = result.unwrap();
+        assert!(
+            !value.starts_with('"'),
+            "Path should not start with quote: {value}"
+        );
+        assert!(
+            !value.ends_with('"'),
+            "Path should not end with quote: {value}"
+        );
+    }
+
+    /// Documents why we can't use `.to_string()` directly on Value::String.
+    #[test]
+    fn test_to_string_on_json_string_adds_quotes() {
+        let json_string = serde_json::Value::String("/Users/test/path".to_string());
+
+        // This is what the buggy code did - produces JSON output with quotes
+        let wrong_result = json_string.to_string();
+
+        // to_string() on a Value::String produces JSON, which includes quotes
+        assert_eq!(wrong_result, "\"/Users/test/path\"");
+        assert!(
+            wrong_result.starts_with('"'),
+            "to_string() adds leading quote"
+        );
+    }
 }

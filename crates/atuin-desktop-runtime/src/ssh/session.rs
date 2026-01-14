@@ -2,7 +2,7 @@
 // This is essentially a wrapper around the russh crate.
 
 use bytes::Bytes;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::mpsc;
@@ -14,7 +14,21 @@ use russh::client::Handle;
 use russh::*;
 use russh_config::*;
 
+use time::OffsetDateTime;
+
+use crate::context::{DocumentSshConfig, SshCertificateConfig, SshIdentityKeyConfig};
 use crate::ssh::SshPoolHandle;
+
+/// Guard struct to ensure temp file cleanup on drop
+struct TempFileGuard {
+    path: PathBuf,
+}
+
+impl Drop for TempFileGuard {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_file(&self.path);
+    }
+}
 
 /// Result of executing a simple command on the remote system
 #[derive(Debug, Clone)]
@@ -46,6 +60,37 @@ pub struct SshConfig {
 pub enum Authentication {
     Key(PathBuf),
     Password(String, String),
+}
+
+/// Warnings that can occur during SSH operations
+/// These are non-fatal issues that the user should be aware of
+#[derive(Debug, Clone)]
+pub enum SshWarning {
+    /// Certificate file exists but failed to load (corrupted, invalid, etc.)
+    /// Authentication fell back to key-based auth
+    CertificateLoadFailed {
+        host: String,
+        cert_path: String,
+        error: String,
+    },
+    /// Certificate has expired, fell back to key-based auth
+    CertificateExpired {
+        host: String,
+        cert_path: String,
+        valid_until: String,
+    },
+    /// Certificate is not yet valid, fell back to key-based auth
+    CertificateNotYetValid {
+        host: String,
+        cert_path: String,
+        valid_from: String,
+    },
+}
+
+/// Result of authentication including any warnings encountered
+#[derive(Debug, Default)]
+pub struct AuthResult {
+    pub warnings: Vec<SshWarning>,
 }
 
 pub enum OutputLine {
@@ -90,7 +135,7 @@ impl Session {
     /// Execute a simple command and capture its output
     /// This opens a new channel, runs the command through a shell, and returns stdout, stderr, and exit code
     /// Used for simple utility commands like mktemp, cat, rm
-    async fn exec_and_capture(&self, command: &str) -> Result<CommandResult> {
+    pub(crate) async fn exec_and_capture(&self, command: &str) -> Result<CommandResult> {
         let mut channel = self.session.channel_open_session().await?;
 
         // Run through shell to ensure proper PATH and environment
@@ -99,7 +144,8 @@ impl Session {
 
         let mut stdout = String::new();
         let mut stderr = String::new();
-        let mut exit_code = 0;
+        let mut exit_code: Option<i32> = None;
+        let mut got_eof = false;
 
         loop {
             let Some(msg) = channel.wait().await else {
@@ -119,9 +165,20 @@ impl Session {
                     }
                 }
                 ChannelMsg::ExitStatus { exit_status } => {
-                    exit_code = exit_status as i32;
+                    exit_code = Some(exit_status as i32);
+                    // If we already got EOF, we can break now
+                    if got_eof {
+                        break;
+                    }
                 }
-                ChannelMsg::Eof | ChannelMsg::Close => {
+                ChannelMsg::Eof => {
+                    got_eof = true;
+                    // If we already got exit status, we can break now
+                    if exit_code.is_some() {
+                        break;
+                    }
+                }
+                ChannelMsg::Close => {
                     break;
                 }
                 _ => {}
@@ -133,7 +190,7 @@ impl Session {
         Ok(CommandResult {
             stdout,
             stderr,
-            exit_code,
+            exit_code: exit_code.unwrap_or(0),
         })
     }
 
@@ -470,6 +527,72 @@ impl Session {
         })
     }
 
+    /// Open a new SSH session with optional configuration overrides from block settings.
+    /// Block settings take precedence over SSH config file.
+    pub async fn open_with_config(
+        host: &str,
+        config_override: Option<&DocumentSshConfig>,
+    ) -> Result<Self> {
+        let mut ssh_config = Self::resolve_ssh_config(host);
+
+        // Apply block-level overrides if provided
+        if let Some(override_cfg) = config_override {
+            if let Some(ref user) = override_cfg.user {
+                if !user.is_empty() {
+                    tracing::debug!("Overriding username from block settings: {}", user);
+                    ssh_config.username = Some(user.clone());
+                }
+            }
+            if let Some(ref hostname) = override_cfg.hostname {
+                if !hostname.is_empty() {
+                    tracing::debug!("Overriding hostname from block settings: {}", hostname);
+                    ssh_config.hostname = hostname.clone();
+                }
+            }
+            if let Some(port) = override_cfg.port {
+                if port > 0 {
+                    tracing::debug!("Overriding port from block settings: {}", port);
+                    ssh_config.port = port;
+                }
+            }
+        }
+
+        let config = russh::client::Config::default();
+        let sh = Client;
+
+        // Handle ProxyCommand and ProxyJump
+        let session = if ssh_config.proxy_command.is_some() || ssh_config.proxy_jump.is_some() {
+            tracing::debug!(
+                "Using proxy for connection to {} (proxy_command: {:?}, proxy_jump: {:?})",
+                host,
+                ssh_config.proxy_command,
+                ssh_config.proxy_jump
+            );
+
+            match parse_home(&ssh_config.hostname) {
+                Ok(parsed_config) => {
+                    let stream = parsed_config.stream().await?;
+                    russh::client::connect_stream(Arc::new(config), stream, sh).await?
+                }
+                Err(e) => {
+                    tracing::warn!("Failed to create proxy stream: {e}");
+                    let address = format!("{}:{}", ssh_config.hostname, ssh_config.port);
+                    tracing::debug!("Falling back to direct connection: {address}");
+                    russh::client::connect(Arc::new(config), address.as_str(), sh).await?
+                }
+            }
+        } else {
+            let address = format!("{}:{}", ssh_config.hostname, ssh_config.port);
+            tracing::debug!("Connecting directly to: {address}");
+            russh::client::connect(Arc::new(config), address.as_str(), sh).await?
+        };
+
+        Ok(Session {
+            session,
+            ssh_config,
+        })
+    }
+
     /// Password authentication
     pub async fn password_auth(&mut self, username: &str, password: &str) -> Result<()> {
         let auth_res = self
@@ -519,8 +642,35 @@ impl Session {
         .collect()
     }
 
-    /// Public key authentication
-    pub async fn key_auth(&mut self, username: &str, key_path: PathBuf) -> Result<()> {
+    /// Find a companion certificate file for a given key path
+    /// OpenSSH convention: certificate for `id_ed25519` is `id_ed25519-cert.pub`
+    async fn find_certificate_for_key(key_path: &Path) -> Option<PathBuf> {
+        let key_name = key_path.file_name()?.to_str()?;
+        let cert_name = format!("{}-cert.pub", key_name);
+        let cert_path = key_path.parent()?.join(cert_name);
+
+        if tokio::fs::try_exists(&cert_path).await.unwrap_or(false) {
+            Some(cert_path)
+        } else {
+            None
+        }
+    }
+
+    /// Public key or certificate authentication
+    /// If a companion certificate file exists (e.g., id_ed25519-cert.pub), uses certificate auth
+    /// Returns AuthResult containing any warnings from the authentication process
+    pub async fn key_auth(
+        &mut self,
+        username: &str,
+        host: &str,
+        key_path: PathBuf,
+    ) -> Result<AuthResult> {
+        // Check if there's a companion certificate for this key
+        if let Some(cert_path) = Self::find_certificate_for_key(&key_path).await {
+            return self.cert_auth(username, host, key_path, cert_path).await;
+        }
+
+        // No certificate found, use regular public key authentication
         tracing::info!(
             "Attempting public key authentication with {}",
             key_path.display()
@@ -549,7 +699,7 @@ impl Session {
         match auth_res {
             russh::client::AuthResult::Success => {
                 tracing::info!("✓ Authentication successful with {}", key_path.display());
-                Ok(())
+                Ok(AuthResult::default())
             }
             russh::client::AuthResult::Failure {
                 remaining_methods,
@@ -568,6 +718,215 @@ impl Session {
         }
     }
 
+    /// Certificate-based SSH authentication
+    /// Uses the private key for signing but presents the certificate to the server
+    /// Returns AuthResult with any warnings (e.g., if cert failed to load but key auth succeeded)
+    pub async fn cert_auth(
+        &mut self,
+        username: &str,
+        host: &str,
+        key_path: PathBuf,
+        cert_path: PathBuf,
+    ) -> Result<AuthResult> {
+        tracing::info!(
+            "Attempting certificate authentication with key {} and cert {}",
+            key_path.display(),
+            cert_path.display()
+        );
+
+        // Load the private key
+        let key_pair = match russh::keys::load_secret_key(&key_path, None) {
+            Ok(kp) => kp,
+            Err(e) => {
+                tracing::warn!("Failed to load key {}: {e}", key_path.display());
+                return Err(e.into());
+            }
+        };
+
+        // Read certificate file content
+        let cert_content = std::fs::read_to_string(&cert_path).map_err(|e| {
+            eyre::eyre!(
+                "Failed to read certificate file {}: {e}",
+                cert_path.display()
+            )
+        })?;
+
+        let cert_source = cert_path.display().to_string();
+        self.cert_auth_impl(username, host, key_pair, &cert_content, &cert_source)
+            .await
+    }
+
+    /// Attempt public key authentication with an already-loaded key.
+    /// Returns Ok(()) on success, Err on failure.
+    async fn try_publickey_auth(
+        &mut self,
+        username: &str,
+        key_pair: russh::keys::PrivateKey,
+    ) -> Result<()> {
+        let best_hash = self.session.best_supported_rsa_hash().await?.flatten();
+        let key_with_alg = russh::keys::PrivateKeyWithHashAlg::new(Arc::new(key_pair), best_hash);
+        let auth_res = self
+            .session
+            .authenticate_publickey(username, key_with_alg)
+            .await?;
+
+        match auth_res {
+            russh::client::AuthResult::Success => Ok(()),
+            _ => Err(eyre::eyre!("Public key authentication failed")),
+        }
+    }
+
+    /// Core certificate authentication implementation.
+    /// Takes certificate content as a string (callers read file or pass directly).
+    /// Handles parsing, validation, fallback to key auth, and returns warnings.
+    async fn cert_auth_impl(
+        &mut self,
+        username: &str,
+        host: &str,
+        key_pair: russh::keys::PrivateKey,
+        cert_content: &str,
+        cert_source: &str, // For display: path or "(pasted content)"
+    ) -> Result<AuthResult> {
+        // Parse certificate via temp file (russh requires a path)
+        let temp_dir = std::env::temp_dir();
+        let temp_cert_path = temp_dir.join(format!("ssh-cert-{}.pub", uuid::Uuid::new_v4()));
+        std::fs::write(&temp_cert_path, cert_content)
+            .map_err(|e| eyre::eyre!("Failed to write temp certificate: {e}"))?;
+
+        // Guard ensures temp file is cleaned up on any exit path
+        let _temp_guard = TempFileGuard {
+            path: temp_cert_path.clone(),
+        };
+
+        // Load the certificate
+        let cert = match russh::keys::load_openssh_certificate(&temp_cert_path) {
+            Ok(c) => c,
+            Err(e) => {
+                let error_msg = e.to_string();
+                tracing::error!(
+                    "Failed to load SSH certificate {}: {e}. Falling back to key authentication.",
+                    cert_source
+                );
+                return match self.try_publickey_auth(username, key_pair).await {
+                    Ok(()) => Ok(AuthResult {
+                        warnings: vec![SshWarning::CertificateLoadFailed {
+                            host: host.to_string(),
+                            cert_path: cert_source.to_string(),
+                            error: error_msg,
+                        }],
+                    }),
+                    Err(_) => Err(eyre::eyre!(
+                        "Certificate load failed ({}) and fallback key authentication also failed",
+                        error_msg
+                    )),
+                };
+            }
+        };
+
+        // Validate certificate timing
+        let now = std::time::SystemTime::now();
+        let valid_after = cert.valid_after_time();
+        let valid_before = cert.valid_before_time();
+
+        if now < valid_after {
+            let valid_from_str = OffsetDateTime::from(valid_after).to_string();
+            tracing::warn!(
+                "Certificate {} is not yet valid (valid from {}). Falling back to key authentication.",
+                cert_source,
+                valid_from_str
+            );
+            return match self.try_publickey_auth(username, key_pair).await {
+                Ok(()) => Ok(AuthResult {
+                    warnings: vec![SshWarning::CertificateNotYetValid {
+                        host: host.to_string(),
+                        cert_path: cert_source.to_string(),
+                        valid_from: valid_from_str,
+                    }],
+                }),
+                Err(_) => Err(eyre::eyre!(
+                    "Certificate not yet valid (valid from {}) and fallback key authentication also failed",
+                    valid_from_str
+                )),
+            };
+        }
+
+        if now > valid_before {
+            let valid_until_str = OffsetDateTime::from(valid_before).to_string();
+            tracing::warn!(
+                "Certificate {} has expired (valid until {}). Falling back to key authentication.",
+                cert_source,
+                valid_until_str
+            );
+            return match self.try_publickey_auth(username, key_pair).await {
+                Ok(()) => Ok(AuthResult {
+                    warnings: vec![SshWarning::CertificateExpired {
+                        host: host.to_string(),
+                        cert_path: cert_source.to_string(),
+                        valid_until: valid_until_str,
+                    }],
+                }),
+                Err(_) => Err(eyre::eyre!(
+                    "Certificate expired (valid until {}) and fallback key authentication also failed",
+                    valid_until_str
+                )),
+            };
+        }
+
+        // Check if certificate authorizes the requested principal
+        let principals = cert.valid_principals();
+        if !principals.is_empty() && !principals.iter().any(|p| p == username) {
+            tracing::warn!(
+                "Certificate does not explicitly authorize principal '{}' (authorized: {:?}). \
+                 Server may still accept it if wildcards or other matching rules apply.",
+                username,
+                principals
+            );
+        }
+
+        tracing::debug!(
+            "Certificate loaded and validated: type={:?}, key_id={}, principals={:?}",
+            cert.cert_type(),
+            cert.key_id(),
+            cert.valid_principals()
+        );
+
+        // Certificate is valid, try cert auth
+        let auth_res = self
+            .session
+            .authenticate_openssh_cert(username, Arc::new(key_pair), cert)
+            .await?;
+
+        match auth_res {
+            russh::client::AuthResult::Success => {
+                tracing::info!(
+                    "✓ Certificate authentication successful with {}",
+                    cert_source
+                );
+                Ok(AuthResult::default())
+            }
+            russh::client::AuthResult::Failure {
+                remaining_methods,
+                partial_success,
+            } => {
+                tracing::warn!(
+                    "Server rejected certificate {} (remaining methods: {:?}, partial: {})",
+                    cert_source,
+                    remaining_methods,
+                    partial_success
+                );
+                Err(eyre::eyre!(
+                    "Certificate authentication failed: server rejected certificate"
+                ))
+            }
+        }
+    }
+
+    /// Authenticate using keys from the SSH agent
+    ///
+    /// Note: SSH certificates loaded in the agent are NOT currently supported due to
+    /// limitations in the russh library. Certificate-based auth works with file-based
+    /// certificates (id_ed25519-cert.pub, etc.) but not with certificates held in an agent.
+    /// See: https://github.com/Eugeny/russh/issues/438
     pub async fn agent_auth(&mut self, username: &str) -> Result<bool> {
         tracing::info!("Attempting SSH agent authentication for {username}");
 
@@ -632,14 +991,17 @@ impl Session {
     /// 2. SSH config identity files
     /// 3. Default SSH keys (id_rsa, id_ecdsa, id_ecdsa_sk, id_ed25519, id_ed25519_sk, id_xmss, id_dsa)
     /// 4. Provided authentication method (password or key)
+    ///
+    /// Returns AuthResult containing any warnings from the authentication process
     pub async fn authenticate(
         &mut self,
         auth: Option<Authentication>,
         username: Option<&str>,
-    ) -> Result<()> {
+    ) -> Result<AuthResult> {
         // Clone values we need before any mutable borrows
         let config_username = self.ssh_config.username.clone();
         let identity_files = self.ssh_config.identity_files.clone();
+        let hostname = self.ssh_config.hostname.clone();
         let current_user = whoami::username();
 
         // Use provided username, or SSH config username, or default to current user
@@ -660,7 +1022,7 @@ impl Session {
         tracing::info!("Step 1/4: Trying SSH agent authentication");
         if self.agent_auth(username).await? {
             tracing::info!("✓ SSH authentication successful with agent");
-            return Ok(());
+            return Ok(AuthResult::default());
         }
         tracing::info!("✗ SSH agent authentication failed or unavailable");
 
@@ -670,8 +1032,11 @@ impl Session {
             identity_files.len()
         );
         for identity_file in &identity_files {
-            if let Ok(()) = self.key_auth(username, identity_file.clone()).await {
-                return Ok(());
+            if let Ok(auth_result) = self
+                .key_auth(username, &hostname, identity_file.clone())
+                .await
+            {
+                return Ok(auth_result);
             }
         }
 
@@ -690,9 +1055,9 @@ impl Session {
                 continue;
             }
 
-            match self.key_auth(username, key_path.clone()).await {
-                Ok(()) => {
-                    return Ok(());
+            match self.key_auth(username, &hostname, key_path.clone()).await {
+                Ok(auth_result) => {
+                    return Ok(auth_result);
                 }
                 Err(e) => {
                     tracing::debug!("Default SSH key failed: {e}");
@@ -705,11 +1070,12 @@ impl Session {
         match auth {
             Some(Authentication::Password(_user, password)) => {
                 tracing::info!("Trying password authentication");
-                self.password_auth(username, &password).await?
+                self.password_auth(username, &password).await?;
+                return Ok(AuthResult::default());
             }
             Some(Authentication::Key(key_path)) => {
                 tracing::info!("Trying explicitly provided key: {}", key_path.display());
-                self.key_auth(username, key_path).await?
+                return self.key_auth(username, &hostname, key_path).await;
             }
             None => {
                 tracing::warn!("All SSH authentication methods exhausted");
@@ -722,6 +1088,210 @@ impl Session {
         }
 
         Err(eyre::eyre!("All SSH authentication methods exhausted"))
+    }
+
+    /// Authenticate with optional block-provided identity key and certificate configuration.
+    /// If an identity key is provided from block settings, it is tried FIRST before other methods.
+    ///
+    /// Authentication order when identity_key_config is provided:
+    /// 0. Block-provided identity key (FIRST - overrides everything)
+    ///    - If certificate_config is also provided, use that cert instead of auto-detecting
+    /// 1. SSH Agent authentication
+    /// 2. SSH config identity files
+    /// 3. Default SSH keys
+    /// 4. Provided authentication method (password or key)
+    ///
+    /// Returns AuthResult containing any warnings from the authentication process
+    pub async fn authenticate_with_config(
+        &mut self,
+        auth: Option<Authentication>,
+        username: Option<&str>,
+        identity_key_config: Option<&SshIdentityKeyConfig>,
+        certificate_config: Option<&SshCertificateConfig>,
+    ) -> Result<AuthResult> {
+        // Clone values we need before any mutable borrows
+        let config_username = self.ssh_config.username.clone();
+        let hostname = self.ssh_config.hostname.clone();
+        let current_user = whoami::username();
+
+        // Use provided username, or SSH config username, or default to current user
+        let username = username
+            .or(config_username.as_deref())
+            .unwrap_or(&current_user);
+
+        tracing::info!(
+            "Starting SSH authentication for {username}@{}",
+            self.ssh_config.hostname
+        );
+
+        // Step 0: Try block-provided identity key FIRST (overrides everything)
+        // If an explicit key is configured and fails, we do NOT fall back to agent/defaults
+        tracing::debug!(
+            "authenticate_with_config called with identity_key_config: {:?}, certificate_config: {:?}",
+            identity_key_config,
+            certificate_config
+        );
+        if let Some(key_config) = identity_key_config {
+            match key_config {
+                SshIdentityKeyConfig::None => {
+                    tracing::debug!(
+                        "Block identity key config is SshIdentityKeyConfig::None, using defaults"
+                    );
+                }
+                SshIdentityKeyConfig::Paste { content } => {
+                    tracing::info!("Step 0: Trying block-provided pasted key");
+                    // For pasted key content with explicit certificate, use cert_auth_from_content
+                    match self
+                        .key_auth_from_content_with_cert(
+                            username,
+                            &hostname,
+                            content,
+                            certificate_config,
+                        )
+                        .await
+                    {
+                        Ok(auth_result) => {
+                            tracing::info!("✓ SSH authentication successful with pasted key");
+                            return Ok(auth_result);
+                        }
+                        Err(e) => {
+                            // Explicit key was configured but failed - do not fall back
+                            return Err(eyre::eyre!(
+                                "Authentication failed with configured identity key: {e}"
+                            ));
+                        }
+                    }
+                }
+                SshIdentityKeyConfig::Path { path } => {
+                    tracing::info!("Step 0: Trying block-provided key path: {}", path);
+                    match self
+                        .key_auth_with_cert_config(
+                            username,
+                            &hostname,
+                            PathBuf::from(path),
+                            certificate_config,
+                        )
+                        .await
+                    {
+                        Ok(auth_result) => {
+                            tracing::info!("✓ SSH authentication successful with key: {}", path);
+                            return Ok(auth_result);
+                        }
+                        Err(e) => {
+                            // Explicit key was configured but failed - do not fall back
+                            return Err(eyre::eyre!(
+                                "Authentication failed with configured identity key '{}': {e}",
+                                path
+                            ));
+                        }
+                    }
+                }
+            }
+        }
+
+        // Continue with normal authentication flow (only reached if no explicit key configured)
+        self.authenticate(auth, Some(username)).await
+    }
+
+    /// Authenticate using a key from pasted content with optional certificate config
+    async fn key_auth_from_content_with_cert(
+        &mut self,
+        username: &str,
+        host: &str,
+        key_content: &str,
+        certificate_config: Option<&SshCertificateConfig>,
+    ) -> Result<AuthResult> {
+        tracing::debug!("Attempting authentication with pasted key content");
+
+        let key_pair = russh::keys::decode_secret_key(key_content, None)
+            .map_err(|e| eyre::eyre!("Failed to decode pasted key: {e}"))?;
+
+        // If explicit certificate provided, use cert auth
+        if let Some(SshCertificateConfig::Path { path }) = certificate_config {
+            tracing::info!("Using explicit certificate path: {}", path);
+            return self
+                .cert_auth_with_key(username, host, key_pair, PathBuf::from(path))
+                .await;
+        }
+
+        if let Some(SshCertificateConfig::Paste { content }) = certificate_config {
+            tracing::info!("Using pasted certificate content");
+            return self
+                .cert_auth_with_key_and_cert_content(username, host, key_pair, content)
+                .await;
+        }
+
+        // No certificate - regular key auth
+        self.try_publickey_auth(username, key_pair)
+            .await
+            .map(|()| {
+                tracing::info!("✓ Pasted key authentication successful");
+                AuthResult::default()
+            })
+            .map_err(|_| eyre::eyre!("Pasted key authentication failed: server rejected key"))
+    }
+
+    /// Authenticate using a key file path with optional certificate config
+    /// If certificate_config is provided, use that instead of auto-detecting
+    async fn key_auth_with_cert_config(
+        &mut self,
+        username: &str,
+        host: &str,
+        key_path: PathBuf,
+        certificate_config: Option<&SshCertificateConfig>,
+    ) -> Result<AuthResult> {
+        if let Some(SshCertificateConfig::Path { path }) = certificate_config {
+            tracing::info!("Using explicit certificate path: {}", path);
+            return self
+                .cert_auth(username, host, key_path, PathBuf::from(path))
+                .await;
+        }
+
+        if let Some(SshCertificateConfig::Paste { content }) = certificate_config {
+            tracing::info!("Using pasted certificate content");
+            let key_pair = russh::keys::load_secret_key(&key_path, None)
+                .map_err(|e| eyre::eyre!("Failed to load key {}: {e}", key_path.display()))?;
+            return self
+                .cert_auth_with_key_and_cert_content(username, host, key_pair, content)
+                .await;
+        }
+
+        // No explicit certificate - use default behavior (auto-detect)
+        self.key_auth(username, host, key_path).await
+    }
+
+    /// Certificate auth with an already-loaded key pair and a certificate path
+    async fn cert_auth_with_key(
+        &mut self,
+        username: &str,
+        host: &str,
+        key_pair: russh::keys::PrivateKey,
+        cert_path: PathBuf,
+    ) -> Result<AuthResult> {
+        // Read certificate file content and delegate to impl
+        let cert_content = std::fs::read_to_string(&cert_path).map_err(|e| {
+            eyre::eyre!(
+                "Failed to read certificate file {}: {e}",
+                cert_path.display()
+            )
+        })?;
+
+        let cert_source = cert_path.display().to_string();
+        self.cert_auth_impl(username, host, key_pair, &cert_content, &cert_source)
+            .await
+    }
+
+    /// Certificate auth with an already-loaded key pair and pasted certificate content
+    async fn cert_auth_with_key_and_cert_content(
+        &mut self,
+        username: &str,
+        host: &str,
+        key_pair: russh::keys::PrivateKey,
+        cert_content: &str,
+    ) -> Result<AuthResult> {
+        // Delegate directly to impl with pasted content indicator
+        self.cert_auth_impl(username, host, key_pair, cert_content, "(pasted content)")
+            .await
     }
 
     pub async fn disconnect(&self) -> Result<()> {
@@ -967,8 +1537,8 @@ impl Session {
 
                     resize = resize_stream.recv() => {
                         match resize {
-                            Some((width, height)) => {
-                                let _ = channel.window_change(width as u32, height as u32, 0, 0).await;
+                            Some((rows, cols)) => {
+                                let _ = channel.window_change(cols as u32, rows as u32, 0, 0).await;
                             }
                             None => {
                                 tracing::debug!("SSH resize stream closed");
@@ -1272,5 +1842,57 @@ Host example.com
                 );
             }
         }
+    }
+
+    #[tokio::test]
+    async fn test_find_certificate_for_key_when_cert_exists() {
+        let temp_dir = TempDir::new().unwrap();
+        let key_path = temp_dir.path().join("id_ed25519");
+        let cert_path = temp_dir.path().join("id_ed25519-cert.pub");
+
+        // Create the key file (content doesn't matter for this test)
+        fs::write(&key_path, "fake key content").unwrap();
+        // Create the certificate file
+        fs::write(&cert_path, "fake cert content").unwrap();
+
+        let result = Session::find_certificate_for_key(&key_path).await;
+        assert!(result.is_some());
+        assert_eq!(result.unwrap(), cert_path);
+    }
+
+    #[tokio::test]
+    async fn test_find_certificate_for_key_when_cert_missing() {
+        let temp_dir = TempDir::new().unwrap();
+        let key_path = temp_dir.path().join("id_ed25519");
+
+        // Create only the key file, no certificate
+        fs::write(&key_path, "fake key content").unwrap();
+
+        let result = Session::find_certificate_for_key(&key_path).await;
+        assert!(result.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_find_certificate_for_key_rsa() {
+        let temp_dir = TempDir::new().unwrap();
+        let key_path = temp_dir.path().join("id_rsa");
+        let cert_path = temp_dir.path().join("id_rsa-cert.pub");
+
+        fs::write(&key_path, "fake key content").unwrap();
+        fs::write(&cert_path, "fake cert content").unwrap();
+
+        let result = Session::find_certificate_for_key(&key_path).await;
+        assert!(result.is_some());
+        assert_eq!(result.unwrap(), cert_path);
+    }
+
+    #[tokio::test]
+    async fn test_find_certificate_for_key_relative_path() {
+        // Test with a relative path - the cert lookup will check for a certificate
+        // at the relative path, which won't exist
+        let key_path = PathBuf::from("just_a_filename");
+        let result = Session::find_certificate_for_key(&key_path).await;
+        // Should return None since no certificate file exists at the relative path
+        assert!(result.is_none());
     }
 }
