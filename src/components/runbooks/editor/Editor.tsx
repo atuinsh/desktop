@@ -332,6 +332,35 @@ export default function Editor({
   const showAiHint = ["ellie", "binarymuse"].includes(username);
   const aiEnabledState = isLoggedIn() && aiEnabled;
 
+  // AI panel width for resizable panel
+  const aiPanelWidth = useStore((state) => state.aiPanelWidth);
+  const setAiPanelWidth = useStore((state) => state.setAiPanelWidth);
+
+  const handleAiPanelResizeStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startWidth = aiPanelWidth;
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+
+    const handleMouseMove = (e: MouseEvent) => {
+      // Dragging left increases width, dragging right decreases
+      const delta = startX - e.clientX;
+      const newWidth = Math.min(Math.max(startWidth + delta, 300), 600);
+      setAiPanelWidth(newWidth);
+    };
+
+    const handleMouseUp = () => {
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+    };
+
+    document.addEventListener("mousemove", handleMouseMove);
+    document.addEventListener("mouseup", handleMouseUp);
+  }, [aiPanelWidth, setAiPanelWidth]);
+
   const documentBridge = useDocumentBridge();
 
   const showAIPopup = useCallback((position: { x: number; y: number }) => {
@@ -1100,15 +1129,24 @@ export default function Editor({
 
       {/* AI Assistant sidebar */}
       {aiEnabledState && isAIAssistantOpen && (
-        <div className="w-[400px] min-w-[300px] max-w-[500px] h-full border-l border-default-200 dark:border-default-100">
-          <AIAssistant
-            runbookId={runbook.id}
-            editor={editor}
-            getContext={getAIAssistantContext}
-            isOpen={isAIAssistantOpen}
-            chargeTarget={chargeTarget}
-            onClose={closeAIAssistant}
-          />
+        <div className="relative h-full flex-shrink-0" style={{ width: aiPanelWidth }}>
+          {/* Resize handle */}
+          <div
+            onMouseDown={handleAiPanelResizeStart}
+            className="absolute top-0 left-0 w-2 h-full cursor-col-resize group z-10"
+          >
+            <div className="absolute top-0 left-0 w-0.5 h-full bg-transparent group-hover:bg-gray-300 dark:group-hover:bg-gray-600 transition-colors duration-150" />
+          </div>
+          <div className="h-full border-l border-default-200 dark:border-default-100">
+            <AIAssistant
+              runbookId={runbook.id}
+              editor={editor}
+              getContext={getAIAssistantContext}
+              isOpen={isAIAssistantOpen}
+              chargeTarget={chargeTarget}
+              onClose={closeAIAssistant}
+            />
+          </div>
         </div>
       )}
     </div>

@@ -25,6 +25,7 @@ import { trackOnlineStatus } from "./lib/online_tracker";
 import { setupColorModes } from "./lib/color_modes";
 import { setupServerEvents } from "./lib/server_events";
 import { invoke } from "@tauri-apps/api/core";
+import { platform } from "@tauri-apps/plugin-os";
 import debounce from "lodash.debounce";
 import Workspace from "./state/runbooks/workspace";
 import { SharedStateManager } from "./lib/shared_state/manager";
@@ -177,7 +178,7 @@ function Application() {
       />
       <QueryClientProvider client={queryClient}>
         <ReactQueryDevtools initialIsOpen={false} buttonPosition="bottom-right" />
-        <main className="text-foreground bg-transparent overflow-hidden z-20 relative">
+        <main className="text-foreground overflow-hidden z-20 relative">
           <Root />
         </main>
       </QueryClientProvider>
@@ -186,6 +187,14 @@ function Application() {
 }
 
 async function setup() {
+  // Detect platform and set data attribute for CSS
+  try {
+    const currentPlatform = platform();
+    document.documentElement.dataset.platform = currentPlatform;
+  } catch (err) {
+    console.warn("Failed to detect platform:", err);
+  }
+
   try {
     const advancedSettings = await invoke<AdvancedSettings>("get_advanced_settings");
     useStore.getState().setAdvancedSettings(advancedSettings);

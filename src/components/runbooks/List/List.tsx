@@ -288,7 +288,7 @@ const NoteSidebar = forwardRef((props: NotesSidebarProps, ref: React.ForwardedRe
   return (
     <div
       className={cn([
-        "relative h-full bg-gray-100/80 dark:bg-zinc-800/80 border-r border-gray-200/50 dark:border-zinc-700/50 select-none flex flex-col",
+        "relative h-full sidebar-bg border-r border-gray-200/50 dark:border-zinc-700/50 select-none flex flex-col",
       ])}
       style={{
         width: "100%",

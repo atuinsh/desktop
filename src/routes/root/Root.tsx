@@ -948,7 +948,7 @@ function App() {
 
   return (
     <div
-      className="flex w-screen bg-transparent"
+      className="flex w-screen"
       style={{ maxWidth: "100vw", height: "100vh" }}
     >
       <RunbookContext.Provider value={runbookContextValue}>

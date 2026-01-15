@@ -309,24 +309,32 @@ export default function Topbar(props: TopbarProps) {
               <SettingsIcon className="h-4 w-4" />
             </Button>
           </Tooltip>
-          {props.isAIFeaturesEnabled && (
-            <Tooltip content="AI assistant" placement="bottom">
-              <Button
-                isIconOnly
-                variant="flat"
-                size="sm"
-                className={cn(
-                  "bg-black/5 dark:bg-white/5",
-                  props.isAIAssistantOpen
+          <Tooltip
+            content={
+              props.isAIFeaturesEnabled
+                ? "AI assistant"
+                : "AI features disabled. Enable in Settings → AI."
+            }
+            placement="bottom"
+          >
+            <Button
+              isIconOnly
+              variant="flat"
+              size="sm"
+              isDisabled={!props.isAIFeaturesEnabled}
+              className={cn(
+                "bg-black/5 dark:bg-white/5",
+                !props.isAIFeaturesEnabled
+                  ? "opacity-50 text-gray-400 dark:text-gray-500"
+                  : props.isAIAssistantOpen
                     ? "bg-purple-500/20 dark:bg-purple-400/20 text-purple-600 dark:text-purple-300"
                     : "text-purple-500 dark:text-purple-400 hover:bg-black/10 dark:hover:bg-white/10"
-                )}
-                onPress={props.toggleAIAssistant}
-              >
-                <SparklesIcon className="h-4 w-4" />
-              </Button>
-            </Tooltip>
-          )}
+              )}
+              onPress={props.isAIFeaturesEnabled ? props.toggleAIAssistant : undefined}
+            >
+              <SparklesIcon className="h-4 w-4" />
+            </Button>
+          </Tooltip>
           <PlayButton
             isRunning={serialExecution.isRunning}
             cancellable={true}

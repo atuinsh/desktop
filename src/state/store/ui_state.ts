@@ -60,6 +60,7 @@ export interface AtuinUiState {
   hiddenWorkspaces: Record<string, boolean>;
   sidebarWidth: number;
   sidebarOpen: boolean;
+  aiPanelWidth: number;
   sidebarClickStyle: "link" | "explorer";
   lastSidebarDragInfo: { itemIds: string[]; sourceWorkspaceId: string } | undefined;
   didSidebarSetup: boolean;
@@ -99,6 +100,7 @@ export interface AtuinUiState {
   setShowedUpdatePrompt: (showed: boolean) => void;
   setSidebarWidth: (width: number) => void;
   setSidebarOpen: (open: boolean) => void;
+  setAiPanelWidth: (width: number) => void;
   setSidebarClickStyle: (style: "link" | "explorer") => void;
   setLastSidebarDragInfo: (info?: { itemIds: string[]; sourceWorkspaceId: string }) => void;
   openTab: (url: string, title?: string, icon?: TabIcon) => void;
@@ -146,6 +148,7 @@ export const persistUiKeys: (keyof AtuinUiState)[] = [
   "folderState",
   "sidebarWidth",
   "sidebarOpen",
+  "aiPanelWidth",
   "sidebarClickStyle",
   "lightModeEditorTheme",
   "darkModeEditorTheme",
@@ -181,6 +184,7 @@ export const createUiState: StateCreator<AtuinUiState> = (set, get, _store): Atu
   hiddenWorkspaces: {},
   sidebarWidth: 250,
   sidebarOpen: true,
+  aiPanelWidth: 400,
   sidebarClickStyle: "link",
   lastSidebarDragInfo: undefined,
   didSidebarSetup: false,
@@ -223,6 +227,7 @@ export const createUiState: StateCreator<AtuinUiState> = (set, get, _store): Atu
   setShowedUpdatePrompt: (showed: boolean) => set(() => ({ showedUpdatePrompt: showed })),
   setSidebarWidth: (width: number) => set(() => ({ sidebarWidth: width })),
   setSidebarOpen: (open: boolean) => set(() => ({ sidebarOpen: open })),
+  setAiPanelWidth: (width: number) => set(() => ({ aiPanelWidth: width })),
   setSidebarClickStyle: (style: "link" | "explorer") => set(() => ({ sidebarClickStyle: style })),
   setLastSidebarDragInfo: (info?: { itemIds: string[]; sourceWorkspaceId: string }) =>
     set(() => ({ lastSidebarDragInfo: info })),
