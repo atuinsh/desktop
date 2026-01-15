@@ -27,18 +27,7 @@ import InterpreterSelector from "@/lib/blocks/common/InterpreterSelector.tsx";
 import { useBlockExecution, useBlockState } from "@/lib/hooks/useDocumentBridge";
 import isValidVarName from "../../utils/varNames";
 import { DropdownState } from "@/rs-bindings/DropdownState";
-
-// Helper to parse and display option nicely
-const parseOption = (option: string, delimiter: string = ":") => {
-  const trimmed = option.trim();
-  const delimiterIndex = trimmed.indexOf(delimiter);
-  if (delimiterIndex > 0 && delimiterIndex < trimmed.length - delimiter.length) {
-    const label = trimmed.substring(0, delimiterIndex).trim(); // what we display
-    const value = trimmed.substring(delimiterIndex + delimiter.length).trim(); // what we store as value
-    return { value, label, hasKeyValue: true };
-  }
-  return { value: trimmed, label: trimmed, hasKeyValue: false };
-};
+import { parseOption } from "./parseOption";
 
 type DropdownOptions = "fixed" | "variable" | "command";
 

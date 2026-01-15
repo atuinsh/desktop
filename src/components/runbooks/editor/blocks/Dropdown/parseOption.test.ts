@@ -1,16 +1,5 @@
 import { describe, expect, test } from "vitest";
-
-// Copy of parseOption for testing - the actual function is not exported
-const parseOption = (option: string, delimiter: string = ":") => {
-  const trimmed = option.trim();
-  const delimiterIndex = trimmed.indexOf(delimiter);
-  if (delimiterIndex > 0 && delimiterIndex < trimmed.length - delimiter.length) {
-    const label = trimmed.substring(0, delimiterIndex).trim();
-    const value = trimmed.substring(delimiterIndex + delimiter.length).trim();
-    return { value, label, hasKeyValue: true };
-  }
-  return { value: trimmed, label: trimmed, hasKeyValue: false };
-};
+import { parseOption } from "./parseOption";
 
 describe("parseOption", () => {
   describe("with default colon delimiter", () => {
