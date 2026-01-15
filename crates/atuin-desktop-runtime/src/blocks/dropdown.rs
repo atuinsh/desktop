@@ -146,7 +146,8 @@ impl Dropdown {
 
         let options = match self.options_type {
             DropdownOptionType::Fixed => {
-                let options = DropdownOption::vec_from_str_with_delimiter(options_source, delimiter)?;
+                let options =
+                    DropdownOption::vec_from_str_with_delimiter(options_source, delimiter)?;
                 Ok(options)
             }
             DropdownOptionType::Variable => {
@@ -789,7 +790,9 @@ mod tests {
 
         #[test]
         fn test_from_str_with_arrow_delimiter() {
-            let option = DropdownOption::from_str_with_delimiter("Display Name->actual_value", "->").unwrap();
+            let option =
+                DropdownOption::from_str_with_delimiter("Display Name->actual_value", "->")
+                    .unwrap();
             assert_eq!(option.label, "Display Name");
             assert_eq!(option.value, "actual_value");
         }
@@ -804,14 +807,17 @@ mod tests {
         #[test]
         fn test_value_contains_colon_with_pipe_delimiter() {
             // User has colons in their data, using pipe as delimiter
-            let option = DropdownOption::from_str_with_delimiter("My Label|http://example.com:8080", "|").unwrap();
+            let option =
+                DropdownOption::from_str_with_delimiter("My Label|http://example.com:8080", "|")
+                    .unwrap();
             assert_eq!(option.label, "My Label");
             assert_eq!(option.value, "http://example.com:8080");
         }
 
         #[test]
         fn test_vec_from_str_with_custom_delimiter() {
-            let options = DropdownOption::vec_from_str_with_delimiter("A|1, B|2, C|3", "|").unwrap();
+            let options =
+                DropdownOption::vec_from_str_with_delimiter("A|1, B|2, C|3", "|").unwrap();
             assert_eq!(options.len(), 3);
             assert_eq!(options[0].label, "A");
             assert_eq!(options[0].value, "1");
@@ -823,7 +829,9 @@ mod tests {
 
         #[test]
         fn test_vec_from_str_with_multi_char_delimiter() {
-            let options = DropdownOption::vec_from_str_with_delimiter("Label A::a\nLabel B::b", "::").unwrap();
+            let options =
+                DropdownOption::vec_from_str_with_delimiter("Label A::a\nLabel B::b", "::")
+                    .unwrap();
             assert_eq!(options.len(), 2);
             assert_eq!(options[0].label, "Label A");
             assert_eq!(options[0].value, "a");
