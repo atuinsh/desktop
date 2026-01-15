@@ -54,6 +54,7 @@ impl DropdownOption {
         }
     }
 
+    #[allow(dead_code)]
     pub fn vec_from_str(value: &str) -> Result<Vec<Self>, String> {
         Self::vec_from_str_with_delimiter(value, ":")
     }
