@@ -87,9 +87,9 @@ export default class SocketManager extends Emittery {
       this.connect();
     } else if (previouslyConnected) {
       this.store.getState().setConnectedToHubSocket(false);
-      this.emit("disconnect", this.socket);
+      this.socket.map((socket) => this.emit("disconnect", socket));
     }
-    this.emit("socketchange", this.socket);
+    this.socket.map((socket) => this.emit("socketchange", socket));
   }
 
   private connect() {
@@ -114,13 +114,13 @@ export default class SocketManager extends Emittery {
     this.handlers.push(
       socket.onOpen(() => {
         this.store.getState().setConnectedToHubSocket(true);
-        this.emit("connect", this.socket);
+        this.socket.map((socket) => this.emit("connect", socket));
       }),
     );
     this.handlers.push(
       socket.onClose(() => {
         this.store.getState().setConnectedToHubSocket(false);
-        this.emit("disconnect", this.socket);
+        this.socket.map((socket) => this.emit("disconnect", socket));
       }),
     );
   }
