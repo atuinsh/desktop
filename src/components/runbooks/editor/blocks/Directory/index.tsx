@@ -1,6 +1,8 @@
 import { Input, Tooltip, Button } from "@heroui/react";
 import { FolderInputIcon } from "lucide-react";
 import { createReactBlockSpec } from "@blocknote/react";
+import undent from "undent";
+import AIBlockRegistry from "@/lib/ai/block_registry";
 import { open } from "@tauri-apps/plugin-dialog";
 import { exportPropMatter } from "@/lib/utils";
 
@@ -29,7 +31,9 @@ const Directory = ({ path, onInputChange, isEditable }: DirectoryProps) => {
         delay={1000}
       >
         <div className="flex flex-col w-full bg-gradient-to-r from-blue-50 to-cyan-50 dark:from-slate-800 dark:to-blue-950 rounded-lg p-3 border border-blue-200 dark:border-blue-900 shadow-sm hover:shadow-md transition-all duration-200">
-          <span className="text-[10px] font-mono text-gray-400 dark:text-gray-500 mb-2">directory</span>
+          <span className="text-[10px] font-mono text-gray-400 dark:text-gray-500 mb-2">
+            directory
+          </span>
           <div className="flex flex-row items-center space-x-3">
             <div className="flex items-center">
               <Button
@@ -105,3 +109,34 @@ export default createReactBlockSpec(
     },
   },
 );
+
+AIBlockRegistry.getInstance().addBlock({
+  typeName: "directory",
+  friendlyName: "Directory",
+  shortDescription:
+    "Sets the working directory for subsequent code blocks (synced) via absolute or relative paths.",
+  description: undent`
+    Directory blocks set the working directory for all subsequent Terminal and Script blocks. The path is synced with collaborators.
+
+    The available props are:
+    - path (string): The directory path
+
+    Use this block when you need all collaborators to use the same working directory. For local-only paths, use the Local Directory block instead.
+
+    If a prior block has already set a working directory, you can use a relative path to set the working directory to a path relative to the prior directory.
+
+    Example: {
+      "type": "directory",
+      "props": {
+        "path": "/home/user/project"
+      }
+    }
+
+    Relative path example: {
+      "type": "directory",
+      "props": {
+        "path": "./target/release/"
+      }
+    }
+  `,
+});

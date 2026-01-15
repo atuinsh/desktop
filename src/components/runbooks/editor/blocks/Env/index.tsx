@@ -4,6 +4,8 @@ import { VariableIcon } from "lucide-react";
 
 // @ts-ignore
 import { createReactBlockSpec } from "@blocknote/react";
+import undent from "undent";
+import AIBlockRegistry from "@/lib/ai/block_registry";
 import { exportPropMatter } from "@/lib/utils";
 
 interface EnvProps {
@@ -31,39 +33,43 @@ const Env = ({ name = "", value = "", onUpdate, isEditable }: EnvProps) => {
       <div className="flex flex-col w-full bg-gradient-to-r from-green-50 to-emerald-50 dark:from-slate-800 dark:to-green-950 rounded-lg p-3 border border-green-200 dark:border-green-900 shadow-sm hover:shadow-md transition-all duration-200">
         <span className="text-[10px] font-mono text-gray-400 dark:text-gray-500 mb-2">env</span>
         <div className="flex flex-row items-center space-x-3">
-        <div className="flex items-center">
-          <Button isIconOnly variant="light" className="bg-green-100 dark:bg-green-800 text-green-600 dark:text-green-300">
-            <VariableIcon className="h-4 w-4" />
-          </Button>
-        </div>
+          <div className="flex items-center">
+            <Button
+              isIconOnly
+              variant="light"
+              className="bg-green-100 dark:bg-green-800 text-green-600 dark:text-green-300"
+            >
+              <VariableIcon className="h-4 w-4" />
+            </Button>
+          </div>
 
-        <div className="flex-1">
-          <Input
-            placeholder="Name"
-            value={name}
-            onChange={handleKeyChange}
-            autoComplete="off"
-            autoCapitalize="off"
-            autoCorrect="off"
-            spellCheck="false"
-            className="flex-1 border-green-200 dark:border-green-800 focus:ring-green-500"
-            disabled={!isEditable}
-          />
-        </div>
+          <div className="flex-1">
+            <Input
+              placeholder="Name"
+              value={name}
+              onChange={handleKeyChange}
+              autoComplete="off"
+              autoCapitalize="off"
+              autoCorrect="off"
+              spellCheck="false"
+              className="flex-1 border-green-200 dark:border-green-800 focus:ring-green-500"
+              disabled={!isEditable}
+            />
+          </div>
 
-        <div className="flex-1">
-          <Input
-            placeholder="Value"
-            value={value}
-            onChange={handleValueChange}
-            autoComplete="off"
-            autoCapitalize="off"
-            autoCorrect="off"
-            spellCheck="false"
-            className="flex-1 border-green-200 dark:border-green-800 focus:ring-green-500"
-            disabled={!isEditable}
-          />
-        </div>
+          <div className="flex-1">
+            <Input
+              placeholder="Value"
+              value={value}
+              onChange={handleValueChange}
+              autoComplete="off"
+              autoCapitalize="off"
+              autoCorrect="off"
+              spellCheck="false"
+              className="flex-1 border-green-200 dark:border-green-800 focus:ring-green-500"
+              disabled={!isEditable}
+            />
+          </div>
         </div>
       </div>
     </Tooltip>
@@ -111,3 +117,28 @@ export default createReactBlockSpec(
     },
   },
 );
+
+AIBlockRegistry.getInstance().addBlock({
+  typeName: "env",
+  friendlyName: "Environment Variable",
+  shortDescription: "Sets an environment variable for all subsequent code blocks.",
+  description: undent`
+    Environment Variable blocks set shell environment variables that are available to all subsequent Terminal and Script blocks in the runbook.
+
+    The available props are:
+    - name (string): The environment variable name
+    - value (string): The environment variable value
+
+    Unlike template variables, environment variables are exported to the shell environment and accessible via standard shell syntax ($VAR_NAME).
+    While they are technically available in templates via {{ env.name }}, it's better to use template variables for these use cases.
+    To combine the two, set the variable in a Variable or Local Variable block and use that variable in the Environment Variable's value field.
+
+    Example: {
+      "type": "env",
+      "props": {
+        "name": "API_KEY",
+        "value": "sk-1234567890"
+      }
+    }
+  `,
+});

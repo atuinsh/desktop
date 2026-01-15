@@ -12,6 +12,8 @@ import PlayButton from "@/lib/blocks/common/PlayButton";
 import WorkspaceManager from "@/lib/workspaces/manager";
 import { RemoteRunbook } from "@/state/models";
 import { resolveRunbookByNwo, ResolvedRunbook } from "@/api/runbooks";
+import undent from "undent";
+import AIBlockRegistry from "@/lib/ai/block_registry";
 
 const searchIndex = new RunbookIndexService();
 
@@ -886,4 +888,59 @@ export const insertSubRunbook = (editor: any) => ({
   icon: <BookOpenIcon size={18} />,
   aliases: ["sub", "runbook", "embed", "include", "nested"],
   group: "Execute",
+});
+
+AIBlockRegistry.getInstance().addBlock({
+  typeName: "sub-runbook",
+  friendlyName: "Sub-Runbook",
+  shortDescription: "Embeds and executes another runbook within the current one.",
+  description: undent`
+    Sub-Runbook blocks execute another runbook as part of the current workflow. This enables modular runbook design by allowing common procedures to be reused across multiple runbooks.
+
+    The available props are:
+    - name (string): Display name for the block
+    - runbookUri (string): Hub URI in format "user/runbook" or "user/runbook:tag" (preferred for sharing)
+    - runbookPath (string): Relative file path to the runbook (for CLI/local use)
+    - runbookName (string): Display name of the referenced runbook
+    - exportEnv (boolean): Merge sub-runbook's environment variables into parent (default: false)
+    - exportVars (boolean): Merge sub-runbook's template variables into parent (default: false)
+    - exportCwd (boolean): Use sub-runbook's final working directory in parent (default: false)
+
+    REFERENCING RUNBOOKS:
+    - Hub URI: Use "user/runbook" or "user/runbook:tag" format for runbooks published to the Hub
+    - File path: Use relative paths like "./setup.atrb" or "../common/auth.atrb" for local runbooks
+    - The runbookId prop is set automatically by the desktop app and should not be set manually
+
+    CONTEXT EXPORT:
+    By default, sub-runbooks run in isolation. Enable export settings to pass context back to the parent:
+    - exportEnv: Environment variables set in the sub-runbook become available in subsequent parent blocks
+    - exportVars: Template variables from the sub-runbook merge into the parent's variable scope
+    - exportCwd: The parent continues execution in whatever directory the sub-runbook ended in
+
+    LIMITATIONS:
+    - You can create sub-runbook blocks that reference existing runbooks
+    - You cannot create new runbooks - only reference runbooks that already exist
+    - The referenced runbook must exist and be accessible to the user
+
+    Example (Hub reference): {
+      "type": "sub-runbook",
+      "props": {
+        "name": "Setup Environment",
+        "runbookUri": "myteam/common-setup:latest",
+        "runbookName": "Common Setup",
+        "exportEnv": true,
+        "exportVars": true
+      }
+    }
+
+    Example (file path reference): {
+      "type": "sub-runbook",
+      "props": {
+        "name": "Database Migration",
+        "runbookPath": "./migrations/run-migrations.atrb",
+        "runbookName": "Run Migrations",
+        "exportCwd": true
+      }
+    }
+  `,
 });

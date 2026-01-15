@@ -2,6 +2,9 @@ import { post } from "./http";
 import { platform, arch } from "@tauri-apps/plugin-os";
 import { invoke } from "@tauri-apps/api/core";
 
+type BlockName = string;
+type BlockType = string;
+
 export interface SystemInfo {
   arch: string;
   os: string;
@@ -19,9 +22,18 @@ export interface AIBlockRequest {
   insert_after_index?: number;
   system_info?: SystemInfo;
   runbook_id?: string;
+  context?: AIContext;
 }
 
-export interface AIBlockResponse {
+export interface AIContext {
+  variables: Array<string>;
+  named_blocks: Array<[BlockName, BlockType]>;
+  environment_variables: Array<string>;
+  working_directory: string | null;
+  ssh_host: string | null;
+}
+
+export interface AISingleBlockResponse {
   block: {
     type: string;
     props: Record<string, any>;
@@ -29,6 +41,14 @@ export interface AIBlockResponse {
     id: string;
   };
 }
+
+type AIBlock = AISingleBlockResponse["block"];
+
+export interface AIMultiBlockResponse {
+  blocks: Array<AIBlock>;
+}
+
+export type AIResponse = AISingleBlockResponse | AIMultiBlockResponse;
 
 export interface AIBlockError {
   error: string;
@@ -73,7 +93,7 @@ async function getSystemInfo(): Promise<SystemInfo> {
   };
 }
 
-export async function generateOrEditBlock(request: AIBlockRequest): Promise<AIBlockResponse> {
+export async function generateOrEditBlock(request: AIBlockRequest): Promise<AIResponse> {
   try {
     // Get system info for context
     const systemInfo = await getSystemInfo();
@@ -105,8 +125,11 @@ export async function generateOrEditBlock(request: AIBlockRequest): Promise<AIBl
     if (request.runbook_id !== undefined) {
       body.runbook_id = request.runbook_id;
     }
+    if (request.context !== undefined) {
+      body.context = request.context;
+    }
 
-    const response = await post<AIBlockResponse>("/ai/blocks", body);
+    const response = await post<AIResponse>("/ai/blocks", body);
 
     return response;
   } catch (error: any) {
@@ -129,7 +152,7 @@ export async function generateOrEditBlock(request: AIBlockRequest): Promise<AIBl
 
     throw new AIGenerationError(
       "Failed to connect to AI service",
-      error?.message || "Unknown error"
+      error?.message || "Unknown error",
     );
   }
 }

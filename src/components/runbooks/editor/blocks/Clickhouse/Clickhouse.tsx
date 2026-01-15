@@ -2,6 +2,8 @@ import { DatabaseIcon } from "lucide-react";
 
 // @ts-ignore
 import { createReactBlockSpec } from "@blocknote/react";
+import undent from "undent";
+import AIBlockRegistry from "@/lib/ai/block_registry";
 
 import { ClickhouseBlock } from "@/lib/workflow/blocks/clickhouse";
 import { DependencySpec } from "@/lib/workflow/dependency";
@@ -182,4 +184,41 @@ export const insertClickhouse = (schema: any) => (editor: typeof schema.BlockNot
   },
   icon: <DatabaseIcon size={18} />,
   group: "Database",
+});
+
+AIBlockRegistry.getInstance().addBlock({
+  typeName: "clickhouse",
+  friendlyName: "ClickHouse",
+  shortDescription: "Executes SQL queries against a ClickHouse database.",
+  description: undent`
+    ClickHouse blocks execute SQL queries against a ClickHouse database and display results in an interactive table.
+
+    The available props are:
+    - name (string): The display name of the block
+    - query (string): The SQL query to execute
+    - uri (string): ClickHouse connection string
+    - autoRefresh (number): Auto-refresh interval in milliseconds (0 to disable)
+
+    You can reference template variables in the query and uri: {{ var.variable_name }}.
+
+    OUTPUT ACCESS (requires block to have a name):
+    - output.rows (array): Rows from the first SELECT query
+    - output.columns (array): Column names
+    - output.total_rows (number): Total row count
+    - output.total_rows_affected (number): Rows affected by INSERT/UPDATE/DELETE
+    - output.total_duration (number): Execution time in seconds
+    - output.results (array): All results for multi-statement queries
+
+    MULTI-STATEMENT QUERIES:
+    Multiple statements separated by semicolons are supported. Access via output.results[index].
+
+    Example: {
+      "type": "clickhouse",
+      "props": {
+        "name": "Analytics Query",
+        "uri": "{{ var.clickhouse_uri }}",
+        "query": "SELECT count() FROM events WHERE date >= today() - 7"
+      }
+    }
+  `,
 });

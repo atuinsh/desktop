@@ -75,6 +75,12 @@ export class DocumentBridge {
     });
   }
 
+  public getLastBlockContext(): Promise<ResolvedContext> {
+    return invoke("get_flattened_document_context", {
+      documentId: this.runbookId,
+    });
+  }
+
   public getBlockState<T = JsonValue>(blockId: string): Promise<T> {
     return invoke("get_block_state", {
       documentId: this.runbookId,

@@ -143,6 +143,11 @@ pub(crate) enum DocumentCommand {
         reply: oneshot::Sender<Result<ResolvedContext, DocumentError>>,
     },
 
+    /// Get a flattened block context for the document (aka the final block)
+    GetLastBlockResolvedContext {
+        reply: oneshot::Sender<Result<ResolvedContext, DocumentError>>,
+    },
+
     /// Get a block's state
     GetBlockState {
         block_id: Uuid,
@@ -438,6 +443,15 @@ impl DocumentHandle {
         rx.await.map_err(|_| DocumentError::ActorSendError)?
     }
 
+    /// Get a flattened block context for the document (aka the final block)
+    pub async fn get_last_block_resolved_context(&self) -> Result<ResolvedContext, DocumentError> {
+        let (tx, rx) = oneshot::channel();
+        self.command_tx
+            .send(DocumentCommand::GetLastBlockResolvedContext { reply: tx })
+            .map_err(|_| DocumentError::ActorSendError)?;
+        rx.await.map_err(|_| DocumentError::ActorSendError)?
+    }
+
     /// Get a block's state
     pub async fn get_block_state(&self, block_id: Uuid) -> Result<Value, DocumentError> {
         let (tx, rx) = oneshot::channel();
@@ -713,6 +727,10 @@ impl DocumentActor {
                 }
                 DocumentCommand::GetResolvedContext { block_id, reply } => {
                     let context = self.document.get_resolved_context(&block_id);
+                    let _ = reply.send(context);
+                }
+                DocumentCommand::GetLastBlockResolvedContext { reply } => {
+                    let context = self.document.get_last_block_resolved_context();
                     let _ = reply.send(context);
                 }
                 DocumentCommand::GetBlockState { block_id, reply } => {

@@ -3,13 +3,12 @@ members = ["backend", "crates/*"]
 resolver = "2"
 
 [workspace.package]
-version = "0.2.12"                                # NOTE - also update this in backend/Cargo.toml if not using `cargo workspaces`
+version = "0.2.13"                                # NOTE - also update this in backend/Cargo.toml if not using `cargo workspaces`
 edition = "2021"
 authors = ["ellie@atuin.sh", "michelle@atuin.sh"]
 
 [workspace.dependencies]
 atuin-desktop-runtime = { path = "crates/atuin-desktop-runtime" }
-atuin-desktop-templates = { path = "crates/atuin-desktop-templates" }
 sqlx = { version = "0.8", features = [
   "runtime-tokio",
   "tls-native-tls",

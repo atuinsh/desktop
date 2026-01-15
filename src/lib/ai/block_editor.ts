@@ -3,6 +3,8 @@ import {
   AIFeatureDisabledError,
   AIGenerationError,
   AIQuotaExceededError,
+  AIContext,
+  AISingleBlockResponse,
 } from "@/api/ai";
 
 export interface EditBlockRequest {
@@ -11,6 +13,7 @@ export interface EditBlockRequest {
   documentMarkdown?: string;
   blockIndex?: number;
   runbookId?: string;
+  context?: AIContext;
 }
 
 export interface EditBlockResponse {
@@ -29,11 +32,12 @@ export async function editBlock(request: EditBlockRequest): Promise<EditBlockRes
     document_markdown: request.documentMarkdown,
     block_index: request.blockIndex,
     runbook_id: request.runbookId,
+    context: request.context,
   });
 
   // Always use the original block's ID, never trust AI-provided ones
   const updatedBlock = {
-    ...response.block,
+    ...(response as AISingleBlockResponse).block,
     id: request.currentBlock?.id,
   };
 

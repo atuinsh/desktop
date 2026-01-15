@@ -1,5 +1,7 @@
 // @ts-ignore
 import { createReactBlockSpec } from "@blocknote/react";
+import undent from "undent";
+import AIBlockRegistry from "@/lib/ai/block_registry";
 
 import { useMemo, useState, useEffect, useRef, useCallback, useContext } from "react";
 
@@ -38,7 +40,10 @@ import {
   useBlockStart,
   useBlockStop,
 } from "@/lib/hooks/useDocumentBridge";
-import Xterm, { XtermHandle, calculateRowHeight } from "@/components/runbooks/editor/components/Xterm";
+import Xterm, {
+  XtermHandle,
+  calculateRowHeight,
+} from "@/components/runbooks/editor/components/Xterm";
 import ResizeHandle from "@/components/common/ResizeHandle";
 import { TabsContext } from "@/routes/root/Tabs";
 
@@ -628,4 +633,52 @@ export const insertScript = (schema: any) => (editor: typeof schema.BlockNoteEdi
   },
   icon: <FileTerminalIcon size={18} />,
   group: "Execute",
+});
+
+AIBlockRegistry.getInstance().addBlock({
+  typeName: "script",
+  friendlyName: "Script",
+  shortDescription:
+    "Executes a non-interactive script and captures output - note: non-interactive shells may not load the user's shell configuration.",
+  description: undent`
+    Script blocks execute non-interactive scripts and capture their output. Unlike Terminal blocks, scripts run to completion without user interaction and can store their output in a template variable for use by other blocks.
+
+    The available props are:
+    - name (string): The display name of the block
+    - code (string): The script code to execute
+    - interpreter (string): The shell interpreter to use (bash, zsh, fish, python3, node, sh)
+    - outputVariable (string): Optional variable name to store the script's stdout
+    - outputVisible (boolean): Whether to show terminal output. Defaults to true.
+
+    NOTE that Script blocks use 'interpreter' instead of 'type' to specify the shell interpreter to use.
+
+    When using the Script block, you can reference template variables in code: {{ var.variable_name }}. You can escape variables with the 'shellquote' filter.
+
+    OUTPUT ACCESS (requires block to have a name):
+    - output.exit_code (number): Process exit code (0 = success)
+    - output.stdout (string): Standard output content
+    - output.stderr (string): Standard error content
+    - output.combined (string): Combined stdout and stderr in order received
+
+    Note: outputVariable captures stdout only. Use doc.named['name'].output for stderr or combined.
+
+    A common issue users run into when using script blocks is that they try to use aliases, environment variables, and other shell features that are only available in interactive shells.
+    If a user runs into these issues, you have the following options:
+
+    - If using zsh, the user can put their setup in '~/.zshenv' instead, since zsh loads '.zshenv' for all shells.
+    - Use absolute paths instead of aliases or binary names that would usually be in the user's PATH.
+    - Source the shell configuration file - note that this can cause additional issues, and adds additional startup time to the script execution.
+    - Set PATH manually in the script.
+    - Use a Terminal block instead, which runs an interactive shell with your full environment loaded. The Terminal docs specify a few more details to be aware of.
+
+    Example: {
+      "type": "script",
+      "props": {
+        "name": "Get current branch",
+        "code": "git branch --show-current",
+        "interpreter": "zsh",
+        "outputVariable": "current_branch"
+      }
+    }
+  `,
 });

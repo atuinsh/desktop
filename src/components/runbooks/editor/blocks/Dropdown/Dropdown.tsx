@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
+import undent from "undent";
+import AIBlockRegistry from "@/lib/ai/block_registry";
 import { ListFilterIcon, CheckIcon, ChevronsUpDownIcon, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -323,7 +325,9 @@ const Dropdown = ({
         ref={() => setExecutionReady(true)}
         className="flex flex-col w-full bg-gradient-to-r from-blue-50 to-cyan-50 dark:from-slate-800 dark:to-cyan-950 rounded-lg p-3 border border-blue-200 dark:border-blue-900 shadow-sm hover:shadow-md transition-all duration-200"
       >
-        <span className="text-[10px] font-mono text-gray-400 dark:text-gray-500 mb-2">dropdown</span>
+        <span className="text-[10px] font-mono text-gray-400 dark:text-gray-500 mb-2">
+          dropdown
+        </span>
         <div className="flex flex-row items-center space-x-3">
           <div className="flex items-center">
             <Button
@@ -605,4 +609,55 @@ export const insertDropdown = (schema: any) => (editor: typeof schema.BlockNoteE
   },
   icon: <ListFilterIcon size={18} />,
   group: "Execute", // Match the group of regular var component
+});
+
+AIBlockRegistry.getInstance().addBlock({
+  typeName: "dropdown",
+  friendlyName: "Dropdown",
+  shortDescription:
+    "Presents a dropdown selector that sets a template variable; choices are sourced from a fixed list, a variable, or a shell command.",
+  description: undent`
+    Dropdown blocks let users select from a list of options. The selected value is stored as a template variable. Options can be fixed, from a variable, or from a shell command.
+
+    The available props are:
+    - name (string): The template variable name to store the selection
+    - optionsType (string): How options are sourced - "fixed", "variable", or "command"
+    - fixedOptions (string): Comma-separated list of fixed options
+    - variableOptions (string): Variable name containing options
+    - commandOptions (string): Shell command that outputs options
+    - interpreter (string): Shell interpreter for command options
+    - value (string): Currently selected value (can be used to set default selection)
+
+    Options support label:value format (e.g., "Display Name:actual-value").
+
+    DEFAULT SELECTION:
+    The 'value' prop sets the initial/default selection. Value should match the actual value, not the display label.
+
+    ERROR HANDLING:
+    - If commandOptions fails, the dropdown shows empty options
+    - If variableOptions references a non-existent variable, options are empty
+    - Invalid option formats are silently skipped
+
+    SERIAL EXECUTION:
+    Dropdown blocks do NOT pause serial execution. They immediately finish with whatever value is currently selected. If no value is selected, the template variable will be empty.
+
+    Example (fixed options): {
+      "type": "dropdown",
+      "props": {
+        "name": "environment",
+        "optionsType": "fixed",
+        "fixedOptions": "Production:prod, Staging:staging, Development:dev"
+      }
+    }
+
+    Example (command output): {
+      "type": "dropdown",
+      "props": {
+        "name": "environment",
+        "optionsType": "command",
+        "commandOptions": "kubectl get pods --no-headers | awk '{print $1}'",
+        "interpreter": "bash"
+      }
+    }
+  `,
 });

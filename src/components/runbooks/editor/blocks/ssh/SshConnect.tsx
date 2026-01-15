@@ -15,6 +15,8 @@ import {
 } from "@heroui/react";
 import { GlobeIcon, SettingsIcon, FolderOpenIcon } from "lucide-react";
 import { createReactBlockSpec } from "@blocknote/react";
+import undent from "undent";
+import AIBlockRegistry from "@/lib/ai/block_registry";
 import track_event from "@/tracking";
 import { exportPropMatter } from "@/lib/utils";
 import { invoke } from "@tauri-apps/api/core";
@@ -76,7 +78,7 @@ const SshConnect = ({
   const [identityKey, setIdentityKey] = useBlockKvValue<IdentityKeySettings>(
     blockId,
     "identityKey",
-    { mode: "none", value: "" }
+    { mode: "none", value: "" },
   );
 
   // Certificate settings are stored locally per-user (not synced)
@@ -84,7 +86,7 @@ const SshConnect = ({
   const [certificate, setCertificate] = useBlockKvValue<CertificateSettings>(
     blockId,
     "certificate",
-    { mode: "none", value: "" }
+    { mode: "none", value: "" },
   );
 
   const hasExplicitConfig = user || hostname;
@@ -156,8 +158,7 @@ const SshConnect = ({
     }
   };
 
-  const hasIncompleteConfig =
-    (user && !hostname) || (!user && hostname);
+  const hasIncompleteConfig = (user && !hostname) || (!user && hostname);
 
   return (
     <>
@@ -195,9 +196,7 @@ const SshConnect = ({
             <div className="flex-1">
               <Input
                 placeholder={
-                  hasExplicitConfig
-                    ? "Configured via settings"
-                    : "myserver or user@host:port"
+                  hasExplicitConfig ? "Configured via settings" : "myserver or user@host:port"
                 }
                 value={displayValue}
                 autoComplete="off"
@@ -221,19 +220,15 @@ const SshConnect = ({
         scrollBehavior="inside"
       >
         <ModalContent>
-          <ModalHeader className="text-base font-medium">
-            SSH Connect Settings
-          </ModalHeader>
+          <ModalHeader className="text-base font-medium">SSH Connect Settings</ModalHeader>
           <ModalBody className="pb-6">
             <div className="grid grid-cols-2 gap-6">
               {/* Left column: Connection */}
               <div className="space-y-3">
-                <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Connection
-                </h3>
+                <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">Connection</h3>
                 <p className="text-xs text-gray-500 dark:text-gray-400">
-                  Override connection details. When set, these take precedence
-                  over the quick input field.
+                  Override connection details. When set, these take precedence over the quick input
+                  field.
                 </p>
 
                 <Input
@@ -293,8 +288,7 @@ const SshConnect = ({
                     Identity Key
                   </h3>
                   <p className="text-xs text-gray-500 dark:text-gray-400">
-                    Specify a private key for authentication. Overrides SSH config
-                    and agent.
+                    Specify a private key for authentication. Overrides SSH config and agent.
                   </p>
 
                   <RadioGroup
@@ -520,12 +514,7 @@ export default createReactBlockSpec(
       return (
         <pre lang="ssh-connect">
           <code>
-            {exportPropMatter("ssh-connect", block.props, [
-              "userHost",
-              "user",
-              "hostname",
-              "port",
-            ])}
+            {exportPropMatter("ssh-connect", block.props, ["userHost", "user", "hostname", "port"])}
           </code>
         </pre>
       );
@@ -559,25 +548,96 @@ export default createReactBlockSpec(
         />
       );
     },
-  }
+  },
 );
 
-export const insertSshConnect =
-  (schema: any) => (editor: typeof schema.BlockNoteEditor) => ({
-    title: "SSH Connect",
-    onItemClick: () => {
-      track_event("runbooks.block.create", { type: "ssh-connect" });
+export const insertSshConnect = (schema: any) => (editor: typeof schema.BlockNoteEditor) => ({
+  title: "SSH Connect",
+  onItemClick: () => {
+    track_event("runbooks.block.create", { type: "ssh-connect" });
 
-      editor.insertBlocks(
-        [
-          {
-            type: "ssh-connect",
-          },
-        ],
-        editor.getTextCursorPosition().block.id,
-        "before"
-      );
-    },
-    icon: <GlobeIcon size={18} />,
-    group: "Network",
-  });
+    editor.insertBlocks(
+      [
+        {
+          type: "ssh-connect",
+        },
+      ],
+      editor.getTextCursorPosition().block.id,
+      "before",
+    );
+  },
+  icon: <GlobeIcon size={18} />,
+  group: "Network",
+});
+
+AIBlockRegistry.getInstance().addBlock({
+  typeName: "ssh-connect",
+  friendlyName: "SSH Connect",
+  shortDescription: "Establishes an SSH connection for subsequent blocks.",
+  description: undent`
+    SSH Connect blocks establish an SSH connection to a remote server. Subsequent Terminal and Script blocks will execute on the connected host until another SSH Connect or Host block is encountered. To switch back to local execution, insert a Host block with host set to "local".
+
+    The available props are:
+    - userHost (string): Quick connection string in format "user@host:port" or just "host" (uses SSH config)
+    - user (string): Override username (when set with hostname, takes precedence over userHost)
+    - hostname (string): Override hostname (when set with user, takes precedence over userHost)
+    - port (number): Override port number (default: 22)
+
+    QUICK vs MANUAL CONFIGURATION:
+    - Quick mode: Set only "userHost" for simple connections using SSH config aliases or user@host format
+    - Manual mode: Set "user" and "hostname" together to override connection details explicitly
+    - When user/hostname are set, they take precedence over userHost
+
+    AUTHENTICATION:
+    Authentication works like the standard ssh command, trying methods in this order:
+    1. SSH Agent - All keys loaded in your SSH agent
+    2. SSH Config - Identity files specified in ~/.ssh/config
+    3. Default Keys - Standard SSH keys in ~/.ssh/: id_rsa, id_ecdsa, id_ecdsa_sk (FIDO/U2F), id_ed25519, id_ed25519_sk (FIDO/U2F), id_xmss, id_dsa
+    4. Interactive password prompt (if key auth fails)
+
+    Password-protected keys must be added to your SSH agent with ssh-add, or users can specify a key path in the settings modal.
+
+    SSH CONFIG SUPPORT:
+    Your ~/.ssh/config is fully respected, including:
+    - Host aliases
+    - ProxyJump and ProxyCommand for bastion/jump hosts
+    - IdentityFile and IdentityAgent
+    - Other standard SSH config options
+    Tailscale SSH also works as expected.
+
+    MANUAL AUTHENTICATION (via Settings UI):
+    Users can configure identity keys and certificates through the block's settings modal. These settings are stored locally per-user (not synced with collaborators) since different users authenticate differently:
+    - Identity Key: Specify a private key by selecting from ~/.ssh, browsing for a file, or pasting content directly. When configured, this key is tried first before other methods.
+    - Certificate: Specify an SSH certificate by path or pasting content directly
+
+    Note: Identity key and certificate settings cannot be set via props - they must be configured through the UI by each user.
+
+    CONNECTION LIFECYCLE:
+    - Connections are pooled globally with multiplexed sessions for low latency
+    - Connection persists until another SSH Connect or Host block is encountered
+    - HTTP, SQL, Kubernetes, Prometheus blocks always run locally regardless of SSH context
+
+    Example (quick mode with SSH config alias): {
+      "type": "ssh-connect",
+      "props": {
+        "userHost": "production-server"
+      }
+    }
+
+    Example (quick mode with full address): {
+      "type": "ssh-connect",
+      "props": {
+        "userHost": "admin@production-server.example.com"
+      }
+    }
+
+    Example (manual mode): {
+      "type": "ssh-connect",
+      "props": {
+        "user": "admin",
+        "hostname": "production-server.example.com",
+        "port": 22
+      }
+    }
+  `,
+});

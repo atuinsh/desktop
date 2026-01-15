@@ -431,6 +431,20 @@ pub async fn get_flattened_block_context(
 }
 
 #[tauri::command]
+pub async fn get_flattened_document_context(
+    state: State<'_, AtuinState>,
+    document_id: String,
+) -> Result<ResolvedContext, String> {
+    let documents = state.documents.read().await;
+    let document = documents.get(&document_id).ok_or("Document not found")?;
+    let context = document
+        .get_last_block_resolved_context()
+        .await
+        .map_err(|e| format!("Failed to get flattened document context: {}", e))?;
+    Ok(context)
+}
+
+#[tauri::command]
 pub async fn get_block_state(
     state: State<'_, AtuinState>,
     document_id: String,

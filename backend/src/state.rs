@@ -10,6 +10,10 @@ use tokio::sync::{broadcast, mpsc, oneshot};
 use uuid::Uuid;
 
 use crate::{
+    ai::session::{SessionEvent, SessionHandle},
+    secret_cache::{KeychainSecretStorage, KvDbSecretStorage, SecretCache},
+};
+use crate::{
     shared_state::SharedStateHandle, sqlite::DbInstances, workspaces::manager::WorkspaceManager,
 };
 use atuin_desktop_runtime::{
@@ -52,12 +56,6 @@ pub(crate) struct AtuinState {
     pub event_receiver: Arc<tokio::sync::Mutex<Option<mpsc::UnboundedReceiver<GCEvent>>>>,
     pub gc_frontend_channel: tokio::sync::Mutex<Option<Channel<GCEvent>>>,
 
-    // Persisted to the keychain, but cached here so that
-    // we don't keep asking the user for keychain access.
-    // Map of user -> password
-    // Service is hardcoded
-    pub runbooks_api_token: RwLock<HashMap<String, String>>,
-
     // The prefix to use for SQLite and local storage in development mode
     pub dev_prefix: Option<String>,
 
@@ -77,6 +75,15 @@ pub(crate) struct AtuinState {
 
     // Map of document handles per runbook
     pub documents: Arc<RwLock<HashMap<String, Arc<DocumentHandle>>>>,
+
+    // AI session handles for sending events to sessions
+    pub ai_sessions: Arc<RwLock<HashMap<Uuid, SessionHandle>>>,
+
+    // AI session event channels for sending events to frontend (per session)
+    pub ai_session_channels: Arc<RwLock<HashMap<Uuid, Channel<SessionEvent>>>>,
+
+    // Secret cache for storing secrets (backed by keychain in prod, KV DB in dev)
+    secret_cache: Mutex<Option<Arc<SecretCache>>>,
 }
 
 impl AtuinState {
@@ -98,13 +105,15 @@ impl AtuinState {
             gc_event_sender: Mutex::new(None),
             event_receiver: Arc::new(tokio::sync::Mutex::new(None)),
             gc_frontend_channel: tokio::sync::Mutex::new(None),
-            runbooks_api_token: Default::default(),
             runbook_output_variables: Default::default(),
             block_executions: Default::default(),
             documents: Default::default(),
+            ai_sessions: Default::default(),
+            ai_session_channels: Default::default(),
             dev_prefix,
             app_path,
             use_hub_updater_service,
+            secret_cache: Mutex::new(None),
         }
     }
     pub async fn init(&self, _app: &AppHandle) -> Result<()> {
@@ -117,6 +126,9 @@ impl AtuinState {
         self.db_instances.init().await?;
         self.db_instances
             .add_migrator("context", sqlx::migrate!("./migrations/context"))
+            .await?;
+        self.db_instances
+            .add_migrator("ai", sqlx::migrate!("./migrations/ai"))
             .await?;
 
         // For some reason we cannot spawn the exec log task before the state is managed. Annoying.
@@ -157,6 +169,22 @@ impl AtuinState {
         let (gc_sender, gc_receiver) = mpsc::unbounded_channel::<GCEvent>();
         self.gc_event_sender.lock().unwrap().replace(gc_sender);
         *self.event_receiver.lock().await = Some(gc_receiver);
+
+        // Initialize secret cache with appropriate storage backend
+        let secret_cache = if let Some(ref prefix) = self.dev_prefix {
+            // Dev mode: use KV DB storage
+            let pool = self.db_instances.get_pool("kv").await?;
+            let storage = Arc::new(KvDbSecretStorage::new(prefix.clone(), pool));
+            SecretCache::new(storage)
+        } else {
+            // Production: use keychain storage
+            let storage = Arc::new(KeychainSecretStorage);
+            SecretCache::new(storage)
+        };
+        self.secret_cache
+            .lock()
+            .unwrap()
+            .replace(Arc::new(secret_cache));
 
         Ok(())
     }
@@ -230,6 +258,14 @@ impl AtuinState {
             gc_event_sender.clone()
         } else {
             panic!("GC event sender not initialized");
+        }
+    }
+
+    pub fn secret_cache(&self) -> Arc<SecretCache> {
+        if let Some(secret_cache) = self.secret_cache.lock().unwrap().as_ref() {
+            secret_cache.clone()
+        } else {
+            panic!("Secret cache not initialized");
         }
     }
 }

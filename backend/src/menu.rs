@@ -300,13 +300,6 @@ pub fn menu<R: Runtime>(app_handle: &AppHandle<R>, tab_items: &[TabItem]) -> Res
                     &PredefinedMenuItem::quit(app_handle, Some("Quit Atuin Desktop"))?,
                 ],
             )?,
-            #[cfg(not(any(
-                target_os = "linux",
-                target_os = "dragonfly",
-                target_os = "freebsd",
-                target_os = "netbsd",
-                target_os = "openbsd"
-            )))]
             &Submenu::with_items(
                 app_handle,
                 "File",

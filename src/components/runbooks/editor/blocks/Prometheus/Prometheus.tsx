@@ -1,4 +1,6 @@
 import { useState, useEffect } from "react";
+import undent from "undent";
+import AIBlockRegistry from "@/lib/ai/block_registry";
 import {
   Button,
   Dropdown,
@@ -501,4 +503,41 @@ export const insertPrometheus = (schema: any) => (editor: typeof schema.BlockNot
   icon: <LineChartIcon size={18} />,
   aliases: ["prom", "promql", "grafana"],
   group: "Monitor",
+});
+
+AIBlockRegistry.getInstance().addBlock({
+  typeName: "prometheus",
+  friendlyName: "Prometheus",
+  shortDescription:
+    "Queries Prometheus and displays results as a chart.",
+  description: undent`
+    Prometheus blocks execute PromQL queries against a Prometheus server and display the results as interactive line charts.
+
+    The available props are:
+    - name (string): The display name of the block
+    - query (string): The PromQL query to execute
+    - endpoint (string): The Prometheus server URL
+    - period (string): Time range for the query (e.g., "5m", "1h", "24h")
+    - autoRefresh (number): Auto-refresh interval in milliseconds (0 to disable)
+
+    You can reference template variables in the endpoint and query: {{ var.variable_name }}.
+
+    OUTPUT ACCESS (requires block to have a name):
+    - output.series (array): Time series data
+    - output.total_series (number): Number of series returned
+    - output.time_range (object): Query time range
+
+    AUTHENTICATION:
+    Supports basic auth via URL (e.g., https://user:pass@prometheus.example.com).
+
+    Example: {
+      "type": "prometheus",
+      "props": {
+        "name": "CPU Usage",
+        "query": "rate(node_cpu_seconds_total{mode='user'}[5m])",
+        "endpoint": "{{ var.prometheus_url }}",
+        "period": "1h"
+      }
+    }
+  `,
 });

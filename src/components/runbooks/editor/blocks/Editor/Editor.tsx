@@ -2,6 +2,8 @@ import { useEffect, useState, useMemo } from "react";
 
 // @ts-ignore
 import { createReactBlockSpec } from "@blocknote/react";
+import undent from "undent";
+import AIBlockRegistry from "@/lib/ai/block_registry";
 
 import * as LanguageData from "@codemirror/language-data";
 import EditorBlockType from "@/lib/workflow/blocks/editor.ts";
@@ -469,4 +471,36 @@ export const insertEditor = (schema: any) => (editor: typeof schema.BlockNoteEdi
   icon: <CodeIcon size={18} />,
   group: "Misc",
   aliases: ["code"],
+});
+
+AIBlockRegistry.getInstance().addBlock({
+  typeName: "editor",
+  friendlyName: "Editor",
+  shortDescription:
+    "A syntax-highlighted code editor for viewing and editing code.",
+  description: undent`
+    Editor blocks provide a syntax-highlighted code editor with language selection. The content can optionally be stored in a template variable.
+
+    The available props are:
+    - name (string): The display name of the block
+    - code (string): The code content
+    - language (string): The syntax highlighting language (e.g., "javascript", "python", "json")
+    - variableName (string): Optional variable name to store the editor contents
+
+    TEMPLATE VARIABLE ACCESS:
+    When variableName is set, the editor's content is available as {{ var.variableName }} in other blocks.
+    This allows using editor content as input to scripts, HTTP bodies, etc.
+
+    Can also be inserted by typing "\`\`\`" on an empty line.
+
+    Example: {
+      "type": "editor",
+      "props": {
+        "name": "Config File",
+        "language": "json",
+        "code": "{\\"key\\": \\"value\\"}",
+        "variableName": "config_content"
+      }
+    }
+  `,
 });

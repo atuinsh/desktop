@@ -1,13 +1,13 @@
 # Atuin Desktop Agent Guide
 
 ## Build & Test Commands
-- Dev: `pnpm install && ./script/dev [--profile profile_name]`
-- Build: `pnpm run tauri build`
-- Frontend tests: `pnpm test`
-- Run single test: `pnpm test-once <test-name>`
+- Dev: `bun install && ./script/dev [--profile profile_name]`
+- Build: `bun run tauri build`
+- Frontend tests: `bun test`
+- Run single test: `bun test-once <test-name>`
 - Development: `./script/dev` (recommended)
-- Test single file: `pnpm run test src/path/to/test.ts`
-- Tauri commands: `pnpm run tauri`
+- Test single file: `bun test src/path/to/test.ts`
+- Tauri commands: `bun run tauri`
 
 ## Code Style Guidelines
 - **Branches**: ALWAYS create a branch before making changes. NEVER commit directly to main. Use format `<username>/<issue-id>/short-description` (e.g., `ellie/ATU-194/script-default-shell`)

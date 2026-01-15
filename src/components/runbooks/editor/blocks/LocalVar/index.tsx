@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { Input, Button } from "@heroui/react";
 import { CloudOffIcon, LockIcon, EyeIcon, EyeOffIcon } from "lucide-react";
 import { createReactBlockSpec } from "@blocknote/react";
+import undent from "undent";
+import AIBlockRegistry from "@/lib/ai/block_registry";
 import track_event from "@/tracking";
 import { exportPropMatter } from "@/lib/utils";
 import { useBlockKvValue } from "@/lib/hooks/useKvValue";
@@ -159,4 +161,30 @@ export const insertLocalVar = (schema: any) => (editor: typeof schema.BlockNoteE
   },
   icon: <LockIcon size={18} />,
   group: "Execute", // Match the group of regular var component
+});
+
+AIBlockRegistry.getInstance().addBlock({
+  typeName: "local-var",
+  friendlyName: "Local Variable",
+  shortDescription:
+    "Stores a variable locally on the user's device (not synced).",
+  description: undent`
+    Local Variable blocks store sensitive values locally on the user's machine. The variable name is synced with collaborators, but the value is stored only on the local device and never uploaded.
+
+    The available props are:
+    - name (string): The variable name (synced with collaborators)
+
+    The value is stored locally and can be referenced using {{ var.variable_name }} syntax. This is ideal for credentials, API keys, or other sensitive data that shouldn't be shared.
+
+    IMPORTANT: This block's value is UI-only - the user must manually enter the value in the runbook editor. You cannot set the value programmatically via props.
+
+    Use case: Add this block to let users enter credentials, paths, or other sensitive data that shouldn't be stored in the runbook document.
+
+    Example: {
+      "type": "local-var",
+      "props": {
+        "name": "api_token"
+      }
+    }
+  `,
 });

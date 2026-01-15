@@ -1,6 +1,8 @@
 import { PauseIcon, PlayIcon } from "lucide-react";
 import { Input, Button, Select, SelectItem } from "@heroui/react";
 import { createReactBlockSpec } from "@blocknote/react";
+import undent from "undent";
+import AIBlockRegistry from "@/lib/ai/block_registry";
 import { exportPropMatter } from "@/lib/utils";
 import { useSerialExecution } from "@/lib/hooks/useSerialExecution";
 import { useCurrentRunbookId } from "@/context/runbook_id_context";
@@ -176,4 +178,32 @@ export const insertPause = (schema: any) => (editor: typeof schema.BlockNoteEdit
   },
   icon: <PauseIcon size={18} />,
   group: "Execute",
+});
+
+AIBlockRegistry.getInstance().addBlock({
+  typeName: "pause",
+  friendlyName: "Pause",
+  shortDescription:
+    "Pauses workflow execution until the user continues.",
+  description: undent`
+    Pause blocks halt serial workflow execution until the user manually continues. Can be unconditional or conditional based on a template variable.
+
+    The available props are:
+    - condition (string): A template expression to evaluate (only used when pauseIfTruthy is true)
+    - pauseIfTruthy (boolean): If true, only pauses when condition evaluates to a truthy value
+
+    TRUTHY VALUES:
+    Truthy values include: true, "true", "1", "yes", or any non-zero number.
+    All other values (including empty strings, "false", "0", "no") are considered falsy.
+
+    Use pause blocks for manual checkpoints, confirmation steps, or conditional halts in automated workflows.
+
+    Example: {
+      "type": "pause",
+      "props": {
+        "pauseIfTruthy": true,
+        "condition": "{{ var.needs_approval }}"
+      }
+    }
+  `,
 });
