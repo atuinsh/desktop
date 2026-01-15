@@ -11,7 +11,7 @@ export default class SocketManager extends Emittery {
   private static instance: SocketManager;
   private handlers: MessageRef[] = [];
   private store: typeof useStore;
-  private socket: Socket;
+  private socket: Option<Socket> = None;
 
   static get() {
     if (!SocketManager.instance) {
@@ -32,9 +32,9 @@ export default class SocketManager extends Emittery {
   constructor(apiToken: string | null) {
     super();
     this.store = useStore;
-    this.socket = this.buildSocket(apiToken);
-    this.setupHandlers();
     if (apiToken) {
+      this.socket = Some(this.buildSocket(apiToken));
+      this.setupHandlers(this.socket.unwrap());
       this.connect();
     } else {
       this.store.getState().setConnectedToHubSocket(false);
@@ -54,7 +54,7 @@ export default class SocketManager extends Emittery {
       // Defer the callback to allow other handlers to be set up
       // before handling the connection event.
       setTimeout(() => {
-        callback(this.socket);
+        callback(this.socket.expect("isConnected returned true but socket is None"));
       }, 0);
     }
 
@@ -70,18 +70,18 @@ export default class SocketManager extends Emittery {
   }
 
   public isConnected() {
-    return this.socket.isConnected();
+    return this.socket.map((socket) => socket.isConnected()).unwrapOr(false);
   }
 
   private putNewApiToken(token: string | null) {
     logger.info("Preparing new Socket with updated token");
     const newSocket = this.buildSocket(token);
-    const previouslyConnected = this.socket.isConnected();
-    this.socket.disconnect();
-    this.cleanupHandlers();
+    const previouslyConnected = this.socket.map((socket) => socket.isConnected()).unwrapOr(false);
+    this.socket.map((socket) => socket.disconnect());
+    this.socket.map((socket) => this.cleanupHandlers(socket));
 
-    this.socket = newSocket;
-    this.setupHandlers();
+    this.socket = Some(newSocket);
+    this.setupHandlers(this.socket.unwrap());
 
     if (token) {
       this.connect();
@@ -93,10 +93,13 @@ export default class SocketManager extends Emittery {
   }
 
   private connect() {
+    if (this.socket.isNone()) {
+      return;
+    }
     logger.debug(
       `Connecting to Atuin Hub with token: ${SocketManager.apiToken!.substring(0, 12)}...`,
     );
-    this.socket.connect();
+    this.socket.map((socket) => socket.connect());
   }
 
   private buildSocket(apiToken: string | null) {
@@ -107,23 +110,23 @@ export default class SocketManager extends Emittery {
     });
   }
 
-  private setupHandlers() {
+  private setupHandlers(socket: Socket) {
     this.handlers.push(
-      this.socket.onOpen(() => {
+      socket.onOpen(() => {
         this.store.getState().setConnectedToHubSocket(true);
         this.emit("connect", this.socket);
       }),
     );
     this.handlers.push(
-      this.socket.onClose(() => {
+      socket.onClose(() => {
         this.store.getState().setConnectedToHubSocket(false);
         this.emit("disconnect", this.socket);
       }),
     );
   }
 
-  private cleanupHandlers() {
-    this.socket.off(this.handlers);
+  private cleanupHandlers(socket: Socket) {
+    socket.off(this.handlers);
     this.handlers = [];
   }
 }
@@ -145,7 +148,12 @@ export class WrappedChannel<J = unknown> {
     this.topic = topic;
     this.emitter = new Emittery();
     this.channelParams = channelParams;
-    this.channel = this.manager.getSocket().channel(topic, channelParams);
+    this.channel = this.manager
+      .getSocket()
+      .map((socket) => socket.channel(topic, channelParams))
+      .unwrapOrElse(() => {
+        return null;
+      });
 
     this.manager.onSocketChange(this.handleNewSocket.bind(this));
   }
@@ -216,7 +224,11 @@ export class WrappedChannel<J = unknown> {
   }
 
   private resetChannel() {
-    this.handleNewSocket(this.manager.getSocket());
+    if (this.manager.getSocket().isNone()) {
+      return;
+    }
+
+    this.handleNewSocket(this.manager.getSocket().unwrap());
   }
 
   public leave(timeout?: number) {

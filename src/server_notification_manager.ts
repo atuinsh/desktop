@@ -44,7 +44,7 @@ export type OrgNotification = {
 export default class ServerNotificationManager extends Emittery {
   static instance: ServerNotificationManager;
   private manager: SocketManager;
-  private channel: WrappedChannel;
+  private channel: Option<WrappedChannel> = None;
 
   static get() {
     if (!ServerNotificationManager.instance) {
@@ -64,54 +64,56 @@ export default class ServerNotificationManager extends Emittery {
   }
 
   public async startNotifications() {
+    const channel = this.channel.unwrap();
+
     // Subscribe is idempotent on the server, so we can just call it with all the runbook IDs
     const runbookIds = await Runbook.allIdsInAllWorkspaces();
     // TODO: replace this with a proper org model one day
     const orgIds = await Workspace.allOrgIds();
 
-    this.channel.push("subscribe", { ids: runbookIds });
-    this.channel.push("subscribe_orgs", { ids: orgIds });
+    channel.push("subscribe", { ids: runbookIds });
+    channel.push("subscribe_orgs", { ids: orgIds });
 
-    this.channel.on("runbook_created", (params: RunbookNotification) => {
+    channel.on("runbook_created", (params: RunbookNotification) => {
       this.emit("runbook_created", params.id);
     });
-    this.channel.on("runbook_updated", (params: RunbookNotification) => {
+    channel.on("runbook_updated", (params: RunbookNotification) => {
       this.emit("runbook_updated", params.id);
     });
-    this.channel.on("runbook_deleted", (params: RunbookNotification) => {
+    channel.on("runbook_deleted", (params: RunbookNotification) => {
       this.emit("runbook_deleted", params.id);
     });
 
-    this.channel.on("collab_invited", (params: RunbookNotification) => {
+    channel.on("collab_invited", (params: RunbookNotification) => {
       this.emit("collab_invited", params.id);
     });
-    this.channel.on("collab_accepted", (params: RunbookNotification) => {
+    channel.on("collab_accepted", (params: RunbookNotification) => {
       this.emit("collab_accepted", params.id);
     });
-    this.channel.on("collab_deleted", (params: RunbookNotification) => {
+    channel.on("collab_deleted", (params: RunbookNotification) => {
       this.emit("collab_deleted", params.id);
     });
 
-    this.channel.on("org_workspace_created", (params: OrgWorkspaceNotification) => {
+    channel.on("org_workspace_created", (params: OrgWorkspaceNotification) => {
       this.emit("org_workspace_created", params);
     });
-    this.channel.on("org_workspace_updated", (params: OrgWorkspaceNotification) => {
+    channel.on("org_workspace_updated", (params: OrgWorkspaceNotification) => {
       this.emit("org_workspace_updated", params);
     });
-    this.channel.on("org_workspace_deleted", (params: OrgWorkspaceNotification) => {
+    channel.on("org_workspace_deleted", (params: OrgWorkspaceNotification) => {
       this.emit("org_workspace_deleted", params);
     });
 
-    this.channel.on("org_joined", (params: OrgNotification) => {
+    channel.on("org_joined", (params: OrgNotification) => {
       this.emit("org_joined", params);
     });
-    this.channel.on("org_left", (params: OrgNotification) => {
+    channel.on("org_left", (params: OrgNotification) => {
       this.emit("org_left", params);
     });
-    this.channel.on("org_updated", (params: OrgNotification) => {
+    channel.on("org_updated", (params: OrgNotification) => {
       this.emit("org_updated", params);
     });
-    this.channel.on("org_deleted", (params: OrgNotification) => {
+    channel.on("org_deleted", (params: OrgNotification) => {
       this.emit("org_deleted", params);
     });
   }
@@ -220,13 +222,23 @@ export default class ServerNotificationManager extends Emittery {
    */
   public subscribe(runbookId: string) {
     this.manager.onConnect(() => {
-      this.channel.push("subscribe", { ids: [runbookId] });
+      if (this.channel.isNone()) {
+        return;
+      }
+
+      const channel = this.channel.unwrap();
+      channel.push("subscribe", { ids: [runbookId] });
     });
   }
 
   public unsubscribe(runbookId: string) {
     this.manager.onConnect(() => {
-      this.channel.push("unsubscribe", { ids: [runbookId] });
+      if (this.channel.isNone()) {
+        return;
+      }
+
+      const channel = this.channel.unwrap();
+      channel.push("unsubscribe", { ids: [runbookId] });
     });
   }
 }
