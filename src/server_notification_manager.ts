@@ -57,8 +57,8 @@ export default class ServerNotificationManager extends Emittery {
   constructor() {
     super();
     this.manager = SocketManager.get();
-    this.channel = this.manager.channel("notifications");
     this.manager.onConnect(() => {
+      this.channel = Some(this.manager.channel("notifications"));
       this.startNotifications();
     });
   }
