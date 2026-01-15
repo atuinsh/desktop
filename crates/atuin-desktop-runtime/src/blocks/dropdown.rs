@@ -41,7 +41,24 @@ pub struct DropdownOption {
 }
 
 impl DropdownOption {
+    pub fn from_str_with_delimiter(value: &str, delimiter: &str) -> Result<Self, String> {
+        if let Some(idx) = value.find(delimiter) {
+            let label = value[..idx].to_string();
+            let val = value[idx + delimiter.len()..].to_string();
+            Ok(DropdownOption::builder().label(label).value(val).build())
+        } else {
+            Ok(DropdownOption::builder()
+                .label(value.to_string())
+                .value(value.to_string())
+                .build())
+        }
+    }
+
     pub fn vec_from_str(value: &str) -> Result<Vec<Self>, String> {
+        Self::vec_from_str_with_delimiter(value, ":")
+    }
+
+    pub fn vec_from_str_with_delimiter(value: &str, delimiter: &str) -> Result<Vec<Self>, String> {
         if value.trim().is_empty() {
             return Ok(vec![]);
         }
@@ -50,7 +67,7 @@ impl DropdownOption {
         re.split(value)
             .map(|part| part.trim())
             .filter(|part| !part.is_empty())
-            .map(|part| part.try_into())
+            .map(|part| Self::from_str_with_delimiter(part, delimiter))
             .collect()
     }
 }
@@ -99,6 +116,7 @@ pub struct Dropdown {
     pub options: String,
     pub interpreter: String,
     pub value: String,
+    pub delimiter: String,
 }
 
 impl Dropdown {
@@ -120,9 +138,15 @@ impl Dropdown {
             }
         };
 
+        let delimiter = if self.delimiter.is_empty() {
+            ":"
+        } else {
+            &self.delimiter
+        };
+
         let options = match self.options_type {
             DropdownOptionType::Fixed => {
-                let options = DropdownOption::vec_from_str(options_source)?;
+                let options = DropdownOption::vec_from_str_with_delimiter(options_source, delimiter)?;
                 Ok(options)
             }
             DropdownOptionType::Variable => {
@@ -132,7 +156,7 @@ impl Dropdown {
                     .get_var(options_source)
                     .map(|v| v.to_string())
                     .unwrap_or_default();
-                let options = DropdownOption::vec_from_str(&value)?;
+                let options = DropdownOption::vec_from_str_with_delimiter(&value, delimiter)?;
                 Ok(options)
             }
             DropdownOptionType::Command => {
@@ -150,7 +174,7 @@ impl Dropdown {
                     .output()
                     .await?;
                 let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-                let options = DropdownOption::vec_from_str(&stdout)?;
+                let options = DropdownOption::vec_from_str_with_delimiter(&stdout, delimiter)?;
                 Ok(options)
             }
         };
@@ -221,6 +245,12 @@ impl FromDocument for Dropdown {
             .ok_or("Missing interpreter")?
             .to_string();
 
+        let delimiter = props
+            .get("delimiter")
+            .and_then(|v| v.as_str())
+            .unwrap_or(":") // Default to ":" if delimiter is missing
+            .to_string();
+
         Ok(Dropdown::builder()
             .id(id)
             .name(name)
@@ -231,6 +261,7 @@ impl FromDocument for Dropdown {
             .command_options(command_options)
             .value(value)
             .interpreter(interpreter)
+            .delimiter(delimiter)
             .build())
     }
 }
@@ -430,6 +461,7 @@ mod tests {
                 .command_options(command_options.to_string())
                 .value("".to_string())
                 .interpreter("/bin/sh".to_string())
+                .delimiter(":".to_string())
                 .build()
         }
 
@@ -727,12 +759,85 @@ mod tests {
                 .command_options("".to_string())
                 .value("a".to_string())
                 .interpreter("/bin/sh".to_string())
+                .delimiter(":".to_string())
                 .build();
 
             let json = serde_json::to_string(&dropdown).unwrap();
             let deserialized: Dropdown = serde_json::from_str(&json).unwrap();
 
             assert_eq!(dropdown, deserialized);
+        }
+    }
+
+    // Tests for custom delimiter parsing
+    mod custom_delimiter {
+        use super::*;
+
+        #[test]
+        fn test_from_str_with_custom_delimiter() {
+            let option = DropdownOption::from_str_with_delimiter("Label|value", "|").unwrap();
+            assert_eq!(option.label, "Label");
+            assert_eq!(option.value, "value");
+        }
+
+        #[test]
+        fn test_from_str_with_multi_char_delimiter() {
+            let option = DropdownOption::from_str_with_delimiter("Label::value", "::").unwrap();
+            assert_eq!(option.label, "Label");
+            assert_eq!(option.value, "value");
+        }
+
+        #[test]
+        fn test_from_str_with_arrow_delimiter() {
+            let option = DropdownOption::from_str_with_delimiter("Display Name->actual_value", "->").unwrap();
+            assert_eq!(option.label, "Display Name");
+            assert_eq!(option.value, "actual_value");
+        }
+
+        #[test]
+        fn test_from_str_no_delimiter_found() {
+            let option = DropdownOption::from_str_with_delimiter("just_a_value", "|").unwrap();
+            assert_eq!(option.label, "just_a_value");
+            assert_eq!(option.value, "just_a_value");
+        }
+
+        #[test]
+        fn test_value_contains_colon_with_pipe_delimiter() {
+            // User has colons in their data, using pipe as delimiter
+            let option = DropdownOption::from_str_with_delimiter("My Label|http://example.com:8080", "|").unwrap();
+            assert_eq!(option.label, "My Label");
+            assert_eq!(option.value, "http://example.com:8080");
+        }
+
+        #[test]
+        fn test_vec_from_str_with_custom_delimiter() {
+            let options = DropdownOption::vec_from_str_with_delimiter("A|1, B|2, C|3", "|").unwrap();
+            assert_eq!(options.len(), 3);
+            assert_eq!(options[0].label, "A");
+            assert_eq!(options[0].value, "1");
+            assert_eq!(options[1].label, "B");
+            assert_eq!(options[1].value, "2");
+            assert_eq!(options[2].label, "C");
+            assert_eq!(options[2].value, "3");
+        }
+
+        #[test]
+        fn test_vec_from_str_with_multi_char_delimiter() {
+            let options = DropdownOption::vec_from_str_with_delimiter("Label A::a\nLabel B::b", "::").unwrap();
+            assert_eq!(options.len(), 2);
+            assert_eq!(options[0].label, "Label A");
+            assert_eq!(options[0].value, "a");
+            assert_eq!(options[1].label, "Label B");
+            assert_eq!(options[1].value, "b");
+        }
+
+        #[test]
+        fn test_default_colon_delimiter() {
+            // vec_from_str should use ":" as default
+            let options = DropdownOption::vec_from_str("Label:value").unwrap();
+            assert_eq!(options.len(), 1);
+            assert_eq!(options[0].label, "Label");
+            assert_eq!(options[0].value, "value");
         }
     }
 }
