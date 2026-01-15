@@ -157,7 +157,7 @@ export default function Tabs() {
       >
         <div
           className={cn(
-            "flex flex-row items-center w-full min-h-[40px] border-b overflow-x-hidden px-2",
+            "flex flex-row items-center w-full min-h-[40px] border-b overflow-hidden px-2",
             !sidebarOpen && "pl-20"
           )}
           data-tauri-drag-region

@@ -31,5 +31,5 @@ export default function RunbookSearchIndex(props: RunbookSearchIndexProps) {
     props.index.bulkUpdateRunbooks(readyRunbooks);
   }, [runbooks]);
 
-  return <div />;
+  return null;
 }

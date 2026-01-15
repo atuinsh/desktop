@@ -1,10 +1,8 @@
 import "./Root.css";
-import debounce from "lodash.debounce";
 
 import { AtuinState, useStore } from "@/state/store";
 
 import { Toaster } from "@/components/ui/toaster";
-// import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
 
 import { checkForAppUpdates } from "@/updater";
 import {
@@ -13,7 +11,6 @@ import {
 } from "@heroui/react";
 import { UnlistenFn } from "@tauri-apps/api/event";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ImperativePanelHandle } from "react-resizable-panels";
 import { isAppleDevice } from "@react-aria/utils";
 import { useTauriEvent } from "@/lib/tauri";
 import { onOpenUrl } from "@tauri-apps/plugin-deep-link";
@@ -870,28 +867,10 @@ function App() {
   const sidebarOpen = useStore((state) => state.sidebarOpen);
   const setSidebarOpen = useStore((state) => state.setSidebarOpen);
 
-  const sidebarPanelRef = useRef<ImperativePanelHandle>(null);
-
-  // Watch sidebarOpen and sync panel state
+  // Trigger resize event when sidebar opens/closes so xterm will reflow contents
   useEffect(() => {
-    if (sidebarPanelRef.current) {
-      if (sidebarOpen) {
-        sidebarPanelRef.current.expand();
-      } else {
-        sidebarPanelRef.current.collapse();
-      }
-      // Trigger a resize event so that xterm will reflow contents
-      (window as any).dispatchEvent(new Event("resize"));
-    }
+    (window as any).dispatchEvent(new Event("resize"));
   }, [sidebarOpen]);
-
-  const handlePanelGroupResize = useCallback(
-    debounce(() => {
-      // Trigger a resize event so that xterm will reflow contents
-      (window as any).dispatchEvent(new Event("resize"));
-    }, 100),
-    [],
-  );
 
   // Auto-collapse sidebar on mobile/narrow screens
   useEffect(() => {
@@ -900,9 +879,6 @@ function App() {
 
       if (isMobile && sidebarOpen) {
         setSidebarOpen(false);
-        if (sidebarPanelRef.current) {
-          sidebarPanelRef.current.collapse();
-        }
       }
     };
 
@@ -911,6 +887,35 @@ function App() {
 
     return () => window.removeEventListener("resize", handleResize);
   }, [sidebarOpen, setSidebarOpen]);
+
+  // Custom sidebar resize logic (width persisted in store)
+  const sidebarWidth = useStore((state) => state.sidebarWidth);
+  const setSidebarWidth = useStore((state) => state.setSidebarWidth);
+
+  const handleResizeStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startWidth = sidebarWidth;
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const delta = e.clientX - startX;
+      const newWidth = Math.min(Math.max(startWidth + delta, 200), 500);
+      setSidebarWidth(newWidth);
+    };
+
+    const handleMouseUp = () => {
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+      window.dispatchEvent(new Event("resize"));
+    };
+
+    document.addEventListener("mousemove", handleMouseMove);
+    document.addEventListener("mouseup", handleMouseUp);
+  }, [sidebarWidth, setSidebarWidth]);
 
   function handleOpenRuntimeExplainerRunbook() {
     const atuinUrl = `atuin://runbook/${NEW_RUNTIME_RUNBOOK_ID}`;
@@ -961,7 +966,7 @@ function App() {
 
         <div className="flex w-full h-full overflow-hidden">
           {sidebarOpen && (
-            <div className="w-[280px] min-w-[280px] h-full">
+            <div className="relative h-full flex-shrink-0" style={{ width: sidebarWidth }}>
               <List
                 onStartCreateWorkspace={showWorkspaceDialog}
                 onStartCreateRunbook={handleStartCreateRunbook}
@@ -970,6 +975,13 @@ function App() {
                 onOpenInvite={handleOpenInviteFriends}
                 ref={listRef}
               />
+              {/* Resize handle */}
+              <div
+                onMouseDown={handleResizeStart}
+                className="absolute top-0 right-0 w-2 h-full cursor-col-resize group"
+              >
+                <div className="absolute top-0 right-0 w-0.5 h-full bg-transparent group-hover:bg-gray-300 dark:group-hover:bg-gray-600 transition-colors duration-150" />
+              </div>
             </div>
           )}
           <div className="flex-1 h-full overflow-hidden bg-background">

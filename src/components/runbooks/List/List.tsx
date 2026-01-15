@@ -10,19 +10,24 @@ import {
   CircularProgress,
   Avatar,
   DropdownSection,
+  Popover,
+  PopoverTrigger,
+  PopoverContent,
 } from "@heroui/react";
 import {
   ArrowUpDownIcon,
+  BookOpenIcon,
   ChartBarBigIcon,
   ChevronDownIcon,
+  CircleHelpIcon,
   ExternalLinkIcon,
-  FileSearchIcon,
   HistoryIcon,
   LogOutIcon,
   MailPlusIcon,
   MessageCircleHeartIcon,
   Plus,
   PlusIcon,
+  SearchIcon,
   SettingsIcon,
   TerminalIcon,
   UsersIcon,
@@ -506,63 +511,129 @@ const NoteSidebar = forwardRef((props: NotesSidebarProps, ref: React.ForwardedRe
             </Dropdown>
 
             {/* Nav Items */}
-            <div className="flex flex-col px-2 pt-3 gap-0.5 pb-2">
-              <Button
-                variant="light"
-                size="sm"
-                className="justify-start"
-                onPress={handleOpenHistory}
-              >
-                <HistoryIcon size={18} className="mr-2" />
-                History
-              </Button>
+            <div className="flex flex-row px-2 pt-3 pb-2 justify-evenly">
               <Tooltip
                 content={
-                  <span className="flex items-center gap-2">
-                    Search <kbd className="px-1.5 py-0.5 text-xs bg-gray-200 dark:bg-gray-700 rounded">⌘P</kbd>
+                  <span className="flex items-center gap-1.5">
+                    Search <kbd className="px-1 py-0.5 text-[10px] bg-gray-600/50 rounded">⌘P</kbd>
                   </span>
                 }
-                placement="right"
+                placement="bottom"
                 delay={300}
+                classNames={{
+                  content: "text-xs py-1 px-2 bg-gray-800/90 dark:bg-gray-900/90 text-white rounded shadow-sm",
+                }}
               >
                 <Button
                   variant="light"
                   size="sm"
-                  className="justify-start"
+                  isIconOnly
                   onPress={handleOpenSearch}
                 >
-                  <FileSearchIcon size={18} className="mr-2" />
-                  Search
+                  <SearchIcon size={18} />
                 </Button>
               </Tooltip>
               <Tooltip
                 content={
-                  <span className="flex items-center gap-2">
-                    Commands <kbd className="px-1.5 py-0.5 text-xs bg-gray-200 dark:bg-gray-700 rounded">⇧⌘P</kbd>
+                  <span className="flex items-center gap-1.5">
+                    Commands <kbd className="px-1 py-0.5 text-[10px] bg-gray-600/50 rounded">⇧⌘P</kbd>
                   </span>
                 }
-                placement="right"
+                placement="bottom"
                 delay={300}
+                classNames={{
+                  content: "text-xs py-1 px-2 bg-gray-800/90 dark:bg-gray-900/90 text-white rounded shadow-sm",
+                }}
               >
                 <Button
                   variant="light"
                   size="sm"
-                  className="justify-start"
+                  isIconOnly
                   onPress={handleOpenCommandPalette}
                 >
-                  <TerminalIcon size={18} className="mr-2" />
-                  Commands
+                  <TerminalIcon size={18} />
                 </Button>
               </Tooltip>
-              <Button
-                variant="light"
-                size="sm"
-                className="justify-start"
-                onPress={handleOpenStats}
+              <Tooltip
+                content="History"
+                placement="bottom"
+                delay={300}
+                classNames={{
+                  content: "text-xs py-1 px-2 bg-gray-800/90 dark:bg-gray-900/90 text-white rounded shadow-sm",
+                }}
               >
-                <ChartBarBigIcon size={18} className="mr-2" />
-                Stats
-              </Button>
+                <Button
+                  variant="light"
+                  size="sm"
+                  isIconOnly
+                  onPress={handleOpenHistory}
+                >
+                  <HistoryIcon size={18} />
+                </Button>
+              </Tooltip>
+              <Tooltip
+                content="Stats"
+                placement="bottom"
+                delay={300}
+                classNames={{
+                  content: "text-xs py-1 px-2 bg-gray-800/90 dark:bg-gray-900/90 text-white rounded shadow-sm",
+                }}
+              >
+                <Button
+                  variant="light"
+                  size="sm"
+                  isIconOnly
+                  onPress={handleOpenStats}
+                >
+                  <ChartBarBigIcon size={18} />
+                </Button>
+              </Tooltip>
+              <Dropdown placement="bottom-end">
+                <DropdownTrigger>
+                  <Button
+                    variant="light"
+                    size="sm"
+                    isIconOnly
+                  >
+                    <CircleHelpIcon size={18} />
+                  </Button>
+                </DropdownTrigger>
+                <DropdownMenu
+                  aria-label="Help menu"
+                  items={[
+                    { key: "docs", label: "Documentation", icon: BookOpenIcon, action: () => open("https://docs.atuin.sh/desktop") },
+                    { key: "feedback", label: "Send Feedback", icon: MessageCircleHeartIcon, action: props.onOpenFeedback },
+                    ...(isLoggedIn() ? [{ key: "invite", label: "Invite Friends", icon: MailPlusIcon, action: props.onOpenInvite }] : []),
+                  ]}
+                >
+                  {(item) => (
+                    <DropdownItem
+                      key={item.key}
+                      startContent={<item.icon size={16} />}
+                      onPress={item.action}
+                    >
+                      {item.label}
+                    </DropdownItem>
+                  )}
+                </DropdownMenu>
+              </Dropdown>
+              <Tooltip
+                content="Settings"
+                placement="bottom"
+                delay={300}
+                classNames={{
+                  content: "text-xs py-1 px-2 bg-gray-800/90 dark:bg-gray-900/90 text-white rounded shadow-sm",
+                }}
+              >
+                <Button
+                  variant="light"
+                  size="sm"
+                  isIconOnly
+                  onPress={handleOpenSettings}
+                >
+                  <SettingsIcon size={18} />
+                </Button>
+              </Tooltip>
             </div>
           </div>
 
@@ -572,6 +643,7 @@ const NoteSidebar = forwardRef((props: NotesSidebarProps, ref: React.ForwardedRe
               <Button
                 size="sm"
                 variant="flat"
+                color="success"
                 className="flex-1"
                 onPress={handleNewRunbookInCurrentWorkspace}
               >
@@ -580,8 +652,8 @@ const NoteSidebar = forwardRef((props: NotesSidebarProps, ref: React.ForwardedRe
               <Button
                 size="sm"
                 variant="flat"
+                color="success"
                 isIconOnly
-                className="border-l-2 border-gray-100 dark:border-gray-800"
                 onPress={handleNewRunbookMenu}
               >
                 <ChevronDownIcon size={18} />
@@ -621,42 +693,12 @@ const NoteSidebar = forwardRef((props: NotesSidebarProps, ref: React.ForwardedRe
             </DndProvider>
           </div>
 
-          {/* Bottom Section */}
-          <div className="border-t border-gray-100 dark:border-gray-800 px-2 py-2 flex flex-col gap-0.5">
-            <Button
-              variant="light"
-              size="sm"
-              className="justify-start"
-              onPress={handleOpenSettings}
-            >
-              <SettingsIcon size={18} className="mr-2" />
-              Settings
-            </Button>
-            <Button
-              variant="light"
-              size="sm"
-              className="justify-start"
-              onPress={props.onOpenFeedback}
-            >
-              <MessageCircleHeartIcon size={18} className="mr-2" />
-              Feedback
-            </Button>
-            {isLoggedIn() && (
-              <Button
-                variant="light"
-                size="sm"
-                className="justify-start"
-                onPress={props.onOpenInvite}
-              >
-                <MailPlusIcon size={18} className="mr-2" />
-                Invite
-              </Button>
-            )}
-            {/* User Info */}
-            {user.isLoggedIn() && (
-              <Dropdown placement="top-start">
-                <DropdownTrigger>
-                  <div className="flex items-center gap-2 px-1 py-2 mt-1 text-sm text-gray-500 dark:text-gray-400 border-t border-gray-100 dark:border-gray-800 cursor-pointer hover:bg-gray-100 dark:hover:bg-content2 rounded">
+          {/* User Info */}
+          {user.isLoggedIn() && (
+            <div className="border-t border-gray-100 dark:border-gray-800 px-2 py-2">
+              <Popover placement="right" offset={10} crossOffset={40}>
+                <PopoverTrigger>
+                  <div className="flex items-center gap-2 px-1 py-1 text-sm text-gray-500 dark:text-gray-400 cursor-pointer hover:bg-gray-100 dark:hover:bg-content2 rounded">
                     <Avatar
                       src={user.avatar_url || ""}
                       size="sm"
@@ -666,10 +708,10 @@ const NoteSidebar = forwardRef((props: NotesSidebarProps, ref: React.ForwardedRe
                     />
                     <span className="truncate">{user.username}</span>
                   </div>
-                </DropdownTrigger>
-                <DropdownMenu>
-                  <DropdownSection showDivider>
-                    <DropdownItem key="user-info" isReadOnly className="cursor-default">
+                </PopoverTrigger>
+                <PopoverContent className="p-0">
+                  <div className="flex flex-col min-w-[200px]">
+                    <div className="px-3 py-2 border-b border-gray-200 dark:border-gray-700">
                       <div className="flex flex-col gap-1">
                         <span className="font-medium">{user.username}</span>
                         <span className="text-xs text-gray-500">{user.email}</span>
@@ -677,22 +719,19 @@ const NoteSidebar = forwardRef((props: NotesSidebarProps, ref: React.ForwardedRe
                           <span className="text-xs text-gray-400 mt-1">{user.bio}</span>
                         )}
                       </div>
-                    </DropdownItem>
-                  </DropdownSection>
-                  <DropdownSection>
-                    <DropdownItem
-                      key="logout"
-                      color="danger"
-                      startContent={<LogOutIcon size={16} />}
-                      onPress={handleLogout}
+                    </div>
+                    <button
+                      onClick={handleLogout}
+                      className="flex items-center gap-2 px-3 py-2 text-danger hover:bg-danger/10 transition-colors text-left"
                     >
+                      <LogOutIcon size={16} />
                       Sign out
-                    </DropdownItem>
-                  </DropdownSection>
-                </DropdownMenu>
-              </Dropdown>
-            )}
-          </div>
+                    </button>
+                  </div>
+                </PopoverContent>
+              </Popover>
+            </div>
+          )}
         </>
       )}
     </div>

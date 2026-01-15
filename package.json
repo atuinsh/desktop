@@ -121,7 +121,6 @@
     "react-dnd-html5-backend": "^14.1.0",
     "react-dom": "^19.1.0",
     "react-multi-ref": "^1.0.2",
-    "react-resizable-panels": "^3.0.3",
     "react-router-dom": "^6.30.0",
     "react-spinners": "^0.14.1",
     "react-tooltip": "^5.28.0",
