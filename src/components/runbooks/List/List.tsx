@@ -15,7 +15,6 @@ import {
   PopoverContent,
 } from "@heroui/react";
 import {
-  ArrowUpDownIcon,
   BookOpenIcon,
   ChartBarBigIcon,
   ChevronDownIcon,
@@ -37,7 +36,6 @@ import { forwardRef, useContext, useEffect, useImperativeHandle, useRef, useStat
 import { cn } from "@/lib/utils";
 import { PendingInvitations } from "./PendingInvitations";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Menu } from "@tauri-apps/api/menu";
 import { SortBy } from "./TreeView";
 import { orgWorkspaces, userOwnedWorkspaces } from "@/lib/queries/workspaces";
 import { default as WorkspaceComponent } from "./Workspace";
@@ -126,7 +124,7 @@ const NoteSidebar = forwardRef((props: NotesSidebarProps, ref: React.ForwardedRe
   const setSearchOpen = useStore((store: AtuinState) => store.setSearchOpen);
   const isCommandPaletteOpen = useStore((store: AtuinState) => store.commandPaletteOpen);
   const setCommandPaletteOpen = useStore((store: AtuinState) => store.setCommandPaletteOpen);
-  const [sortBy, setSortBy] = useState<SortBy>(SortBy.Name);
+  const [sortBy] = useState<SortBy>(SortBy.Name);
   const [pendingWorkspaceMigration, setPendingWorkspaceMigration] = useState<boolean>(true);
   const [focusedWorkspaceId, setFocusedWorkspaceId] = useState<string | null>(null);
 
@@ -225,52 +223,6 @@ const NoteSidebar = forwardRef((props: NotesSidebarProps, ref: React.ForwardedRe
     await clearHubApiToken();
     SocketManager.setApiToken(null);
     refreshUser();
-  }
-
-  async function handleOpenSortMenu() {
-    const sortMenu = await Menu.new({
-      id: "sort_menu",
-      items: [
-        {
-          id: "sort_by_name_desc",
-          text: "Name",
-          action: () => {
-            setSortBy(SortBy.Name);
-          },
-          accelerator: "N",
-          checked: sortBy === SortBy.Name,
-        },
-        {
-          id: "sort_by_name_asc",
-          text: "Name (ascending)",
-          action: () => {
-            setSortBy(SortBy.NameAsc);
-          },
-          accelerator: "Shift+N",
-          checked: sortBy === SortBy.NameAsc,
-        },
-        {
-          id: "sort_by_updated",
-          text: "Updated",
-          action: () => {
-            setSortBy(SortBy.Updated);
-          },
-          accelerator: "U",
-          checked: sortBy === SortBy.Updated,
-        },
-        {
-          id: "sort_by_updated_asc",
-          text: "Updated (ascending)",
-          action: () => {
-            setSortBy(SortBy.UpdatedAsc);
-          },
-          accelerator: "Shift+U",
-          checked: sortBy === SortBy.UpdatedAsc,
-        },
-      ],
-    });
-    await sortMenu.popup();
-    sortMenu.close();
   }
 
   async function handleNewRunbookMenu() {

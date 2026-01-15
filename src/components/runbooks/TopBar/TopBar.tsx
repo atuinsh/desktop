@@ -11,6 +11,7 @@ import {
   PencilOffIcon,
   RefreshCcwIcon,
   SettingsIcon,
+  SparklesIcon,
   TrashIcon,
 } from "lucide-react";
 import { PresenceUserInfo } from "@/lib/phoenix_provider";
@@ -43,6 +44,9 @@ type TopbarProps = {
   onDeleteFromHub: () => void;
   onToggleSettings: () => void;
   isSettingsOpen: boolean;
+  isAIFeaturesEnabled: boolean;
+  isAIAssistantOpen: boolean;
+  toggleAIAssistant: () => void;
 };
 
 function openHubRunbook(e: React.MouseEvent<HTMLAnchorElement>) {
@@ -305,6 +309,24 @@ export default function Topbar(props: TopbarProps) {
               <SettingsIcon className="h-4 w-4" />
             </Button>
           </Tooltip>
+          {props.isAIFeaturesEnabled && (
+            <Tooltip content="AI assistant" placement="bottom">
+              <Button
+                isIconOnly
+                variant="flat"
+                size="sm"
+                className={cn(
+                  "bg-black/5 dark:bg-white/5",
+                  props.isAIAssistantOpen
+                    ? "bg-purple-500/20 dark:bg-purple-400/20 text-purple-600 dark:text-purple-300"
+                    : "text-purple-500 dark:text-purple-400 hover:bg-black/10 dark:hover:bg-white/10"
+                )}
+                onPress={props.toggleAIAssistant}
+              >
+                <SparklesIcon className="h-4 w-4" />
+              </Button>
+            </Tooltip>
+          )}
           <PlayButton
             isRunning={serialExecution.isRunning}
             cancellable={true}

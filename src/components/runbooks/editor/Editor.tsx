@@ -38,7 +38,6 @@ import { AIHint, incrementAIHintUseCount } from "./ui/AIHint";
 import { RunbookLinkPopup } from "./ui/RunbookLinkPopup";
 import AIAssistant, { AIContext } from "./ui/AIAssistant";
 import { SparklesIcon } from "lucide-react";
-import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
 
 import { insertSQLite } from "@/components/runbooks/editor/blocks/SQLite/SQLite";
 import { insertPostgres } from "@/components/runbooks/editor/blocks/Postgres/Postgres";
@@ -816,9 +815,9 @@ export default function Editor({
 
   // Renders the editor instance.
   return (
-    <ResizablePanelGroup direction="horizontal" className="h-full w-full min-h-0">
+    <div className="flex h-full w-full min-h-0">
       {/* Main editor area */}
-      <ResizablePanel defaultSize={isAIAssistantOpen ? 70 : 100} minSize={40}>
+      <div className="flex-1 min-w-0 h-full">
         <div
           ref={scrollContainerRef}
           className="overflow-y-scroll editor h-full min-h-0 pt-3 relative"
@@ -1097,24 +1096,21 @@ export default function Editor({
 
           {/* AI Assistant toggle button */}
         </div>
-      </ResizablePanel>
+      </div>
 
       {/* AI Assistant sidebar */}
       {aiEnabledState && isAIAssistantOpen && (
-        <>
-          <ResizableHandle withHandle />
-          <ResizablePanel defaultSize={30} minSize={20} maxSize={100}>
-            <AIAssistant
-              runbookId={runbook.id}
-              editor={editor}
-              getContext={getAIAssistantContext}
-              isOpen={isAIAssistantOpen}
-              chargeTarget={chargeTarget}
-              onClose={closeAIAssistant}
-            />
-          </ResizablePanel>
-        </>
+        <div className="w-[400px] min-w-[300px] max-w-[500px] h-full border-l border-default-200 dark:border-default-100">
+          <AIAssistant
+            runbookId={runbook.id}
+            editor={editor}
+            getContext={getAIAssistantContext}
+            isOpen={isAIAssistantOpen}
+            chargeTarget={chargeTarget}
+            onClose={closeAIAssistant}
+          />
+        </div>
       )}
-    </ResizablePanelGroup>
+    </div>
   );
 }
