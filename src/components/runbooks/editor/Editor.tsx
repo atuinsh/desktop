@@ -62,6 +62,7 @@ import RunbookEditor from "@/lib/runbook_editor";
 import { useStore } from "@/state/store";
 import { usePromise } from "@/lib/utils";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useResizable } from "@/lib/hooks/useResizable";
 import track_event from "@/tracking";
 import {
   saveScrollPosition,
@@ -336,30 +337,13 @@ export default function Editor({
   const aiPanelWidth = useStore((state) => state.aiPanelWidth);
   const setAiPanelWidth = useStore((state) => state.setAiPanelWidth);
 
-  const handleAiPanelResizeStart = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    const startX = e.clientX;
-    const startWidth = aiPanelWidth;
-    document.body.style.cursor = "col-resize";
-    document.body.style.userSelect = "none";
-
-    const handleMouseMove = (e: MouseEvent) => {
-      // Dragging left increases width, dragging right decreases
-      const delta = startX - e.clientX;
-      const newWidth = Math.min(Math.max(startWidth + delta, 300), 600);
-      setAiPanelWidth(newWidth);
-    };
-
-    const handleMouseUp = () => {
-      document.body.style.cursor = "";
-      document.body.style.userSelect = "";
-      document.removeEventListener("mousemove", handleMouseMove);
-      document.removeEventListener("mouseup", handleMouseUp);
-    };
-
-    document.addEventListener("mousemove", handleMouseMove);
-    document.addEventListener("mouseup", handleMouseUp);
-  }, [aiPanelWidth, setAiPanelWidth]);
+  const { onResizeStart: handleAiPanelResizeStart } = useResizable({
+    width: aiPanelWidth,
+    onWidthChange: setAiPanelWidth,
+    minWidth: 300,
+    maxWidth: 600,
+    edge: "left",
+  });
 
   const documentBridge = useDocumentBridge();
 

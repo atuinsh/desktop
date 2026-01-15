@@ -11,6 +11,7 @@ import {
 } from "@heroui/react";
 import { UnlistenFn } from "@tauri-apps/api/event";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useResizable } from "@/lib/hooks/useResizable";
 import { isAppleDevice } from "@react-aria/utils";
 import { useTauriEvent } from "@/lib/tauri";
 import { onOpenUrl } from "@tauri-apps/plugin-deep-link";
@@ -892,30 +893,14 @@ function App() {
   const sidebarWidth = useStore((state) => state.sidebarWidth);
   const setSidebarWidth = useStore((state) => state.setSidebarWidth);
 
-  const handleResizeStart = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    const startX = e.clientX;
-    const startWidth = sidebarWidth;
-    document.body.style.cursor = "col-resize";
-    document.body.style.userSelect = "none";
-
-    const handleMouseMove = (e: MouseEvent) => {
-      const delta = e.clientX - startX;
-      const newWidth = Math.min(Math.max(startWidth + delta, 200), 500);
-      setSidebarWidth(newWidth);
-    };
-
-    const handleMouseUp = () => {
-      document.body.style.cursor = "";
-      document.body.style.userSelect = "";
-      document.removeEventListener("mousemove", handleMouseMove);
-      document.removeEventListener("mouseup", handleMouseUp);
-      window.dispatchEvent(new Event("resize"));
-    };
-
-    document.addEventListener("mousemove", handleMouseMove);
-    document.addEventListener("mouseup", handleMouseUp);
-  }, [sidebarWidth, setSidebarWidth]);
+  const { onResizeStart: handleResizeStart } = useResizable({
+    width: sidebarWidth,
+    onWidthChange: setSidebarWidth,
+    minWidth: 200,
+    maxWidth: 500,
+    edge: "right",
+    dispatchResizeEvent: true,
+  });
 
   function handleOpenRuntimeExplainerRunbook() {
     const atuinUrl = `atuin://runbook/${NEW_RUNTIME_RUNBOOK_ID}`;
