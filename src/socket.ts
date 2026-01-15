@@ -151,9 +151,9 @@ export class WrappedChannel<J = unknown> {
     this.channel = this.manager
       .getSocket()
       .map((socket) => socket.channel(topic, channelParams))
-      .unwrapOrElse(() => {
-        return null;
-      });
+      .expect(
+        "Tried to create channel with no socket; wait for SocketManager `onConnect` or `onSocketChange` before creating channels",
+      );
 
     this.manager.onSocketChange(this.handleNewSocket.bind(this));
   }
