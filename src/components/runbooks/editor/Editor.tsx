@@ -85,6 +85,7 @@ import { SavedBlockPopup } from "./ui/SavedBlockPopup";
 import { DeleteBlockItem } from "./ui/DeleteBlockItem";
 import { BlockNoteEditor } from "@blocknote/core";
 import useDocumentBridge from "@/lib/hooks/useDocumentBridge";
+import TableOfContents, { HeadingItem } from "./TableOfContents";
 import { AISingleBlockResponse } from "@/api/ai";
 import { ChargeTarget } from "@/rs-bindings/ChargeTarget";
 
@@ -296,6 +297,7 @@ export default function Editor({
   const [runbookLinkPopupPosition, setRunbookLinkPopupPosition] = useState({ x: 0, y: 0 });
   const [savedBlockPopupVisible, setSavedBlockPopupVisible] = useState(false);
   const [savedBlockPopupPosition, setSavedBlockPopupPosition] = useState({ x: 0, y: 0 });
+  const [headings, setHeadings] = useState<HeadingItem[]>([]);
 
   const chargeTarget: ChargeTarget = useMemo(() => {
     if (owningOrgId) {
@@ -532,6 +534,20 @@ export default function Editor({
       .join("");
   }, []);
 
+  // Extract headings from the document for table of contents
+  const extractHeadings = useCallback(() => {
+    if (!editor) return;
+    const blocks = editor.document;
+    const headingItems: HeadingItem[] = blocks
+      .filter((block: any) => block.type === "heading")
+      .map((block: any) => ({
+        id: block.id,
+        text: getBlockText(block),
+        level: block.props?.level || 1,
+      }));
+    setHeadings(headingItems);
+  }, [editor, getBlockText]);
+
   // Handle inline AI generation from a paragraph block
   const handleInlineGenerate = useCallback(
     async (block: any) => {
@@ -741,6 +757,13 @@ export default function Editor({
     onClearPostGeneration: clearPostGenerationMode,
     onStartEditing: () => setIsEditingGenerated(true),
   });
+
+  // Extract headings when editor is ready
+  useEffect(() => {
+    if (editor) {
+      extractHeadings();
+    }
+  }, [editor, extractHeadings]);
 
   // Handle visibility and scroll restoration when runbook changes
   useLayoutEffect(() => {
@@ -969,6 +992,7 @@ export default function Editor({
             sideMenu={false}
             onChange={() => {
               runbookEditor.save(runbook, editor);
+              extractHeadings();
               // Clear post-generation mode when user edits anything (but not programmatic edits)
               if (postGenerationBlockId && !isProgrammaticEditRef.current) {
                 clearPostGenerationMode();
@@ -1106,6 +1130,17 @@ export default function Editor({
             onSelect={handleSavedBlockSelect}
             onClose={closeSavedBlockPopup}
           />
+
+          {/* Table of Contents - positioned in top-right corner */}
+          {headings.length > 0 && (
+            <div className="absolute top-3 right-3">
+              <TableOfContents
+                editor={editor}
+                headings={headings}
+                scrollContainerRef={scrollContainerRef}
+              />
+            </div>
+          )}
 
           {/* AI Assistant toggle button */}
         </div>
