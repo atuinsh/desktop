@@ -24,6 +24,7 @@ import SshConnect from "./blocks/ssh/SshConnect";
 import HostSelect from "./blocks/Host";
 import Pause from "./blocks/Pause";
 import SubRunbook from "./blocks/SubRunbook";
+import TableOfContents from "./blocks/TableOfContents";
 
 import { randomColor } from "@/lib/colors";
 import PhoenixProvider from "@/lib/phoenix_provider";
@@ -75,6 +76,7 @@ export const schema = BlockNoteSchema.create({
     // Misc
     editor: CodeEditor(),
     horizontal_rule: HorizontalRule(),
+    table_of_contents: TableOfContents(),
 
     // Workflow control
     pause: Pause(),
