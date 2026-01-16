@@ -231,7 +231,7 @@ export class SharedStateManager<T extends SharableState> {
       (state) => state.connectionState,
       (connectionState) => {
         if (connectionState === ConnectionState.Online) {
-          // onConnect is async, so wait a small amount of time to init
+          // onConnect is async on the next tick, so wait a small amount of time to init
           timeoutPromise(100, undefined).then(() => {
             return this.adapter.ensureConnected()
           }).then(() => {
