@@ -339,9 +339,9 @@ impl ContextResolver {
 fn default_cwd() -> String {
     // Check for PWD env var first (set by shell, reflects current directory)
     // This allows CLI tools to inherit the user's current working directory
-    // Falls back to home directory for desktop app / GUI contexts
+    // Skip "/" as it's not useful - macOS sets PWD="/" when launching GUI apps from Finder
     if let Ok(pwd) = std::env::var("PWD") {
-        if !pwd.is_empty() {
+        if !pwd.is_empty() && pwd != "/" {
             return pwd;
         }
     }
