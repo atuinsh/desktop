@@ -10,6 +10,7 @@ use tokio::time::interval;
 
 use crate::context::DocumentSshConfig;
 use crate::pty::PtyMetadata;
+use crate::ssh::known_hosts::HostKeyVerifier;
 use crate::ssh::pool::Pool;
 use crate::ssh::session::{Authentication, OutputLine, Session, SshWarning};
 use eyre::Result;
@@ -97,6 +98,9 @@ pub enum SshPoolMessage {
 
         // Channel to send authentication warnings (certificate issues, etc.)
         warnings_tx: Option<oneshot::Sender<Vec<SshWarning>>>,
+
+        // Host key verifier for checking server keys
+        host_key_verifier: Option<Arc<dyn HostKeyVerifier>>,
     },
     ExecFinished {
         channel: String,
@@ -126,6 +130,9 @@ pub enum SshPoolMessage {
                 Vec<SshWarning>,
             )>,
         >,
+
+        // Host key verifier for checking server keys
+        host_key_verifier: Option<Arc<dyn HostKeyVerifier>>,
     },
     ClosePty {
         channel: String,
@@ -268,6 +275,7 @@ impl SshPoolHandle {
             result_tx,
             None,
             None,
+            None, // No host key verifier for simple exec
         )
         .await
     }
@@ -284,6 +292,7 @@ impl SshPoolHandle {
         result_tx: oneshot::Sender<()>,
         ssh_config: Option<DocumentSshConfig>,
         warnings_tx: Option<oneshot::Sender<Vec<SshWarning>>>,
+        host_key_verifier: Option<Arc<dyn HostKeyVerifier>>,
     ) -> Result<()> {
         let (sender, receiver) = oneshot::channel();
         let msg = SshPoolMessage::Exec {
@@ -297,6 +306,7 @@ impl SshPoolHandle {
             result_tx,
             ssh_config,
             warnings_tx,
+            host_key_verifier,
         };
 
         let _ = self.sender.send(msg).await;
@@ -336,7 +346,7 @@ impl SshPoolHandle {
         mpsc::Sender<(u16, u16)>,
         Vec<SshWarning>,
     )> {
-        self.open_pty_with_config(host, username, channel, output_stream, width, height, None)
+        self.open_pty_with_config(host, username, channel, output_stream, width, height, None, None)
             .await
     }
 
@@ -350,6 +360,7 @@ impl SshPoolHandle {
         width: u16,
         height: u16,
         ssh_config: Option<DocumentSshConfig>,
+        host_key_verifier: Option<Arc<dyn HostKeyVerifier>>,
     ) -> Result<(
         mpsc::Sender<Bytes>,
         mpsc::Sender<(u16, u16)>,
@@ -366,6 +377,7 @@ impl SshPoolHandle {
             width,
             height,
             ssh_config,
+            host_key_verifier,
         };
 
         let _ = self.sender.send(msg).await;
@@ -549,7 +561,7 @@ impl SshPool {
                     .pool
                     .write()
                     .await
-                    .connect(&host, username.as_deref(), auth, None)
+                    .connect(&host, username.as_deref(), auth, None, None)
                     .await
                     .map(|(session, _auth_result)| session);
 
@@ -586,6 +598,7 @@ impl SshPool {
                 result_tx,
                 ssh_config,
                 warnings_tx,
+                host_key_verifier,
             } => {
                 tracing::trace!(
                     "Executing command on {host} with {interpreter} with username {username:?}"
@@ -623,7 +636,7 @@ impl SshPool {
                         Result<Arc<Session>, SshPoolConnectionError>,
                         Vec<SshWarning>,
                     ) = tokio::select! {
-                        result = pool_guard.connect_with_config(&host, Some(username.as_str()), None, Some(connect_cancel_rx), ssh_config.as_ref()) => {
+                        result = pool_guard.connect_with_config(&host, Some(username.as_str()), None, Some(connect_cancel_rx), ssh_config.as_ref(), host_key_verifier) => {
                             tracing::trace!("SSH connection to {host} with username {username} successful");
                             match result {
                                 Ok((session, auth_result)) => (Ok(session), auth_result.warnings),
@@ -735,6 +748,7 @@ impl SshPool {
                 width,
                 height,
                 ssh_config,
+                host_key_verifier,
             } => {
                 tracing::trace!("Handling OpenPty message for {host} with username {username:?} with channel {channel}");
                 // Resolve username: block override > provided > SSH config > current user
@@ -756,6 +770,7 @@ impl SshPool {
                         None,
                         None,
                         ssh_config.as_ref(),
+                        host_key_verifier,
                     )
                     .await;
 
@@ -906,7 +921,7 @@ impl SshPool {
                 tracing::trace!("Handling CreateTempFile message for {host} with username {username:?} with prefix {prefix}");
                 let mut pool_guard = self.pool.write().await;
                 let session = match pool_guard
-                    .connect(&host, username.as_deref(), None, None)
+                    .connect(&host, username.as_deref(), None, None, None)
                     .await
                 {
                     Ok((session, _auth_result)) => session,
@@ -929,7 +944,7 @@ impl SshPool {
                 tracing::trace!("Handling ReadFile message for {host} with username {username:?} with path {path}");
                 let mut pool_guard = self.pool.write().await;
                 let session = match pool_guard
-                    .connect(&host, username.as_deref(), None, None)
+                    .connect(&host, username.as_deref(), None, None, None)
                     .await
                 {
                     Ok((session, _auth_result)) => session,
@@ -952,7 +967,7 @@ impl SshPool {
                 tracing::trace!("Handling DeleteFile message for {host} with username {username:?} with path {path}");
                 let mut pool_guard = self.pool.write().await;
                 let session = match pool_guard
-                    .connect(&host, username.as_deref(), None, None)
+                    .connect(&host, username.as_deref(), None, None, None)
                     .await
                 {
                     Ok((session, _auth_result)) => session,

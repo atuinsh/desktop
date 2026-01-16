@@ -14,7 +14,7 @@ use crate::execution::{
     CancellationToken, ExecutionContext, ExecutionHandle, ExecutionStatus, StreamingBlockOutput,
 };
 use crate::pty::{Pty, PtyLike};
-use crate::ssh::{SshPty, SshWarning};
+use crate::ssh::{ContextHostKeyVerifier, HostKeyVerifier, SshPty, SshWarning};
 
 /// Output structure for Terminal blocks that implements BlockExecutionOutput
 /// for template access to terminal output.
@@ -281,6 +281,11 @@ impl Terminal {
             let initial_cols = self.cols;
             let initial_rows = self.rows;
             let ssh_config_clone = ssh_config.clone();
+
+            // Create host key verifier that uses context prompting
+            let host_key_verifier: Option<Arc<dyn HostKeyVerifier>> =
+                Some(Arc::new(ContextHostKeyVerifier::new(context.clone())));
+
             let ssh_result = tokio::select! {
                 result = ssh_pool_clone.open_pty_with_config(
                     &hostname_clone,
@@ -290,6 +295,7 @@ impl Terminal {
                     initial_cols,
                     initial_rows,
                     ssh_config_clone,
+                    host_key_verifier,
                 ) => {
                     result.map_err(|e| format!("Failed to open SSH PTY: {}", e))
                 }

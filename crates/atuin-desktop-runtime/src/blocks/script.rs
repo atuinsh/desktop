@@ -17,7 +17,7 @@ use crate::events::GCEvent;
 use crate::execution::{
     CancellationToken, ExecutionContext, ExecutionHandle, ExecutionStatus, StreamingBlockOutput,
 };
-use crate::ssh::{OutputLine as SessionOutputLine, SshWarning};
+use crate::ssh::{ContextHostKeyVerifier, HostKeyVerifier, OutputLine as SessionOutputLine, SshWarning};
 
 use super::FromDocument;
 
@@ -725,6 +725,10 @@ impl Script {
             }
         };
 
+        // Create host key verifier that uses context prompting
+        let host_key_verifier: Option<Arc<dyn HostKeyVerifier>> =
+            Some(Arc::new(ContextHostKeyVerifier::new(context.clone())));
+
         let exec_result = tokio::select! {
             result = ssh_pool.exec_with_config(
                 &hostname,
@@ -736,6 +740,7 @@ impl Script {
                 result_tx,
                 ssh_config,
                 Some(warnings_tx),
+                host_key_verifier,
             ) => {
                 result
             }

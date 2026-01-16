@@ -1,3 +1,4 @@
+use super::known_hosts::HostKeyVerifier;
 use super::session::{AuthResult, Authentication, Session};
 use crate::context::DocumentSshConfig;
 use eyre::Result;
@@ -38,8 +39,9 @@ impl Pool {
         username: Option<&str>,
         auth: Option<Authentication>,
         cancellation_rx: Option<oneshot::Receiver<()>>,
+        host_key_verifier: Option<Arc<dyn HostKeyVerifier>>,
     ) -> Result<(Arc<Session>, AuthResult)> {
-        self.connect_with_config(host, username, auth, cancellation_rx, None)
+        self.connect_with_config(host, username, auth, cancellation_rx, None, host_key_verifier)
             .await
     }
 
@@ -53,6 +55,7 @@ impl Pool {
         auth: Option<Authentication>,
         cancellation_rx: Option<oneshot::Receiver<()>>,
         ssh_config_override: Option<&DocumentSshConfig>,
+        host_key_verifier: Option<Arc<dyn HostKeyVerifier>>,
     ) -> Result<(Arc<Session>, AuthResult)> {
         let ssh_config = Session::resolve_ssh_config(host);
 
@@ -90,7 +93,8 @@ impl Pool {
         );
 
         let async_session = async {
-            let mut session = Session::open_with_config(host, ssh_config_override).await?;
+            let mut session =
+                Session::open_with_config(host, ssh_config_override, host_key_verifier).await?;
             let auth_result = session
                 .authenticate_with_config(
                     auth,

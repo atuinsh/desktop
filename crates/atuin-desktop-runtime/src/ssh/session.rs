@@ -17,6 +17,7 @@ use russh_config::*;
 use time::OffsetDateTime;
 
 use crate::context::{DocumentSshConfig, SshCertificateConfig, SshIdentityKeyConfig};
+use crate::ssh::known_hosts::HostKeyVerifier;
 use crate::ssh::SshPoolHandle;
 
 /// Guard struct to ensure temp file cleanup on drop
@@ -115,19 +116,63 @@ impl OutputLine {
     }
 }
 
-/// SSH client implementation for russh
-pub struct Client;
+/// SSH client implementation for russh with host key verification
+pub struct Client {
+    host: String,
+    port: u16,
+    host_key_verifier: Option<Arc<dyn HostKeyVerifier>>,
+}
+
+impl Client {
+    fn new(host: String, port: u16, host_key_verifier: Option<Arc<dyn HostKeyVerifier>>) -> Self {
+        Self {
+            host,
+            port,
+            host_key_verifier,
+        }
+    }
+}
 
 impl russh::client::Handler for Client {
     type Error = russh::Error;
 
     async fn check_server_key(
         &mut self,
-        _server_public_key: &russh::keys::PublicKey,
+        server_public_key: &russh::keys::PublicKey,
     ) -> Result<bool, Self::Error> {
-        // For now, accept all server keys
-        // In production, you'd want to implement proper host key verification
-        Ok(true)
+        // If no verifier is provided, accept all keys (insecure but backward compatible)
+        let Some(verifier) = &self.host_key_verifier else {
+            tracing::warn!(
+                "No host key verifier configured for {}:{} - accepting key WITHOUT VERIFICATION",
+                self.host,
+                self.port
+            );
+            return Ok(true);
+        };
+
+        // Use the verifier to check/prompt for the host key
+        match verifier.verify(&self.host, self.port, server_public_key).await {
+            Ok(accepted) => {
+                if !accepted {
+                    tracing::info!(
+                        "Host key verification rejected for {}:{}",
+                        self.host,
+                        self.port
+                    );
+                }
+                Ok(accepted)
+            }
+            Err(e) => {
+                tracing::error!(
+                    "Host key verification failed for {}:{}: {}",
+                    self.host,
+                    self.port,
+                    e
+                );
+                // Convert HostKeyError to russh::Error
+                Err(russh::Error::NotAuthenticated)
+            }
+        }
     }
 }
 
@@ -482,11 +527,18 @@ impl Session {
     }
 
     /// Open a new SSH session to the given host, and connect
-    pub async fn open(host: &str) -> Result<Self> {
+    pub async fn open(
+        host: &str,
+        host_key_verifier: Option<Arc<dyn HostKeyVerifier>>,
+    ) -> Result<Self> {
         let ssh_config = Self::resolve_ssh_config(host);
 
         let config = russh::client::Config::default();
-        let sh = Client;
+        let sh = Client::new(
+            ssh_config.hostname.clone(),
+            ssh_config.port,
+            host_key_verifier,
+        );
 
         // Parse the hostname for proxy connections
         let (_, hostname, _) = Self::parse_host_string(host);
@@ -532,6 +584,7 @@ impl Session {
     pub async fn open_with_config(
         host: &str,
         config_override: Option<&DocumentSshConfig>,
+        host_key_verifier: Option<Arc<dyn HostKeyVerifier>>,
     ) -> Result<Self> {
         let mut ssh_config = Self::resolve_ssh_config(host);
 
@@ -558,7 +611,11 @@ impl Session {
         }
 
         let config = russh::client::Config::default();
-        let sh = Client;
+        let sh = Client::new(
+            ssh_config.hostname.clone(),
+            ssh_config.port,
+            host_key_verifier,
+        );
 
         // Handle ProxyCommand and ProxyJump
         let session = if ssh_config.proxy_command.is_some() || ssh_config.proxy_jump.is_some() {

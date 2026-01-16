@@ -8,6 +8,7 @@
 //! - SSH configuration file parsing
 //! - Multiple authentication methods (keys and certificates)
 //! - Remote PTY support
+//! - Host key verification with known_hosts support
 //!
 //! ## Certificate Support
 //!
@@ -20,6 +21,7 @@
 //! certificate authentication should ensure the private key and certificate files
 //! are available on disk.
 
+pub mod known_hosts;
 mod pool;
 mod session;
 mod ssh_pool;
@@ -27,6 +29,11 @@ mod ssh_pool;
 #[cfg(test)]
 mod integration_tests;
 
+pub use known_hosts::{
+    AcceptAllVerifier, ContextHostKeyVerifier, HostKeyError, HostKeyPromptRequest,
+    HostKeyPromptResponse, HostKeyStatus, HostKeyVerifier, InteractiveHostKeyVerifier,
+    KnownHostsManager, KnownHostsSource,
+};
 pub use pool::Pool;
 pub use session::{Authentication, CommandResult, OutputLine, Session, SshConfig, SshWarning};
 pub use ssh_pool::{SshPoolHandle, SshPty};
