@@ -2,6 +2,8 @@ import { ListIcon, ChevronRightIcon, ChevronDownIcon } from "lucide-react";
 import { createReactBlockSpec } from "@blocknote/react";
 import { useCallback, useEffect, useState } from "react";
 import track_event from "@/tracking";
+import AIBlockRegistry from "@/lib/ai/block_registry";
+import undent from "undent";
 
 interface HeadingItem {
   id: string;
@@ -143,25 +145,38 @@ export default createReactBlockSpec(
 );
 
 // Component to insert this block from the editor menu
-export const insertTableOfContents =
-  (schema: any) => (editor: typeof schema.BlockNoteEditor) => ({
-    title: "Contents",
-    subtext: "Add a navigable list of all headings",
-    onItemClick: async () => {
-      track_event("runbooks.block.create", { type: "table_of_contents" });
+export const insertTableOfContents = (schema: any) => (editor: typeof schema.BlockNoteEditor) => ({
+  title: "Contents",
+  subtext: "Add a navigable list of all headings",
+  onItemClick: async () => {
+    track_event("runbooks.block.create", { type: "table_of_contents" });
 
-      editor.insertBlocks(
-        [
-          {
-            type: "table_of_contents",
-            props: {},
-          },
-        ],
-        editor.getTextCursorPosition().block.id,
-        "before",
-      );
-    },
-    icon: <ListIcon size={18} />,
-    aliases: ["toc", "contents"],
-    group: "Content",
-  });
+    editor.insertBlocks(
+      [
+        {
+          type: "table_of_contents",
+          props: {},
+        },
+      ],
+      editor.getTextCursorPosition().block.id,
+      "before",
+    );
+  },
+  icon: <ListIcon size={18} />,
+  aliases: ["toc", "contents"],
+  group: "Content",
+});
+
+AIBlockRegistry.getInstance().addBlock({
+  typeName: "table_of_contents",
+  friendlyName: "Table of Contents",
+  shortDescription: "A navigable list of all headings",
+  description: undent`
+    Table of Contents blocks add a navigable list of all headings to the document. It takes no props.
+
+    Example: {
+        "type": "table_of_contents",
+        "props": {},
+      }
+  `,
+});
