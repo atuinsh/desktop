@@ -59,13 +59,20 @@ export class AtuinSharedStateAdapter<T extends SharableState> implements SharedS
   }
 
   public async init() {
-    const socketManager = SocketManager.get();
-    this.channel = socketManager.channel(`shared-state:${this.stateId}`);
     this.logger = new Logger(`PhoenixSharedStateAdapter: ${this.stateId}`);
-    this.unsub = this.channel.on(Event.UPDATE, this.handleUpdate);
+    const socketManager = SocketManager.get();
+
+    socketManager.onConnect(() => {
+      this.channel = socketManager.channel(`shared-state:${this.stateId}`);
+      this.unsub = this.channel.on(Event.UPDATE, this.handleUpdate);
+    });
   }
 
   public async ensureConnected() {
+    if (!this.channel) {
+      throw new Error("Channel not yet initialized");
+    }
+
     if (this.channel!.state === "joined" || this.channel!.state === "joining") return;
 
     try {
@@ -81,6 +88,10 @@ export class AtuinSharedStateAdapter<T extends SharableState> implements SharedS
   }
 
   public resync(last_known_version: Version): Promise<ResyncPayload<T>> {
+    if (!this.channel) {
+      throw new Error("Channel not yet initialized");
+    }
+
     return this.channel!.push<ResyncRequest>(Event.RESYNC_REQ, { last_known_version }).receive<
       ResyncPayload<T>
     >();
@@ -89,7 +100,7 @@ export class AtuinSharedStateAdapter<T extends SharableState> implements SharedS
   public destroy() {
     this.logger!.debug("Shutting down");
     this.unsub?.();
-    this.channel!.leave();
+    this.channel?.leave();
     this.emitter.clearListeners();
   }
 

@@ -14,6 +14,7 @@ import {
 import { useStore } from "@/state/store";
 import { ConnectionState } from "@/state/store/user_state";
 import { Rc } from "@binarymuse/ts-stdlib";
+import { timeoutPromise } from "../utils";
 
 function applyOptimisticUpdates<T>(data: T, updates: Array<OptimisticUpdate>) {
   for (const update of updates) {
@@ -230,14 +231,14 @@ export class SharedStateManager<T extends SharableState> {
       (state) => state.connectionState,
       (connectionState) => {
         if (connectionState === ConnectionState.Online) {
-          this.adapter
-            .ensureConnected()
-            .then(() => {
-              this.resync();
-            })
-            .catch((_err) => {
-              this.logger.error("Failed to ensure channel connection");
-            });
+          // onConnect is async, so wait a small amount of time to init
+          timeoutPromise(100, undefined).then(() => {
+            return this.adapter.ensureConnected()
+          }).then(() => {
+            return this.resync();
+          }).catch((err) => {
+            this.logger.error("Failed to ensure channel connection and resync:", err);
+          });
         }
       },
       {
