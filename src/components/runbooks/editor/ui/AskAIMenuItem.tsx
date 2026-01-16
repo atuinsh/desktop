@@ -1,26 +1,34 @@
-import { useComponentsContext } from "@blocknote/react";
+import { useBlockNoteEditor, useComponentsContext, useExtensionState } from "@blocknote/react";
+import { SideMenuExtension } from "@blocknote/core/extensions";
 import { SparklesIcon } from "lucide-react";
 
 interface AskAIMenuItemProps {
-  onAskAI: () => void;
+  onAskAI: (blockId: string, blockType: string) => void;
 }
 
 /**
  * Menu item for the block's drag handle menu that opens the block-local AI agent.
  */
 export function AskAIMenuItem({ onAskAI }: AskAIMenuItemProps) {
-  const Components = useComponentsContext();
+  const editor = useBlockNoteEditor();
+  const Components = useComponentsContext()!;
+  const hoveredBlock = useExtensionState(SideMenuExtension, {
+    editor,
+    selector: (state) => state?.block,
+  });
 
-  if (!Components) {
+  if (!hoveredBlock) {
     return null;
   }
 
   return (
-    <Components.Generic.Menu.Item onClick={onAskAI}>
-      <Components.Generic.Menu.Label>
-        <SparklesIcon className="h-4 w-4 mr-2 text-purple-600 dark:text-purple-400" />
-        Ask AI
-      </Components.Generic.Menu.Label>
+    <Components.Generic.Menu.Item
+      icon={<SparklesIcon size={16} className="text-purple-600 dark:text-purple-400" />}
+      onClick={() => {
+        onAskAI(hoveredBlock.id, hoveredBlock.type);
+      }}
+    >
+      Ask AI
     </Components.Generic.Menu.Item>
   );
 }

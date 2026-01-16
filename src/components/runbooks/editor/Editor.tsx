@@ -84,6 +84,8 @@ import { writeTextFile } from "@tauri-apps/plugin-fs";
 import { SaveBlockItem } from "./ui/SaveBlockItem";
 import { SavedBlockPopup } from "./ui/SavedBlockPopup";
 import { DeleteBlockItem } from "./ui/DeleteBlockItem";
+import { AskAIMenuItem } from "./ui/AskAIMenuItem";
+import BlockThreadColumn from "./ui/BlockThreadColumn";
 import { BlockNoteEditor } from "@blocknote/core";
 import useDocumentBridge from "@/lib/hooks/useDocumentBridge";
 import { AISingleBlockResponse } from "@/api/ai";
@@ -325,6 +327,12 @@ export default function Editor({
   const [editPrompt, setEditPrompt] = useState("");
   const isProgrammaticEditRef = useRef(false);
 
+  // Block-local AI thread state
+  const [activeBlockThread, setActiveBlockThread] = useState<{
+    blockId: string;
+    blockType: string;
+  } | null>(null);
+
   // AI is enabled for logged-in Hub users when AI setting is on
   const isLoggedIn = useStore((state) => state.isLoggedIn);
   const aiEnabled = useStore((state) => state.aiEnabled);
@@ -373,6 +381,16 @@ export default function Editor({
 
   const closeSavedBlockPopup = useCallback(() => {
     setSavedBlockPopupVisible(false);
+  }, []);
+
+  // Block-local AI thread handlers
+  const handleOpenBlockThread = useCallback((blockId: string, blockType: string) => {
+    setActiveBlockThread({ blockId, blockType });
+    track_event("runbooks.ai.block_thread_open", { blockType });
+  }, []);
+
+  const handleCloseBlockThread = useCallback(() => {
+    setActiveBlockThread(null);
   }, []);
 
   const handleExportMarkdown = async () => {
@@ -799,6 +817,25 @@ export default function Editor({
     });
   }, [runbookEditor]);
 
+  // Highlight the active block when a thread is open
+  useEffect(() => {
+    if (!activeBlockThread) return;
+
+    const blockElement = document.querySelector(
+      `[data-id="${activeBlockThread.blockId}"]`
+    );
+
+    if (blockElement) {
+      blockElement.classList.add("block-thread-active");
+    }
+
+    return () => {
+      if (blockElement) {
+        blockElement.classList.remove("block-thread-active");
+      }
+    };
+  }, [activeBlockThread]);
+
   if (editorError) {
     return (
       <div className="flex w-full h-full flex-col justify-center items-center gap-4">
@@ -1038,6 +1075,9 @@ export default function Editor({
                 <SideMenu>
                   <AddBlockButton />
                   <DragHandleButton>
+                    {aiEnabledState && (
+                      <AskAIMenuItem onAskAI={handleOpenBlockThread} />
+                    )}
                     <DeleteBlockItem />
                     <DuplicateBlockItem />
                     <CopyBlockItem />
@@ -1112,6 +1152,17 @@ export default function Editor({
           {/* AI Assistant toggle button */}
         </div>
       </div>
+
+      {/* Block-local AI thread column */}
+      {aiEnabledState && activeBlockThread && runbook && (
+        <BlockThreadColumn
+          editor={editor}
+          activeThread={activeBlockThread}
+          onClose={handleCloseBlockThread}
+          runbookId={runbook.id}
+          scrollContainerRef={scrollContainerRef}
+        />
+      )}
 
       {/* AI Assistant sidebar */}
       {aiEnabledState && isAIAssistantOpen && (

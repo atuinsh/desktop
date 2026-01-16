@@ -67,3 +67,15 @@
     opacity: 0.6;
     transition: opacity 150ms ease-in-out;
 }
+
+/* Block with active AI thread - highlight */
+.block-thread-active {
+    outline: 2px solid rgb(147, 51, 234);
+    outline-offset: 2px;
+    border-radius: 4px;
+    transition: outline 150ms ease-in-out;
+}
+
+.dark .block-thread-active {
+    outline-color: rgb(168, 85, 247);
+}
