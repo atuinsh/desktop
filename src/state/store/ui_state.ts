@@ -483,12 +483,13 @@ export const createUiState: StateCreator<AtuinUiState> = (set, get, _store): Atu
   },
   toggleWorkspaceVisibility: (workspaceId: string) => {
     set((state) => {
-      if (state.hiddenWorkspaces[workspaceId]) {
-        delete state.hiddenWorkspaces[workspaceId];
+      const newHiddenWorkspaces = { ...state.hiddenWorkspaces };
+      if (newHiddenWorkspaces[workspaceId]) {
+        delete newHiddenWorkspaces[workspaceId];
       } else {
-        state.hiddenWorkspaces[workspaceId] = true;
+        newHiddenWorkspaces[workspaceId] = true;
       }
-      return state;
+      return { hiddenWorkspaces: newHiddenWorkspaces };
     });
   },
   // updateFolderState: (workspaceId: string, state: Record<string, boolean>) => {
