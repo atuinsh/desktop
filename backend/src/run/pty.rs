@@ -3,7 +3,10 @@ use atuin_desktop_runtime::pty::PtyStoreHandle;
 use eyre::Result;
 use tauri::Manager;
 
-async fn update_badge_count(app: &tauri::AppHandle, store: PtyStoreHandle) -> Result<()> {
+async fn update_badge_count<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+    store: PtyStoreHandle,
+) -> Result<()> {
     let len = store.len().await?;
     let len = if len == 0 { None } else { Some(len as i64) };
 
@@ -48,8 +51,8 @@ pub(crate) async fn pty_resize(
     Ok(())
 }
 
-pub(crate) async fn remove_pty(
-    app: tauri::AppHandle,
+pub(crate) async fn remove_pty<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
     pid: uuid::Uuid,
     store: PtyStoreHandle,
 ) -> Result<(), String> {

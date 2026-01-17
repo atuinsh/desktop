@@ -61,3 +61,8 @@ downcast-rs = "2.0.2"
 dyn-clone = "1.0.20"
 regex = "1.12.2"
 shellexpand = "3.1.0"
+
+[patch.crates-io]
+tauri = { git = "https://github.com/tauri-apps/tauri", branch = "feat/cef" }
+tauri-runtime = { git = "https://github.com/tauri-apps/tauri", branch = "feat/cef" }
+tauri-utils = { git = "https://github.com/tauri-apps/tauri", branch = "feat/cef" }

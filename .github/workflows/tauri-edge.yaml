@@ -211,3 +211,114 @@ jobs:
               gh release upload "edge" "$file" --clobber
             fi
           done
+
+  build-edge-cef:
+    name: Build edge release (CEF)
+    needs: create-release
+    permissions:
+      contents: write
+
+    runs-on: depot-macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.TS_CLONE_DEPLOY_KEY }}
+
+      - name: Run sccache-cache
+        uses: mozilla-actions/sccache-action@v0.0.7
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: setup node
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+
+      - name: install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin
+
+      - name: Install CEF tauri-cli
+        run: cargo install --git https://github.com/tauri-apps/tauri --branch feat/cef tauri-cli
+
+      - name: install frontend dependencies
+        run: bun install
+
+      - name: update edge version
+        id: update-edge-version
+        run: |
+          # Get the current version from Cargo.toml
+          version=$(grep -m 1 '^version = ' Cargo.toml | sed 's/version = "\([^"]*\)".*/\1/')
+          # Get the short commit SHA
+          commit_sha=$(git rev-parse --short HEAD)
+          # Create the new version string
+          new_version="${version}-${commit_sha}"
+          # Replace the version in both Cargo.toml files
+          sed -i.bak "s/^version = \"${version}\"/version = \"${new_version}\"/" Cargo.toml
+          sed -i.bak "s/^version = \"${version}\"/version = \"${new_version}\"/" backend/Cargo.toml
+          echo "new_version=${new_version}" >> $GITHUB_OUTPUT
+
+      - name: Build with CEF
+        env:
+          TAURI_BUNDLER_DMG_IGNORE_CI: false
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_RELEASE: ${{ steps.update-edge-version.outputs.new_version }}
+          NODE_OPTIONS: "--max-old-space-size=6144"
+          RUSTC_WRAPPER: sccache
+          IS_EDGE_BUILD: true
+        run: node script/tauri cef build --target aarch64-apple-darwin
+
+      - name: Find and upload CEF artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Find built artifacts in target directory
+          artifact_dir="backend/target/aarch64-apple-darwin/release/bundle"
+
+          echo "Looking for artifacts in: $artifact_dir"
+
+          # Find .app.tar.gz and .app.tar.gz.sig files
+          for file in "$artifact_dir/macos"/*.app.tar.gz "$artifact_dir/macos"/*.app.tar.gz.sig; do
+            if [[ -f "$file" ]]; then
+              filename=$(basename "$file")
+
+              # Add -cef suffix before the extension
+              if [[ "$file" == *.app.tar.gz.sig ]]; then
+                new_filename=$(echo "$filename" | sed 's/\.app\.tar\.gz\.sig$/-cef-aarch64.app.tar.gz.sig/')
+              elif [[ "$file" == *.app.tar.gz ]]; then
+                new_filename=$(echo "$filename" | sed 's/\.app\.tar\.gz$/-cef-aarch64.app.tar.gz/')
+              fi
+
+              echo "Uploading: $filename as $new_filename"
+              gh release upload "edge" "$file" --clobber --repo "${{ github.repository }}" || \
+                (mv "$file" "$(dirname "$file")/$new_filename" && \
+                 gh release upload "edge" "$(dirname "$file")/$new_filename" --clobber --repo "${{ github.repository }}")
+            fi
+          done
+
+          # Also upload DMG if it exists
+          for file in "$artifact_dir/dmg"/*.dmg; do
+            if [[ -f "$file" ]]; then
+              filename=$(basename "$file")
+              new_filename=$(echo "$filename" | sed 's/\.dmg$/-cef-aarch64.dmg/')
+
+              echo "Uploading DMG: $filename as $new_filename"
+              mv "$file" "$(dirname "$file")/$new_filename"
+              gh release upload "edge" "$(dirname "$file")/$new_filename" --clobber --repo "${{ github.repository }}"
+            fi
+          done

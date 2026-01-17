@@ -13,8 +13,8 @@ struct ExecLogCompletedEvent {
 }
 
 #[tauri::command]
-pub async fn log_execution(
-    app: tauri::AppHandle,
+pub async fn log_execution<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
     state: tauri::State<'_, crate::state::AtuinState>,
     block: Block,
     start_time: u64,

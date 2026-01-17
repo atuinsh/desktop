@@ -3,8 +3,8 @@ use uuid::Uuid;
 use crate::{run::pty::remove_pty, state::AtuinState};
 
 #[tauri::command]
-pub async fn runbook_kill_all_ptys(
-    app: tauri::AppHandle,
+pub async fn runbook_kill_all_ptys<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
     state: tauri::State<'_, AtuinState>,
     runbook: Uuid,
 ) -> Result<(), String> {

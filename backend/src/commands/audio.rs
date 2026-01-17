@@ -2,7 +2,7 @@ use rodio::{Decoder, OutputStream, Sink};
 use serde::Serialize;
 use std::fs::File;
 use std::io::BufReader;
-use tauri::{path::BaseDirectory, AppHandle, Manager};
+use tauri::{path::BaseDirectory, AppHandle, Manager, Runtime};
 
 #[derive(Debug, Serialize)]
 pub struct SoundInfo {
@@ -27,7 +27,7 @@ fn to_display_name(stem: &str) -> String {
 }
 
 #[tauri::command]
-pub async fn list_sounds(app: AppHandle) -> Result<Vec<SoundInfo>, String> {
+pub async fn list_sounds<R: Runtime>(app: AppHandle<R>) -> Result<Vec<SoundInfo>, String> {
     let sounds_path = app
         .path()
         .resolve("resources/sounds", BaseDirectory::Resource)
@@ -62,7 +62,11 @@ pub async fn list_sounds(app: AppHandle) -> Result<Vec<SoundInfo>, String> {
 }
 
 #[tauri::command]
-pub async fn play_sound(app: AppHandle, sound_id: String, volume: f32) -> Result<(), String> {
+pub async fn play_sound<R: Runtime>(
+    app: AppHandle<R>,
+    sound_id: String,
+    volume: f32,
+) -> Result<(), String> {
     log::info!(
         "play_sound called with sound_id={}, volume={}",
         sound_id,
