@@ -1,9 +1,12 @@
 use sqlx::Row;
 use tauri::ipc::{InvokeBody, Request, Response};
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Manager, Runtime};
 
 #[tauri::command]
-pub async fn save_ydoc_for_runbook(app: AppHandle, request: Request<'_>) -> Result<(), String> {
+pub async fn save_ydoc_for_runbook<R: Runtime>(
+    app: AppHandle<R>,
+    request: Request<'_>,
+) -> Result<(), String> {
     if let InvokeBody::Raw(data) = request.body() {
         let runbook_id = request.headers().get("id").unwrap().to_str().unwrap();
 
@@ -28,7 +31,10 @@ pub async fn save_ydoc_for_runbook(app: AppHandle, request: Request<'_>) -> Resu
 }
 
 #[tauri::command]
-pub async fn load_ydoc_for_runbook(app: AppHandle, runbook_id: &str) -> Result<Response, String> {
+pub async fn load_ydoc_for_runbook<R: Runtime>(
+    app: AppHandle<R>,
+    runbook_id: &str,
+) -> Result<Response, String> {
     let state = app.state::<crate::state::AtuinState>();
     let db = state
         .db_instances

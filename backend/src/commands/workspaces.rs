@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use serde_yaml::Value;
-use tauri::{ipc::Channel, path::BaseDirectory, AppHandle, Manager, State};
+use tauri::{ipc::Channel, path::BaseDirectory, AppHandle, Manager, Runtime, State};
 
 use crate::{
     state::AtuinState,
@@ -14,7 +14,10 @@ use crate::{
 };
 
 #[tauri::command]
-pub async fn copy_welcome_workspace(app: AppHandle, id: String) -> Result<String, String> {
+pub async fn copy_welcome_workspace<R: Runtime>(
+    app: AppHandle<R>,
+    id: String,
+) -> Result<String, String> {
     let welcome_path = app
         .path()
         .resolve("resources/welcome", BaseDirectory::Resource)

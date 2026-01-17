@@ -5,7 +5,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 use tauri::ipc::Channel;
-use tauri::{async_runtime::RwLock, AppHandle};
+use tauri::{async_runtime::RwLock, AppHandle, Runtime};
 use tokio::sync::{broadcast, mpsc, oneshot};
 use uuid::Uuid;
 
@@ -116,7 +116,7 @@ impl AtuinState {
             secret_cache: Mutex::new(None),
         }
     }
-    pub async fn init(&self, _app: &AppHandle) -> Result<()> {
+    pub async fn init<R: Runtime>(&self, _app: &AppHandle<R>) -> Result<()> {
         let path = if let Some(ref prefix) = self.dev_prefix {
             self.app_path.join(format!("{prefix}_exec_log.db"))
         } else {

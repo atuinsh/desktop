@@ -36,7 +36,13 @@ url = { workspace = true }
 sha2 = "0.10"
 bigdecimal = { workspace = true }
 
-tauri = { version = "2.9.4", features = ["tray-icon", "devtools", "macos-private-api"] }
+tauri = { version = "2.9.4", default-features = false, features = [
+    "tray-icon",
+    "devtools",
+    "compression",
+    "common-controls-v6",
+    "macos-private-api",
+] }
 tauri-plugin-http = { version = "2.5.4", features = ["native-tls"] }
 tauri-plugin-deep-link = "2.4.5"
 tauri-plugin-single-instance = { version = "2.3.6", features = ["deep-link"] }
@@ -86,6 +92,9 @@ genai = { git = "https://github.com/BinaryMuse/rust-genai", rev = "674535905a966
 futures-util = "0.3.31"
 indoc = "2.0.7"
 
+# Note: tauri's test feature is not enabled here because the feat/cef branch has a broken MockRuntime.
+# Tests use Wry directly instead of MockRuntime when running with default features.
+
 [dependencies.tauri-plugin-sql]
 features = ["sqlite"] # or "postgres", or "mysql"
 version = "2.3.1"
@@ -97,6 +106,9 @@ cocoa = "0.26"
 tauri-plugin-updater = "2.9.0"
 
 [features]
+default = ["wry"]
 # this feature is used for production builds or when `devPath` points to the filesystem
 # DO NOT REMOVE!!
 custom-protocol = ["tauri/custom-protocol"]
+wry = ["tauri/wry"]
+cef = ["tauri/cef"]

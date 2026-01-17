@@ -32,8 +32,8 @@ pub fn export_atrb(json: String, file_path: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub async fn delete_runbook_cleanup(
-    app: tauri::AppHandle,
+pub async fn delete_runbook_cleanup<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
     state: State<'_, AtuinState>,
     runbook: Uuid,
 ) -> Result<(), String> {

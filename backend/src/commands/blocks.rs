@@ -10,7 +10,7 @@ use atuin_desktop_runtime::pty::PtyStoreHandle;
 use atuin_desktop_runtime::ssh::SshPoolHandle;
 use serde_json::Value;
 use tauri::Manager;
-use tauri::{ipc::Channel, AppHandle, State};
+use tauri::{ipc::Channel, AppHandle, Runtime, State};
 use tokio::sync::oneshot;
 use uuid::Uuid;
 
@@ -51,18 +51,18 @@ impl MessageChannel<DocumentBridgeMessage> for DocumentBridgeChannel {
 }
 
 #[derive(Clone)]
-struct KvBlockLocalValueProvider {
-    app_handle: AppHandle,
+struct KvBlockLocalValueProvider<R: Runtime> {
+    app_handle: AppHandle<R>,
 }
 
-impl KvBlockLocalValueProvider {
-    pub fn new(app_handle: AppHandle) -> Self {
+impl<R: Runtime> KvBlockLocalValueProvider<R> {
+    pub fn new(app_handle: AppHandle<R>) -> Self {
         Self { app_handle }
     }
 }
 
 #[async_trait]
-impl LocalValueProvider for KvBlockLocalValueProvider {
+impl<R: Runtime> LocalValueProvider for KvBlockLocalValueProvider<R> {
     async fn get_block_local_value(
         &self,
         block_id: Uuid,
@@ -287,8 +287,8 @@ pub async fn cancel_block_execution(
 }
 
 #[tauri::command]
-pub async fn open_document(
-    app: AppHandle,
+pub async fn open_document<R: Runtime>(
+    app: AppHandle<R>,
     state: State<'_, AtuinState>,
     document_id: String,
     document: Vec<serde_json::Value>,
@@ -521,8 +521,8 @@ pub async fn remove_stored_context_for_document(
 }
 
 #[tauri::command]
-pub async fn start_serial_execution(
-    app: AppHandle,
+pub async fn start_serial_execution<R: Runtime>(
+    app: AppHandle<R>,
     state: State<'_, AtuinState>,
     document_id: String,
     from_block: Option<String>,
