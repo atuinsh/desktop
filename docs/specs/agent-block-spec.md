@@ -545,233 +545,55 @@ async fn execute_agent(
 
 ---
 
-## ACP Client Implementation
+## ACP Integration (Phase 2 - Future Work)
 
-### Dependencies
+ACP support is deferred to Phase 2. The design ensures it slots in cleanly.
 
-Add to `Cargo.toml`:
+### Why It's Easy to Add Later
 
-```toml
-[dependencies]
-agent-client-protocol = "0.10"  # Official ACP Rust SDK
-```
+1. **`AgentSource` enum already separates paths:**
+   ```rust
+   match &agent.source {
+       AgentSource::Internal { model } => execute_internal_agent(...).await,
+       AgentSource::Acp { command, args, env } => execute_acp_agent(...).await,  // Add later
+   }
+   ```
 
-### ACP Execution
+2. **Same output structure:** Both return `AgentExecutionOutput` with `text`, `token_usage`, `tool_calls_executed`
+
+3. **Same state machine:** `AgentState` and `AgentStatus` work for both
+
+4. **Same streaming pattern:** Both emit `StreamingBlockOutput` chunks
+
+### Interface Contract for ACP
+
+When implementing, `execute_acp_agent` must:
 
 ```rust
-use agent_client_protocol as acp;
-
 async fn execute_acp_agent(
     context: &ExecutionContext,
-    command: &str,
+    command: &str,                              // e.g., "claude", "gemini"
     args: &[String],
-    env: &std::collections::HashMap<String, String>,
+    env: &HashMap<String, String>,
     prompt: &str,
     system_prompt: Option<&str>,
     capabilities: &AgentCapabilities,
     timeout_seconds: Option<u32>,
-    working_directory: Option<&str>,
-) -> Result<(String, Option<TokenUsage>, Vec<ExecutedToolCall>), Box<dyn std::error::Error + Send + Sync>> {
-
-    // 1. Spawn agent subprocess
-    let mut cmd = tokio::process::Command::new(command);
-    cmd.args(args)
-        .stdin(std::process::Stdio::piped())
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
-        .envs(env);
-
-    if let Some(cwd) = working_directory {
-        cmd.current_dir(cwd);
-    }
-
-    let mut child = cmd.spawn()?;
-
-    let stdin = child.stdin.take().expect("stdin");
-    let stdout = child.stdout.take().expect("stdout");
-
-    // 2. Create ACP connection
-    let client = AgentBlockClient::new(context.clone(), capabilities.clone());
-    let (reader, writer) = /* wrap stdin/stdout for async */;
-
-    let conn = acp::ClientSideConnection::new(client, reader, writer);
-
-    // 3. Initialize
-    context.update_block_state::<AgentState, _>(|state| {
-        state.status = AgentStatus::Initializing;
-    }).await;
-
-    let init_response = conn.initialize(acp::InitializeRequest {
-        protocol_version: acp::V1,
-        client_capabilities: build_client_capabilities(capabilities),
-        client_info: acp::Implementation {
-            name: "atuin-runbook".to_string(),
-            title: Some("Atuin Runbook".to_string()),
-            version: env!("CARGO_PKG_VERSION").to_string(),
-        },
-    }).await?;
-
-    // 4. Create session
-    let session = conn.new_session(acp::NewSessionRequest {
-        // Include MCP servers if relevant
-        mcp_servers: vec![],
-        working_directory: working_directory.map(|s| s.to_string()),
-        ..Default::default()
-    }).await?;
-
-    // 5. Send prompt
-    context.update_block_state::<AgentState, _>(|state| {
-        state.status = AgentStatus::Waiting;
-    }).await;
-
-    conn.prompt(acp::PromptRequest {
-        session_id: session.session_id,
-        prompt: prompt.to_string(),
-        system_prompt: system_prompt.map(|s| s.to_string()),
-    }).await?;
-
-    // 6. Collect response (streaming handled via client callbacks)
-    // The client implementation handles:
-    // - Streaming text chunks → context.send_output()
-    // - Tool call requests → approval flow
-    // - Final completion
-
-    // 7. Wait for completion or timeout
-    let result = if let Some(timeout) = timeout_seconds {
-        tokio::time::timeout(
-            std::time::Duration::from_secs(timeout as u64),
-            conn.wait_for_completion()
-        ).await.map_err(|_| "Agent timed out")?
-    } else {
-        conn.wait_for_completion().await
-    };
-
-    // 8. Clean up
-    let _ = child.kill().await;
-
-    result
-}
-
-/// ACP Client implementation for handling agent requests
-struct AgentBlockClient {
-    context: ExecutionContext,
-    capabilities: AgentCapabilities,
-    response_text: std::sync::Arc<tokio::sync::Mutex<String>>,
-    tool_calls: std::sync::Arc<tokio::sync::Mutex<Vec<ExecutedToolCall>>>,
-}
-
-impl acp::Client for AgentBlockClient {
-    // Handle streaming text chunks
-    async fn session_notification(&self, notification: acp::SessionNotification) {
-        if let Some(content) = notification.text_chunk {
-            // Append to response
-            self.response_text.lock().await.push_str(&content);
-
-            // Stream to UI
-            let _ = self.context.send_output(
-                StreamingBlockOutput::builder()
-                    .block_id(self.context.block_id)
-                    .stdout(Some(content))
-                    .build()
-            ).await;
-
-            // Update state
-            self.context.update_block_state::<AgentState, _>(|state| {
-                state.status = AgentStatus::Streaming;
-            }).await;
-        }
-    }
-
-    // Handle tool call permission requests
-    async fn request_tool_permission(
-        &self,
-        request: acp::ToolPermissionRequest,
-    ) -> Result<acp::ToolPermissionResponse, acp::Error> {
-        // If always_allow is enabled, auto-approve
-        if self.capabilities.always_allow_tools {
-            return Ok(acp::ToolPermissionResponse { approved: true });
-        }
-
-        // Check if tool matches granted capabilities
-        let auto_approve = match request.tool_name.as_str() {
-            name if name.contains("read") => self.capabilities.read_files,
-            name if name.contains("write") => self.capabilities.write_files,
-            name if name.contains("exec") || name.contains("bash") || name.contains("shell")
-                => self.capabilities.execute_commands,
-            _ => false,
-        };
-
-        if auto_approve {
-            return Ok(acp::ToolPermissionResponse { approved: true });
-        }
-
-        // Request user approval
-        self.context.update_block_state::<AgentState, _>(|state| {
-            state.status = AgentStatus::PendingToolApproval;
-            state.pending_tool_call = Some(PendingToolCall {
-                id: request.call_id.clone(),
-                name: request.tool_name.clone(),
-                description: request.description.unwrap_or_default(),
-                summary: format!("Agent wants to: {}", request.tool_name),
-            });
-        }).await;
-
-        // Emit event for UI to show approval dialog
-        let _ = self.context.emit_gc_event(GCEvent::AgentToolApprovalRequired {
-            block_id: self.context.block_id,
-            runbook_id: self.context.runbook_id,
-            tool_call_id: request.call_id.clone(),
-            tool_name: request.tool_name.clone(),
-            description: request.description,
-        }).await;
-
-        // Wait for user response (via channel or similar mechanism)
-        let approved = self.wait_for_tool_approval(&request.call_id).await;
-
-        // Record the tool call
-        self.tool_calls.lock().await.push(ExecutedToolCall {
-            name: request.tool_name,
-            approved,
-            result_summary: None,
-        });
-
-        // Clear pending state
-        self.context.update_block_state::<AgentState, _>(|state| {
-            state.status = if approved {
-                AgentStatus::ExecutingTool
-            } else {
-                AgentStatus::Waiting
-            };
-            state.pending_tool_call = None;
-        }).await;
-
-        Ok(acp::ToolPermissionResponse { approved })
-    }
-
-    // File system capabilities (delegate to context/environment)
-    async fn read_text_file(
-        &self,
-        request: acp::ReadTextFileRequest,
-    ) -> Result<acp::ReadTextFileResponse, acp::Error> {
-        if !self.capabilities.read_files {
-            return Err(acp::Error::method_not_found());
-        }
-        // Implement file reading via context
-        todo!("Implement file reading")
-    }
-
-    async fn write_text_file(
-        &self,
-        request: acp::WriteTextFileRequest,
-    ) -> Result<acp::WriteTextFileResponse, acp::Error> {
-        if !self.capabilities.write_files {
-            return Err(acp::Error::method_not_found());
-        }
-        // Implement file writing via context
-        todo!("Implement file writing")
-    }
-}
+) -> Result<AgentExecutionOutput, Error>
 ```
+
+**Requirements:**
+- Spawn subprocess with stdio pipes
+- Use `agent-client-protocol` crate (v0.10+) for JSON-RPC
+- Map ACP `session_notification` → `StreamingBlockOutput`
+- Map ACP `request_tool_permission` → existing approval UI
+- Return same `AgentExecutionOutput` as internal agent
+
+### Resources for Implementation
+
+- [ACP Rust SDK](https://github.com/agentclientprotocol/rust-sdk)
+- [Crates.io: agent-client-protocol](https://crates.io/crates/agent-client-protocol)
+- See `rust-sdk/examples/client.rs` for reference implementation
 
 ---
 
@@ -1364,7 +1186,9 @@ const defaultAgentSettings: AgentSettings = {
 
 ## Implementation Order
 
-### Phase 1: Internal Agent (Reuses Existing Infrastructure)
+### Phase 1: Internal Agent ← START HERE
+
+**Ship this first.** Users get value immediately with existing model setup.
 
 1. **Block Definition**
    - [ ] `agent.rs` - Structs (`Agent`, `AgentSource`, `AgentCapabilities`)
@@ -1385,55 +1209,57 @@ const defaultAgentSettings: AgentSettings = {
 
 4. **Frontend**
    - [ ] TypeScript types (auto-generated via ts-rs)
-   - [ ] Block config component (source selector, prompt editor, capabilities)
+   - [ ] Block config component (prompt editor, model selector, capabilities)
    - [ ] Block execution view (streaming output, status indicator)
    - [ ] Reuse existing tool approval dialog from AIAssistant
 
-### Phase 2: ACP Integration (New Protocol)
-
-5. **ACP Client**
-   - [ ] Add `agent-client-protocol = "0.10"` dependency
-   - [ ] `AgentBlockClient` implementing `acp::Client` trait
-   - [ ] `execute_acp_agent()` subprocess management
-   - [ ] Map ACP events → `StreamingBlockOutput`
-
-6. **ACP Tool Handling**
-   - [ ] Forward `request_tool_permission` to block UI
-   - [ ] Implement `read_text_file`, `write_text_file` if capabilities allow
-
-### Phase 3: Polish
-
-7. **Settings**
-   - [ ] Global agent registry (available ACP agents)
-   - [ ] Default timeout and capabilities
-   - [ ] Settings UI
-
-8. **Testing**
+5. **Testing & Ship**
    - [ ] Unit tests for FromDocument, output template access
    - [ ] Integration test with mock AI session
-   - [ ] Manual test with Claude Code (ACP)
+   - [ ] Manual testing with Atuin Hub / Claude API
 
-### Effort Estimate
+**Effort: Low-Medium** (mostly wiring existing infrastructure)
 
-| Phase | Effort | Notes |
-|-------|--------|-------|
-| Phase 1 | **Low-Medium** | Mostly wiring existing infrastructure |
-| Phase 2 | **Medium** | New protocol integration |
-| Phase 3 | **Low** | Polish and testing |
+---
 
-**Key insight:** Phase 1 is dramatically smaller than originally scoped because the AI infrastructure already exists.
+### Phase 2: ACP Integration ← DEFERRED
+
+Add after Phase 1 ships. See "ACP Integration (Phase 2)" section for interface contract.
+
+- [ ] Add `agent-client-protocol` dependency
+- [ ] Implement `execute_acp_agent()` matching interface contract
+- [ ] Map ACP events → `StreamingBlockOutput`
+- [ ] Test with Claude Code, Gemini CLI
+
+**Effort: Medium** (new protocol, subprocess management)
+
+---
+
+### Phase 3: Polish ← DEFERRED
+
+- [ ] Global agent registry (available ACP agents)
+- [ ] Settings UI for defaults
+- [ ] Enhanced testing
 
 ---
 
 ## Open Questions for Implementer
 
-1. **MCP Server passthrough** - Should agent blocks pass through MCP servers configured in Atuin to the ACP agent? (e.g., database access)
+### Phase 1 (Internal Agent)
 
-2. **Session persistence** - Should ACP sessions be resumable across runbook executions, or always fresh?
+1. **Tool availability** - Should internal agent have access to `insert_blocks`/`update_block` tools, or be strictly read-only? (Spec currently says read-only)
 
-3. **Stderr handling** - Stream agent stderr to block output, or capture separately for debugging?
+2. **System prompt** - What context should be included in the agent block's system prompt? Just the custom prompt, or also runbook context like the AI Assistant gets?
 
-4. **Working directory** - Default to runbook file location, workspace root, or require explicit config?
+3. **Model fallback chain** - Block config model → workspace default → global default. Is this the right priority?
+
+### Phase 2 (ACP - Deferred)
+
+4. **MCP Server passthrough** - Should agent blocks pass MCP servers to ACP agents?
+
+5. **Session persistence** - Fresh session per execution, or resumable?
+
+6. **Working directory** - Runbook location, workspace root, or explicit config?
 
 ---
 
