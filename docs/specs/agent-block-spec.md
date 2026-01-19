@@ -83,14 +83,16 @@ pub struct Agent {
 ## Block State
 
 ```rust
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
+#[ts(export)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentState {
     pub status: AgentStatus,
     pub token_usage: Option<TokenUsage>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
+#[ts(export)]
 #[serde(rename_all = "camelCase")]
 pub enum AgentStatus {
     #[default]
@@ -103,7 +105,9 @@ pub enum AgentStatus {
     TimedOut,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
+#[ts(export)]
+#[serde(rename_all = "camelCase")]
 pub struct TokenUsage {
     pub input_tokens: Option<u64>,
     pub output_tokens: Option<u64>,
@@ -152,6 +156,9 @@ impl BlockExecutionOutput for AgentExecutionOutput {
 
 ## Execution
 
+**Note:** `execute_agent_block` is a regular async function (not a Tauri command) since it runs
+in the backend block executor. It uses channels for streaming, not closures.
+
 ```rust
 #[async_trait]
 impl BlockBehavior for Agent {
@@ -177,23 +184,33 @@ impl BlockBehavior for Agent {
 
             let start = std::time::Instant::now();
 
-            let result = ai_agent_execute(
+            // Create channel for streaming chunks
+            let (chunk_tx, mut chunk_rx) = tokio::sync::mpsc::channel::<String>(32);
+
+            // Spawn chunk forwarder
+            let ctx_for_chunks = context.clone();
+            tokio::spawn(async move {
+                while let Some(chunk) = chunk_rx.recv().await {
+                    let _ = ctx_for_chunks.send_output(StreamingBlockOutput::builder()
+                        .block_id(block_id)
+                        .stdout(Some(chunk))
+                        .build()
+                    ).await;
+                    ctx_for_chunks.update_block_state::<AgentState, _>(|s| {
+                        s.status = AgentStatus::Streaming;
+                    }).await;
+                }
+            });
+
+            // Execute agent (regular backend function, not Tauri command)
+            let result = execute_agent_block(
                 context.runbook_id,
                 prompt,
                 system_prompt,
                 self.model,
                 self.always_allow_tools,
                 self.timeout_seconds,
-                |chunk| {
-                    context.send_output(StreamingBlockOutput::builder()
-                        .block_id(block_id)
-                        .stdout(Some(chunk))
-                        .build()
-                    );
-                    context.update_block_state::<AgentState, _>(|s| {
-                        s.status = AgentStatus::Streaming;
-                    });
-                },
+                chunk_tx,
             ).await;
 
             let duration = start.elapsed().as_secs_f64();
@@ -239,26 +256,30 @@ impl BlockBehavior for Agent {
 
 ## Backend Changes
 
-### 1. New Tauri Command
+### 1. Agent Execution Function
 
-**File:** `backend/src/commands/ai.rs`
+**File:** `backend/src/ai/agent_block.rs` (new file)
+
+**Note:** This is a regular async function called from the block executor, NOT a Tauri command.
+Tauri commands use `Channel<T>` for IPC streaming; backend functions use `mpsc::Sender<T>`.
 
 ```rust
-#[tauri::command]
-pub async fn ai_agent_execute(
-    state: tauri::State<'_, AtuinState>,
+use tokio::sync::mpsc;
+
+/// Execute an agent block (called from block executor, not frontend)
+pub async fn execute_agent_block(
     runbook_id: Uuid,
     prompt: String,
     system_prompt: Option<String>,
     model: Option<ModelSelection>,
     always_allow_tools: bool,
     timeout_seconds: Option<u32>,
-    on_chunk: Channel<String>,
-) -> Result<AgentResult, String> {
+    chunk_tx: mpsc::Sender<String>,
+) -> Result<AgentResult, Error> {
     let model = model
         .or_else(|| get_workspace_default_model(runbook_id))
         .or_else(|| get_global_default_model())
-        .ok_or("No model configured")?;
+        .ok_or_else(|| Error::msg("No model configured"))?;
 
     let session = AISession::new_for_agent_block(
         runbook_id,
@@ -267,12 +288,12 @@ pub async fn ai_agent_execute(
         always_allow_tools,
     ).await?;
 
-    // Forward chunks
-    let rx = session.subscribe();
+    // Forward chunks via mpsc channel
+    let mut rx = session.subscribe();
     tokio::spawn(async move {
         while let Some(event) = rx.recv().await {
             if let SessionEvent::Chunk { content } = event {
-                let _ = on_chunk.send(content);
+                let _ = chunk_tx.send(content).await;
             }
         }
     });
@@ -283,7 +304,7 @@ pub async fn ai_agent_execute(
         Some(t) => tokio::time::timeout(
             Duration::from_secs(t as u64),
             session.wait_for_idle()
-        ).await.map_err(|_| "Timed out")?,
+        ).await.map_err(|_| Error::msg("Timed out"))?,
         None => session.wait_for_idle().await,
     }?;
 
