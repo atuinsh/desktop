@@ -10,6 +10,88 @@ The Agent block enables runbooks to invoke AI agents—either external ACP-compa
 2. **Simplicity** - Expose text output; let other blocks parse structured data
 3. **Safety** - Tool calls require confirmation (with opt-in always-allow)
 4. **Consistency** - Follow existing block patterns exactly
+5. **Reuse** - Leverage existing AI infrastructure; don't rebuild
+
+---
+
+## Existing Infrastructure to Reuse
+
+**CRITICAL: The internal agent path should reuse existing AI infrastructure, not build new.**
+
+Atuin Desktop already has production-ready AI infrastructure:
+
+| Component | Location | What It Does |
+|-----------|----------|--------------|
+| **FSM Engine** | `backend/src/ai/fsm.rs` | Pure state machine: Idle → Sending → Streaming → PendingTools |
+| **Session Driver** | `backend/src/ai/session.rs` | Event loop, model calls, stream processing |
+| **Tool System** | `backend/src/ai/tools.rs` | 6 built-in tools with approval flow |
+| **Streaming** | `backend/src/ai/session.rs:523` | genai stream → SessionEvent → frontend |
+| **Storage** | `backend/src/ai/storage.rs` | SQLite persistence for sessions |
+| **Multi-Provider** | `ModelSelection` enum | Claude, OpenAI, Ollama, AtuinHub |
+| **Types** | `backend/src/ai/types.rs` | AIMessage, AIToolCall, etc. |
+| **Commands** | `backend/src/commands/ai.rs` | `ai_create_session`, `ai_send_message`, etc. |
+
+### What This Means for Implementation
+
+**For Internal Agent:**
+```rust
+// DON'T: Build new streaming, new tool handling, new state machine
+// DO: Create AISession, send prompt, wait for completion
+
+async fn execute_internal_agent(...) -> Result<...> {
+    // 1. Create session using existing infrastructure
+    let session_id = ai_create_session(runbook_id, ...).await?;
+
+    // 2. Configure auto-approve policy (new: expose existing capability)
+    ai_set_auto_approve_tools(session_id, &capabilities.auto_approve_tools).await?;
+
+    // 3. Send prompt (FSM handles streaming, tools, everything)
+    ai_send_message(session_id, prompt).await?;
+
+    // 4. Wait for FSM to reach Idle (response complete)
+    let response = ai_wait_for_idle(session_id).await?;
+
+    // 5. Clean up
+    ai_destroy_session(session_id).await?;
+
+    Ok(response)
+}
+```
+
+**For ACP Agent:**
+- Different protocol (JSON-RPC over stdio)
+- Needs ACP SDK integration
+- But similar conceptual flow
+
+### Existing Tool Approval Flow
+
+The FSM already implements tool approval:
+
+```
+Model requests tool → State::PendingTools
+                    → SessionEvent::ToolsRequested
+                    → Frontend shows approval UI
+                    → User approves/denies
+                    → ai_send_tool_result()
+                    → FSM continues or stops
+```
+
+**What's needed:** Expose auto-approve configuration to the block, not rebuild the flow.
+
+### Key Files to Reference
+
+```
+backend/src/ai/
+├── fsm.rs          # State machine (580 lines) - DON'T REWRITE
+├── session.rs      # Session driver (634 lines) - REUSE
+├── types.rs        # Message types - REUSE
+├── tools.rs        # Tool definitions - EXTEND if needed
+├── storage.rs      # Persistence - REUSE
+└── prompts.rs      # System prompts - ADD agent-specific prompt
+
+backend/src/commands/
+└── ai.rs           # Tauri commands - ADD new commands for agent block
+```
 
 ---
 
@@ -695,86 +777,270 @@ impl acp::Client for AgentBlockClient {
 
 ## Internal Agent Implementation
 
+**Key insight:** Don't rebuild the AI infrastructure. Create an AISession and let the existing FSM handle everything.
+
+### Required Changes to Existing Infrastructure
+
+**1. New Tauri command for agent block usage:**
+
+**File:** `backend/src/commands/ai.rs`
+
 ```rust
-async fn execute_internal_agent(
-    context: &ExecutionContext,
-    model: Option<&ModelSelection>,
-    prompt: &str,
-    system_prompt: Option<&str>,
+/// Create a session specifically for agent block execution
+/// Differences from ai_create_session:
+/// - No runbook editing tools (agent block is read-only to runbook)
+/// - Configurable auto-approve policy
+/// - Returns when FSM reaches Idle (not ongoing conversation)
+#[tauri::command]
+pub async fn ai_agent_execute(
+    state: tauri::State<'_, AtuinState>,
+    runbook_id: Uuid,
+    prompt: String,
+    system_prompt: Option<String>,
+    model: Option<ModelSelection>,
+    auto_approve_tools: Vec<String>,
     timeout_seconds: Option<u32>,
-) -> Result<(String, Option<TokenUsage>, Vec<ExecutedToolCall>), Box<dyn std::error::Error + Send + Sync>> {
-
-    context.update_block_state::<AgentState, _>(|state| {
-        state.status = AgentStatus::Waiting;
-    }).await;
-
-    // Build messages for the AI request
-    let mut messages = Vec::new();
-
-    if let Some(system) = system_prompt {
-        messages.push(AIMessage {
-            role: Role::System,
-            content: vec![ContentPart::Text { text: system.to_string() }],
-        });
-    }
-
-    messages.push(AIMessage {
-        role: Role::User,
-        content: vec![ContentPart::Text { text: prompt.to_string() }],
-    });
-
-    // Get model selection (use provided or fall back to workspace/global default)
-    let model_selection = model.cloned()
-        .or_else(|| context.get_default_model_selection())
+    on_event: Channel<AgentBlockEvent>,
+) -> Result<AgentExecutionResult, String> {
+    // 1. Get model selection (provided, workspace default, or global default)
+    let model_selection = model
+        .or_else(|| get_workspace_default_model(runbook_id))
+        .or_else(|| get_global_default_model())
         .ok_or("No model configured")?;
 
-    // Create streaming request using existing AI infrastructure
-    let (tx, mut rx) = tokio::sync::mpsc::channel(100);
+    // 2. Build system prompt for agent block context
+    let full_system_prompt = build_agent_system_prompt(system_prompt.as_deref());
 
-    // Spawn the AI request (reuse existing provider infrastructure)
-    let request_handle = spawn_ai_request(
+    // 3. Create session with agent-specific configuration
+    let session = AISession::new_for_agent_block(
+        runbook_id,
         model_selection,
-        messages,
-        tx,
-        timeout_seconds,
+        full_system_prompt,
+        auto_approve_tools,
     ).await?;
 
-    // Collect streaming response
-    let mut response_text = String::new();
-    let mut token_usage = None;
+    // 4. Subscribe to session events, forward to block
+    let event_rx = session.subscribe();
+    tokio::spawn(forward_session_events_to_block(event_rx, on_event.clone()));
 
+    // 5. Send the prompt
+    session.send_message(prompt).await?;
+
+    // 6. Wait for completion (FSM reaches Idle) with optional timeout
+    let result = if let Some(timeout) = timeout_seconds {
+        tokio::time::timeout(
+            Duration::from_secs(timeout as u64),
+            session.wait_for_idle()
+        ).await.map_err(|_| "Agent timed out")?
+    } else {
+        session.wait_for_idle().await
+    }?;
+
+    // 7. Extract final response
+    Ok(AgentExecutionResult {
+        text: result.final_response,
+        token_usage: result.token_usage,
+        tool_calls_executed: result.tool_calls_executed,
+        success: true,
+    })
+}
+
+/// Forward SessionEvents to block output channel
+async fn forward_session_events_to_block(
+    mut rx: mpsc::Receiver<SessionEvent>,
+    block_channel: Channel<AgentBlockEvent>,
+) {
     while let Some(event) = rx.recv().await {
-        match event {
-            AIStreamEvent::Chunk { content } => {
-                response_text.push_str(&content);
-
-                // Stream to UI
-                let _ = context.send_output(
-                    StreamingBlockOutput::builder()
-                        .block_id(context.block_id)
-                        .stdout(Some(content))
-                        .build()
-                ).await;
-
-                context.update_block_state::<AgentState, _>(|state| {
-                    state.status = AgentStatus::Streaming;
-                }).await;
+        let block_event = match event {
+            SessionEvent::StateChanged { state } => {
+                AgentBlockEvent::StateChanged { state: state.into() }
             }
-            AIStreamEvent::Complete { usage } => {
-                token_usage = usage.map(|u| TokenUsage {
-                    input_tokens: Some(u.input_tokens),
-                    output_tokens: Some(u.output_tokens),
-                });
-                break;
+            SessionEvent::Chunk { content } => {
+                AgentBlockEvent::Chunk { content }
             }
-            AIStreamEvent::Error { message } => {
-                return Err(message.into());
+            SessionEvent::ToolsRequested { calls } => {
+                AgentBlockEvent::ToolsRequested { calls }
+            }
+            SessionEvent::ResponseComplete => {
+                AgentBlockEvent::ResponseComplete
+            }
+            SessionEvent::Error { message } => {
+                AgentBlockEvent::Error { message }
+            }
+            _ => continue,
+        };
+        let _ = block_channel.send(block_event);
+    }
+}
+```
+
+**2. AISession extension for agent blocks:**
+
+**File:** `backend/src/ai/session.rs`
+
+```rust
+impl AISession {
+    /// Create session configured for agent block (not conversational assistant)
+    pub async fn new_for_agent_block(
+        runbook_id: Uuid,
+        model: ModelSelection,
+        system_prompt: String,
+        auto_approve_tools: Vec<String>,
+    ) -> Result<Self, Error> {
+        let mut session = Self::new(runbook_id, model).await?;
+
+        // Set system prompt
+        session.set_system_prompt(system_prompt);
+
+        // Configure auto-approve (existing FSM can handle this)
+        session.set_auto_approve_tools(auto_approve_tools);
+
+        // Agent blocks don't need runbook editing tools
+        session.set_available_tools(vec![
+            "get_runbook_document",  // Read-only access to runbook
+            "get_block_docs",        // Documentation lookup
+            // NO insert_blocks, update_block, replace_blocks
+        ]);
+
+        Ok(session)
+    }
+
+    /// Wait for FSM to reach Idle state (response complete)
+    pub async fn wait_for_idle(&self) -> Result<CompletedResponse, Error> {
+        loop {
+            let state = self.get_state().await;
+            match state {
+                State::Idle => {
+                    return Ok(self.get_completed_response().await);
+                }
+                State::PendingTools => {
+                    // If tools need approval and aren't auto-approved,
+                    // this will block until user approves via existing flow
+                    self.wait_for_tool_resolution().await?;
+                }
+                _ => {
+                    // Sending or Streaming - wait for next state change
+                    self.wait_for_state_change().await;
+                }
             }
         }
     }
+}
+```
 
-    // Internal agent doesn't support tool calls in v1
-    Ok((response_text, token_usage, vec![]))
+**3. Auto-approve configuration in FSM:**
+
+**File:** `backend/src/ai/fsm.rs`
+
+```rust
+// Add to Agent struct
+pub struct Agent {
+    pub state: State,
+    pub context: Context,
+    pub auto_approve_tools: HashSet<String>,  // NEW
+}
+
+// Modify tool handling in transition logic
+impl Agent {
+    fn should_auto_approve_tool(&self, tool_name: &str) -> bool {
+        self.auto_approve_tools.contains(tool_name)
+    }
+}
+```
+
+### Block Execution (Simplified)
+
+```rust
+async fn execute_internal_agent(
+    context: &ExecutionContext,
+    agent: &Agent,
+) -> Result<AgentExecutionOutput, Box<dyn std::error::Error + Send + Sync>> {
+    let block_id = context.block_id;
+
+    // Render prompt
+    let prompt = context.render_template(&agent.prompt)?;
+    let system_prompt = agent.system_prompt.as_ref()
+        .map(|s| context.render_template(s))
+        .transpose()?;
+
+    // Build auto-approve list from capabilities
+    let auto_approve_tools = build_auto_approve_list(&agent.capabilities);
+
+    // Create channel for streaming to block output
+    let (event_tx, mut event_rx) = tokio::sync::mpsc::channel(32);
+
+    // Spawn event forwarder to block output
+    let ctx_clone = context.clone();
+    tokio::spawn(async move {
+        while let Some(event) = event_rx.recv().await {
+            match event {
+                AgentBlockEvent::Chunk { content } => {
+                    let _ = ctx_clone.send_output(
+                        StreamingBlockOutput::builder()
+                            .block_id(block_id)
+                            .stdout(Some(content))
+                            .build()
+                    ).await;
+                }
+                AgentBlockEvent::StateChanged { state } => {
+                    ctx_clone.update_block_state::<AgentState, _>(|s| {
+                        s.status = state;
+                    }).await;
+                }
+                // ... handle other events
+            }
+        }
+    });
+
+    let start = std::time::Instant::now();
+
+    // Execute via existing AI infrastructure
+    let result = ai_agent_execute(
+        context.runbook_id,
+        prompt,
+        system_prompt,
+        agent.source.model().cloned(),
+        auto_approve_tools,
+        agent.timeout_seconds,
+        event_tx,
+    ).await;
+
+    let duration = start.elapsed().as_secs_f64();
+
+    match result {
+        Ok(r) => Ok(AgentExecutionOutput {
+            text: r.text,
+            duration_seconds: duration,
+            success: true,
+            error: None,
+            token_usage: r.token_usage,
+            tool_calls_executed: r.tool_calls_executed,
+        }),
+        Err(e) => Ok(AgentExecutionOutput {
+            text: String::new(),
+            duration_seconds: duration,
+            success: false,
+            error: Some(e),
+            token_usage: None,
+            tool_calls_executed: vec![],
+        }),
+    }
+}
+
+fn build_auto_approve_list(capabilities: &AgentCapabilities) -> Vec<String> {
+    let mut tools = vec!["get_block_docs".to_string()]; // Always safe
+
+    if capabilities.read_files {
+        tools.push("get_runbook_document".to_string());
+    }
+
+    if capabilities.always_allow_tools {
+        // All tools auto-approved
+        tools.extend(["insert_blocks", "update_block", "replace_blocks"]
+            .iter().map(|s| s.to_string()));
+    }
+
+    tools
 }
 ```
 
@@ -1098,34 +1364,64 @@ const defaultAgentSettings: AgentSettings = {
 
 ## Implementation Order
 
-1. **Backend Core**
-   - [ ] `agent.rs` - Structs, FromDocument, BlockBehavior scaffold
+### Phase 1: Internal Agent (Reuses Existing Infrastructure)
+
+1. **Block Definition**
+   - [ ] `agent.rs` - Structs (`Agent`, `AgentSource`, `AgentCapabilities`)
+   - [ ] `FromDocument` implementation
+   - [ ] `AgentState`, `AgentExecutionOutput`
    - [ ] Register in Block enum and dispatcher
-   - [ ] AgentState and AgentExecutionOutput
 
-2. **Internal Agent**
-   - [ ] `execute_internal_agent()` using existing AI infra
-   - [ ] Streaming to UI
+2. **AI Infrastructure Extensions** (minimal changes to existing code)
+   - [ ] `ai/session.rs` - Add `new_for_agent_block()` constructor
+   - [ ] `ai/session.rs` - Add `wait_for_idle()` method
+   - [ ] `ai/fsm.rs` - Add `auto_approve_tools: HashSet<String>` field
+   - [ ] `commands/ai.rs` - Add `ai_agent_execute()` Tauri command
 
-3. **ACP Integration**
-   - [ ] Add `agent-client-protocol` dependency
-   - [ ] `AgentBlockClient` implementation
+3. **Block Execution**
+   - [ ] `execute_internal_agent()` - wrapper around `ai_agent_execute`
+   - [ ] Forward `SessionEvent` → `StreamingBlockOutput`
+   - [ ] Map FSM state → `AgentState`
+
+4. **Frontend**
+   - [ ] TypeScript types (auto-generated via ts-rs)
+   - [ ] Block config component (source selector, prompt editor, capabilities)
+   - [ ] Block execution view (streaming output, status indicator)
+   - [ ] Reuse existing tool approval dialog from AIAssistant
+
+### Phase 2: ACP Integration (New Protocol)
+
+5. **ACP Client**
+   - [ ] Add `agent-client-protocol = "0.10"` dependency
+   - [ ] `AgentBlockClient` implementing `acp::Client` trait
    - [ ] `execute_acp_agent()` subprocess management
+   - [ ] Map ACP events → `StreamingBlockOutput`
 
-4. **Tool Approval Flow**
-   - [ ] GC events for approval request/response
-   - [ ] Channel-based wait for approval
-   - [ ] Capability-based auto-approve
+6. **ACP Tool Handling**
+   - [ ] Forward `request_tool_permission` to block UI
+   - [ ] Implement `read_text_file`, `write_text_file` if capabilities allow
 
-5. **Frontend**
-   - [ ] TypeScript types (auto-generated)
-   - [ ] Block config component
-   - [ ] Block execution view
-   - [ ] Tool approval dialog
+### Phase 3: Polish
 
-6. **Settings**
-   - [ ] Agent settings schema
-   - [ ] Settings UI for agent configuration
+7. **Settings**
+   - [ ] Global agent registry (available ACP agents)
+   - [ ] Default timeout and capabilities
+   - [ ] Settings UI
+
+8. **Testing**
+   - [ ] Unit tests for FromDocument, output template access
+   - [ ] Integration test with mock AI session
+   - [ ] Manual test with Claude Code (ACP)
+
+### Effort Estimate
+
+| Phase | Effort | Notes |
+|-------|--------|-------|
+| Phase 1 | **Low-Medium** | Mostly wiring existing infrastructure |
+| Phase 2 | **Medium** | New protocol integration |
+| Phase 3 | **Low** | Polish and testing |
+
+**Key insight:** Phase 1 is dramatically smaller than originally scoped because the AI infrastructure already exists.
 
 ---
 
