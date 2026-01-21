@@ -28,7 +28,7 @@ impl fmt::Display for ModelSelection {
             },
             ModelSelection::Ollama { model, uri } => match uri {
                 Some(uri) => write!(f, "ollama::{model}::{}", uri.deref()),
-                None => write!(f, "ollama::{model}::http://localhost:11434/v1"),
+                None => write!(f, "ollama::{model}::http://localhost:11434"),
             },
         }
     }
