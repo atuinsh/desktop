@@ -615,6 +615,7 @@ impl AISession {
                         Ok(ChatStreamEvent::ToolCallChunk(_tc_chunk)) => {
                             // Tool call chunks are accumulated by genai internally
                             // We'll get the complete tool calls in the End event
+                            log::trace!("Session {} received tool call chunk", session_id);
                         }
                         Ok(ChatStreamEvent::ReasoningChunk(_)) => {
                             log::trace!("Session {} received reasoning chunk", session_id);
