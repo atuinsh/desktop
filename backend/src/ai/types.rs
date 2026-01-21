@@ -1,3 +1,6 @@
+//! AI types for Atuin Desktop.
+//! These types implement serializable and TS exportable versions of the types from the genai crate.
+
 use std::{fmt, ops::Deref, sync::Arc};
 
 use serde::{Deserialize, Serialize};

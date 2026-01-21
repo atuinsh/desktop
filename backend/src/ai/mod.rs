@@ -1,3 +1,4 @@
+mod client;
 pub mod fsm;
 pub mod prompts;
 pub mod session;

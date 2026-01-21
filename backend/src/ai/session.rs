@@ -1,20 +1,16 @@
 //! AI Session - the driver that wraps the Agent FSM and executes effects.
 
 use std::fmt::Display;
-use std::future::Future;
-use std::pin::Pin;
 use std::sync::Arc;
 
 use futures_util::stream::StreamExt;
-use genai::adapter::AdapterKind;
 use genai::chat::{ChatMessage, ChatOptions, ChatRequest, ChatStreamEvent, ToolCall};
-use genai::resolver::{AuthData, Endpoint, ServiceTargetResolver};
-use genai::{ClientConfig, ModelIden, ServiceTarget};
 use serde::{Deserialize, Serialize};
 use tokio::sync::{mpsc, watch, RwLock};
 use ts_rs::TS;
 use uuid::Uuid;
 
+use crate::ai::client::AtuinAIClient;
 use crate::ai::fsm::State;
 use crate::ai::prompts::AIPrompts;
 use crate::ai::tools::AITools;
@@ -31,6 +27,9 @@ pub enum AISessionError {
 
     #[error("Failed to start request: {0}")]
     RequestError(#[from] genai::Error),
+
+    #[error("Failed to generate system prompt: {0}")]
+    SystemPromptError(#[from] minijinja::Error),
 
     #[error("Session event channel closed")]
     ChannelClosed,
@@ -172,7 +171,7 @@ pub struct AISession {
     id: Uuid,
     runbook_id: Uuid,
     model: ModelSelection,
-    client: genai::Client,
+    client: AtuinAIClient,
     block_types: Vec<String>,
     block_summary: String,
     agent: Arc<RwLock<Agent>>,
@@ -185,55 +184,6 @@ pub struct AISession {
     charge_target: ChargeTarget,
     /// Cancellation signal for the stream processing task.
     cancel_tx: watch::Sender<bool>,
-}
-
-fn resolve_service_target(
-    mut service_target: ServiceTarget,
-) -> Pin<Box<dyn Future<Output = Result<ServiceTarget, genai::resolver::Error>> + Send>> {
-    Box::pin(async move {
-        let model_name = service_target.model.model_name.to_string();
-        let parts = model_name.splitn(3, "::").collect::<Vec<&str>>();
-
-        if parts.len() != 3 {
-            return Err(genai::resolver::Error::Custom(format!(
-                "Invalid Atuin Desktop model identifier format: {}",
-                model_name
-            )));
-        }
-
-        let adapter_kind = match parts[0] {
-            "atuinhub" => AdapterKind::Anthropic,
-            "claude" => AdapterKind::Anthropic,
-            "openai" => AdapterKind::OpenAI,
-            "ollama" => AdapterKind::Ollama,
-            _ => {
-                return Err(genai::resolver::Error::Custom(format!(
-                    "Invalid model identifier: {}",
-                    parts[0]
-                )))
-            }
-        };
-
-        let key = AISession::get_api_key(adapter_kind, parts[0] == "atuinhub")
-            .await
-            .map_err(|e| genai::resolver::Error::Custom(e.to_string()))?;
-
-        if let Some(key) = key {
-            let auth = AuthData::Key(key);
-            service_target.auth = auth;
-        } else {
-            service_target.auth = AuthData::Key("".to_string());
-        }
-
-        let model_id = ModelIden::new(adapter_kind, parts[1]);
-        service_target.model = model_id;
-
-        if parts[2] != "default" {
-            service_target.endpoint = Endpoint::from_owned(parts[2].to_string());
-        }
-
-        Ok(service_target)
-    })
 }
 
 impl AISession {
@@ -250,11 +200,7 @@ impl AISession {
         secret_cache: Arc<SecretCache>,
         storage: Arc<AISessionStorage>,
     ) -> (Self, SessionHandle) {
-        let target_resolver = ServiceTargetResolver::from_resolver_async_fn(resolve_service_target);
-
-        let client = genai::Client::builder()
-            .with_config(ClientConfig::default().with_service_target_resolver(target_resolver))
-            .build();
+        let client = AtuinAIClient::new(secret_cache.clone());
         let (event_tx, event_rx) = mpsc::channel(32);
         let (cancel_tx, _cancel_rx) = watch::channel(false);
 
@@ -298,11 +244,7 @@ impl AISession {
         secret_cache: Arc<SecretCache>,
         storage: Arc<AISessionStorage>,
     ) -> (Self, SessionHandle) {
-        let target_resolver = ServiceTargetResolver::from_resolver_async_fn(resolve_service_target);
-
-        let client = genai::Client::builder()
-            .with_config(ClientConfig::default().with_service_target_resolver(target_resolver))
-            .build();
+        let client = AtuinAIClient::new(secret_cache.clone());
         let (event_tx, event_rx) = mpsc::channel(32);
         let (cancel_tx, _cancel_rx) = watch::channel(false);
 
@@ -363,17 +305,6 @@ impl AISession {
         } else {
             log::debug!("Saved session {} state", self.id);
         }
-    }
-
-    async fn get_api_key(
-        _adapter_kind: AdapterKind,
-        is_hub: bool,
-    ) -> Result<Option<String>, AISessionError> {
-        if is_hub {
-            return Ok(None);
-        }
-
-        Ok(None)
     }
 
     /// Run the session event loop.
@@ -478,8 +409,10 @@ impl AISession {
             agent.context().conversation.clone()
         };
 
+        let system_prompt = AIPrompts::assistant_system_prompt(&self.block_summary)?;
+        log::debug!("System prompt: {}", system_prompt);
         let chat_request = ChatRequest::new(messages)
-            .with_system(AIPrompts::system_prompt(&self.block_summary))
+            .with_system(system_prompt)
             .with_tools(vec![
                 AITools::get_runboook_document(),
                 AITools::get_block_docs(&self.block_types),
