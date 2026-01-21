@@ -61,5 +61,5 @@ export async function getModelSelection(provider: string): Promise<Result<ModelS
 }
 
 function joinUrlParts(parts: string[]): string {
-  return parts.join("/").replace(/\/+/g, "/");
+  return parts.map(p => p.replace(/\/+$/, '')).join('/').replace(/([^:]\/)\/+/g, '$1');
 }
