@@ -266,32 +266,34 @@ const SQL = ({
       type={block.typeName}
       setName={setName}
       inlineHeader
+      topRightElement={
+        <div className="flex items-center gap-1">
+          {settingsContent && (
+            <Tooltip content="Settings" delay={500}>
+              <button
+                onClick={() => setSettingsOpen(true)}
+                className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+              >
+                <SettingsIcon className="h-4 w-4" />
+              </button>
+            </Tooltip>
+          )}
+          <Tooltip content={isFullscreen ? "Exit fullscreen" : "Open in fullscreen"} delay={500}>
+            <button
+              onClick={() => setIsFullscreen(!isFullscreen)}
+              className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+            >
+              {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+            </button>
+          </Tooltip>
+        </div>
+      }
       header={
         <>
           <div className="flex flex-row justify-between w-full">
             <h1 className="text-default-700 font-semibold">
               <EditableHeading initialText={name} onTextChange={(text) => setName(text)} />
             </h1>
-            <div className="flex flex-row items-center gap-2">
-              {settingsContent && (
-                <Tooltip content="Settings">
-                  <button
-                    onClick={() => setSettingsOpen(true)}
-                    className="p-2 hover:bg-default-100 rounded-md"
-                  >
-                    <SettingsIcon size={20} />
-                  </button>
-                </Tooltip>
-              )}
-              <Tooltip content={isFullscreen ? "Exit fullscreen" : "Open in fullscreen"}>
-                <button
-                  onClick={() => setIsFullscreen(!isFullscreen)}
-                  className="p-2 hover:bg-default-100 rounded-md"
-                >
-                  {isFullscreen ? <Minimize2 size={20} /> : <Maximize2 size={20} />}
-                </button>
-              </Tooltip>
-            </div>
           </div>
 
           <div className="flex flex-row gap-2 w-full items-center">
