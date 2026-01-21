@@ -1257,11 +1257,11 @@ const AgentSettings = () => {
         <h2 className="text-xl font-semibold">AI Agent</h2>
 
         <Select
-          label="Provider"
+          label="Default AI provider"
           value={aiProvider}
           onSelectionChange={handleProviderChange}
           className="mt-4"
-          placeholder="Select provider"
+          placeholder="Select default AI provider"
           selectedKeys={[aiProvider]}
           items={providers.map(([name, id]) => ({ label: name, key: id }))}
           isDisabled={aiProviderLoading}
@@ -1303,7 +1303,7 @@ const AIOllamaSettings = () => {
             />
 
             <Input
-              label="Model (required)"
+              label="Model (required; your chosen model must support tool calling)"
               placeholder="Model name"
               value={ollamaSettings.model}
               onValueChange={(value) => setOllamaSettings({ ...ollamaSettings, model: value })}
