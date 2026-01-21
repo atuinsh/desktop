@@ -117,7 +117,17 @@ impl SessionHandle {
     }
 
     /// Send a user message to the session.
-    pub async fn send_user_message(&self, content: String) -> Result<(), AISessionError> {
+    pub async fn send_user_message(
+        &self,
+        content: String,
+        model: ModelSelection,
+    ) -> Result<(), AISessionError> {
+        let msg = Event::ModelChange(model);
+        self.event_tx
+            .send(msg)
+            .await
+            .map_err(|_| AISessionError::ChannelClosed)?;
+
         let msg = ChatMessage::user(content);
         self.event_tx
             .send(Event::UserMessage(msg))
@@ -204,12 +214,16 @@ fn resolve_service_target(
             }
         };
 
-        let auth = AuthData::Key(
-            AISession::get_api_key(adapter_kind, parts[0] == "atuinhub")
-                .await
-                .map_err(|e| genai::resolver::Error::Custom(e.to_string()))?,
-        );
-        service_target.auth = auth;
+        let key = AISession::get_api_key(adapter_kind, parts[0] == "atuinhub")
+            .await
+            .map_err(|e| genai::resolver::Error::Custom(e.to_string()))?;
+
+        if let Some(key) = key {
+            let auth = AuthData::Key(key);
+            service_target.auth = auth;
+        } else {
+            service_target.auth = AuthData::Key("".to_string());
+        }
 
         let model_id = ModelIden::new(adapter_kind, parts[1]);
         service_target.model = model_id;
@@ -354,12 +368,12 @@ impl AISession {
     async fn get_api_key(
         _adapter_kind: AdapterKind,
         is_hub: bool,
-    ) -> Result<String, AISessionError> {
+    ) -> Result<Option<String>, AISessionError> {
         if is_hub {
-            return Ok("".to_string());
+            return Ok(None);
         }
 
-        Ok("".to_string())
+        Ok(None)
     }
 
     /// Run the session event loop.

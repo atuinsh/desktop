@@ -39,6 +39,7 @@ import handleDeepLink from "@/routes/root/deep";
 import * as api from "@/api/api";
 import InterpreterSelector from "@/lib/blocks/common/InterpreterSelector";
 import AtuinEnv from "@/atuin_env";
+import { OllamaSettings, useAIProviderSettings } from "@/state/settings_ai";
 
 async function loadFonts(): Promise<string[]> {
   const fonts = await invoke<string[]>("list_fonts");
@@ -49,7 +50,7 @@ async function loadFonts(): Promise<string[]> {
 }
 
 // Custom hook for managing settings
-const useSettingsState = (
+export const useSettingsState = (
   _key: any,
   initialValue: any,
   settingsGetter: any,
@@ -109,6 +110,7 @@ interface SettingsSwitchProps {
   onValueChange: (e: boolean) => void;
   description: string;
   className?: string;
+  isDisabled?: boolean;
 }
 
 const SettingSwitch = ({
@@ -117,11 +119,13 @@ const SettingSwitch = ({
   onValueChange,
   description,
   className,
+  isDisabled,
 }: SettingsSwitchProps) => (
   <Switch
     isSelected={isSelected}
     onValueChange={onValueChange}
     className={cn("flex justify-between items-center w-full", className)}
+    isDisabled={isDisabled || false}
   >
     <div className="flex flex-col">
       <span>{label}</span>
@@ -1191,28 +1195,121 @@ const AISettings = () => {
   const setAiShareContext = useStore((state) => state.setAiShareContext);
 
   return (
+    <>
+      <Card shadow="sm">
+        <CardBody className="flex flex-col gap-4 mb-4">
+          <h2 className="text-xl font-semibold">AI</h2>
+          <p className="text-sm text-default-500">
+            Configure AI-powered features in runbooks
+          </p>
+
+          <SettingSwitch
+            label="Enable AI features"
+            isSelected={aiEnabled}
+            onValueChange={setAiEnabled}
+            description="Enable AI block generation and editing (Cmd+Enter, Cmd+K, AI Agent Sidebar)"
+          />
+
+          {aiEnabled && (
+            <SettingSwitch
+              className="ml-4"
+              label="Share document context"
+              isSelected={aiShareContext}
+              onValueChange={setAiShareContext}
+              description="Send document content to improve AI suggestions. Disable for sensitive documents."
+            />
+          )}
+        </CardBody>
+      </Card>
+      {aiEnabled && (
+        <>
+          <AgentSettings />
+          <AIOllamaSettings />
+        </>
+      )}
+    </>
+  );
+};
+
+const AgentSettings = () => {
+  const providers = [
+    ["Atuin Hub", "atuinhub"],
+    ["Ollama", "ollama"]
+  ]
+
+  const [aiProvider, setAiProvider, aiProviderLoading] = useSettingsState(
+    "ai_provider",
+    "atuinhub",
+    Settings.aiAgentProvider,
+    Settings.aiAgentProvider,
+  );
+
+  const handleProviderChange = (keys: SharedSelection) => {
+    const key = keys.currentKey as string;
+    if (key) {
+      setAiProvider(key);
+    }
+  };
+
+  return (
     <Card shadow="sm">
       <CardBody className="flex flex-col gap-4">
-        <h2 className="text-xl font-semibold">AI</h2>
-        <p className="text-sm text-default-500">
-          Configure AI-powered features in runbooks
-        </p>
+        <h2 className="text-xl font-semibold">AI Agent</h2>
+
+        <Select
+          label="Provider"
+          value={aiProvider}
+          onSelectionChange={handleProviderChange}
+          className="mt-4"
+          placeholder="Select provider"
+          selectedKeys={[aiProvider]}
+          items={providers.map(([name, id]) => ({ label: name, key: id }))}
+          isDisabled={aiProviderLoading}
+        >
+          {(item) => <SelectItem key={item.key}>{item.label}</SelectItem>}
+        </Select>
+      </CardBody>
+    </Card>
+  );
+};
+
+const AIOllamaSettings = () => {
+  const [ollamaSettings, setOllamaSettings, isLoading] = useAIProviderSettings<OllamaSettings>("ollama", {
+    enabled: false,
+    endpoint: "http://localhost:11434",
+    model: "",
+  });
+
+  return (
+    <Card shadow="sm">
+      <CardBody className="flex flex-col gap-4">
+        <h2 className="text-xl font-semibold">Ollama</h2>
 
         <SettingSwitch
-          label="Enable AI features"
-          isSelected={aiEnabled}
-          onValueChange={setAiEnabled}
-          description="Enable AI block generation and editing (Cmd+Enter, Cmd+K)"
+          label="Enable Ollama AI provider"
+          isSelected={ollamaSettings.enabled}
+          onValueChange={(enabled) => setOllamaSettings({ ...ollamaSettings, enabled })}
+          description="Toggle to use Ollama as the AI provider."
         />
 
-        {aiEnabled && (
-          <SettingSwitch
-            className="ml-4"
-            label="Share document context"
-            isSelected={aiShareContext}
-            onValueChange={setAiShareContext}
-            description="Send document content to improve AI suggestions. Disable for sensitive documents."
-          />
+        {ollamaSettings.enabled && (
+          <div className="flex flex-col gap-4">
+            <Input
+              label="Endpoint"
+              placeholder="Endpoint URL (e.g. http://localhost:11434)"
+              value={ollamaSettings.endpoint}
+              onValueChange={(value) => setOllamaSettings({ ...ollamaSettings, endpoint: value })}
+              isDisabled={isLoading}
+            />
+
+            <Input
+              label="Model"
+              placeholder="Model name"
+              value={ollamaSettings.model}
+              onValueChange={(value) => setOllamaSettings({ ...ollamaSettings, model: value })}
+              isDisabled={isLoading}
+            />
+          </div>
         )}
       </CardBody>
     </Card>

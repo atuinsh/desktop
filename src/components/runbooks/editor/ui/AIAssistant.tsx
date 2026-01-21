@@ -46,6 +46,8 @@ import { Settings } from "@/state/settings";
 import { useStore } from "@/state/store";
 import { ChargeTarget } from "@/rs-bindings/ChargeTarget";
 import AtuinEnv from "@/atuin_env";
+import { getAIProviderSettings, getModelSelection } from "@/state/settings_ai";
+import { DialogBuilder } from "@/components/Dialogs/dialog";
 
 const ALL_TOOL_NAMES = [
   "get_runbook_document",
@@ -628,11 +630,24 @@ export default function AIAssistant({
     }
   }, [isOpen, sessionId]);
 
-  const handleSend = useCallback(() => {
+  const handleSend = useCallback(async () => {
     if (!inputValue.trim() || isStreaming || !sessionId) return;
-    // TODO: Allow buffering one message while streaming
-    sendMessage(inputValue.trim());
+
+    const input = inputValue.trim();
     setInputValue("");
+
+    const aiProvider = await Settings.aiAgentProvider();
+    const modelSelection = await getModelSelection(aiProvider);
+    if (modelSelection.isNone()) {
+      await new DialogBuilder().title("AI Provider Not Configured")
+        .message("Please configure your selected AI provider in the settings.")
+        .action({ label: "OK", value: undefined, variant: "flat" })
+        .build();
+      return;
+    }
+
+    // TODO: Allow buffering one message while streaming
+    sendMessage(input, modelSelection.unwrap());
   }, [inputValue, isStreaming, sessionId, sendMessage]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {

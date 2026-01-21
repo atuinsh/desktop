@@ -9,6 +9,7 @@ import {
 } from "./commands";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { State } from "@/rs-bindings/State";
+import { ModelSelection } from "@/rs-bindings/ModelSelection";
 
 export interface AIChatAPI {
   sessionId: string;
@@ -19,7 +20,7 @@ export interface AIChatAPI {
   pendingToolCalls: Array<AIToolCall>;
   error: string | null;
   state: State["type"];
-  sendMessage: (message: string) => void;
+  sendMessage: (message: string, model?: ModelSelection) => void;
   addToolOutput: (output: AIToolOutput) => void;
   cancel: () => void;
 }
@@ -153,7 +154,7 @@ export default function useAIChat(sessionId: string): AIChatAPI {
   }, [sessionId]);
 
   const sendMessage = useCallback(
-    async (message: string) => {
+    async (message: string, model?: ModelSelection) => {
       const userMessage: AIMessage = {
         role: "user",
         content: { parts: [{ type: "text", data: message }] },
@@ -168,7 +169,7 @@ export default function useAIChat(sessionId: string): AIChatAPI {
       }
       setError(null);
 
-      await sendMessageCommand(sessionId, message);
+      await sendMessageCommand(sessionId, message, model);
     },
     [sessionId, isIdle],
   );

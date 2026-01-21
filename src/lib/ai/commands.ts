@@ -70,8 +70,8 @@ export async function changeUser(sessionId: string, user: string): Promise<void>
 /**
  * Send a user message to an AI session.
  */
-export async function sendMessage(sessionId: string, message: string): Promise<void> {
-  await invoke("ai_send_message", { sessionId, message });
+export async function sendMessage(sessionId: string, message: string, model?: ModelSelection): Promise<void> {
+  await invoke("ai_send_message", { sessionId, message, model });
 }
 
 /**

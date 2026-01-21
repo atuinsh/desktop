@@ -40,6 +40,8 @@ const NOTIFICATIONS_SERIAL_PAUSED_DURATION = "settings.notifications.serial.paus
 const NOTIFICATIONS_SERIAL_PAUSED_SOUND = "settings.notifications.serial.paused.sound";
 const NOTIFICATIONS_SERIAL_PAUSED_OS = "settings.notifications.serial.paused.os";
 
+const AI_AGENT_PROVIDER = "settings.ai.agent.provider";
+
 export class Settings {
   public static DEFAULT_FONT = "FiraCode";
   public static DEFAULT_FONT_SIZE = 14;
@@ -406,5 +408,27 @@ export class Settings {
       return userShell;
     }
     return await this.getSystemDefaultShell();
+  }
+
+  public static async aiAgentProvider(val: string | null = null): Promise<string> {
+    let store = await KVStore.open_default();
+
+    if (val !== null) {
+      await store.set(AI_AGENT_PROVIDER, val);
+      return val;
+    }
+
+    return await store.get(AI_AGENT_PROVIDER) ?? "atuinhub";
+  }
+
+  public static async aiProviderSettings<T extends Record<string, any>>(provider: string, settings: T | null = null): Promise<T> {
+    let store = await KVStore.open_default();
+
+    if (settings !== null) {
+      await store.set(`ai.provider.${provider}.settings`, settings);
+      return settings;
+    }
+
+    return await store.get(`ai.provider.${provider}.settings`) ?? {} as T;
   }
 }

@@ -300,6 +300,7 @@ pub async fn ai_send_message(
     state: tauri::State<'_, AtuinState>,
     session_id: Uuid,
     message: String,
+    model: ModelSelection,
 ) -> Result<(), String> {
     let sessions = state.ai_sessions.read().await;
     let handle = sessions
@@ -307,7 +308,7 @@ pub async fn ai_send_message(
         .ok_or_else(|| format!("Session {} not found", session_id))?;
 
     handle
-        .send_user_message(message)
+        .send_user_message(message, model)
         .await
         .map_err(|e| e.to_string())
 }
