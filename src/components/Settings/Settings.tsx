@@ -1295,7 +1295,7 @@ const AIOllamaSettings = () => {
         {ollamaSettings.enabled && (
           <div className="flex flex-col gap-4">
             <Input
-              label="Endpoint"
+              label="Endpoint (optional, defaults to http://localhost:11434)"
               placeholder="Endpoint URL (e.g. http://localhost:11434)"
               value={ollamaSettings.endpoint}
               onValueChange={(value) => setOllamaSettings({ ...ollamaSettings, endpoint: value })}
@@ -1303,7 +1303,7 @@ const AIOllamaSettings = () => {
             />
 
             <Input
-              label="Model"
+              label="Model (required)"
               placeholder="Model name"
               value={ollamaSettings.model}
               onValueChange={(value) => setOllamaSettings({ ...ollamaSettings, model: value })}
@@ -1332,7 +1332,7 @@ const UserSettings = () => {
     const deepLink = `atuin://register-token/${token}`;
     // token submit deep link doesn't require a runbook activation,
     // so passing an empty function for simplicity
-    handleDeepLink(deepLink, () => {});
+    handleDeepLink(deepLink, () => { });
   }
 
   let content;
