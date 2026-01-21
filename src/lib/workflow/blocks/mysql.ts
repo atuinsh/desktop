@@ -5,17 +5,19 @@ export class MySqlBlock extends Block {
     query: string;
     uri: string;
     autoRefresh: number;
+    skipSqlModeInit: boolean;
 
     get typeName() {
         return "mysql";
     }
 
-    constructor(id: string, name: string, dependency: DependencySpec, query: string, uri: string, autoRefresh: number) {
+    constructor(id: string, name: string, dependency: DependencySpec, query: string, uri: string, autoRefresh: number, skipSqlModeInit: boolean = false) {
         super(id, name, dependency);
 
         this.query = query;
         this.uri = uri;
         this.autoRefresh = autoRefresh;
+        this.skipSqlModeInit = skipSqlModeInit;
     }
 
     object() {
@@ -25,6 +27,7 @@ export class MySqlBlock extends Block {
             query: this.query,
             uri: this.uri,
             autoRefresh: this.autoRefresh,
+            skipSqlModeInit: this.skipSqlModeInit,
         };
     }
 
@@ -34,6 +37,6 @@ export class MySqlBlock extends Block {
 
     static deserialize(json: string) {
         const data = JSON.parse(json);
-        return new MySqlBlock(data.id, data.name, data.dependency, data.query, data.uri, data.autoRefresh);
+        return new MySqlBlock(data.id, data.name, data.dependency, data.query, data.uri, data.autoRefresh, data.skipSqlModeInit ?? false);
     }
 }

@@ -33,6 +33,9 @@ pub struct Mysql {
 
     #[builder(default = 0)]
     pub auto_refresh: u32,
+
+    #[builder(default = false)]
+    pub skip_sql_mode_init: bool,
 }
 
 impl FromDocument for Mysql {
@@ -77,6 +80,12 @@ impl FromDocument for Mysql {
                     .get("autoRefresh")
                     .and_then(|v| v.as_u64())
                     .unwrap_or(0) as u32,
+            )
+            .skip_sql_mode_init(
+                props
+                    .get("skipSqlModeInit")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false),
             )
             .build();
 
@@ -170,7 +179,14 @@ impl SqlBlockBehavior for Mysql {
     }
 
     async fn create_pool(&self, uri: String) -> Result<Self::Pool, SqlBlockError> {
-        let opts = MySqlConnectOptions::from_str(&uri)?;
+        let mut opts = MySqlConnectOptions::from_str(&uri)?;
+
+        // Skip sql_mode initialization for databases that don't support dynamic SET statements
+        // (e.g., StarRocks, Apache Doris)
+        if self.skip_sql_mode_init {
+            opts = opts.pipes_as_concat(false).no_engine_substitution(false);
+        }
+
         Ok(MySqlPool::connect_with(opts).await?)
     }
 

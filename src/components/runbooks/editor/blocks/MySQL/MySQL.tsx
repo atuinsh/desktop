@@ -1,4 +1,5 @@
 import { DatabaseIcon } from "lucide-react";
+import { Switch } from "@heroui/react";
 
 // @ts-ignore
 import { createReactBlockSpec } from "@blocknote/react";
@@ -25,6 +26,7 @@ interface SQLProps {
   setAutoRefresh: (autoRefresh: number) => void;
   setName: (name: string) => void;
   setDependency: (dependency: DependencySpec) => void;
+  setSkipSqlModeInit: (skip: boolean) => void;
   onCodeMirrorFocus?: () => void;
 }
 
@@ -38,8 +40,28 @@ const MySQL = ({
   collapseQuery,
   setCollapseQuery,
   setDependency,
+  setSkipSqlModeInit,
   onCodeMirrorFocus,
 }: SQLProps) => {
+  const settingsContent = (
+    <div className="flex items-center justify-between gap-4">
+      <div className="flex flex-col">
+        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+          Skip SQL mode initialization
+        </span>
+        <span className="text-xs text-gray-500 dark:text-gray-400">
+          Enable for MySQL-compatible databases like StarRocks or Doris
+        </span>
+      </div>
+      <Switch
+        size="sm"
+        isSelected={mysql.skipSqlModeInit}
+        onValueChange={setSkipSqlModeInit}
+        isDisabled={!isEditable}
+      />
+    </div>
+  );
+
   return (
     <SQL
       block={mysql}
@@ -59,6 +81,8 @@ const MySQL = ({
       setCollapseQuery={setCollapseQuery}
       setDependency={setDependency}
       onCodeMirrorFocus={onCodeMirrorFocus}
+      settingsContent={settingsContent}
+      settingsTitle="MySQL Settings"
     />
   );
 };
@@ -72,6 +96,7 @@ export default createReactBlockSpec(
       uri: { default: "" },
       autoRefresh: { default: 0 },
       dependency: { default: "{}" },
+      skipSqlModeInit: { default: false },
     },
     content: "none",
   },
@@ -133,6 +158,13 @@ export default createReactBlockSpec(
         });
       };
 
+      const setSkipSqlModeInit = (skip: boolean) => {
+        editor.updateBlock(block, {
+          // @ts-ignore
+          props: { ...block.props, skipSqlModeInit: skip },
+        });
+      };
+
       let dependency = DependencySpec.deserialize(block.props.dependency);
       let mysql = new MySqlBlock(
         block.id,
@@ -141,6 +173,7 @@ export default createReactBlockSpec(
         block.props.query,
         block.props.uri,
         block.props.autoRefresh,
+        block.props.skipSqlModeInit,
       );
 
       return (
@@ -154,6 +187,7 @@ export default createReactBlockSpec(
           collapseQuery={collapseQuery}
           setCollapseQuery={setCollapseQuery}
           setDependency={setDependency}
+          setSkipSqlModeInit={setSkipSqlModeInit}
           onCodeMirrorFocus={handleCodeMirrorFocus}
         />
       );
