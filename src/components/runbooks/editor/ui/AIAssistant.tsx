@@ -638,9 +638,12 @@ export default function AIAssistant({
 
     const aiProvider = await Settings.aiAgentProvider();
     const modelSelection = await getModelSelection(aiProvider);
-    if (modelSelection.isNone()) {
-      await new DialogBuilder().title("AI Provider Not Configured")
-        .message("Please configure your selected AI provider in the settings.")
+    if (modelSelection.isErr()) {
+      const err = modelSelection.unwrapErr();
+      await new DialogBuilder()
+        .title("AI Provider Error")
+        .icon("error")
+        .message("There was an error setting up your selected AI provider: " + err)
         .action({ label: "OK", value: undefined, variant: "flat" })
         .build();
       return;
