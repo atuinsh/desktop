@@ -18,7 +18,16 @@ import Postgres from "./blocks/Postgres/Postgres";
 import MySQL from "./blocks/MySQL/MySQL";
 import Clickhouse from "./blocks/Clickhouse/Clickhouse";
 import { HttpBlockSpec } from "@/lib/blocks/http";
+import { GitHubPreviewBlockSpec } from "@/lib/blocks/github-preview";
+import { CodebergPreviewBlockSpec } from "@/lib/blocks/codeberg-preview";
+import { GitLabPreviewBlockSpec } from "@/lib/blocks/gitlab-preview";
 import { LocalDirectoryBlockSpec } from "@/lib/blocks/localdirectory";
+import { linkPreviewPasteHandler } from "@/lib/blocks/link-preview";
+
+// Import to register link preview handlers (side effect)
+import "@/lib/blocks/github-preview/paste-handler";
+import "@/lib/blocks/codeberg-preview/paste-handler";
+import "@/lib/blocks/gitlab-preview/paste-handler";
 import Script from "./blocks/Script/Script";
 import SshConnect from "./blocks/ssh/SshConnect";
 import HostSelect from "./blocks/Host";
@@ -80,6 +89,11 @@ export const schema = BlockNoteSchema.create({
 
     // Workflow control
     pause: Pause(),
+
+    // Link Previews
+    githubPreview: GitHubPreviewBlockSpec(),
+    codebergPreview: CodebergPreviewBlockSpec(),
+    gitlabPreview: GitLabPreviewBlockSpec(),
   },
   inlineContentSpecs: {
     // Adds all default inline content.
@@ -102,6 +116,7 @@ export function createBasicEditor(content: any) {
 export function createLocalOnlyEditor(content: any) {
   let editor = BlockNoteEditor.create({
     schema,
+    pasteHandler: linkPreviewPasteHandler,
     _tiptapOptions: {
       editorProps: {
         scrollThreshold: 200,
@@ -126,6 +141,7 @@ export function createCollaborativeEditor(
   presenceColor = presenceColor || randomColor();
   let editor = BlockNoteEditor.create({
     schema,
+    pasteHandler: linkPreviewPasteHandler,
     _tiptapOptions: {
       editorProps: {
         scrollThreshold: 200,
