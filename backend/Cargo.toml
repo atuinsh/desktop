@@ -88,7 +88,7 @@ log = { workspace = true }
 dirs = { workspace = true }
 tempfile = { workspace = true }
 config = "0.15.19"
-genai = { git = "https://github.com/BinaryMuse/rust-genai", rev = "674535905a966b44104a327dd1e2ca80f4b4a444" }
+genai = { git = "https://github.com/BinaryMuse/rust-genai", rev = "ce7feec4ae112cc9ad442841c6b49961a599580e" }
 futures-util = "0.3.31"
 indoc = "2.0.7"
 

@@ -3213,7 +3213,7 @@ dependencies = [
 [[package]]
 name = "genai"
 version = "0.5.0-alpha.10-WIP"
-source = "git+https://github.com/BinaryMuse/rust-genai?rev=674535905a966b44104a327dd1e2ca80f4b4a444#674535905a966b44104a327dd1e2ca80f4b4a444"
+source = "git+https://github.com/BinaryMuse/rust-genai?rev=ce7feec4ae112cc9ad442841c6b49961a599580e#ce7feec4ae112cc9ad442841c6b49961a599580e"
 dependencies = [
  "base64 0.22.1",
  "bytes",
