@@ -46,7 +46,7 @@ import { Settings } from "@/state/settings";
 import { useStore } from "@/state/store";
 import { ChargeTarget } from "@/rs-bindings/ChargeTarget";
 import AtuinEnv from "@/atuin_env";
-import { getAIProviderSettings, getModelSelection } from "@/state/settings_ai";
+import { getModelSelection } from "@/state/settings_ai";
 import { DialogBuilder } from "@/components/Dialogs/dialog";
 
 const ALL_TOOL_NAMES = [
