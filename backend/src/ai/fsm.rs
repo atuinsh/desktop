@@ -266,7 +266,9 @@ impl Agent {
             };
             let tool_response = ToolResponse::new(result.call_id, result_str);
             // ChatMessage::from(ToolResponse) creates a message with ChatRole::Tool
-            self.context.conversation.push(ChatMessage::from(tool_response));
+            self.context
+                .conversation
+                .push(ChatMessage::from(tool_response));
         }
     }
 
@@ -817,7 +819,7 @@ mod tests {
         assert_eq!(t.effects, vec![Effect::Cancelled]);
         assert!(agent.context().pending_tools.is_empty());
         // Tool results were pushed to conversation as error responses
-        // Conversation: user msg, assistant msg, tool response (with 2 cancelled results)
-        assert_eq!(agent.context().conversation.len(), 3);
+        // Conversation: user msg, assistant msg, tool response, tool response
+        assert_eq!(agent.context().conversation.len(), 4);
     }
 }
