@@ -25,6 +25,7 @@ import { trackOnlineStatus } from "./lib/online_tracker";
 import { setupColorModes } from "./lib/color_modes";
 import { setupServerEvents } from "./lib/server_events";
 import { invoke } from "@tauri-apps/api/core";
+import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { platform } from "@tauri-apps/plugin-os";
 import debounce from "lodash.debounce";
 import Workspace from "./state/runbooks/workspace";
@@ -161,7 +162,11 @@ function Application() {
   }, []);
 
   useEffect(() => {
-    document.documentElement.style.zoom = `${uiScale}%`;
+    getCurrentWebview()
+      .setZoom(uiScale / 100)
+      .catch((err) => {
+        console.error("Failed to set zoom:", err);
+      });
   }, [uiScale]);
 
   return (

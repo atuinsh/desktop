@@ -7,6 +7,7 @@
     "core:path:default",
     "core:event:default",
     "core:window:default",
+    "core:webview:allow-set-webview-zoom",
     "core:app:default",
     "core:resources:default",
     "core:menu:default",
