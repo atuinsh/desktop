@@ -355,12 +355,15 @@ impl AISession {
         match effect {
             Effect::ModelChange(model) => {
                 self.model = model;
+                self.save_state().await;
             }
             Effect::ChargeTargetChange(charge_target) => {
                 self.charge_target = charge_target;
+                self.save_state().await;
             }
             Effect::UserChange(user) => {
                 self.desktop_username = user;
+                self.save_state().await;
             }
             Effect::StartRequest => {
                 self.start_request().await?;
