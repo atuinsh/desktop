@@ -61,10 +61,19 @@ export async function getModelSelection(provider: string): Promise<Result<ModelS
 }
 
 function joinUrlParts(parts: string[], trailingSlash: boolean = false): string {
-  let result = parts.map(p => p.replace(/\/+$/, '')).join('/').replace(/([^:]\/)\/+/g, '$1');
+  parts = parts.filter(p => !!p);
+
+  if (parts.length === 0) {
+    return "";
+  }
+
+  let result = parts.map(p => p.replace(/\/+$/, '')).join('/');
+  result = result.replace(/([^:]\/)\/+/g, '$1');
 
   if (trailingSlash && !result.endsWith("/")) {
     return result + "/";
   }
+
+  console.info("joinUrlParts result", result);
   return result;
 }
