@@ -6,6 +6,7 @@ import {
   sendToolResult,
   subscribeSession,
   cancelSession,
+  changeModel as changeModelCommand,
 } from "./commands";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { State } from "@/rs-bindings/State";
@@ -20,7 +21,8 @@ export interface AIChatAPI {
   pendingToolCalls: Array<AIToolCall>;
   error: string | null;
   state: State["type"];
-  sendMessage: (message: string, model?: ModelSelection) => void;
+  sendMessage: (message: string) => void;
+  changeModel: (model: ModelSelection) => Promise<void>;
   addToolOutput: (output: AIToolOutput) => void;
   cancel: () => void;
 }
@@ -154,7 +156,7 @@ export default function useAIChat(sessionId: string): AIChatAPI {
   }, [sessionId]);
 
   const sendMessage = useCallback(
-    async (message: string, model?: ModelSelection) => {
+    async (message: string) => {
       const userMessage: AIMessage = {
         role: "user",
         content: { parts: [{ type: "text", data: message }] },
@@ -169,9 +171,16 @@ export default function useAIChat(sessionId: string): AIChatAPI {
       }
       setError(null);
 
-      await sendMessageCommand(sessionId, message, model);
+      await sendMessageCommand(sessionId, message);
     },
     [sessionId, isIdle],
+  );
+
+  const changeModel = useCallback(
+    async (model: ModelSelection) => {
+      await changeModelCommand(sessionId, model);
+    },
+    [sessionId],
   );
 
   const addToolOutput = useCallback(
@@ -216,6 +225,7 @@ export default function useAIChat(sessionId: string): AIChatAPI {
       pendingToolCalls,
       error,
       sendMessage,
+      changeModel,
       addToolOutput,
       cancel,
     }),
@@ -229,6 +239,7 @@ export default function useAIChat(sessionId: string): AIChatAPI {
       pendingToolCalls,
       error,
       sendMessage,
+      changeModel,
       addToolOutput,
       cancel,
     ],

@@ -551,6 +551,7 @@ export default function AIAssistant({
     pendingToolCalls,
     error,
     sendMessage,
+    changeModel,
     addToolOutput,
     cancel,
   } = chat;
@@ -650,7 +651,8 @@ export default function AIAssistant({
     }
 
     // TODO: Allow buffering one message while streaming
-    sendMessage(input, modelSelection.unwrap());
+    await changeModel(modelSelection.unwrap());
+    sendMessage(input);
   }, [inputValue, isStreaming, sessionId, sendMessage]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
