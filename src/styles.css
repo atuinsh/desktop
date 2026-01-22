@@ -89,6 +89,11 @@ body.resizing, body.resizing a:hover, body.resizing * {
     * {
         @apply border-border;
     }
+    input:focus,
+    textarea:focus,
+    select:focus {
+        outline: none;
+    }
     /* Only apply transparent background on macOS where vibrancy effect is available */
     html[data-platform="macos"], html[data-platform="macos"] body, html[data-platform="macos"] #root {
         background: transparent !important;
