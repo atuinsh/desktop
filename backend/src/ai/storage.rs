@@ -15,7 +15,7 @@ pub enum StorageError {
     DatabaseError(#[from] sqlx::Error),
 }
 
-/// The orivinal version of the serialization format.
+/// The original version of the serialization format.
 /// It has a few quirks:
 ///
 /// - `id` and `runbook_id` were mistakenly stored as JSON strings
