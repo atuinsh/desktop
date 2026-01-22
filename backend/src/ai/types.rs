@@ -1,13 +1,23 @@
 //! AI types for Atuin Desktop.
 //! These types implement serializable and TS exportable versions of the types from the genai crate.
 
-use std::{fmt, ops::Deref, sync::Arc};
+use std::{
+    fmt::{self, Display},
+    ops::Deref,
+    sync::Arc,
+};
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use ts_rs::TS;
+use uuid::Uuid;
 
-#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+use crate::ai::{
+    prompts::{AIPrompts, PromptError},
+    tools::AITools,
+};
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS, PartialEq, Eq)]
 #[serde(tag = "type", content = "data", rename_all = "camelCase")]
 #[ts(export)]
 pub enum ModelSelection {
@@ -208,4 +218,126 @@ impl From<genai::chat::ToolResponse> for AIToolResponse {
             result: tool_response.content,
         }
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct SessionConfig {
+    pub model: ModelSelection,
+    pub desktop_username: String,
+    pub charge_target: ChargeTarget,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub enum ChargeTarget {
+    User,
+    Org(String),
+}
+
+impl Display for ChargeTarget {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ChargeTarget::User => write!(f, "user"),
+            ChargeTarget::Org(org) => write!(f, "org:{}", org),
+        }
+    }
+}
+
+/// The type of the session, which determines the behavior of the session.
+/// Any data necessary for the session should be included here.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(tag = "type", content = "data", rename_all = "camelCase")]
+#[ts(export)]
+pub enum SessionKind {
+    /// An AI assistant chat session, with streaming output and tool execution.
+    AssistantChat {
+        runbook_id: Uuid,
+        block_infos: Vec<BlockInfo>,
+    },
+
+    InlineBlockGeneration {
+        runbook_id: Uuid,
+        block_infos: Vec<BlockInfo>,
+        current_document: serde_json::Value,
+        /// The ID of the block after which to insert the new blocks;
+        /// this is the block where the user pressed Cmd/Ctrl+Enter.
+        insert_after: Uuid,
+    },
+}
+
+impl SessionKind {
+    pub fn runbook_id(&self) -> Uuid {
+        match self {
+            SessionKind::AssistantChat { runbook_id, .. } => *runbook_id,
+            SessionKind::InlineBlockGeneration { runbook_id, .. } => *runbook_id,
+        }
+    }
+
+    pub fn emits_chunks(&self) -> bool {
+        matches!(self, SessionKind::AssistantChat { .. })
+    }
+
+    pub fn persists_state(&self) -> bool {
+        matches!(self, SessionKind::AssistantChat { .. })
+    }
+
+    pub fn system_prompt(&self) -> Result<String, PromptError> {
+        match self {
+            SessionKind::AssistantChat { .. } => {
+                // todo
+                AIPrompts::assistant_system_prompt("TODO: block summary -> block info")
+            }
+            SessionKind::InlineBlockGeneration { .. } => {
+                // todo
+                AIPrompts::generator_system_prompt("TODO: block summary -> block info")
+            }
+        }
+    }
+
+    pub fn tools(&self) -> Vec<genai::chat::Tool> {
+        match self {
+            SessionKind::AssistantChat { block_infos, .. } => {
+                let block_types = block_infos
+                    .iter()
+                    .map(|b| b.type_name.clone())
+                    .collect::<Vec<String>>();
+
+                vec![
+                    AITools::get_runboook_document(),
+                    AITools::get_block_docs(&block_types),
+                    AITools::get_default_shell(),
+                    AITools::insert_blocks(&block_types),
+                    AITools::update_block(),
+                    AITools::replace_blocks(),
+                ]
+            }
+            SessionKind::InlineBlockGeneration { block_infos, .. } => {
+                let block_types = block_infos
+                    .iter()
+                    .map(|b| b.type_name.clone())
+                    .collect::<Vec<String>>();
+
+                vec![
+                    AITools::get_runboook_document(),
+                    AITools::get_block_docs(&block_types),
+                    AITools::get_default_shell(),
+                    // TODO
+                    // AITools::submit_generated_blocks(),
+                ]
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct BlockInfo {
+    pub type_name: String,
+    pub friendly_name: String,
+    pub summary: String,
+    pub docs: String,
 }

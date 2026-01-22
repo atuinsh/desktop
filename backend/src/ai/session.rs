@@ -1,6 +1,5 @@
 //! AI Session - the driver that wraps the Agent FSM and executes effects.
 
-use std::fmt::Display;
 use std::sync::Arc;
 
 use futures_util::stream::StreamExt;
@@ -12,12 +11,12 @@ use uuid::Uuid;
 
 use crate::ai::client::AtuinAIClient;
 use crate::ai::fsm::State;
-use crate::ai::prompts::AIPrompts;
-use crate::ai::tools::AITools;
+use crate::ai::prompts::PromptError;
+use crate::ai::types::{ChargeTarget, SessionConfig, SessionKind};
 use crate::secret_cache::{SecretCache, SecretCacheError};
 
 use super::fsm::{Agent, Effect, Event, StreamChunk, ToolOutput, ToolResult};
-use super::storage::{AISessionStorage, SerializedAISession};
+use super::storage::{AISessionStorage, SerializedAISessionV1};
 use super::types::{AIMessage, AIToolCall, ModelSelection};
 
 #[derive(Debug, thiserror::Error)]
@@ -29,27 +28,10 @@ pub enum AISessionError {
     RequestError(#[from] genai::Error),
 
     #[error("Failed to generate system prompt: {0}")]
-    SystemPromptError(#[from] minijinja::Error),
+    SystemPromptError(PromptError),
 
     #[error("Session event channel closed")]
     ChannelClosed,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, TS)]
-#[serde(rename_all = "camelCase")]
-#[ts(export)]
-pub enum ChargeTarget {
-    User,
-    Org(String),
-}
-
-impl Display for ChargeTarget {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ChargeTarget::User => write!(f, "user"),
-            ChargeTarget::Org(org) => write!(f, "org:{}", org),
-        }
-    }
 }
 
 /// Events emitted by the session to the frontend.
@@ -84,16 +66,19 @@ pub enum SessionEvent {
 /// Handle for sending events into the session from external sources.
 #[derive(Clone)]
 pub struct SessionHandle {
+    pub id: Uuid,
+    config: Arc<RwLock<SessionConfig>>,
+    #[allow(dead_code)] // this will be used to convert between session types in the future
+    kind: Arc<RwLock<SessionKind>>,
     event_tx: mpsc::Sender<Event>,
 }
 
 impl SessionHandle {
     /// Change the model of the session.
     pub async fn change_model(&self, model: ModelSelection) -> Result<(), AISessionError> {
-        self.event_tx
-            .send(Event::ModelChange(model))
-            .await
-            .map_err(|_| AISessionError::ChannelClosed)
+        let mut config = self.config.write().await;
+        config.model = model;
+        Ok(())
     }
 
     /// Change the charge target of the session.
@@ -101,32 +86,20 @@ impl SessionHandle {
         &self,
         charge_target: ChargeTarget,
     ) -> Result<(), AISessionError> {
-        self.event_tx
-            .send(Event::ChargeTargetChange(charge_target))
-            .await
-            .map_err(|_| AISessionError::ChannelClosed)
+        let mut config = self.config.write().await;
+        config.charge_target = charge_target;
+        Ok(())
     }
 
     /// Change the active user of the session.
     pub async fn change_user(&self, user: String) -> Result<(), AISessionError> {
-        self.event_tx
-            .send(Event::UserChange(user))
-            .await
-            .map_err(|_| AISessionError::ChannelClosed)
+        let mut config = self.config.write().await;
+        config.desktop_username = user;
+        Ok(())
     }
 
     /// Send a user message to the session.
-    pub async fn send_user_message(
-        &self,
-        content: String,
-        model: ModelSelection,
-    ) -> Result<(), AISessionError> {
-        let msg = Event::ModelChange(model);
-        self.event_tx
-            .send(msg)
-            .await
-            .map_err(|_| AISessionError::ChannelClosed)?;
-
+    pub async fn send_user_message(&self, content: String) -> Result<(), AISessionError> {
         let msg = ChatMessage::user(content);
         self.event_tx
             .send(Event::UserMessage(msg))
@@ -169,19 +142,15 @@ impl SessionHandle {
 /// Wraps the Agent FSM and handles effect execution.
 pub struct AISession {
     id: Uuid,
-    runbook_id: Uuid,
-    model: ModelSelection,
+    config: Arc<RwLock<SessionConfig>>,
+    kind: Arc<RwLock<SessionKind>>,
     client: AtuinAIClient,
-    block_types: Vec<String>,
-    block_summary: String,
     agent: Arc<RwLock<Agent>>,
     event_tx: mpsc::Sender<Event>,
     event_rx: mpsc::Receiver<Event>,
     output_tx: mpsc::Sender<SessionEvent>,
     secret_cache: Arc<SecretCache>,
     storage: Arc<AISessionStorage>,
-    desktop_username: String,
-    charge_target: ChargeTarget,
     /// Cancellation signal for the stream processing task.
     cancel_tx: watch::Sender<bool>,
 }
@@ -190,13 +159,9 @@ impl AISession {
     /// Create a new session, returning the session and a handle for sending events.
     #[allow(clippy::too_many_arguments)]
     pub fn new(
-        runbook_id: Uuid,
-        model: ModelSelection,
+        kind: SessionKind,
+        config: SessionConfig,
         output_tx: mpsc::Sender<SessionEvent>,
-        block_types: Vec<String>,
-        block_summary: String,
-        desktop_username: String,
-        charge_target: ChargeTarget,
         secret_cache: Arc<SecretCache>,
         storage: Arc<AISessionStorage>,
     ) -> (Self, SessionHandle) {
@@ -204,25 +169,29 @@ impl AISession {
         let (event_tx, event_rx) = mpsc::channel(32);
         let (cancel_tx, _cancel_rx) = watch::channel(false);
 
+        let config = Arc::new(RwLock::new(config));
+        let kind = Arc::new(RwLock::new(kind));
+
         let session = Self {
             id: Uuid::new_v4(),
-            runbook_id,
-            model,
+            config: config.clone(),
+            kind: kind.clone(),
             client,
-            block_types,
-            block_summary,
             agent: Arc::new(RwLock::new(Agent::new())),
             event_tx: event_tx.clone(),
             event_rx,
             output_tx,
-            desktop_username,
-            charge_target,
             secret_cache,
             storage,
             cancel_tx,
         };
 
-        let handle = SessionHandle { event_tx };
+        let handle = SessionHandle {
+            id: session.id,
+            event_tx,
+            config,
+            kind,
+        };
 
         (session, handle)
     }
@@ -235,12 +204,8 @@ impl AISession {
     /// Create a session from saved state, returning the session and a handle for sending events.
     #[allow(clippy::too_many_arguments)]
     pub fn from_saved(
-        saved: SerializedAISession,
+        saved: SerializedAISessionV1,
         output_tx: mpsc::Sender<SessionEvent>,
-        block_types: Vec<String>,
-        block_summary: String,
-        desktop_username: String,
-        charge_target: ChargeTarget,
         secret_cache: Arc<SecretCache>,
         storage: Arc<AISessionStorage>,
     ) -> (Self, SessionHandle) {
@@ -249,29 +214,42 @@ impl AISession {
         let (cancel_tx, _cancel_rx) = watch::channel(false);
 
         // Restore agent with saved state and context
+        log::debug!("Restoring session {} from storage", saved.id);
+        log::debug!("{:?}", saved);
         let agent = Agent::from_saved(saved.agent_state, saved.agent_context);
+
+        let config = Arc::new(RwLock::new(saved.config));
+        let kind = Arc::new(RwLock::new(saved.kind));
 
         let session = Self {
             id: saved.id,
-            runbook_id: saved.runbook_id,
-            model: saved.model,
+            config: config.clone(),
+            kind: kind.clone(),
             client,
-            block_types,
-            block_summary,
             agent: Arc::new(RwLock::new(agent)),
             event_tx: event_tx.clone(),
             event_rx,
             output_tx,
-            desktop_username,
-            charge_target,
             secret_cache,
             storage,
             cancel_tx,
         };
 
-        let handle = SessionHandle { event_tx };
+        let handle = SessionHandle {
+            id: session.id,
+            event_tx,
+            config,
+            kind,
+        };
 
         (session, handle)
+    }
+
+    /// Save the current session state to storage if the session is meant to be persisted.
+    async fn save_if_persisted(&self) {
+        if self.kind.read().await.persists_state() {
+            self.save_state().await;
+        }
     }
 
     /// Save the current session state to storage.
@@ -281,26 +259,21 @@ impl AISession {
             (agent.state().clone(), agent.context().clone())
         };
 
-        log::debug!(
-            "Saving session {} - state: {:?}, pending_tools: {:?}",
-            self.id,
-            state,
-            context.pending_tools.keys().collect::<Vec<_>>()
-        );
+        log::debug!("Saving session {} to storage", self.id);
 
-        let serialized = SerializedAISession {
+        let config = self.config.read().await.clone();
+        let kind = self.kind.read().await.clone();
+        let runbook_id = kind.runbook_id();
+
+        let serialized = SerializedAISessionV1 {
             id: self.id,
-            runbook_id: self.runbook_id,
-            model: self.model.clone(),
+            config,
+            kind,
             agent_state: state,
             agent_context: context,
-            updated_at: std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_secs() as i64,
         };
 
-        if let Err(e) = self.storage.save(&serialized).await {
+        if let Err(e) = self.storage.save(&runbook_id, &serialized).await {
             log::error!("Failed to save session state: {}", e);
         } else {
             log::debug!("Saved session {} state", self.id);
@@ -315,7 +288,7 @@ impl AISession {
 
         // Save immediately so this session becomes the most recent for the runbook
         // This ensures "clear chat" followed by quit will restore a blank session
-        self.save_state().await;
+        self.save_if_persisted().await;
 
         while let Some(event) = self.event_rx.recv().await {
             log::trace!("Session {} received event: {:?}", self.id, event);
@@ -353,23 +326,13 @@ impl AISession {
     /// Execute a single effect.
     async fn execute_effect(&mut self, effect: Effect) -> Result<(), AISessionError> {
         match effect {
-            Effect::ModelChange(model) => {
-                self.model = model;
-                self.save_state().await;
-            }
-            Effect::ChargeTargetChange(charge_target) => {
-                self.charge_target = charge_target;
-                self.save_state().await;
-            }
-            Effect::UserChange(user) => {
-                self.desktop_username = user;
-                self.save_state().await;
-            }
             Effect::StartRequest => {
                 self.start_request().await?;
             }
             Effect::EmitChunk { content } => {
-                let _ = self.output_tx.send(SessionEvent::Chunk { content }).await;
+                if self.kind.read().await.emits_chunks() {
+                    let _ = self.output_tx.send(SessionEvent::Chunk { content }).await;
+                }
             }
             Effect::ExecuteTools { calls } => {
                 // Convert genai ToolCall to AIToolCall for frontend
@@ -379,16 +342,16 @@ impl AISession {
                     .send(SessionEvent::ToolsRequested { calls: ai_calls })
                     .await;
                 // Save state when entering PendingTools
-                self.save_state().await;
+                self.save_if_persisted().await;
             }
             Effect::ToolResultReceived => {
                 // Save state after each tool result for durability
-                self.save_state().await;
+                self.save_if_persisted().await;
             }
             Effect::ResponseComplete => {
                 let _ = self.output_tx.send(SessionEvent::ResponseComplete).await;
                 // Save state on response complete
-                self.save_state().await;
+                self.save_if_persisted().await;
             }
             Effect::Error { message } => {
                 let _ = self.output_tx.send(SessionEvent::Error { message }).await;
@@ -412,47 +375,57 @@ impl AISession {
             agent.context().conversation.clone()
         };
 
-        let system_prompt = AIPrompts::assistant_system_prompt(&self.block_summary)?;
+        let config = self.config.read().await.clone();
+        let kind = self.kind.read().await.clone();
+        let model_str = config.model.to_string();
+
+        let system_prompt = kind
+            .system_prompt()
+            .map_err(AISessionError::SystemPromptError)?;
+        let tools = kind.tools();
+
         log::debug!("System prompt: {}", system_prompt);
         let chat_request = ChatRequest::new(messages)
             .with_system(system_prompt)
-            .with_tools(vec![
-                AITools::get_runboook_document(),
-                AITools::get_block_docs(&self.block_types),
-                AITools::get_default_shell(),
-                AITools::insert_blocks(&self.block_types),
-                AITools::update_block(),
-                AITools::replace_blocks(),
-            ]);
+            .with_tools(tools);
 
         let mut chat_options = ChatOptions::default().with_capture_tool_calls(true);
 
-        if let ModelSelection::AtuinHub { .. } = self.model {
+        // If we're using the Atuin Hub provider, add proprietary headers for auth and charge tracking
+        if let ModelSelection::AtuinHub { .. } = &config.model {
             let secret = self
                 .secret_cache
-                .get("sh.atuin.runbooks.api", &self.desktop_username)
+                .get("sh.atuin.runbooks.api", &config.desktop_username)
                 .await?
                 .ok_or(AISessionError::CredentialError(
                     SecretCacheError::LookupFailed {
                         service: "sh.atuin.runbooks.api".to_string(),
-                        user: self.desktop_username.clone(),
+                        user: config.desktop_username.clone(),
                         context: "No Atuin Hub API key found".to_string(),
                     },
                 ))?;
 
+            let api_key_header = "x-atuin-hub-api-key".to_string();
+            let api_charge_header = "x-atuin-charge-to".to_string();
+
             let extra_headers = vec![
-                ("x-atuin-hub-api-key".to_string(), secret),
-                (
-                    "x-atuin-charge-to".to_string(),
-                    self.charge_target.to_string(),
-                ),
+                (api_key_header, secret),
+                (api_charge_header, config.charge_target.to_string()),
             ];
+
             chat_options = chat_options.with_extra_headers(extra_headers);
         }
 
+        drop(config);
+        drop(kind);
+
+        log::debug!(
+            "Executing chat stream for session {} with model {model_str}",
+            self.id
+        );
         let stream = self
             .client
-            .exec_chat_stream(&self.model.to_string(), chat_request, Some(&chat_options))
+            .exec_chat_stream(&model_str, chat_request, Some(&chat_options))
             .await?;
 
         // Spawn task to process the stream

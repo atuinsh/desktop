@@ -502,8 +502,8 @@ export default function AIAssistant({
 
     createSession(
       runbookId,
-      blockRegistry.getBlockTypes(),
-      blockRegistry.getBlockSummary(),
+      None,
+      blockRegistry.getBlockInfos(),
       user.username,
       chargeTarget,
       AtuinEnv.url("/api/ai/proxy/"),
@@ -709,8 +709,8 @@ export default function AIAssistant({
       setIsCreatingSession(true);
       createSession(
         runbookId,
-        blockRegistry.getBlockTypes(),
-        blockRegistry.getBlockSummary(),
+        None,
+        blockRegistry.getBlockInfos(),
         user.username,
         chargeTarget,
         AtuinEnv.url("/api/ai/proxy/"),

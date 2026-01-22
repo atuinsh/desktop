@@ -17,6 +17,7 @@ pub enum AtuinAIClientError {
 /// A wrapper around a genai::Client that includes Atuin's custom service target resolver
 pub struct AtuinAIClient {
     client: genai::Client,
+    #[allow(dead_code)] // this will be used to fetch provider API keys in the future
     secret_cache: Arc<SecretCache>,
 }
 

@@ -10,7 +10,7 @@ use tokio::sync::{broadcast, mpsc, oneshot};
 use uuid::Uuid;
 
 use crate::{
-    ai::session::{SessionEvent, SessionHandle},
+    ai::{manager::AISessionManager, storage::AISessionStorage},
     secret_cache::{KeychainSecretStorage, KvDbSecretStorage, SecretCache},
 };
 use crate::{
@@ -76,11 +76,8 @@ pub(crate) struct AtuinState {
     // Map of document handles per runbook
     pub documents: Arc<RwLock<HashMap<String, Arc<DocumentHandle>>>>,
 
-    // AI session handles for sending events to sessions
-    pub ai_sessions: Arc<RwLock<HashMap<Uuid, SessionHandle>>>,
-
-    // AI session event channels for sending events to frontend (per session)
-    pub ai_session_channels: Arc<RwLock<HashMap<Uuid, Channel<SessionEvent>>>>,
+    // AI session manager
+    pub ai_manager: tokio::sync::Mutex<Option<Arc<AISessionManager>>>,
 
     // Secret cache for storing secrets (backed by keychain in prod, KV DB in dev)
     secret_cache: Mutex<Option<Arc<SecretCache>>>,
@@ -108,8 +105,7 @@ impl AtuinState {
             runbook_output_variables: Default::default(),
             block_executions: Default::default(),
             documents: Default::default(),
-            ai_sessions: Default::default(),
-            ai_session_channels: Default::default(),
+            ai_manager: tokio::sync::Mutex::new(None),
             dev_prefix,
             app_path,
             use_hub_updater_service,
@@ -181,10 +177,14 @@ impl AtuinState {
             let storage = Arc::new(KeychainSecretStorage);
             SecretCache::new(storage)
         };
-        self.secret_cache
-            .lock()
-            .unwrap()
-            .replace(Arc::new(secret_cache));
+
+        let secret_cache_arc = Arc::new(secret_cache);
+        *self.secret_cache.lock().unwrap() = Some(secret_cache_arc.clone());
+
+        let ai_pool = self.db_instances.get_pool("ai").await?;
+        let ai_storage = Arc::new(AISessionStorage::new(ai_pool));
+        let ai_manager = AISessionManager::new(secret_cache_arc, ai_storage);
+        *self.ai_manager.lock().await = Some(Arc::new(ai_manager));
 
         Ok(())
     }
@@ -266,6 +266,14 @@ impl AtuinState {
             secret_cache.clone()
         } else {
             panic!("Secret cache not initialized");
+        }
+    }
+
+    pub async fn ai_manager(&self) -> Arc<AISessionManager> {
+        if let Some(ai_manager) = self.ai_manager.lock().await.as_ref() {
+            ai_manager.clone()
+        } else {
+            panic!("AI manager not found");
         }
     }
 }

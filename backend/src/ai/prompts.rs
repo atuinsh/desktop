@@ -5,6 +5,12 @@ pub struct AIPrompts;
 
 const SYS_PROMPT_SOURCE: &str = include_str!("system_prompt.minijinja.txt");
 
+#[derive(Debug, thiserror::Error)]
+pub enum PromptError {
+    #[error("Failed to process system prompt template: {0}")]
+    SystemPromptTemplateError(#[from] minijinja::Error),
+}
+
 #[derive(Serialize)]
 #[serde(rename_all = "snake_case")]
 struct SystemPromptContext {
@@ -20,7 +26,7 @@ enum SystemPromptType {
 }
 
 impl AIPrompts {
-    pub fn assistant_system_prompt(block_summary: &str) -> Result<String, minijinja::Error> {
+    pub fn assistant_system_prompt(block_summary: &str) -> Result<String, PromptError> {
         let mut env = Environment::new();
         env.set_trim_blocks(true);
         env.set_undefined_behavior(UndefinedBehavior::Strict);
@@ -31,9 +37,10 @@ impl AIPrompts {
         };
 
         env.render_str(SYS_PROMPT_SOURCE, &context)
+            .map_err(PromptError::SystemPromptTemplateError)
     }
 
-    pub fn generator_system_prompt(block_summary: &str) -> Result<String, minijinja::Error> {
+    pub fn generator_system_prompt(block_summary: &str) -> Result<String, PromptError> {
         let mut env = Environment::new();
         env.set_trim_blocks(true);
         env.set_undefined_behavior(UndefinedBehavior::Strict);
@@ -44,5 +51,6 @@ impl AIPrompts {
         };
 
         env.render_str(SYS_PROMPT_SOURCE, &context)
+            .map_err(PromptError::SystemPromptTemplateError)
     }
 }

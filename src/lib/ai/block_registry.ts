@@ -1,3 +1,5 @@
+import { BlockInfo } from "@/rs-bindings/BlockInfo";
+
 export interface BlockRegistryDefinition {
   typeName: string;
   friendlyName: string;
@@ -9,7 +11,7 @@ export default class AIBlockRegistry {
   private static instance: AIBlockRegistry;
   private blocks: Map<string, BlockRegistryDefinition> = new Map();
 
-  private constructor() {}
+  private constructor() { }
 
   public static getInstance(): AIBlockRegistry {
     if (!AIBlockRegistry.instance) {
@@ -20,20 +22,6 @@ export default class AIBlockRegistry {
 
   public addBlock(block: BlockRegistryDefinition) {
     this.blocks.set(block.typeName, block);
-  }
-
-  public getBlockTypes(): string[] {
-    return Array.from(this.blocks.keys());
-  }
-
-  public getBlockSummary(): string {
-    let summary = "";
-
-    for (const block of this.blocks.values()) {
-      summary += `* ${block.typeName}\n  Known to users as: ${block.friendlyName}\n  ${block.shortDescription}\n`;
-    }
-
-    return summary.trim();
   }
 
   public getBlockDocs(blockType: string): string {
@@ -50,5 +38,14 @@ export default class AIBlockRegistry {
       "):\n" +
       block.description
     );
+  }
+
+  public getBlockInfos(): Array<BlockInfo> {
+    return Array.from(this.blocks.values()).map((block) => ({
+      typeName: block.typeName,
+      friendlyName: block.friendlyName,
+      summary: block.shortDescription,
+      docs: block.description,
+    }));
   }
 }
