@@ -33,7 +33,16 @@ impl AIPrompts {
         env.render_str(SYS_PROMPT_SOURCE, &context)
     }
 
-    pub fn generator_system_prompt(block_summary: &str) -> String {
-        todo!()
+    pub fn generator_system_prompt(block_summary: &str) -> Result<String, minijinja::Error> {
+        let mut env = Environment::new();
+        env.set_trim_blocks(true);
+        env.set_undefined_behavior(UndefinedBehavior::Strict);
+
+        let context = SystemPromptContext {
+            prompt_type: SystemPromptType::Generator,
+            block_summary: block_summary.to_string(),
+        };
+
+        env.render_str(SYS_PROMPT_SOURCE, &context)
     }
 }
