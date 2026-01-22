@@ -286,14 +286,19 @@ impl SessionKind {
 
     pub fn system_prompt(&self) -> Result<String, PromptError> {
         match self {
-            SessionKind::AssistantChat { .. } => {
-                // todo
-                AIPrompts::assistant_system_prompt("TODO: block summary -> block info")
+            SessionKind::AssistantChat { block_infos, .. } => {
+                AIPrompts::assistant_system_prompt(block_infos.clone())
             }
-            SessionKind::InlineBlockGeneration { .. } => {
-                // todo
-                AIPrompts::generator_system_prompt("TODO: block summary -> block info")
-            }
+            SessionKind::InlineBlockGeneration {
+                block_infos,
+                current_document,
+                insert_after,
+                ..
+            } => AIPrompts::generator_system_prompt(
+                block_infos.clone(),
+                current_document.clone(),
+                *insert_after,
+            ),
         }
     }
 

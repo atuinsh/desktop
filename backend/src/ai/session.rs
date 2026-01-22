@@ -215,7 +215,6 @@ impl AISession {
 
         // Restore agent with saved state and context
         log::debug!("Restoring session {} from storage", saved.id);
-        log::debug!("{:?}", saved);
         let agent = Agent::from_saved(saved.agent_state, saved.agent_context);
 
         let config = Arc::new(RwLock::new(saved.config));
@@ -384,7 +383,6 @@ impl AISession {
             .map_err(AISessionError::SystemPromptError)?;
         let tools = kind.tools();
 
-        log::debug!("System prompt: {}", system_prompt);
         let chat_request = ChatRequest::new(messages)
             .with_system(system_prompt)
             .with_tools(tools);
