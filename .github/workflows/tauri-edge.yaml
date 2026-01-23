@@ -156,8 +156,6 @@ jobs:
           platform_suffix=""
           if [[ "${{ matrix.args }}" == *"aarch64-apple-darwin"* ]]; then
             platform_suffix="-aarch64"
-          elif [[ "${{ matrix.args }}" == *"x86_64-apple-darwin"* ]]; then
-            platform_suffix="-x86_64"
           fi
 
           # Rename files and upload to GitHub release
@@ -243,7 +241,7 @@ jobs:
       - name: install Rust stable
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: aarch64-apple-darwin,aarch64-apple-darwin,x86_64-apple-darwin
+          targets: aarch64-apple-darwin
 
       - name: Install CEF tauri-cli
         run: cargo install --git https://github.com/tauri-apps/tauri --branch feat/cef tauri-cli
