@@ -349,6 +349,25 @@ impl AISession {
             }
             Effect::ResponseComplete => {
                 let _ = self.output_tx.send(SessionEvent::ResponseComplete).await;
+                // Send updated history so frontends can update their conversation view
+                // Note: We don't include pending_tool_calls here because ToolsRequested
+                // already handles that, and including them would cause duplicates
+                let messages = {
+                    let agent = self.agent.read().await;
+                    agent
+                        .context()
+                        .conversation
+                        .iter()
+                        .map(|m| AIMessage::from(m.clone()))
+                        .collect()
+                };
+                let _ = self
+                    .output_tx
+                    .send(SessionEvent::History {
+                        messages,
+                        pending_tool_calls: vec![],
+                    })
+                    .await;
                 // Save state on response complete
                 self.save_if_persisted().await;
             }

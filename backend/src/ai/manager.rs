@@ -1,7 +1,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 use tauri::ipc::Channel;
-use tokio::sync::{mpsc, RwLock};
+use tokio::sync::{broadcast, mpsc, RwLock};
 use uuid::Uuid;
 
 use crate::{
@@ -9,7 +9,10 @@ use crate::{
         fsm::State as FsmState,
         session::{AISession, SessionEvent, SessionHandle},
         storage::{AISessionStorage, SerializedAISessionV1},
-        types::{AIMessage, AIToolCall, BlockInfo, SessionConfig, SessionKind},
+        types::{
+            AIMessage, AIToolCall, BlockInfo, LLMToolsEvent, SessionConfig, SessionInfo,
+            SessionKind,
+        },
     },
     secret_cache::SecretCache,
 };
@@ -42,16 +45,27 @@ pub struct AISessionManager {
     channels: Arc<RwLock<HashMap<Uuid, Channel<SessionEvent>>>>,
 
     pending_replays: Arc<RwLock<HashMap<Uuid, PendingReplay>>>,
+
+    /// Tracks session info for list_sessions and LLMToolsEvent broadcasts.
+    session_infos: Arc<RwLock<HashMap<Uuid, SessionInfo>>>,
+
+    /// Broadcast channel for LLM Tools window events.
+    llmtools_tx: broadcast::Sender<LLMToolsEvent>,
 }
 
 impl AISessionManager {
     pub fn new(secret_cache: Arc<SecretCache>, storage: Arc<AISessionStorage>) -> Self {
+        // Create broadcast channel with reasonable capacity for LLM Tools subscribers
+        let (llmtools_tx, _) = broadcast::channel(256);
+
         Self {
             secret_cache,
             storage,
             sessions: Arc::new(RwLock::new(HashMap::new())),
             channels: Arc::new(RwLock::new(HashMap::new())),
             pending_replays: Arc::new(RwLock::new(HashMap::new())),
+            session_infos: Arc::new(RwLock::new(HashMap::new())),
+            llmtools_tx,
         }
     }
 
@@ -65,6 +79,12 @@ impl AISessionManager {
         self.sessions.write().await.remove(&session_id);
         self.channels.write().await.remove(&session_id);
         self.pending_replays.write().await.remove(&session_id);
+        self.session_infos.write().await.remove(&session_id);
+
+        // Broadcast session destroyed event (ignore errors if no subscribers)
+        let _ = self
+            .llmtools_tx
+            .send(LLMToolsEvent::SessionDestroyed { session_id });
 
         log::info!("Destroyed AI session {}", session_id);
     }
@@ -91,6 +111,16 @@ impl AISessionManager {
 
         log::debug!("Frontend subscribed to session {}", session_id);
         Ok(())
+    }
+
+    /// List all active sessions with their info.
+    pub async fn list_sessions(&self) -> Vec<SessionInfo> {
+        self.session_infos.read().await.values().cloned().collect()
+    }
+
+    /// Subscribe to LLM Tools events (session creation, destruction, and session events).
+    pub fn subscribe_llmtools(&self) -> broadcast::Receiver<LLMToolsEvent> {
+        self.llmtools_tx.subscribe()
     }
 
     pub async fn create_chat_session(
@@ -142,7 +172,7 @@ impl AISessionManager {
 
         let (output_tx, output_rx) = mpsc::channel::<SessionEvent>(32);
 
-        let (session, handle, replay_data) = if let Some(saved) = existing {
+        let (session, handle, replay_data, session_info) = if let Some(saved) = existing {
             log::info!(
                 "Restoring AI session {} for runbook {}",
                 saved.id,
@@ -150,6 +180,7 @@ impl AISessionManager {
             );
 
             let replay = self.extract_replay_data(&saved)?;
+            let info = SessionInfo::from_session_kind(saved.id, &saved.kind);
             let (session, handle) = AISession::from_saved(
                 saved,
                 output_tx,
@@ -157,10 +188,12 @@ impl AISessionManager {
                 self.storage.clone(),
             );
 
-            (session, handle, Some(replay))
+            (session, handle, Some(replay), info)
         } else {
             log::info!("Creating new AI session for runbook {}", kind.runbook_id());
 
+            // Capture session info before kind is moved
+            let info = SessionInfo::from_session_kind(Uuid::new_v4(), &kind);
             let (session, handle) = AISession::new(
                 kind,
                 config,
@@ -168,8 +201,13 @@ impl AISessionManager {
                 self.secret_cache.clone(),
                 self.storage.clone(),
             );
+            // Update info with actual session id
+            let info = SessionInfo {
+                id: session.id(),
+                ..info
+            };
 
-            (session, handle, None)
+            (session, handle, None, info)
         };
 
         let session_id = session.id();
@@ -183,6 +221,12 @@ impl AISessionManager {
             }
         }
 
+        // Store session info for list_sessions
+        self.session_infos
+            .write()
+            .await
+            .insert(session_id, session_info.clone());
+
         self.sessions
             .write()
             .await
@@ -191,6 +235,11 @@ impl AISessionManager {
         tokio::spawn(session.run());
 
         self.spawn_event_forwarder(session_id, output_rx);
+
+        // Broadcast session created event (ignore errors if no subscribers)
+        let _ = self
+            .llmtools_tx
+            .send(LLMToolsEvent::SessionCreated { info: session_info });
 
         Ok(handle)
     }
@@ -222,9 +271,18 @@ impl AISessionManager {
     fn spawn_event_forwarder(&self, session_id: Uuid, mut output_rx: mpsc::Receiver<SessionEvent>) {
         let channels = self.channels.clone();
         let sessions = self.sessions.clone();
+        let session_infos = self.session_infos.clone();
+        let llmtools_tx = self.llmtools_tx.clone();
 
         tokio::spawn(async move {
             while let Some(event) = output_rx.recv().await {
+                // Broadcast to LLM Tools window (ignore errors if no subscribers)
+                let _ = llmtools_tx.send(LLMToolsEvent::SessionEvent {
+                    session_id,
+                    event: event.clone(),
+                });
+
+                // Forward to the frontend channel for this specific session
                 let channels = channels.read().await;
                 if let Some(channel) = channels.get(&session_id) {
                     if let Err(e) = channel.send(event) {
@@ -238,6 +296,10 @@ impl AISessionManager {
             log::debug!("Session {session_id} output channel closed, cleaning up");
             sessions.write().await.remove(&session_id);
             channels.write().await.remove(&session_id);
+            session_infos.write().await.remove(&session_id);
+
+            // Broadcast session destroyed event (ignore errors if no subscribers)
+            let _ = llmtools_tx.send(LLMToolsEvent::SessionDestroyed { session_id });
         });
     }
 

@@ -20,6 +20,7 @@ mod file;
 mod font;
 mod install;
 mod kv;
+mod llmtools_window;
 mod main_window;
 mod menu;
 mod run;
@@ -596,6 +597,8 @@ fn main() {
             commands::ai::ai_send_tool_result,
             commands::ai::ai_cancel_session,
             commands::ai::ai_destroy_session,
+            commands::llmtools::llmtools_list_sessions,
+            commands::llmtools::llmtools_subscribe,
             shared_state::get_shared_state_document,
             shared_state::push_optimistic_update,
             shared_state::update_shared_state_document,

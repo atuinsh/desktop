@@ -30,6 +30,6 @@
     },
     "types": ["vitest/importMeta", "./src/global.d.ts"]
   },
-  "include": ["src"],
+  "include": ["src", "src-llmtools"],
   "references": [{ "path": "./tsconfig.node.json" }]
 }
