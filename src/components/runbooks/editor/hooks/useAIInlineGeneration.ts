@@ -1,4 +1,4 @@
-import React, { useReducer, useCallback, useRef, useState, useEffect } from "react";
+import React, { useCallback, useRef } from "react";
 import { addToast } from "@heroui/react";
 import { BlockNoteEditor } from "@blocknote/core";
 import { AIFeatureDisabledError, AIQuotaExceededError } from "@/lib/ai/block_generator";
@@ -7,43 +7,11 @@ import { incrementAIHintUseCount } from "../ui/AIHint";
 import track_event from "@/tracking";
 import useDocumentBridge from "@/lib/hooks/useDocumentBridge";
 import { executeBlock } from "@/lib/runtime";
+import useReducerWithEffects, { UseReducerWithEffectsReducerReturn } from "@/lib/hooks/useReducerWithEffects";
 
 // =============================================================================
 // Types
 // =============================================================================
-
-type UseReducerWithEffectsReducerReturn<S, E> = S | [S, E] | [S, E[]];
-function useReducerWithEffects<S, A, E>(
-  reducer: (state: S, action: A) => UseReducerWithEffectsReducerReturn<S, E>,
-  initialState: S,
-  effectRunner: (effect: E) => void
-): [S, (action: A) => void] {
-  const [state, setState] = useState(initialState);
-  const pendingEffectsRef = useRef<E[]>([]);
-
-  useEffect(() => {
-    const effects = pendingEffectsRef.current;
-    pendingEffectsRef.current = [];
-    effects.forEach(effectRunner);
-  })
-
-  const dispatch = useCallback((action: A) => {
-    setState((currentState) => {
-      const result = reducer(currentState, action);
-      if (Array.isArray(result)) {
-        let [newState, effects] = result;
-        if (!Array.isArray(effects)) {
-          effects = [effects];
-        }
-        pendingEffectsRef.current = effects;
-        return newState;
-      }
-      return result;
-    })
-  }, [reducer]);
-
-  return [state, dispatch];
-}
 
 export interface EditorContext {
   documentMarkdown?: string;
