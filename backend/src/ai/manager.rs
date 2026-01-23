@@ -105,7 +105,7 @@ impl AISessionManager {
             block_infos,
         };
 
-        self.create_session(kind, config, restore_previous).await
+        Ok(self.create_session(kind, config, restore_previous).await?)
     }
 
     pub async fn create_generator_session(
@@ -123,7 +123,7 @@ impl AISessionManager {
             insert_after,
         };
 
-        self.create_session(kind, config, false).await
+        Ok(self.create_session(kind, config, false).await?)
     }
 
     async fn create_session(
@@ -155,7 +155,7 @@ impl AISessionManager {
                 output_tx,
                 self.secret_cache.clone(),
                 self.storage.clone(),
-            );
+            )?;
 
             (session, handle, Some(replay))
         } else {
@@ -167,7 +167,7 @@ impl AISessionManager {
                 output_tx,
                 self.secret_cache.clone(),
                 self.storage.clone(),
-            );
+            )?;
 
             (session, handle, None)
         };

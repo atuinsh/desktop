@@ -164,10 +164,14 @@ impl AISession {
         output_tx: mpsc::Sender<SessionEvent>,
         secret_cache: Arc<SecretCache>,
         storage: Arc<AISessionStorage>,
-    ) -> (Self, SessionHandle) {
+    ) -> Result<(Self, SessionHandle), AISessionError> {
         let client = AtuinAIClient::new(secret_cache.clone());
         let (event_tx, event_rx) = mpsc::channel(32);
         let (cancel_tx, _cancel_rx) = watch::channel(false);
+
+        let system_prompt = kind
+            .system_prompt()
+            .map_err(AISessionError::SystemPromptError)?;
 
         let config = Arc::new(RwLock::new(config));
         let kind = Arc::new(RwLock::new(kind));
@@ -177,7 +181,7 @@ impl AISession {
             config: config.clone(),
             kind: kind.clone(),
             client,
-            agent: Arc::new(RwLock::new(Agent::new())),
+            agent: Arc::new(RwLock::new(Agent::new(ChatMessage::system(system_prompt)))),
             event_tx: event_tx.clone(),
             event_rx,
             output_tx,
@@ -193,7 +197,7 @@ impl AISession {
             kind,
         };
 
-        (session, handle)
+        Ok((session, handle))
     }
 
     /// Get the session ID.
@@ -208,17 +212,27 @@ impl AISession {
         output_tx: mpsc::Sender<SessionEvent>,
         secret_cache: Arc<SecretCache>,
         storage: Arc<AISessionStorage>,
-    ) -> (Self, SessionHandle) {
+    ) -> Result<(Self, SessionHandle), AISessionError> {
         let client = AtuinAIClient::new(secret_cache.clone());
         let (event_tx, event_rx) = mpsc::channel(32);
         let (cancel_tx, _cancel_rx) = watch::channel(false);
 
         // Restore agent with saved state and context
         log::debug!("Restoring session {} from storage", saved.id);
-        let agent = Agent::from_saved(saved.agent_state, saved.agent_context);
+
+        let system_prompt = saved
+            .kind
+            .system_prompt()
+            .map_err(AISessionError::SystemPromptError)?;
 
         let config = Arc::new(RwLock::new(saved.config));
         let kind = Arc::new(RwLock::new(saved.kind));
+
+        let agent = Agent::from_saved(
+            saved.agent_state,
+            saved.agent_context,
+            ChatMessage::system(system_prompt),
+        );
 
         let session = Self {
             id: saved.id,
@@ -241,7 +255,7 @@ impl AISession {
             kind,
         };
 
-        (session, handle)
+        Ok((session, handle))
     }
 
     /// Save the current session state to storage if the session is meant to be persisted.
