@@ -2,7 +2,7 @@ import { useState, useCallback, useRef } from "react";
 import { addToast } from "@heroui/react";
 import { BlockNoteEditor } from "@blocknote/core";
 import { AIFeatureDisabledError, AIQuotaExceededError } from "@/lib/ai/block_generator";
-import { AISingleBlockResponse } from "@/api/ai";
+import { AIMultiBlockResponse, AISingleBlockResponse } from "@/api/ai";
 import { incrementAIHintUseCount } from "../ui/AIHint";
 import track_event from "@/tracking";
 import useDocumentBridge from "@/lib/hooks/useDocumentBridge";
@@ -23,7 +23,7 @@ export interface UseAIInlineGenerationOptions {
 export interface UseAIInlineGenerationReturn {
   // Generation state
   isGeneratingInline: boolean;
-  generatingBlockId: string | null;
+  generatingBlockIds: string[] | null;
   loadingStatus: "loading" | "cancelled";
 
   // Post-generation state
@@ -57,7 +57,7 @@ export function useAIInlineGeneration({
 }: UseAIInlineGenerationOptions): UseAIInlineGenerationReturn {
   // Inline AI generation state
   const [isGeneratingInline, setIsGeneratingInline] = useState(false);
-  const [generatingBlockId, setGeneratingBlockId] = useState<string | null>(null);
+  const [generatingBlockIds, setGeneratingBlockIds] = useState<string[] | null>(null);
   const [loadingStatus, setLoadingStatus] = useState<"loading" | "cancelled">("loading");
   const generatingBlockIdRef = useRef<string | null>(null); // For cancellation check
   const originalPromptRef = useRef<string | null>(null); // For cancellation detection
@@ -90,7 +90,7 @@ export function useAIInlineGeneration({
 
       // Set up generation state
       setIsGeneratingInline(true);
-      setGeneratingBlockId(block.id);
+      setGeneratingBlockIds([block.id]);
       setLoadingStatus("loading");
       generatingBlockIdRef.current = block.id;
       originalPromptRef.current = prompt;
@@ -175,10 +175,10 @@ export function useAIInlineGeneration({
           error instanceof AIFeatureDisabledError
             ? "AI feature is not enabled for your account"
             : error instanceof AIQuotaExceededError
-            ? "AI quota exceeded"
-            : error instanceof Error
-            ? error.message
-            : "Failed to generate blocks";
+              ? "AI quota exceeded"
+              : error instanceof Error
+                ? error.message
+                : "Failed to generate blocks";
 
         addToast({
           title: error instanceof AIQuotaExceededError ? "Quota exceeded" : "Generation failed",
@@ -191,7 +191,7 @@ export function useAIInlineGeneration({
         });
       } finally {
         setIsGeneratingInline(false);
-        setGeneratingBlockId(null);
+        setGeneratingBlockIds(null);
         generatingBlockIdRef.current = null;
         originalPromptRef.current = null;
       }
@@ -213,19 +213,17 @@ export function useAIInlineGeneration({
     if (!editor || !postGenerationBlockId || !editPrompt.trim() || generatedBlockIds.length === 0)
       return;
 
-    const blockToEditId = generatedBlockIds[0];
-
     // Use the same loading overlay as initial generation
     setIsEditingGenerated(false);
     setIsGeneratingInline(true);
-    setGeneratingBlockId(blockToEditId);
+    setGeneratingBlockIds(generatedBlockIds);
     setLoadingStatus("loading");
 
     try {
-      // Get the current block to edit
-      const currentBlock = editor.document.find((b: any) => b.id === blockToEditId);
-      if (!currentBlock) {
-        throw new Error("Block not found");
+      // Get the current blocks to edit
+      const currentBlocks = editor.document.filter((b: any) => generatedBlockIds.includes(b.id));
+      if (currentBlocks.length != generatedBlockIds.length) {
+        throw new Error("Blocks not found");
       }
 
       const context = await getEditorContext();
@@ -233,16 +231,16 @@ export function useAIInlineGeneration({
 
       const result = (await generateOrEditBlock({
         action: "edit",
-        block: currentBlock,
+        blocks: currentBlocks,
         instruction: editPrompt,
         document_markdown: context?.documentMarkdown,
         runbook_id: context?.runbookId,
-      })) as AISingleBlockResponse;
+      })) as AIMultiBlockResponse;
 
       // Replace the block with the edited version
-      const newBlock = { ...result.block, id: currentBlock.id };
       isProgrammaticEditRef.current = true;
-      editor.updateBlock(currentBlock.id, newBlock as any);
+      editor.replaceBlocks(generatedBlockIds, result.blocks as any[]);
+      setGeneratedBlockIds(result.blocks.map((b: any) => b.id));
       // Reset after microtask to ensure onChange has fired
       queueMicrotask(() => {
         isProgrammaticEditRef.current = false;
@@ -251,9 +249,10 @@ export function useAIInlineGeneration({
       // Reset edit prompt but stay in post-generation mode
       setEditPrompt("");
 
-      track_event("runbooks.ai.post_generation_edit", {
-        blockType: currentBlock.type,
-      });
+      // TODO:
+      // track_event("runbooks.ai.post_generation_edit", {
+      //   blockType: currentBlock.type,
+      // });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to edit block";
       addToast({
@@ -265,7 +264,7 @@ export function useAIInlineGeneration({
     } finally {
       // Clear loading state - this will show the focus overlay again
       setIsGeneratingInline(false);
-      setGeneratingBlockId(null);
+      setGeneratingBlockIds(null);
     }
   }, [editor, postGenerationBlockId, editPrompt, generatedBlockIds, getEditorContext]);
 
@@ -287,7 +286,7 @@ export function useAIInlineGeneration({
   return {
     // Generation state
     isGeneratingInline,
-    generatingBlockId,
+    generatingBlockIds,
     loadingStatus,
 
     // Post-generation state

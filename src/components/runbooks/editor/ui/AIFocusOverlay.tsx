@@ -1,20 +1,24 @@
 import { useLayoutEffect, useState, useRef, useEffect } from "react";
 
 interface AIFocusOverlayProps {
-  blockId: string;
+  blockIds: string[];
   editor: any;
   isEditing?: boolean;
   editValue?: string;
+  showRunHint: boolean;
+  hideAllHints?: boolean;
   onEditChange?: (value: string) => void;
   onEditSubmit?: () => void;
   onEditCancel?: () => void;
 }
 
 export function AIFocusOverlay({
-  blockId,
+  blockIds,
   editor,
   isEditing = false,
   editValue = "",
+  showRunHint,
+  hideAllHints = false,
   onEditChange,
   onEditSubmit,
   onEditCancel,
@@ -35,36 +39,68 @@ export function AIFocusOverlay({
   }, [isEditing]);
 
   useLayoutEffect(() => {
-    if (!editor?.domElement) return;
+    if (!editor?.domElement || blockIds.length === 0) return;
 
     const scrollContainer = editor.domElement.closest(".editor") as HTMLElement | null;
-    let blockEl = editor.domElement.querySelector(`[data-id="${blockId}"]`) as HTMLElement | null;
 
-    // Apply faded effect via CSS class
-    if (blockEl) {
-      blockEl.classList.add("ai-generated-pending");
-    }
+    // Track block elements for cleanup
+    let blockEls: HTMLElement[] = [];
+
+    // Apply faded effect to all blocks
+    const applyPendingClass = () => {
+      blockEls = blockIds
+        .map((id) => editor.domElement?.querySelector(`[data-id="${id}"]`) as HTMLElement | null)
+        .filter((el): el is HTMLElement => el !== null);
+
+      blockEls.forEach((el) => el.classList.add("ai-generated-pending"));
+    };
+
+    applyPendingClass();
 
     const updatePosition = () => {
-      // Re-query in case block was re-rendered
-      const currentBlockEl = editor.domElement?.querySelector(`[data-id="${blockId}"]`) as HTMLElement | null;
-      if (!currentBlockEl || !scrollContainer) return;
+      if (!scrollContainer) return;
 
-      // Update blockEl reference if changed
-      if (currentBlockEl !== blockEl) {
-        blockEl?.classList.remove("ai-generated-pending");
-        currentBlockEl.classList.add("ai-generated-pending");
-        blockEl = currentBlockEl;
-      }
+      // Re-query all blocks in case they were re-rendered
+      const currentBlockEls = blockIds
+        .map((id) => editor.domElement?.querySelector(`[data-id="${id}"]`) as HTMLElement | null)
+        .filter((el): el is HTMLElement => el !== null);
 
-      const blockRect = currentBlockEl.getBoundingClientRect();
+      if (currentBlockEls.length === 0) return;
+
+      // Update CSS classes if elements changed
+      const currentSet = new Set(currentBlockEls);
+      const previousSet = new Set(blockEls);
+
+      // Remove class from elements no longer in the list
+      blockEls.forEach((el) => {
+        if (!currentSet.has(el)) {
+          el.classList.remove("ai-generated-pending");
+        }
+      });
+
+      // Add class to new elements
+      currentBlockEls.forEach((el) => {
+        if (!previousSet.has(el)) {
+          el.classList.add("ai-generated-pending");
+        }
+      });
+
+      blockEls = currentBlockEls;
+
+      // Calculate combined bounding box
+      const rects = currentBlockEls.map((el) => el.getBoundingClientRect());
       const containerRect = scrollContainer.getBoundingClientRect();
 
+      const minTop = Math.min(...rects.map((r) => r.top));
+      const minLeft = Math.min(...rects.map((r) => r.left));
+      const maxBottom = Math.max(...rects.map((r) => r.bottom));
+      const maxRight = Math.max(...rects.map((r) => r.right));
+
       setPosition({
-        top: blockRect.top - containerRect.top + scrollContainer.scrollTop,
-        left: blockRect.left - containerRect.left,
-        width: blockRect.width,
-        height: blockRect.height,
+        top: minTop - containerRect.top + scrollContainer.scrollTop,
+        left: minLeft - containerRect.left,
+        width: maxRight - minLeft,
+        height: maxBottom - minTop,
       });
     };
 
@@ -73,19 +109,19 @@ export function AIFocusOverlay({
     scrollContainer?.addEventListener("scroll", updatePosition);
     window.addEventListener("resize", updatePosition);
 
-    // Observe only the specific block for size changes, not the whole editor
+    // Observe all blocks for size changes
     const observer = new MutationObserver(updatePosition);
-    if (blockEl) {
-      observer.observe(blockEl, { childList: true, subtree: true, attributes: true });
-    }
+    blockEls.forEach((el) => {
+      observer.observe(el, { childList: true, subtree: true, attributes: true });
+    });
 
     return () => {
-      blockEl?.classList.remove("ai-generated-pending");
+      blockEls.forEach((el) => el.classList.remove("ai-generated-pending"));
       scrollContainer?.removeEventListener("scroll", updatePosition);
       window.removeEventListener("resize", updatePosition);
       observer.disconnect();
     };
-  }, [blockId, editor]);
+  }, [blockIds, editor]);
 
   if (!position) return null;
 
@@ -100,7 +136,7 @@ export function AIFocusOverlay({
       }}
     >
       {/* Edit input or hint text at the bottom */}
-      <div className="absolute -bottom-10 left-0 right-0 flex justify-center pointer-events-auto">
+      {!hideAllHints && <div className="absolute -bottom-10 left-0 right-0 flex justify-center pointer-events-auto">
         {isEditing ? (
           <div className="flex items-center gap-2 bg-white dark:bg-zinc-900 px-3 py-2 rounded-lg shadow-md border border-purple-300 dark:border-purple-700">
             <input
@@ -126,12 +162,15 @@ export function AIFocusOverlay({
           </div>
         ) : (
           <div className="text-[11px] bg-white dark:bg-zinc-900 px-3 py-1.5 rounded-lg shadow-md border border-purple-300 dark:border-purple-700 flex items-center gap-3">
-            <span className="flex items-center gap-1.5 text-purple-700 dark:text-purple-300">
-              <kbd className="font-mono text-[10px] bg-purple-100 dark:bg-purple-900/60 px-1.5 py-0.5 rounded border border-purple-200 dark:border-purple-700">⌘</kbd>
-              <kbd className="font-mono text-[10px] bg-purple-100 dark:bg-purple-900/60 px-1.5 py-0.5 rounded border border-purple-200 dark:border-purple-700">Enter</kbd>
-              <span className="ml-0.5">Run</span>
-            </span>
-            <span className="text-purple-300 dark:text-purple-600">│</span>
+            {showRunHint && (
+              <>
+                <span className="flex items-center gap-1.5 text-purple-700 dark:text-purple-300">
+                  <kbd className="font-mono text-[10px] bg-purple-100 dark:bg-purple-900/60 px-1.5 py-0.5 rounded border border-purple-200 dark:border-purple-700">⌘</kbd>
+                  <kbd className="font-mono text-[10px] bg-purple-100 dark:bg-purple-900/60 px-1.5 py-0.5 rounded border border-purple-200 dark:border-purple-700">Enter</kbd>
+                  <span className="ml-0.5">Run</span>
+                </span>
+                <span className="text-purple-300 dark:text-purple-600">│</span>
+              </>)}
             <span className="flex items-center gap-1.5 text-purple-700 dark:text-purple-300">
               <kbd className="font-mono text-[10px] bg-purple-100 dark:bg-purple-900/60 px-1.5 py-0.5 rounded border border-purple-200 dark:border-purple-700">Tab</kbd>
               <span className="ml-0.5">Accept</span>
@@ -148,7 +187,7 @@ export function AIFocusOverlay({
             </span>
           </div>
         )}
-      </div>
+      </div>}
     </div>
   );
 }

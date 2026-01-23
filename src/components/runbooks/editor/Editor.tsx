@@ -508,7 +508,7 @@ export default function Editor({
   // AI inline generation hook
   const {
     isGeneratingInline,
-    generatingBlockId,
+    generatingBlockIds,
     loadingStatus,
     postGenerationBlockId,
     generatedBlockIds,
@@ -886,14 +886,16 @@ export default function Editor({
           )}
 
           {/* Inline generation loading overlay */}
-          {isGeneratingInline && generatingBlockId && (
-            <AILoadingOverlay blockId={generatingBlockId} editor={editor} status={loadingStatus} />
+          {isGeneratingInline && generatingBlockIds && (
+            <AILoadingOverlay blockIds={generatingBlockIds} editor={editor} status={loadingStatus} />
           )}
 
-          {/* Post-generation focus overlay - shows after AI generates a block */}
-          {postGenerationBlockId && !isGeneratingInline && (
+          {/* Post-generation focus overlay - shows after AI generates blocks */}
+          {generatedBlockIds.length > 0 && (
             <AIFocusOverlay
-              blockId={postGenerationBlockId}
+              hideAllHints={isGeneratingInline}
+              showRunHint={generatedBlockIds.length === 1}
+              blockIds={generatedBlockIds}
               editor={editor}
               isEditing={isEditingGenerated}
               editValue={editPrompt}

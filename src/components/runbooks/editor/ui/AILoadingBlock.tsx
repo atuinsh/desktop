@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useState } from "react";
 import { Spinner } from "@heroui/react";
 
 const loadingMessages = [
@@ -35,16 +35,18 @@ const loadingMessages = [
 ];
 
 interface AILoadingOverlayProps {
-  blockId: string;
+  blockIds: string[];
   editor: any;
   status: "loading" | "cancelled";
 }
 
-export function AILoadingOverlay({ blockId, editor, status }: AILoadingOverlayProps) {
+export function AILoadingOverlay({ blockIds, editor, status }: AILoadingOverlayProps) {
   const [position, setPosition] = useState<{ top: number; left: number; width: number } | null>(null);
   const [messageIndex, setMessageIndex] = useState(() =>
     Math.floor(Math.random() * loadingMessages.length)
   );
+
+  const blockId = useMemo(() => blockIds[blockIds.length - 1], [blockIds]);
 
   // Position the overlay below the prompt block
   useLayoutEffect(() => {
