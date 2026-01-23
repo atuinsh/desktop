@@ -550,7 +550,7 @@ export function useAIInlineGeneration({
           }
 
           // Cmd+Enter - run the generated block
-          if (e.metaKey && e.key === "Enter") {
+          if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
             e.preventDefault();
             e.stopPropagation();
 
@@ -603,7 +603,7 @@ export function useAIInlineGeneration({
       }
 
       // Handle Cmd+Enter to start generation (only when idle)
-      if (currentState.status === "idle" && e.metaKey && e.key === "Enter") {
+      if (currentState.status === "idle" && (e.metaKey || e.ctrlKey) && e.key === "Enter") {
         try {
           const cursorPosition = editor.getTextCursorPosition();
           const currentBlock = cursorPosition.block;

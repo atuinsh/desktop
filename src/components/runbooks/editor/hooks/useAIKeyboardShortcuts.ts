@@ -42,7 +42,7 @@ export function useAIKeyboardShortcuts({
       if (!editor) return;
 
       // Only handle Cmd+K
-      if (!e.metaKey || e.key !== "k") return;
+      if ((!e.metaKey && !e.ctrlKey) || e.key !== "k") return;
 
       try {
         const cursorPosition = editor.getTextCursorPosition();
