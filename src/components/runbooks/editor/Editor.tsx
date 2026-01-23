@@ -507,26 +507,28 @@ export default function Editor({
 
   // AI inline generation hook
   const {
-    isGeneratingInline,
+    isGenerating,
     generatingBlockIds,
-    loadingStatus,
-    postGenerationBlockId,
     generatedBlockIds,
-    generatedBlockCount,
-    isEditingGenerated,
+    isEditing,
     editPrompt,
-    setEditPrompt,
+    loadingStatus,
     handleInlineGenerate,
     clearPostGenerationMode,
     handleEditSubmit,
     startEditing,
     cancelEditing,
+    setEditPrompt,
     getIsProgrammaticEdit,
   } = useAIInlineGeneration({
     editor: editor ?? null,
     documentBridge,
     getEditorContext,
   });
+
+  // Derived values for compatibility with useAIKeyboardShortcuts
+  const postGenerationBlockId = generatedBlockIds.length > 0 ? generatedBlockIds[generatedBlockIds.length - 1] : null;
+  const generatedBlockCount = generatedBlockIds.length;
 
   // Callback for showing the edit popup
   const handleShowEditPopup = useCallback((position: { x: number; y: number }, block: any) => {
@@ -542,8 +544,8 @@ export default function Editor({
     postGenerationBlockId,
     generatedBlockIds,
     generatedBlockCount,
-    isEditingGenerated,
-    isGeneratingInline,
+    isEditingGenerated: isEditing,
+    isGeneratingInline: isGenerating,
     onShowAIPopup: showAIPopup,
     onShowEditPopup: handleShowEditPopup,
     onInlineGenerate: handleInlineGenerate,
@@ -882,22 +884,22 @@ export default function Editor({
 
           {/* Subtle hint for AI generation */}
           {aiEnabledState && showAiHint && !postGenerationBlockId && (
-            <AIHint editor={editor} isGenerating={isGeneratingInline} aiEnabled={aiEnabledState} />
+            <AIHint editor={editor} isGenerating={isGenerating} aiEnabled={aiEnabledState} />
           )}
 
           {/* Inline generation loading overlay */}
-          {isGeneratingInline && generatingBlockIds && (
+          {isGenerating && generatingBlockIds && (
             <AILoadingOverlay blockIds={generatingBlockIds} editor={editor} status={loadingStatus} />
           )}
 
           {/* Post-generation focus overlay - shows after AI generates blocks */}
           {generatedBlockIds.length > 0 && (
             <AIFocusOverlay
-              hideAllHints={isGeneratingInline}
+              hideAllHints={isGenerating}
               showRunHint={generatedBlockIds.length === 1}
               blockIds={generatedBlockIds}
               editor={editor}
-              isEditing={isEditingGenerated}
+              isEditing={isEditing}
               editValue={editPrompt}
               onEditChange={setEditPrompt}
               onEditSubmit={handleEditSubmit}
