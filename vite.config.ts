@@ -1,4 +1,5 @@
 import { defineConfig } from "vite";
+import { resolve } from "path";
 import { analyzer } from "vite-bundle-analyzer";
 import react from "@vitejs/plugin-react";
 import tsconfigPaths from "vite-tsconfig-paths";
@@ -37,6 +38,10 @@ export default defineConfig(async () => ({
   build: {
     sourcemap: true,
     rollupOptions: {
+      input: {
+        main: resolve(__dirname, 'index.html'),
+        llmtools: resolve(__dirname, 'llmtools.html'),
+      },
       output: {
         experimentalMinChunkSize: 100_000,
         manualChunks: {

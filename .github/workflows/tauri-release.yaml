@@ -77,8 +77,6 @@ jobs:
         include:
           - platform: "macos-latest" # for Arm based macs (M1 and above).
             args: "--target aarch64-apple-darwin"
-          - platform: "macos-15-intel"
-            args: "--target x86_64-apple-darwin"
           - platform: "depot-ubuntu-22.04-4"
             args: ""
 
@@ -110,7 +108,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable # Set this to dtolnay/rust-toolchain@nightly
         with:
           # Those targets are only used on macos runners so it's in an `if` to slightly speed up windows and linux builds.
-          targets: ${{ (matrix.platform == 'macos-latest' || matrix.platform == 'macos-15-intel') && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin' || '' }}
 
       - name: Rust cache
         uses: swatinem/rust-cache@v2
@@ -155,8 +153,6 @@ jobs:
           platform_suffix=""
           if [[ "${{ matrix.args }}" == *"aarch64-apple-darwin"* ]]; then
             platform_suffix="-aarch64"
-          elif [[ "${{ matrix.args }}" == *"x86_64-apple-darwin"* ]]; then
-            platform_suffix="-x86_64"
           fi
 
           # Rename files and upload to GitHub release

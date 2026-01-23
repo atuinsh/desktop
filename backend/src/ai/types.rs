@@ -14,6 +14,7 @@ use uuid::Uuid;
 
 use crate::ai::{
     prompts::{AIPrompts, PromptError},
+    session::SessionEvent,
     tools::AITools,
 };
 
@@ -345,4 +346,45 @@ pub struct BlockInfo {
     pub friendly_name: String,
     pub summary: String,
     pub docs: String,
+}
+
+/// Summary information about an active session for the LLM Tools window.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct SessionInfo {
+    pub id: Uuid,
+    pub runbook_id: Uuid,
+    pub kind: String,
+}
+
+impl SessionInfo {
+    pub fn from_session_kind(id: Uuid, kind: &SessionKind) -> Self {
+        let kind_str = match kind {
+            SessionKind::AssistantChat { .. } => "assistantChat",
+            SessionKind::InlineBlockGeneration { .. } => "inlineBlockGeneration",
+        };
+        Self {
+            id,
+            runbook_id: kind.runbook_id(),
+            kind: kind_str.to_string(),
+        }
+    }
+}
+
+/// Events broadcast to the LLM Tools window.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(tag = "type", rename_all = "camelCase")]
+#[ts(export)]
+pub enum LLMToolsEvent {
+    SessionCreated {
+        info: SessionInfo,
+    },
+    SessionDestroyed {
+        session_id: Uuid,
+    },
+    SessionEvent {
+        session_id: Uuid,
+        event: SessionEvent,
+    },
 }

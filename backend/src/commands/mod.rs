@@ -5,6 +5,7 @@ pub(crate) mod dependency;
 pub(crate) mod events;
 pub(crate) mod exec_log;
 pub(crate) mod feedback;
+pub(crate) mod llmtools;
 pub(crate) mod pty_store;
 pub(crate) mod secrets;
 pub(crate) mod ssh;

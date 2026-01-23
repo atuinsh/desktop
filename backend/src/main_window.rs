@@ -110,7 +110,6 @@ pub(crate) async fn create_main_window<R: Runtime>(app: &AppHandle<R>) -> Result
 
     let mut builder = WebviewWindowBuilder::new(app, "main", app_url)
         .title(title)
-        .transparent(true)
         .resizable(true)
         .fullscreen(false)
         .disable_drag_drop_handler()
