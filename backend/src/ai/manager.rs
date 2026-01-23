@@ -26,12 +26,14 @@ pub enum ManagerError {
     SessionError(#[from] crate::ai::session::AISessionError),
 }
 
+/// Data that needs to be replayed to the frontend when a session is restored.
 struct PendingReplay {
     fsm_state: FsmState,
     history: Vec<AIMessage>,
     pending_tools: Vec<AIToolCall>,
 }
 
+/// Manages the creation and destruction of AI sessions.
 pub struct AISessionManager {
     secret_cache: Arc<SecretCache>,
     storage: Arc<AISessionStorage>,
@@ -53,6 +55,7 @@ impl AISessionManager {
         }
     }
 
+    /// Get a session handle for a session ID.
     pub async fn get_handle(&self, session_id: Uuid) -> Option<SessionHandle> {
         self.sessions.read().await.get(&session_id).cloned()
     }
@@ -66,6 +69,7 @@ impl AISessionManager {
         log::info!("Destroyed AI session {}", session_id);
     }
 
+    /// Subscribe to events from a session.
     pub async fn subscribe(
         &self,
         session_id: Uuid,
