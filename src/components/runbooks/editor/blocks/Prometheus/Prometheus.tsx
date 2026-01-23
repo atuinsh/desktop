@@ -105,8 +105,8 @@ const Prometheus = ({
 }: PromProps) => {
   let editor = useBlockNoteEditor();
   const [value, setValue] = useState<string>(prometheus.query);
-  const [data, setData] = useState<any[]>([]);
-  const [config, _setConfig] = useState<{}>({});
+  const [data, setData] = useState<Array<Array<number>>>([]);
+  const [seriesNames, setSeriesNames] = useState<string[]>([]);
   const [timeFrame, setTimeFrame] = useState<TimeFrame>(
     timeOptions.find((t) => t.short === prometheus.period) || timeOptions[3],
   );
@@ -121,7 +121,8 @@ const Prometheus = ({
     if (output.object) {
       // Backend returns PrometheusQueryResult in the object field
       const result = output.object as PrometheusQueryResult;
-      setData(result.series as any[]);
+      setData(result.data);
+      setSeriesNames(result.seriesNames);
     }
   });
 
@@ -375,9 +376,11 @@ const Prometheus = ({
         ) : execution.isError ? (
           <ErrorCard error={execution.error} />
         ) : isRunning && data.length === 0 ? (
-          <Spinner />
+          <div className="flex items-center justify-center h-full w-full">
+            <Spinner />
+          </div>
         ) : (
-          <PromLineChart data={data} config={config} />
+          <PromLineChart data={data} seriesNames={seriesNames} />
         )}
       </div>
     </Block>
