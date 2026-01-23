@@ -505,7 +505,7 @@ export default function Editor({
     };
   }, [editor, documentBridge]);
 
-  // AI inline generation hook
+  // AI inline generation hook (handles Cmd+Enter and post-generation shortcuts)
   const {
     isGenerating,
     generatingBlockIds,
@@ -513,22 +513,19 @@ export default function Editor({
     isEditing,
     editPrompt,
     loadingStatus,
-    handleInlineGenerate,
     clearPostGenerationMode,
     handleEditSubmit,
-    startEditing,
     cancelEditing,
     setEditPrompt,
     getIsProgrammaticEdit,
+    hasGeneratedBlocks,
+    handleKeyDown: handleInlineGenerationKeyDown,
   } = useAIInlineGeneration({
     editor: editor ?? null,
+    runbookId: runbook?.id,
     documentBridge,
     getEditorContext,
   });
-
-  // Derived values for compatibility with useAIKeyboardShortcuts
-  const postGenerationBlockId = generatedBlockIds.length > 0 ? generatedBlockIds[generatedBlockIds.length - 1] : null;
-  const generatedBlockCount = generatedBlockIds.length;
 
   // Callback for showing the edit popup
   const handleShowEditPopup = useCallback((position: { x: number; y: number }, block: any) => {
@@ -537,21 +534,21 @@ export default function Editor({
     setCurrentEditBlock(block);
   }, []);
 
-  // AI keyboard shortcuts (Cmd+K, Cmd+Enter, Tab, Escape, E)
-  useAIKeyboardShortcuts({
+  // AI keyboard shortcuts (Cmd+K only - for showing popups)
+  const { handleKeyDown: handleAIShortcutsKeyDown } = useAIKeyboardShortcuts({
     editor,
-    runbookId: runbook?.id,
-    postGenerationBlockId,
-    generatedBlockIds,
-    generatedBlockCount,
-    isEditingGenerated: isEditing,
-    isGeneratingInline: isGenerating,
     onShowAIPopup: showAIPopup,
     onShowEditPopup: handleShowEditPopup,
-    onInlineGenerate: handleInlineGenerate,
-    onClearPostGeneration: clearPostGenerationMode,
-    onStartEditing: startEditing,
   });
+
+  // Combined keyboard handler for BlockNoteView
+  const handleEditorKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      handleInlineGenerationKeyDown(e);
+      handleAIShortcutsKeyDown(e);
+    },
+    [handleInlineGenerationKeyDown, handleAIShortcutsKeyDown]
+  );
 
   // Handle visibility and scroll restoration when runbook changes
   useLayoutEffect(() => {
@@ -733,7 +730,8 @@ export default function Editor({
           }}
           onClick={(e) => {
             // Clear post-generation mode on any click
-            if (postGenerationBlockId) {
+            // Use hasGeneratedBlocks() to avoid stale closure issues
+            if (hasGeneratedBlocks()) {
               clearPostGenerationMode();
             }
 
@@ -778,10 +776,12 @@ export default function Editor({
             slashMenu={false}
             className="pb-[200px]"
             sideMenu={false}
+            onKeyDownCapture={handleEditorKeyDown}
             onChange={() => {
               runbookEditor.save(runbook, editor);
               // Clear post-generation mode when user edits anything (but not programmatic edits)
-              if (postGenerationBlockId && !getIsProgrammaticEdit()) {
+              // Use hasGeneratedBlocks() to avoid stale closure issues
+              if (hasGeneratedBlocks() && !getIsProgrammaticEdit()) {
                 clearPostGenerationMode();
               }
             }}
@@ -883,7 +883,7 @@ export default function Editor({
           )}
 
           {/* Subtle hint for AI generation */}
-          {aiEnabledState && showAiHint && !postGenerationBlockId && (
+          {aiEnabledState && showAiHint && generatedBlockIds.length === 0 && (
             <AIHint editor={editor} isGenerating={isGenerating} aiEnabled={aiEnabledState} />
           )}
 
