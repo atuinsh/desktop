@@ -454,10 +454,10 @@ impl QueryBlockBehavior for Prometheus {
                                     .unwrap_or(0.0);
 
                                 // Only collect timestamps from first series
-                                if timestamps.is_empty() || timestamps.len() < values.len() {
-                                    if series_names.is_empty() {
-                                        timestamps.push(ts);
-                                    }
+                                if (timestamps.is_empty() || timestamps.len() < values.len())
+                                    && series_names.is_empty()
+                                {
+                                    timestamps.push(ts);
                                 }
                                 series_values.push(value);
                             }
