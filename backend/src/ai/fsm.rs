@@ -538,7 +538,7 @@ mod tests {
 
         assert_eq!(agent.state(), &State::Sending);
         assert_eq!(t.effects, vec![Effect::StartRequest]);
-        assert_eq!(agent.context().conversation.len(), 1);
+        assert_eq!(agent.context().conversation.len(), 2); // system + user
     }
 
     #[test]
@@ -597,7 +597,7 @@ mod tests {
 
         assert_eq!(agent.state(), &State::Idle);
         assert_eq!(t.effects, vec![Effect::ResponseComplete]);
-        assert_eq!(agent.context().conversation.len(), 2); // user + assistant
+        assert_eq!(agent.context().conversation.len(), 3); // system + user + assistant
     }
 
     #[test]
@@ -618,7 +618,7 @@ mod tests {
             vec![Effect::ResponseComplete, Effect::StartRequest]
         );
         assert!(agent.context().queued_messages.is_empty());
-        assert_eq!(agent.context().conversation.len(), 3); // first + response + second
+        assert_eq!(agent.context().conversation.len(), 4); // system + first + response + second
     }
 
     #[test]
@@ -668,8 +668,8 @@ mod tests {
         assert!(agent.context().pending_tools.is_empty());
         // Tool results are now pushed to conversation as ToolResponse messages
         assert!(agent.context().tool_results.is_empty());
-        // Conversation: user msg, assistant msg (with tool call), tool response
-        assert_eq!(agent.context().conversation.len(), 3);
+        // Conversation: system, user msg, assistant msg (with tool call), tool response
+        assert_eq!(agent.context().conversation.len(), 4);
     }
 
     #[test]
@@ -751,7 +751,8 @@ mod tests {
         });
 
         // Check the assistant message in conversation has both text and tool call
-        let assistant_msg = &agent.context().conversation[1];
+        // conversation[0] = system, [1] = user, [2] = assistant
+        let assistant_msg = &agent.context().conversation[2];
         assert!(matches!(assistant_msg.role, ChatRole::Assistant));
         let parts = assistant_msg.content.clone().into_parts();
         assert_eq!(parts.len(), 2);
@@ -779,8 +780,8 @@ mod tests {
         // Messages stay queued until tools complete
         assert_eq!(agent.state(), &State::PendingTools);
         assert_eq!(agent.context().queued_messages.len(), 1);
-        // Conversation: first msg, assistant msg
-        assert_eq!(agent.context().conversation.len(), 2);
+        // Conversation: system, first msg, assistant msg
+        assert_eq!(agent.context().conversation.len(), 3);
 
         // Tool completes - now queued messages are drained
         agent.handle(Event::ToolResult(ToolResult {
@@ -790,11 +791,11 @@ mod tests {
 
         assert_eq!(agent.state(), &State::Sending);
         assert!(agent.context().queued_messages.is_empty());
-        // Conversation: first msg, assistant msg, tool response, second msg
-        assert_eq!(agent.context().conversation.len(), 4);
-        // Verify the fourth message is the queued "second"
-        let fourth_msg = &agent.context().conversation[3];
-        assert!(matches!(fourth_msg.role, ChatRole::User));
+        // Conversation: system, first msg, assistant msg, tool response, second msg
+        assert_eq!(agent.context().conversation.len(), 5);
+        // Verify the fifth message is the queued "second"
+        let fifth_msg = &agent.context().conversation[4];
+        assert!(matches!(fifth_msg.role, ChatRole::User));
     }
 
     #[test]
@@ -829,8 +830,8 @@ mod tests {
             vec![Effect::ToolResultReceived, Effect::StartRequest]
         );
         assert!(agent.context().queued_messages.is_empty());
-        // Conversation: user msg, assistant msg, tool response, queued msg
-        assert_eq!(agent.context().conversation.len(), 4);
+        // Conversation: system, user msg, assistant msg, tool response, queued msg
+        assert_eq!(agent.context().conversation.len(), 5);
     }
 
     #[test]
@@ -855,7 +856,7 @@ mod tests {
         assert_eq!(t.effects, vec![Effect::Cancelled]);
         assert!(agent.context().pending_tools.is_empty());
         // Tool results were pushed to conversation as error responses
-        // Conversation: user msg, assistant msg, tool response, tool response
-        assert_eq!(agent.context().conversation.len(), 4);
+        // Conversation: system, user msg, assistant msg, tool response, tool response
+        assert_eq!(agent.context().conversation.len(), 5);
     }
 }
