@@ -149,8 +149,9 @@ export const EditorAIFeatures = forwardRef<EditorAIFeaturesHandle, EditorAIFeatu
         closeAIPopup();
         // Start generation with replacePromptBlock=true to replace the empty block
         startGenerationWithPrompt(prompt, aiPopupBlockId, true);
+        editor?.focus();
       },
-      [aiPopupBlockId, closeAIPopup, startGenerationWithPrompt],
+      [aiPopupBlockId, closeAIPopup, startGenerationWithPrompt, editor],
     );
 
     // =========================================================================

@@ -148,8 +148,10 @@ export function AIFocusOverlay({
                 e.stopPropagation();
                 if (e.key === "Enter") {
                   onEditSubmit?.();
+                  editor?.focus();
                 } else if (e.key === "Escape") {
                   onEditCancel?.();
+                  editor?.focus();
                 }
               }}
               placeholder="Describe changes..."
