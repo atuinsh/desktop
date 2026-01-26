@@ -16,15 +16,16 @@ export type UseReducerWithEffectsReducerReturn<S, E> = S | [S, E[]];
 export default function useReducerWithEffects<S, A, E>(
   reducer: (state: S, action: A) => UseReducerWithEffectsReducerReturn<S, E>,
   initialState: S,
-  effectRunner: (effect: E) => void | Promise<void>
+  effectRunner: (effect: E, dispatch: (action: A) => void) => void | Promise<void>
 ): [S, (action: A) => void] {
   const [state, setState] = useState(initialState);
   const pendingEffectsRef = useRef<E[]>([]);
+  const dispatchRef = useRef<(action: A) => void>(() => { });
 
   useEffect(() => {
     const effects = pendingEffectsRef.current;
     pendingEffectsRef.current = [];
-    effects.forEach(effectRunner);
+    effects.forEach((effect) => effectRunner(effect, dispatchRef.current));
   })
 
   const dispatch = useCallback((action: A) => {
@@ -41,6 +42,7 @@ export default function useReducerWithEffects<S, A, E>(
       return result;
     })
   }, [reducer]);
+  dispatchRef.current = dispatch;
 
   return [state, dispatch];
 }
