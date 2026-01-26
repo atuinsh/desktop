@@ -210,3 +210,24 @@ pub async fn ai_destroy_session(
     ai_manager.destroy(session_id).await;
     Ok(())
 }
+
+/// Send an edit request to an InlineBlockGeneration session.
+/// This continues the conversation after submit_blocks with the user's edit instructions.
+#[tauri::command]
+pub async fn ai_send_edit_request(
+    state: tauri::State<'_, AtuinState>,
+    session_id: Uuid,
+    edit_prompt: String,
+    tool_call_id: String,
+) -> Result<(), String> {
+    let ai_manager = state.ai_manager().await;
+    let handle = ai_manager
+        .get_handle(session_id)
+        .await
+        .ok_or_else(|| format!("Session {} not found", session_id))?;
+
+    handle
+        .send_edit_request(edit_prompt, tool_call_id)
+        .await
+        .map_err(|e| e.to_string())
+}

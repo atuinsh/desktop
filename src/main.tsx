@@ -41,7 +41,6 @@ import Runbook from "./state/runbooks/runbook";
 import Operation from "./state/runbooks/operation";
 import EditorBus from "./lib/buses/editor";
 import BlockBus from "./lib/workflow/block_bus";
-import { generateBlocks } from "./lib/ai/block_generator";
 import WorkspaceManager from "./lib/workspaces/manager";
 import Root from "./routes/root/Root";
 import RunbookBus from "./lib/app/runbook_bus";
@@ -105,7 +104,6 @@ DevConsole.addAppObject("invoke", invoke)
   .addAppObject("EditorBus", EditorBus.get())
   .addAppObject("BlockBus", BlockBus.get())
   .addAppObject("SharedStateManager", SharedStateManager)
-  .addAppObject("generateBlocks", generateBlocks)
   .addAppObject("grandCentral", grandCentral)
   .addAppObject("models", {
     Runbook,

@@ -13,7 +13,7 @@ use ts_rs::TS;
 use uuid::Uuid;
 
 use crate::ai::{
-    prompts::{AIPrompts, PromptError},
+    prompts::{AIPrompts, GenerationType, PromptError},
     session::SessionEvent,
     tools::AITools,
 };
@@ -266,6 +266,7 @@ pub enum SessionKind {
         /// The ID of the block after which to insert the new blocks;
         /// this is the block where the user pressed Cmd/Ctrl+Enter.
         insert_after: Uuid,
+        is_initial_generation: bool,
     },
 }
 
@@ -294,12 +295,21 @@ impl SessionKind {
                 block_infos,
                 current_document,
                 insert_after,
+                is_initial_generation,
                 ..
-            } => AIPrompts::generator_system_prompt(
-                block_infos.clone(),
-                current_document.clone(),
-                *insert_after,
-            ),
+            } => {
+                let generation_type = if *is_initial_generation {
+                    GenerationType::Generate
+                } else {
+                    GenerationType::Edit
+                };
+                AIPrompts::generator_system_prompt(
+                    generation_type,
+                    block_infos.clone(),
+                    current_document.clone(),
+                    *insert_after,
+                )
+            }
         }
     }
 
@@ -330,8 +340,7 @@ impl SessionKind {
                     AITools::get_runboook_document(),
                     AITools::get_block_docs(&block_types),
                     AITools::get_default_shell(),
-                    // TODO
-                    // AITools::submit_generated_blocks(),
+                    AITools::submit_blocks(),
                 ]
             }
         }

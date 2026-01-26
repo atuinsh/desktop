@@ -1,13 +1,25 @@
-import React, { useCallback, useRef } from "react";
+import React, { useCallback, useRef, useEffect } from "react";
 import { addToast } from "@heroui/react";
 import { BlockNoteEditor } from "@blocknote/core";
-import { AIFeatureDisabledError, AIQuotaExceededError } from "@/lib/ai/block_generator";
-import { AIMultiBlockResponse } from "@/api/ai";
+import { None } from "@binarymuse/ts-stdlib";
 import { incrementAIHintUseCount } from "../ui/AIHint";
 import track_event from "@/tracking";
 import useDocumentBridge from "@/lib/hooks/useDocumentBridge";
 import { executeBlock } from "@/lib/runtime";
 import useReducerWithEffects, { UseReducerWithEffectsReducerReturn } from "@/lib/hooks/useReducerWithEffects";
+import { ChargeTarget } from "@/rs-bindings/ChargeTarget";
+import {
+  createGeneratorSession,
+  subscribeSession,
+  sendMessage,
+  sendEditRequest,
+  sendToolResult,
+  destroySession,
+} from "@/lib/ai/commands";
+import AIBlockRegistry from "@/lib/ai/block_registry";
+import AtuinEnv from "@/atuin_env";
+import { SessionEvent } from "@/rs-bindings/SessionEvent";
+import { AIToolRunner, DEFAULT_AUTO_APPROVE_TOOLS } from "@/lib/ai/tools";
 
 // =============================================================================
 // Types
@@ -23,29 +35,30 @@ export interface EditorContext {
 // Discriminated union for all possible states
 export type InlineGenerationState =
   | { status: "idle" }
-  | { status: "generating"; promptBlockId: string; originalPrompt: string }
+  | { status: "generating"; promptBlockId: string; originalPrompt: string; sessionId: string; replacePromptBlock: boolean }
   | { status: "cancelled" }
-  | { status: "postGeneration"; generatedBlockIds: string[] }
-  | { status: "editing"; generatedBlockIds: string[]; editPrompt: string }
-  | { status: "submittingEdit"; generatedBlockIds: string[]; editPrompt: string };
+  | { status: "postGeneration"; generatedBlockIds: string[]; sessionId: string; toolCallId: string }
+  | { status: "editing"; generatedBlockIds: string[]; editPrompt: string; sessionId: string; toolCallId: string }
+  | { status: "submittingEdit"; generatedBlockIds: string[]; editPrompt: string; sessionId: string; toolCallId: string };
 
 // All possible actions
 type Action =
-  | { type: "START_GENERATE"; promptBlockId: string; originalPrompt: string }
+  | { type: "START_GENERATE"; promptBlockId: string; originalPrompt: string; sessionId: string; replacePromptBlock: boolean }
   | { type: "GENERATION_CANCELLED" }
-  | { type: "GENERATION_SUCCESS"; generatedBlockIds: string[] }
+  | { type: "GENERATION_SUCCESS"; generatedBlockIds: string[]; toolCallId: string }
   | { type: "GENERATION_ERROR" }
   | { type: "FINISH_CANCELLED_DISPLAY" }
   | { type: "START_EDITING" }
   | { type: "UPDATE_EDIT_PROMPT"; editPrompt: string }
   | { type: "CANCEL_EDITING" }
   | { type: "SUBMIT_EDIT" }
-  | { type: "EDIT_SUCCESS"; generatedBlockIds: string[] }
+  | { type: "EDIT_SUCCESS"; generatedBlockIds: string[]; toolCallId: string }
   | { type: "EDIT_ERROR" }
   | { type: "CLEAR" };
 
 type Effects =
   | { type: "focusEditor" }
+  | { type: "destroySession"; sessionId: string }
 
 // Block types that have inline text content (can be used as prompts)
 const TEXT_BLOCK_TYPES = [
@@ -87,6 +100,8 @@ function reducer(state: InlineGenerationState, action: Action): UseReducerWithEf
         status: "generating",
         promptBlockId: action.promptBlockId,
         originalPrompt: action.originalPrompt,
+        sessionId: action.sessionId,
+        replacePromptBlock: action.replacePromptBlock,
       };
 
     case "GENERATION_CANCELLED":
@@ -94,7 +109,10 @@ function reducer(state: InlineGenerationState, action: Action): UseReducerWithEf
         console.warn(`[AIInlineGeneration] Cannot GENERATION_CANCELLED from state: ${state.status}`);
         return state;
       }
-      return { status: "cancelled" };
+      return [
+        { status: "cancelled" },
+        [{ type: "destroySession", sessionId: state.sessionId }],
+      ];
 
     case "GENERATION_SUCCESS":
       if (state.status !== "generating") {
@@ -104,6 +122,8 @@ function reducer(state: InlineGenerationState, action: Action): UseReducerWithEf
       return {
         status: "postGeneration",
         generatedBlockIds: action.generatedBlockIds,
+        sessionId: state.sessionId,
+        toolCallId: action.toolCallId,
       };
 
     case "GENERATION_ERROR":
@@ -111,7 +131,10 @@ function reducer(state: InlineGenerationState, action: Action): UseReducerWithEf
         console.warn(`[AIInlineGeneration] Cannot GENERATION_ERROR from state: ${state.status}`);
         return state;
       }
-      return { status: "idle" };
+      return [
+        { status: "idle" },
+        [{ type: "destroySession", sessionId: state.sessionId }],
+      ];
 
     case "FINISH_CANCELLED_DISPLAY":
       if (state.status !== "cancelled") {
@@ -129,6 +152,8 @@ function reducer(state: InlineGenerationState, action: Action): UseReducerWithEf
         status: "editing",
         generatedBlockIds: state.generatedBlockIds,
         editPrompt: "",
+        sessionId: state.sessionId,
+        toolCallId: state.toolCallId,
       };
 
     case "UPDATE_EDIT_PROMPT":
@@ -149,6 +174,8 @@ function reducer(state: InlineGenerationState, action: Action): UseReducerWithEf
       return [{
         status: "postGeneration",
         generatedBlockIds: state.generatedBlockIds,
+        sessionId: state.sessionId,
+        toolCallId: state.toolCallId,
       }, [{ type: "focusEditor" }]];
 
     case "SUBMIT_EDIT":
@@ -164,6 +191,8 @@ function reducer(state: InlineGenerationState, action: Action): UseReducerWithEf
         status: "submittingEdit",
         generatedBlockIds: state.generatedBlockIds,
         editPrompt: state.editPrompt,
+        sessionId: state.sessionId,
+        toolCallId: state.toolCallId,
       };
 
     case "EDIT_SUCCESS":
@@ -174,6 +203,8 @@ function reducer(state: InlineGenerationState, action: Action): UseReducerWithEf
       return {
         status: "postGeneration",
         generatedBlockIds: action.generatedBlockIds,
+        sessionId: state.sessionId,
+        toolCallId: action.toolCallId,
       };
 
     case "EDIT_ERROR":
@@ -186,15 +217,21 @@ function reducer(state: InlineGenerationState, action: Action): UseReducerWithEf
         status: "editing",
         generatedBlockIds: state.generatedBlockIds,
         editPrompt: state.editPrompt,
+        sessionId: state.sessionId,
+        toolCallId: state.toolCallId,
       };
 
-    case "CLEAR":
-      // Can clear from postGeneration or editing
-      if (state.status !== "postGeneration" && state.status !== "editing") {
-        // Silent - this can happen legitimately when blocks are deleted
-        return state;
+    case "CLEAR": {
+      // Can clear from postGeneration or editing - destroy session
+      if (state.status === "postGeneration" || state.status === "editing") {
+        return [
+          { status: "idle" },
+          [{ type: "destroySession", sessionId: state.sessionId }],
+        ];
       }
-      return { status: "idle" };
+      // Silent - this can happen legitimately when blocks are deleted
+      return state;
+    }
 
     default:
       return state;
@@ -237,6 +274,18 @@ function getEditPrompt(state: InlineGenerationState): string {
   }
 }
 
+function getSessionId(state: InlineGenerationState): string | null {
+  switch (state.status) {
+    case "generating":
+    case "postGeneration":
+    case "editing":
+    case "submittingEdit":
+      return state.sessionId;
+    default:
+      return null;
+  }
+}
+
 // =============================================================================
 // Hook interface
 // =============================================================================
@@ -246,6 +295,8 @@ export interface UseAIInlineGenerationOptions {
   runbookId: string | undefined;
   documentBridge: ReturnType<typeof useDocumentBridge>;
   getEditorContext: () => Promise<EditorContext | undefined>;
+  username: string;
+  chargeTarget: ChargeTarget;
 }
 
 export interface UseAIInlineGenerationReturn {
@@ -265,6 +316,10 @@ export interface UseAIInlineGenerationReturn {
   cancelEditing: () => void;
   setEditPrompt: (value: string) => void;
 
+  // Start generation with a prompt string (for Cmd+K popup flow)
+  // replacePromptBlock: if true, deletes the insertAfterBlockId after inserting generated blocks
+  startGenerationWithPrompt: (prompt: string, insertAfterBlockId: string, replacePromptBlock?: boolean) => Promise<void>;
+
   // For onChange integration (ref-based, doesn't trigger re-renders)
   getIsProgrammaticEdit: () => boolean;
   hasGeneratedBlocks: () => boolean;
@@ -283,27 +338,51 @@ export interface UseAIInlineGenerationReturn {
 export function useAIInlineGeneration({
   editor,
   runbookId,
-  documentBridge,
-  getEditorContext,
+  documentBridge: _documentBridge,
+  getEditorContext: _getEditorContext,
+  username,
+  chargeTarget,
 }: UseAIInlineGenerationOptions): UseAIInlineGenerationReturn {
   const runEffect = useCallback((effect: Effects) => {
     console.log("[AIInlineGeneration] Running effect:", effect);
     if (effect.type === "focusEditor") {
       editor?.focus();
+    } else if (effect.type === "destroySession") {
+      destroySession(effect.sessionId).catch((err) => {
+        console.error("[AIInlineGeneration] Failed to destroy session:", err);
+      });
     }
   }, [editor]);
 
   const [state, dispatch] = useReducerWithEffects(reducer, initialState, runEffect);
 
+  // Tool runner for executing AI tools - auto-approve all read-only tools for inline generation
+  const toolRunnerRef = useRef<AIToolRunner>(new AIToolRunner(DEFAULT_AUTO_APPROVE_TOOLS.concat(["get_runbook_document"])));
+
   // Keep state and handlers in refs so keyboard handlers always have current values
   const stateRef = useRef(state);
   stateRef.current = state;
+
+  const editorRef = useRef(editor);
+  editorRef.current = editor;
+
+  // Keep tool runner's editor reference up to date
+  useEffect(() => {
+    toolRunnerRef.current.setEditor(editor);
+  }, [editor]);
 
   const handleInlineGenerateRef = useRef<(block: any) => Promise<void>>(null as any);
 
   // Refs for async operation tracking
   const errorToastShownRef = useRef(false);
   const isProgrammaticEditRef = useRef(false);
+
+  // Track the prompt block ID so we can check for cancellation
+  const promptBlockIdRef = useRef<string | null>(null);
+  const originalPromptRef = useRef<string | null>(null);
+  const replacePromptBlockRef = useRef<boolean>(false);
+  // Track if we need to insert at the beginning of the document (when prompt block was first block)
+  const insertAtBeginningRef = useRef<boolean>(false);
 
   // Extract plain text from a BlockNote block's content
   const getBlockText = useCallback((block: any): string => {
@@ -314,94 +393,275 @@ export function useAIInlineGeneration({
       .join("");
   }, []);
 
-  // Handle inline AI generation from a paragraph block
-  const handleInlineGenerate = useCallback(
-    async (block: any) => {
-      const prompt = getBlockText(block);
-      if (!prompt.trim() || !editor) return;
+  // Handle session events
+  const handleSessionEvent = useCallback(
+    (event: SessionEvent) => {
+      console.log("[AIInlineGeneration] Session event:", event.type, event);
+      const currentEditor = editorRef.current;
+      const currentState = stateRef.current;
 
-      // Start generation
-      dispatch({ type: "START_GENERATE", promptBlockId: block.id, originalPrompt: prompt });
+      switch (event.type) {
+        case "blocksGenerated": {
+          if (currentState.status !== "generating" && currentState.status !== "submittingEdit") {
+            console.warn("[AIInlineGeneration] Received blocksGenerated in unexpected state:", currentState.status);
+            return;
+          }
+
+          // Check if the block was edited during generation (cancellation)
+          // Skip this check for Cmd+K flow (replacePromptBlock=true) since the prompt came from the popup, not the block
+          if (currentState.status === "generating" && !currentState.replacePromptBlock && promptBlockIdRef.current && currentEditor) {
+            const currentBlock = currentEditor.document.find((b: any) => b.id === promptBlockIdRef.current);
+            const currentBlockText = currentBlock ? getBlockText(currentBlock) : null;
+            if (currentBlockText !== originalPromptRef.current) {
+              dispatch({ type: "GENERATION_CANCELLED" });
+              track_event("runbooks.ai.inline_generate_cancelled", { reason: "block_edited" });
+              // Show "Cancelled" for 1.5 seconds, then return to idle
+              setTimeout(() => dispatch({ type: "FINISH_CANCELLED_DISPLAY" }), 1500);
+              return;
+            }
+          }
+
+          const blocks = event.blocks as Array<{ type: string; props?: Record<string, unknown> }>;
+          const toolCallId = event.toolCallId;
+
+          if (!currentEditor) {
+            console.error("[AIInlineGeneration] No editor available for block insertion");
+            dispatch({ type: "GENERATION_ERROR" });
+            return;
+          }
+
+          // For edits, remove old blocks first
+          if (currentState.status === "submittingEdit") {
+            isProgrammaticEditRef.current = true;
+            currentEditor.removeBlocks(currentState.generatedBlockIds);
+          }
+
+          // Cap at 3 blocks
+          const blocksToInsert = blocks.slice(0, 3);
+
+          // Determine insertion point and method
+          let insertAfterBlockId: string | null;
+          let insertAtBeginning = false;
+
+          if (currentState.status === "generating") {
+            insertAfterBlockId = currentState.promptBlockId;
+          } else {
+            // For edits, insert after the block before the first removed block
+            // If insertAtBeginningRef is true, we need to insert before the first document block
+            if (insertAtBeginningRef.current) {
+              insertAtBeginning = true;
+              insertAfterBlockId = currentEditor.document[0]?.id || null;
+            } else {
+              insertAfterBlockId = promptBlockIdRef.current || currentEditor.document[0]?.id;
+            }
+          }
+
+          let lastInsertedId: string | null = insertAfterBlockId;
+          const insertedIds: string[] = [];
+          for (let i = 0; i < blocksToInsert.length; i++) {
+            const newBlock = blocksToInsert[i];
+            // For the first block when inserting at beginning, use "before"; otherwise "after"
+            const position = (insertAtBeginning && i === 0) ? "before" : "after";
+            const referenceId = lastInsertedId || currentEditor.document[0]?.id;
+            if (!referenceId) {
+              console.error("[AIInlineGeneration] No reference block for insertion");
+              break;
+            }
+            const inserted = currentEditor.insertBlocks([newBlock as any], referenceId, position);
+            if (inserted?.[0]?.id) {
+              lastInsertedId = inserted[0].id;
+              insertedIds.push(inserted[0].id);
+            }
+          }
+
+          if (currentState.status === "submittingEdit") {
+            queueMicrotask(() => {
+              isProgrammaticEditRef.current = false;
+            });
+          }
+
+          // If replacePromptBlock is set (Cmd+K flow), delete the original empty block
+          // and update promptBlockIdRef to point to the block before it (for subsequent edits)
+          if (currentState.status === "generating" && replacePromptBlockRef.current && promptBlockIdRef.current) {
+            const promptBlockIndex = currentEditor.document.findIndex((b: any) => b.id === promptBlockIdRef.current);
+            const blockBeforePrompt = promptBlockIndex > 0 ? currentEditor.document[promptBlockIndex - 1] : null;
+
+            isProgrammaticEditRef.current = true;
+            currentEditor.removeBlocks([promptBlockIdRef.current]);
+            queueMicrotask(() => {
+              isProgrammaticEditRef.current = false;
+            });
+
+            // Update refs so subsequent edits insert in the right place
+            if (blockBeforePrompt) {
+              promptBlockIdRef.current = blockBeforePrompt.id;
+              insertAtBeginningRef.current = false;
+            } else {
+              // Prompt block was the first block - need to insert at beginning for edits
+              promptBlockIdRef.current = null;
+              insertAtBeginningRef.current = true;
+            }
+          }
+
+          // Move cursor to after the last inserted block
+          if (lastInsertedId && lastInsertedId !== insertAfterBlockId) {
+            currentEditor.setTextCursorPosition(lastInsertedId, "end");
+          }
+
+          if (insertedIds.length > 0) {
+            if (currentState.status === "generating") {
+              dispatch({ type: "GENERATION_SUCCESS", generatedBlockIds: insertedIds, toolCallId });
+              track_event("runbooks.ai.inline_generate_success", {
+                prompt_length: originalPromptRef.current?.length || 0,
+                blocks_generated: blocksToInsert.length,
+              });
+              incrementAIHintUseCount();
+            } else {
+              dispatch({ type: "EDIT_SUCCESS", generatedBlockIds: insertedIds, toolCallId });
+              track_event("runbooks.ai.post_generation_edit_success", {
+                blocks_generated: blocksToInsert.length,
+              });
+            }
+          } else {
+            if (currentState.status === "generating") {
+              dispatch({ type: "GENERATION_ERROR" });
+            } else {
+              dispatch({ type: "EDIT_ERROR" });
+            }
+          }
+          break;
+        }
+
+        case "error": {
+          const message = event.message || "Unknown error";
+          console.error("[AIInlineGeneration] Session error:", message);
+
+          if (currentState.status === "generating") {
+            dispatch({ type: "GENERATION_ERROR" });
+          } else if (currentState.status === "submittingEdit") {
+            dispatch({ type: "EDIT_ERROR" });
+          }
+
+          // Prevent duplicate error toasts
+          if (!errorToastShownRef.current) {
+            errorToastShownRef.current = true;
+            addToast({
+              title: "Generation failed",
+              description: message,
+              color: "danger",
+            });
+          }
+
+          track_event("runbooks.ai.inline_generate_error", { error: message });
+          break;
+        }
+
+        case "cancelled": {
+          if (currentState.status === "generating") {
+            dispatch({ type: "GENERATION_CANCELLED" });
+            track_event("runbooks.ai.inline_generate_cancelled", { reason: "session_cancelled" });
+            setTimeout(() => dispatch({ type: "FINISH_CANCELLED_DISPLAY" }), 1500);
+          }
+          break;
+        }
+
+        case "toolsRequested": {
+          // Auto-execute tools for inline generation using the tool runner
+          const toolCalls = event.calls;
+          const sessionId = getSessionId(currentState);
+          const toolRunner = toolRunnerRef.current;
+
+          if (!sessionId) {
+            console.error("[AIInlineGeneration] No session for tool execution");
+            return;
+          }
+
+          // Execute each tool and send result
+          for (const toolCall of toolCalls) {
+            if (toolRunner.isAutoApprovable(toolCall.name)) {
+              console.log(`[AIInlineGeneration] Auto-executing tool: ${toolCall.name}`);
+              toolRunner
+                .executeToolCall(toolCall)
+                .then((result) => {
+                  sendToolResult(sessionId, toolCall.id, result.success, result.result).catch(
+                    (err) => console.error("[AIInlineGeneration] Failed to send tool result:", err)
+                  );
+                })
+                .catch((err) => {
+                  console.error(`[AIInlineGeneration] Failed to execute tool ${toolCall.name}:`, err);
+                  sendToolResult(sessionId, toolCall.id, false, err.message).catch(
+                    (err2) => console.error("[AIInlineGeneration] Failed to send error result:", err2)
+                  );
+                });
+            } else {
+              console.warn(`[AIInlineGeneration] Tool ${toolCall.name} is not auto-approvable, sending error`);
+              sendToolResult(
+                sessionId,
+                toolCall.id,
+                false,
+                `Tool ${toolCall.name} is not available for inline generation`
+              ).catch((err) => console.error("[AIInlineGeneration] Failed to send error result:", err));
+            }
+          }
+          break;
+        }
+
+        // Other events we don't need to handle for inline generation
+        default:
+          break;
+      }
+    },
+    [getBlockText]
+  );
+
+  // Core generation logic shared between inline (Cmd+Enter) and popup (Cmd+K) flows
+  const startGeneration = useCallback(
+    async (prompt: string, blockId: string, replacePromptBlock: boolean) => {
+      if (!prompt.trim() || !editor || !runbookId) return;
+
+      // Cancel any existing session
+      const existingSessionId = getSessionId(stateRef.current);
+      if (existingSessionId) {
+        await destroySession(existingSessionId).catch(console.error);
+      }
+
       errorToastShownRef.current = false;
+      promptBlockIdRef.current = blockId;
+      originalPromptRef.current = prompt;
+      replacePromptBlockRef.current = replacePromptBlock;
 
       try {
-        const context = await getEditorContext();
-        const { generateBlocks } = await import("@/lib/ai/block_generator");
-        const lastBlockContext = await documentBridge?.getLastBlockContext();
+        const blockRegistry = AIBlockRegistry.getInstance();
+        const hubEndpoint = AtuinEnv.url("/api/ai/proxy/");
 
-        const result = await generateBlocks({
-          prompt,
-          documentMarkdown: context?.documentMarkdown,
-          insertAfterIndex: context?.currentBlockIndex,
-          runbookId: context?.runbookId,
-          context: {
-            variables: Object.keys(lastBlockContext?.variables ?? {}),
-            named_blocks: [],
-            environment_variables: Object.keys(lastBlockContext?.envVars ?? {}),
-            working_directory: lastBlockContext?.cwd || null,
-            ssh_host: lastBlockContext?.sshHost || null,
-          },
-        });
+        // Create generator session
+        const sessionId = await createGeneratorSession(
+          runbookId,
+          None, // Use default model
+          blockRegistry.getBlockInfos(),
+          editor.document,
+          blockId,
+          username,
+          chargeTarget,
+          hubEndpoint,
+        );
 
-        // Check if the block was edited during generation (cancellation)
-        const currentBlock = editor.document.find((b: any) => b.id === block.id);
-        const currentBlockText = getBlockText(currentBlock);
-        if (currentBlockText !== prompt) {
-          dispatch({ type: "GENERATION_CANCELLED" });
-          track_event("runbooks.ai.inline_generate_cancelled", { reason: "block_edited" });
-          // Show "Cancelled" for 1.5 seconds, then return to idle
-          setTimeout(() => dispatch({ type: "FINISH_CANCELLED_DISPLAY" }), 1500);
-          return;
-        }
+        // Update state with session ID
+        dispatch({ type: "START_GENERATE", promptBlockId: blockId, originalPrompt: prompt, sessionId, replacePromptBlock });
 
-        // Cap at 3 blocks
-        const blocksToInsert = result.blocks.slice(0, 3);
+        // Subscribe to session events
+        await subscribeSession(sessionId, handleSessionEvent);
 
-        let lastInsertedId = block.id;
-        const insertedIds: string[] = [];
-        for (const newBlock of blocksToInsert) {
-          const inserted = editor.insertBlocks([newBlock as any], lastInsertedId, "after");
-          if (inserted?.[0]?.id) {
-            lastInsertedId = inserted[0].id;
-            insertedIds.push(inserted[0].id);
-          }
-        }
+        // Send the prompt as user message to start generation
+        await sendMessage(sessionId, prompt);
 
-        // Move cursor to after the last inserted block
-        if (lastInsertedId !== block.id) {
-          editor.setTextCursorPosition(lastInsertedId, "end");
-        }
-
-        if (insertedIds.length > 0) {
-          dispatch({ type: "GENERATION_SUCCESS", generatedBlockIds: insertedIds });
-        } else {
-          dispatch({ type: "GENERATION_ERROR" });
-        }
-
-        track_event("runbooks.ai.inline_generate_success", {
-          prompt_length: prompt.length,
-          blocks_generated: blocksToInsert.length,
-        });
-
-        incrementAIHintUseCount();
       } catch (error) {
+        console.error("[AIInlineGeneration] Failed to create session:", error);
         dispatch({ type: "GENERATION_ERROR" });
 
-        // Prevent duplicate error toasts
-        if (errorToastShownRef.current) return;
-        errorToastShownRef.current = true;
-
-        const message =
-          error instanceof AIFeatureDisabledError
-            ? "AI feature is not enabled for your account"
-            : error instanceof AIQuotaExceededError
-              ? "AI quota exceeded"
-              : error instanceof Error
-                ? error.message
-                : "Failed to generate blocks";
-
+        const message = error instanceof Error ? error.message : "Failed to start generation";
         addToast({
-          title: error instanceof AIQuotaExceededError ? "Quota exceeded" : "Generation failed",
+          title: "Generation failed",
           description: message,
           color: "danger",
         });
@@ -409,7 +669,24 @@ export function useAIInlineGeneration({
         track_event("runbooks.ai.inline_generate_error", { error: message });
       }
     },
-    [editor, getEditorContext, getBlockText, documentBridge]
+    [editor, runbookId, username, chargeTarget, handleSessionEvent]
+  );
+
+  // Handle inline AI generation from a paragraph block (Cmd+Enter flow)
+  const handleInlineGenerate = useCallback(
+    async (block: any) => {
+      const prompt = getBlockText(block);
+      await startGeneration(prompt, block.id, false);
+    },
+    [getBlockText, startGeneration]
+  );
+
+  // Start generation with a prompt string (Cmd+K popup flow)
+  const startGenerationWithPrompt = useCallback(
+    async (prompt: string, insertAfterBlockId: string, replacePromptBlock: boolean = false) => {
+      await startGeneration(prompt, insertAfterBlockId, replacePromptBlock);
+    },
+    [startGeneration]
   );
 
   // Update ref so keyboard handler always has current function
@@ -420,37 +697,14 @@ export function useAIInlineGeneration({
     const currentState = stateRef.current;
     if (!editor || currentState.status !== "editing" || !currentState.editPrompt.trim()) return;
 
-    const { generatedBlockIds, editPrompt } = currentState;
+    const { sessionId, toolCallId, editPrompt } = currentState;
 
     dispatch({ type: "SUBMIT_EDIT" });
 
     try {
-      const currentBlocks = editor.document.filter((b: any) => generatedBlockIds.includes(b.id));
-      if (currentBlocks.length !== generatedBlockIds.length) {
-        throw new Error("Blocks not found");
-      }
-
-      const context = await getEditorContext();
-      const { generateOrEditBlock } = await import("@/api/ai");
-
-      const result = (await generateOrEditBlock({
-        action: "edit",
-        blocks: currentBlocks,
-        instruction: editPrompt,
-        document_markdown: context?.documentMarkdown,
-        runbook_id: context?.runbookId,
-      })) as AIMultiBlockResponse;
-
-      isProgrammaticEditRef.current = true;
-      editor.replaceBlocks(generatedBlockIds, result.blocks as any[]);
-      queueMicrotask(() => {
-        isProgrammaticEditRef.current = false;
-      });
-
-      dispatch({
-        type: "EDIT_SUCCESS",
-        generatedBlockIds: result.blocks.map((b: any) => b.id),
-      });
+      // Send edit request to session - this will update system prompt and continue conversation
+      await sendEditRequest(sessionId, editPrompt, toolCallId);
+      // The session will emit BlocksGenerated event when done
     } catch (error) {
       dispatch({ type: "EDIT_ERROR" });
 
@@ -462,7 +716,7 @@ export function useAIInlineGeneration({
       });
       track_event("runbooks.ai.post_generation_edit_error", { error: message });
     }
-  }, [editor, getEditorContext]);
+  }, [editor]);
 
   // Simple action dispatchers
   const clearPostGenerationMode = useCallback(() => {
@@ -632,6 +886,16 @@ export function useAIInlineGeneration({
     [editor, runbookId]
   );
 
+  // Cleanup session on unmount
+  useEffect(() => {
+    return () => {
+      const sessionId = getSessionId(stateRef.current);
+      if (sessionId) {
+        destroySession(sessionId).catch(console.error);
+      }
+    };
+  }, []);
+
   // Derive values from state
   const isGenerating = state.status === "generating" || state.status === "submittingEdit";
   const generatingBlockIds = getGeneratingBlockIds(state);
@@ -654,6 +918,7 @@ export function useAIInlineGeneration({
     startEditing,
     cancelEditing,
     setEditPrompt,
+    startGenerationWithPrompt,
 
     getIsProgrammaticEdit,
     hasGeneratedBlocks,

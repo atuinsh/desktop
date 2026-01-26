@@ -49,16 +49,7 @@ import AtuinEnv from "@/atuin_env";
 import { getModelSelection } from "@/state/settings_ai";
 import { DialogBuilder } from "@/components/Dialogs/dialog";
 import { ModelSelection } from "@/rs-bindings/ModelSelection";
-
-const ALL_TOOL_NAMES = [
-  "get_runbook_document",
-  "get_block_docs",
-  "get_default_shell",
-  "insert_blocks",
-  "update_block",
-  "replace_blocks",
-];
-const AUTO_APPROVE_TOOLS = new Set(["get_block_docs"]);
+import { ALL_TOOL_NAMES, AIToolRunner, DEFAULT_AUTO_APPROVE_TOOLS } from "@/lib/ai/tools";
 
 // Error boundary for Streamdown - falls back to plain text if it fails
 class MarkdownErrorBoundary extends Component<
@@ -369,111 +360,7 @@ function QueuedMessageItem({ message }: { message: AIMessage }) {
   );
 }
 
-// Tool execution functions
-async function executeGetRunbookDocument(editor: BlockNoteEditor): Promise<any> {
-  return { blocks: editor.document };
-}
-
-async function executeGetBlockDocs(
-  _editor: BlockNoteEditor,
-  params: { block_types: string[] },
-): Promise<string> {
-  return params.block_types.reduce((acc, blockType) => {
-    acc += AIBlockRegistry.getInstance().getBlockDocs(blockType);
-    return acc;
-  }, "");
-}
-
-async function executeGetDefaultShell(): Promise<string> {
-  return await Settings.getSystemDefaultShell();
-}
-
-async function executeInsertBlocks(
-  editor: BlockNoteEditor,
-  params: { blocks: any[]; position: "before" | "after" | "end"; reference_block_id?: string },
-): Promise<any> {
-  const { blocks, position, reference_block_id } = params;
-
-  if (position === "end") {
-    const lastBlock = editor.document[editor.document.length - 1];
-    editor.insertBlocks(blocks, lastBlock.id, "after");
-  } else if (reference_block_id) {
-    editor.insertBlocks(blocks, reference_block_id, position);
-  } else {
-    throw new Error("reference_block_id required for 'before' or 'after' position");
-  }
-
-  return { success: true };
-}
-
-async function executeUpdateBlock(
-  editor: BlockNoteEditor,
-  params: { block_id: string; props?: any; content?: any },
-): Promise<any> {
-  const { block_id, props, content } = params;
-
-  const updates: any = {};
-  if (props) updates.props = props;
-  if (content) updates.content = content;
-
-  editor.updateBlock(block_id, updates);
-  return { success: true };
-}
-
-async function executeReplaceBlocks(
-  editor: BlockNoteEditor,
-  params: { block_ids: string[]; new_blocks: any[] },
-): Promise<any> {
-  const { block_ids, new_blocks } = params;
-
-  if (block_ids.length === 0) {
-    throw new Error("block_ids cannot be empty");
-  }
-
-  const blocksToReplace = editor.document.filter((b: any) => block_ids.includes(b.id));
-  if (blocksToReplace.length === 0) {
-    throw new Error("No blocks found with the specified IDs");
-  }
-
-  editor.replaceBlocks(blocksToReplace, new_blocks);
-  return { success: true };
-}
-
-async function executeTool(
-  editor: BlockNoteEditor,
-  toolName: string,
-  params: any,
-): Promise<{ success: boolean; result: string }> {
-  try {
-    let result: any;
-    switch (toolName) {
-      case "get_runbook_document":
-        result = await executeGetRunbookDocument(editor);
-        break;
-      case "get_block_docs":
-        result = await executeGetBlockDocs(editor, params);
-        break;
-      case "get_default_shell":
-        result = await executeGetDefaultShell();
-        break;
-      case "insert_blocks":
-        result = await executeInsertBlocks(editor, params);
-        break;
-      case "update_block":
-        result = await executeUpdateBlock(editor, params);
-        break;
-      case "replace_blocks":
-        result = await executeReplaceBlocks(editor, params);
-        break;
-      default:
-        throw new Error(`Unknown tool: ${toolName}`);
-    }
-    return { success: true, result: JSON.stringify(result) };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown error";
-    return { success: false, result: message };
-  }
-}
+// Tool execution functions are now in @/lib/ai/tools.ts
 
 export default function AIAssistant({
   runbookId,
@@ -490,8 +377,13 @@ export default function AIAssistant({
   const [rejectedToolCalls, setRejectedToolCalls] = useState<string[]>([]);
   const scrollShadowRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const autoApproveToolsRef = useRef<string[]>([...AUTO_APPROVE_TOOLS]);
+  const toolRunnerRef = useRef<AIToolRunner>(new AIToolRunner(DEFAULT_AUTO_APPROVE_TOOLS));
   const user = useStore((state) => state.user);
+
+  // Keep tool runner editor reference up to date
+  useEffect(() => {
+    toolRunnerRef.current.setEditor(editor);
+  }, [editor]);
 
   // Create session on mount
   useEffect(() => {
@@ -681,21 +573,22 @@ export default function AIAssistant({
 
   const handleApprove = useCallback(
     async (toolCall: AIToolCall) => {
-      if (!editor) return;
+      const toolRunner = toolRunnerRef.current;
+      if (!toolRunner.getEditor()) return;
 
-      const { success, result } = await executeTool(editor, toolCall.name, toolCall.args);
+      const { success, result } = await toolRunner.executeToolCall(toolCall);
       addToolOutput({
         toolCallId: toolCall.id,
         success,
         result,
       });
     },
-    [editor, addToolOutput],
+    [addToolOutput],
   );
 
   const handleAlwaysApprove = useCallback(
     (toolCall: AIToolCall) => {
-      autoApproveToolsRef.current.push(toolCall.name);
+      toolRunnerRef.current.addAutoApproveTool(toolCall.name);
       handleApprove(toolCall);
     },
     [handleApprove],
@@ -746,7 +639,8 @@ export default function AIAssistant({
   const autoApprovedRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
-    if (!editor) return;
+    const toolRunner = toolRunnerRef.current;
+    if (!toolRunner.getEditor()) return;
 
     for (const toolCall of pendingToolCalls) {
       if (!ALL_TOOL_NAMES.includes(toolCall.name)) {
@@ -755,14 +649,14 @@ export default function AIAssistant({
       }
 
       if (
-        autoApproveToolsRef.current.includes(toolCall.name) &&
+        toolRunner.isAutoApprovable(toolCall.name) &&
         !autoApprovedRef.current.has(toolCall.id)
       ) {
         autoApprovedRef.current.add(toolCall.id);
         handleApprove(toolCall);
       }
     }
-  }, [pendingToolCalls, editor, handleApprove]);
+  }, [pendingToolCalls, handleApprove, handleDeny]);
 
   if (!isOpen) return null;
 

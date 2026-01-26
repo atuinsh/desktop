@@ -135,7 +135,7 @@ impl AISessionManager {
             block_infos,
         };
 
-        Ok(self.create_session(kind, config, restore_previous).await?)
+        self.create_session(kind, config, restore_previous).await
     }
 
     pub async fn create_generator_session(
@@ -151,9 +151,10 @@ impl AISessionManager {
             block_infos,
             current_document,
             insert_after,
+            is_initial_generation: true,
         };
 
-        Ok(self.create_session(kind, config, false).await?)
+        self.create_session(kind, config, false).await
     }
 
     async fn create_session(

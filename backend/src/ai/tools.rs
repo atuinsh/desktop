@@ -176,4 +176,41 @@ impl AITools {
                 "required": ["block_ids", "new_blocks"]
             }))
     }
+
+    pub fn submit_blocks() -> Tool {
+        Tool::new("submit_blocks")
+            .with_description(indoc! {"
+                Submit the generated blocks to be inserted into the runbook.
+                This tool should be called exactly once at the end of your response
+                with all the blocks you want to insert. After calling this tool,
+                the interaction ends unless the user requests edits.
+
+                Each block object must have a 'type' property (the block type name)
+                and a 'props' property (the block's properties as specified in the block documentation).
+            "})
+            .with_schema(json!({
+                "type": "object",
+                "properties": {
+                    "blocks": {
+                        "type": "array",
+                        "description": "Array of block objects to insert. Each must have 'type' and 'props'.",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "type": {
+                                    "type": "string",
+                                    "description": "The block type name"
+                                },
+                                "props": {
+                                    "type": "object",
+                                    "description": "The block's properties"
+                                }
+                            },
+                            "required": ["type", "props"]
+                        }
+                    }
+                },
+                "required": ["blocks"]
+            }))
+    }
 }

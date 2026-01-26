@@ -2,8 +2,9 @@
 import type { AIMessage } from "./AIMessage";
 import type { AIToolCall } from "./AIToolCall";
 import type { State } from "./State";
+import type { JsonValue } from "./serde_json/JsonValue";
 
 /**
  * Events emitted by the session to the frontend.
  */
-export type SessionEvent = { "type": "stateChanged", state: State, } | { "type": "streamStarted" } | { "type": "chunk", content: string, } | { "type": "responseComplete" } | { "type": "toolsRequested", calls: Array<AIToolCall>, } | { "type": "error", message: string, } | { "type": "cancelled" } | { "type": "history", messages: Array<AIMessage>, pendingToolCalls: Array<AIToolCall>, };
+export type SessionEvent = { "type": "stateChanged", state: State, } | { "type": "streamStarted" } | { "type": "chunk", content: string, } | { "type": "responseComplete" } | { "type": "toolsRequested", calls: Array<AIToolCall>, } | { "type": "error", message: string, } | { "type": "cancelled" } | { "type": "history", messages: Array<AIMessage>, pendingToolCalls: Array<AIToolCall>, } | { "type": "blocksGenerated", blocks: Array<JsonValue>, toolCallId: string, };

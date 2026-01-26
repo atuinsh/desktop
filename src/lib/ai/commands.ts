@@ -5,7 +5,7 @@ import { ChargeTarget } from "@/rs-bindings/ChargeTarget";
 import { BlockInfo } from "@/rs-bindings/BlockInfo";
 
 /**
- * Create or restore an AI session for a runbook.
+ * Create or restore an AI chat session for a runbook.
  * Returns the session ID.
  *
  * @param restorePrevious - If true, attempts to restore the most recent session for this runbook.
@@ -28,6 +28,32 @@ export async function createSession(
     chargeTarget,
     hubEndpoint,
     restorePrevious,
+  });
+}
+
+/**
+ * Create an AI generator session for inline block generation.
+ * Returns the session ID.
+ */
+export async function createGeneratorSession(
+  runbookId: string,
+  model: Option<ModelSelection>,
+  blockInfos: Array<BlockInfo>,
+  currentDocument: unknown,
+  insertAfter: string,
+  desktopUsername: string,
+  chargeTarget: ChargeTarget,
+  hubEndpoint: string,
+): Promise<string> {
+  return await invoke<string>("ai_create_generator_session", {
+    runbookId,
+    model: model.unwrapOr(undefined),
+    blockInfos,
+    currentDocument,
+    insertAfter,
+    desktopUsername,
+    chargeTarget,
+    hubEndpoint,
   });
 }
 
@@ -99,4 +125,16 @@ export async function cancelSession(sessionId: string): Promise<void> {
  */
 export async function destroySession(sessionId: string): Promise<void> {
   await invoke("ai_destroy_session", { sessionId });
+}
+
+/**
+ * Send an edit request to an InlineBlockGeneration session.
+ * This continues the conversation after submit_blocks with the user's edit instructions.
+ */
+export async function sendEditRequest(
+  sessionId: string,
+  editPrompt: string,
+  toolCallId: string,
+): Promise<void> {
+  await invoke("ai_send_edit_request", { sessionId, editPrompt, toolCallId });
 }

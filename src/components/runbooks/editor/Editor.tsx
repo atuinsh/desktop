@@ -30,7 +30,6 @@ import {
 } from "lucide-react";
 
 import { AIGeneratePopup } from "./AIGeneratePopup";
-import AIPopup from "./ui/AIPopup";
 import { AILoadingOverlay } from "./ui/AILoadingBlock";
 import { AIFocusOverlay } from "./ui/AIFocusOverlay";
 import { AIHint } from "./ui/AIHint";
@@ -249,14 +248,15 @@ const insertPastedBlock = (editor: typeof schema.BlockNoteEditor, copiedBlock: a
 // AI Generate function
 const insertAIGenerate = (
   editor: any,
-  showAIPopup: (position: { x: number; y: number }) => void,
+  showAIPopup: (position: { x: number; y: number }, blockId: string) => void,
 ) => ({
   title: "AI Generate",
   subtext: "Generate blocks from a natural language prompt (or press ⌘K)",
   onItemClick: () => {
     track_event("runbooks.ai.slash_menu_popup");
+    const cursorPosition = editor.getTextCursorPosition();
     const position = calculateAIPopupPosition(editor);
-    showAIPopup(position);
+    showAIPopup(position, cursorPosition.block.id);
   },
   icon: <SparklesIcon size={18} />,
   aliases: ["ai", "generate", "prompt"],
@@ -288,9 +288,7 @@ export default function Editor({
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [aiPopupVisible, setAiPopupVisible] = useState(false);
   const [aiPopupPosition, setAiPopupPosition] = useState({ x: 0, y: 0 });
-  const [isAIEditPopupOpen, setIsAIEditPopupOpen] = useState(false);
-  const [currentEditBlock, setCurrentEditBlock] = useState<any>(null);
-  const [aiEditPopupPosition, setAiEditPopupPosition] = useState({ x: 0, y: 0 });
+  const [aiPopupBlockId, setAiPopupBlockId] = useState<string | null>(null);
   const [isVisible, setIsVisible] = useState(true);
   const [runbookLinkPopupVisible, setRunbookLinkPopupVisible] = useState(false);
   const [runbookLinkPopupPosition, setRunbookLinkPopupPosition] = useState({ x: 0, y: 0 });
@@ -311,8 +309,8 @@ export default function Editor({
   const aiEnabled = useStore((state) => state.aiEnabled);
   const aiShareContext = useStore((state) => state.aiShareContext);
   const user = useStore((state) => state.user);
-  const username = user?.username?.toLowerCase() ?? "";
-  const showAiHint = ["ellie", "binarymuse"].includes(username);
+  const username = user?.username ?? "";
+  const showAiHint = aiEnabled;
   const aiEnabledState = isLoggedIn() && aiEnabled;
 
   // AI panel width for resizable panel
@@ -329,13 +327,15 @@ export default function Editor({
 
   const documentBridge = useDocumentBridge();
 
-  const showAIPopup = useCallback((position: { x: number; y: number }) => {
+  const showAIPopup = useCallback((position: { x: number; y: number }, blockId: string) => {
     setAiPopupPosition(position);
+    setAiPopupBlockId(blockId);
     setAiPopupVisible(true);
   }, []);
 
   const closeAIPopup = useCallback(() => {
     setAiPopupVisible(false);
+    setAiPopupBlockId(null);
   }, []);
 
   const showRunbookLinkPopup = useCallback((position: { x: number; y: number }) => {
@@ -425,37 +425,6 @@ export default function Editor({
     [editor, closeSavedBlockPopup],
   );
 
-  const insertionAnchorRef = useRef<string | null>(null);
-  const lastInsertedBlockRef = useRef<string | null>(null);
-
-  const handleBlockGenerated = useCallback(
-    (block: any) => {
-      if (!editor) return;
-
-      // On first block, store the anchor (cursor position) and insert after it
-      if (!insertionAnchorRef.current) {
-        insertionAnchorRef.current = editor.getTextCursorPosition().block.id;
-      }
-
-      // Insert after the last inserted block, or after anchor if this is the first
-      const insertAfterId = lastInsertedBlockRef.current || insertionAnchorRef.current;
-
-      const insertedBlocks = editor.insertBlocks([block], insertAfterId, "after");
-
-      // Track the last inserted block for the next one
-      if (insertedBlocks && insertedBlocks.length > 0) {
-        lastInsertedBlockRef.current = insertedBlocks[0].id;
-      }
-    },
-    [editor],
-  );
-
-  const handleGenerateComplete = useCallback(() => {
-    insertionAnchorRef.current = null;
-    lastInsertedBlockRef.current = null;
-    closeAIPopup();
-  }, [closeAIPopup]);
-
   // Get editor context for AI operations (document as markdown + current position)
   const getEditorContext = useCallback(async () => {
     if (!editor) return undefined;
@@ -517,6 +486,7 @@ export default function Editor({
     handleEditSubmit,
     cancelEditing,
     setEditPrompt,
+    startGenerationWithPrompt,
     getIsProgrammaticEdit,
     hasGeneratedBlocks,
     handleKeyDown: handleInlineGenerationKeyDown,
@@ -525,20 +495,26 @@ export default function Editor({
     runbookId: runbook?.id,
     documentBridge,
     getEditorContext,
+    username,
+    chargeTarget,
   });
 
-  // Callback for showing the edit popup
-  const handleShowEditPopup = useCallback((position: { x: number; y: number }, block: any) => {
-    setAiEditPopupPosition(position);
-    setIsAIEditPopupOpen(true);
-    setCurrentEditBlock(block);
-  }, []);
+  // Handle popup submit - delegates to inline generation hook
+  const handlePopupSubmit = useCallback(
+    (prompt: string) => {
+      if (!aiPopupBlockId) return;
+      // Close popup immediately, generation UI is handled by the hook
+      closeAIPopup();
+      // Start generation with replacePromptBlock=true to replace the empty block
+      startGenerationWithPrompt(prompt, aiPopupBlockId, true);
+    },
+    [aiPopupBlockId, closeAIPopup, startGenerationWithPrompt],
+  );
 
-  // AI keyboard shortcuts (Cmd+K only - for showing popups)
+  // AI keyboard shortcuts (Cmd+K only - for showing popup)
   const { handleKeyDown: handleAIShortcutsKeyDown } = useAIKeyboardShortcuts({
     editor,
     onShowAIPopup: showAIPopup,
-    onShowEditPopup: handleShowEditPopup,
   });
 
   // Combined keyboard handler for BlockNoteView
@@ -863,22 +839,8 @@ export default function Editor({
             <AIGeneratePopup
               isVisible={aiPopupVisible}
               position={aiPopupPosition}
-              onBlockGenerated={handleBlockGenerated}
-              onGenerateComplete={handleGenerateComplete}
+              onSubmit={handlePopupSubmit}
               onClose={closeAIPopup}
-              getEditorContext={getEditorContext}
-            />
-          )}
-
-          {/* AI edit popup for modifying existing blocks */}
-          {aiEnabledState && (
-            <AIPopup
-              isOpen={isAIEditPopupOpen}
-              onClose={() => setIsAIEditPopupOpen(false)}
-              editor={editor}
-              currentBlock={currentEditBlock}
-              position={aiEditPopupPosition}
-              getEditorContext={getEditorContext}
             />
           )}
 

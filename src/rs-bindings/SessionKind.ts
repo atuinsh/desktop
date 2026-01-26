@@ -11,4 +11,4 @@ export type SessionKind = { "type": "assistantChat", "data": { runbook_id: strin
  * The ID of the block after which to insert the new blocks;
  * this is the block where the user pressed Cmd/Ctrl+Enter.
  */
-insert_after: string, } };
+insert_after: string, is_initial_generation: boolean, } };

@@ -1,5 +1,5 @@
 use minijinja::{Environment, UndefinedBehavior};
-use serde::Serialize;
+use serde::{Serialize, Serializer};
 use uuid::Uuid;
 
 use crate::ai::types::BlockInfo;
@@ -25,9 +25,30 @@ struct SystemPromptContext {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-enum SystemPromptType {
+pub enum SystemPromptType {
     Assistant,
-    Generator,
+    #[serde(serialize_with = "serialize_generation_type")]
+    Generator(GenerationType),
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum GenerationType {
+    Generate,
+    Edit,
+}
+
+fn serialize_generation_type<S>(
+    generation_type: &GenerationType,
+    serializer: S,
+) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    serializer.serialize_str(match generation_type {
+        GenerationType::Generate => "generation.generate",
+        GenerationType::Edit => "generation.edit",
+    })
 }
 
 impl AIPrompts {
@@ -48,6 +69,7 @@ impl AIPrompts {
     }
 
     pub fn generator_system_prompt(
+        generation_type: GenerationType,
         block_infos: Vec<BlockInfo>,
         current_document: serde_json::Value,
         insert_after: Uuid,
@@ -57,7 +79,7 @@ impl AIPrompts {
         env.set_undefined_behavior(UndefinedBehavior::Strict);
 
         let context = SystemPromptContext {
-            prompt_type: SystemPromptType::Generator,
+            prompt_type: SystemPromptType::Generator(generation_type),
             block_infos,
             current_document: Some(current_document),
             insert_after: Some(insert_after),

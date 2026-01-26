@@ -1,7 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from "react";
-import { Button, Textarea, Spinner, addToast } from "@heroui/react";
+import { Button, Textarea, Spinner } from "@heroui/react";
 import { SparklesIcon, ArrowRightIcon } from "lucide-react";
-import { AIQuotaExceededError } from "@/api/ai";
 
 interface AIPopupBaseProps {
   isVisible: boolean;
@@ -47,17 +46,8 @@ export function AIPopupBase({
       setPrompt("");
       onClose();
     } catch (err) {
-      if (err instanceof AIQuotaExceededError) {
-        addToast({
-          title: "Quota exceeded",
-          description: "AI quota exceeded",
-          color: "danger",
-        });
-        onClose();
-      } else {
-        const errorMessage = err instanceof Error ? err.message : "Request failed";
-        setError(errorMessage);
-      }
+      const errorMessage = err instanceof Error ? err.message : "Request failed";
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
     }

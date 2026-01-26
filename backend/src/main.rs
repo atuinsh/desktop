@@ -597,6 +597,7 @@ fn main() {
             commands::ai::ai_send_tool_result,
             commands::ai::ai_cancel_session,
             commands::ai::ai_destroy_session,
+            commands::ai::ai_send_edit_request,
             commands::llmtools::llmtools_list_sessions,
             commands::llmtools::llmtools_subscribe,
             shared_state::get_shared_state_document,

@@ -13,9 +13,8 @@ const TEXT_BLOCK_TYPES = [
 
 interface UseAIKeyboardShortcutsProps {
   editor: any;
-  // Callbacks for showing popups
-  onShowAIPopup: (position: { x: number; y: number }) => void;
-  onShowEditPopup: (position: { x: number; y: number }, block: any) => void;
+  // Callback for showing generate popup with position and block ID
+  onShowAIPopup: (position: { x: number; y: number }, blockId: string) => void;
 }
 
 interface UseAIKeyboardShortcutsReturn {
@@ -31,11 +30,10 @@ interface UseAIKeyboardShortcutsReturn {
 export function useAIKeyboardShortcuts({
   editor,
   onShowAIPopup,
-  onShowEditPopup,
 }: UseAIKeyboardShortcutsProps): UseAIKeyboardShortcutsReturn {
   // Use refs to avoid recreating the handler when callbacks change
-  const callbacksRef = useRef({ onShowAIPopup, onShowEditPopup });
-  callbacksRef.current = { onShowAIPopup, onShowEditPopup };
+  const callbacksRef = useRef({ onShowAIPopup });
+  callbacksRef.current = { onShowAIPopup };
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -60,16 +58,10 @@ export function useAIKeyboardShortcuts({
           e.stopPropagation();
           track_event("runbooks.ai.keyboard_shortcut");
           const position = calculateAIPopupPosition(editor, currentBlock.id);
-          callbacksRef.current.onShowAIPopup(position);
-        } else if (!isTextBlock) {
-          // Non-text block + Cmd+K = show edit popup
-          e.preventDefault();
-          e.stopPropagation();
-          track_event("runbooks.ai.edit_block", { blockType: currentBlock.type });
-          const position = calculateAIPopupPosition(editor, currentBlock.id);
-          callbacksRef.current.onShowEditPopup(position, currentBlock);
+          callbacksRef.current.onShowAIPopup(position, currentBlock.id);
         }
-        // Note: Cmd+K on text block WITH content does nothing here
+        // Note: Cmd+K on text block WITH content does nothing
+        // Cmd+K on non-text blocks does nothing (use AI sidebar instead)
         // Cmd+Enter for generation is handled by useAIInlineGeneration
       } catch (error) {
         console.warn("Could not get cursor position:", error);
