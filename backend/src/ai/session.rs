@@ -181,7 +181,15 @@ impl SessionHandle {
             .await
             .map_err(|_| AISessionError::ChannelClosed)?;
 
-        // 3. Send tool result for submit_blocks (success - blocks were shown to user)
+        // 3. Send user message with edit prompt first (gets queued while in PendingTools)
+        let user_msg = ChatMessage::user(edit_prompt);
+        self.event_tx
+            .send(Event::UserMessage(user_msg))
+            .await
+            .map_err(|_| AISessionError::ChannelClosed)?;
+
+        // 4. Send tool result for submit_blocks - this completes PendingTools,
+        //    drains the queued edit prompt, and triggers a single LLM request
         self.event_tx
             .send(Event::ToolResult(ToolResult {
                 call_id: tool_call_id,
@@ -189,13 +197,6 @@ impl SessionHandle {
                     "Blocks shown to user. User has requested changes.".to_string(),
                 ),
             }))
-            .await
-            .map_err(|_| AISessionError::ChannelClosed)?;
-
-        // 4. Send user message with edit prompt
-        let user_msg = ChatMessage::user(edit_prompt);
-        self.event_tx
-            .send(Event::UserMessage(user_msg))
             .await
             .map_err(|_| AISessionError::ChannelClosed)?;
 
