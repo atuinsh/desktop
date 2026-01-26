@@ -104,6 +104,10 @@ pub enum Event {
 
     /// User explicitly cancelled the current operation.
     Cancel,
+
+    /// Update the system prompt (replaces conversation[0]).
+    /// Used when transitioning from initial generation to edit mode.
+    UpdateSystemPrompt(ChatMessage),
 }
 
 // ============================================================================
@@ -465,6 +469,17 @@ impl Agent {
                 self.push_tool_results_to_conversation();
                 self.state = State::Idle;
                 Transition::single(Effect::Cancelled)
+            }
+
+            // ================================================================
+            // Update system prompt
+            // ================================================================
+            (_, Event::UpdateSystemPrompt(msg)) => {
+                // Replace conversation[0] with the new system prompt
+                if !self.context.conversation.is_empty() {
+                    self.context.conversation[0] = msg;
+                }
+                Transition::none()
             }
 
             (_, _) => Transition::none(),
