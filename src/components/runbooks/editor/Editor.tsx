@@ -29,13 +29,9 @@ import {
   AlertCircleIcon,
 } from "lucide-react";
 
-import { AIGeneratePopup } from "./AIGeneratePopup";
-import { AILoadingOverlay } from "./ui/AILoadingBlock";
-import { AIFocusOverlay } from "./ui/AIFocusOverlay";
-import { AIHint } from "./ui/AIHint";
 import { RunbookLinkPopup } from "./ui/RunbookLinkPopup";
+import { EditorAIFeatures, EditorAIFeaturesHandle, createAIGenerateMenuItem } from "./EditorAIFeatures";
 import AIAssistant, { AIContext } from "./ui/AIAssistant";
-import { SparklesIcon } from "lucide-react";
 
 import { insertSQLite } from "@/components/runbooks/editor/blocks/SQLite/SQLite";
 import { insertPostgres } from "@/components/runbooks/editor/blocks/Postgres/Postgres";
@@ -74,9 +70,7 @@ import { insertSubRunbook } from "./blocks/SubRunbook";
 import { insertTerminal } from "@/lib/blocks/terminal";
 import { insertKubernetes } from "@/lib/blocks/kubernetes";
 import { insertLocalDirectory } from "@/lib/blocks/localdirectory";
-import { calculateAIPopupPosition, calculateLinkPopupPosition } from "./utils/popupPositioning";
-import { useAIKeyboardShortcuts } from "./hooks/useAIKeyboardShortcuts";
-import { useAIInlineGeneration } from "./hooks/useAIInlineGeneration";
+import { calculateLinkPopupPosition } from "./utils/popupPositioning";
 import { useTauriEvent } from "@/lib/tauri";
 import { save } from "@tauri-apps/plugin-dialog";
 import { writeTextFile } from "@tauri-apps/plugin-fs";
@@ -245,24 +239,6 @@ const insertPastedBlock = (editor: typeof schema.BlockNoteEditor, copiedBlock: a
   group: "Content",
 });
 
-// AI Generate function
-const insertAIGenerate = (
-  editor: any,
-  showAIPopup: (position: { x: number; y: number }, blockId: string) => void,
-) => ({
-  title: "AI Generate",
-  subtext: "Generate blocks from a natural language prompt (or press ⌘K)",
-  onItemClick: () => {
-    track_event("runbooks.ai.slash_menu_popup");
-    const cursorPosition = editor.getTextCursorPosition();
-    const position = calculateAIPopupPosition(editor);
-    showAIPopup(position, cursorPosition.block.id);
-  },
-  icon: <SparklesIcon size={18} />,
-  aliases: ["ai", "generate", "prompt"],
-  group: "AI",
-});
-
 type EditorProps = {
   runbook: Runbook | null;
   editable: boolean;
@@ -286,9 +262,7 @@ export default function Editor({
   const fontFamily = useStore((state) => state.fontFamily);
   const copiedBlock = useStore((state) => state.copiedBlock);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const [aiPopupVisible, setAiPopupVisible] = useState(false);
-  const [aiPopupPosition, setAiPopupPosition] = useState({ x: 0, y: 0 });
-  const [aiPopupBlockId, setAiPopupBlockId] = useState<string | null>(null);
+  const aiRef = useRef<EditorAIFeaturesHandle>(null);
   const [isVisible, setIsVisible] = useState(true);
   const [runbookLinkPopupVisible, setRunbookLinkPopupVisible] = useState(false);
   const [runbookLinkPopupPosition, setRunbookLinkPopupPosition] = useState({ x: 0, y: 0 });
@@ -326,17 +300,6 @@ export default function Editor({
   });
 
   const documentBridge = useDocumentBridge();
-
-  const showAIPopup = useCallback((position: { x: number; y: number }, blockId: string) => {
-    setAiPopupPosition(position);
-    setAiPopupBlockId(blockId);
-    setAiPopupVisible(true);
-  }, []);
-
-  const closeAIPopup = useCallback(() => {
-    setAiPopupVisible(false);
-    setAiPopupBlockId(null);
-  }, []);
 
   const showRunbookLinkPopup = useCallback((position: { x: number; y: number }) => {
     setRunbookLinkPopupPosition(position);
@@ -425,31 +388,6 @@ export default function Editor({
     [editor, closeSavedBlockPopup],
   );
 
-  // Get editor context for AI operations (document as markdown + current position)
-  const getEditorContext = useCallback(async () => {
-    if (!editor) return undefined;
-
-    try {
-      const cursorPosition = editor.getTextCursorPosition();
-      const blocks = editor.document;
-      const currentBlockId = cursorPosition.block.id;
-      const currentBlockIndex = blocks.findIndex((b: any) => b.id === currentBlockId);
-
-      // Export document as markdown to save tokens (only if sharing context is enabled)
-      const documentMarkdown = aiShareContext ? await editor.blocksToMarkdownLossy() : undefined;
-
-      return {
-        documentMarkdown,
-        currentBlockId,
-        currentBlockIndex: currentBlockIndex >= 0 ? currentBlockIndex : 0,
-        runbookId: runbook?.id,
-      };
-    } catch (error) {
-      console.warn("Failed to get editor context:", error);
-      return undefined;
-    }
-  }, [editor, aiShareContext, runbook?.id]);
-
   // Get context for AI Assistant channel
   const getAIAssistantContext = useCallback(async (): Promise<AIContext> => {
     const lastBlockContext = await documentBridge?.getLastBlockContext();
@@ -473,58 +411,6 @@ export default function Editor({
       ssh_host: lastBlockContext?.sshHost || null,
     };
   }, [editor, documentBridge]);
-
-  // AI inline generation hook (handles Cmd+Enter and post-generation shortcuts)
-  const {
-    isGenerating,
-    generatingBlockIds,
-    generatedBlockIds,
-    isEditing,
-    editPrompt,
-    loadingStatus,
-    clearPostGenerationMode,
-    handleEditSubmit,
-    cancelEditing,
-    setEditPrompt,
-    startGenerationWithPrompt,
-    getIsProgrammaticEdit,
-    hasGeneratedBlocks,
-    handleKeyDown: handleInlineGenerationKeyDown,
-  } = useAIInlineGeneration({
-    editor: editor ?? null,
-    runbookId: runbook?.id,
-    documentBridge,
-    getEditorContext,
-    username,
-    chargeTarget,
-  });
-
-  // Handle popup submit - delegates to inline generation hook
-  const handlePopupSubmit = useCallback(
-    (prompt: string) => {
-      if (!aiPopupBlockId) return;
-      // Close popup immediately, generation UI is handled by the hook
-      closeAIPopup();
-      // Start generation with replacePromptBlock=true to replace the empty block
-      startGenerationWithPrompt(prompt, aiPopupBlockId, true);
-    },
-    [aiPopupBlockId, closeAIPopup, startGenerationWithPrompt],
-  );
-
-  // AI keyboard shortcuts (Cmd+K only - for showing popup)
-  const { handleKeyDown: handleAIShortcutsKeyDown } = useAIKeyboardShortcuts({
-    editor,
-    onShowAIPopup: showAIPopup,
-  });
-
-  // Combined keyboard handler for BlockNoteView
-  const handleEditorKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      handleInlineGenerationKeyDown(e);
-      handleAIShortcutsKeyDown(e);
-    },
-    [handleInlineGenerationKeyDown, handleAIShortcutsKeyDown]
-  );
 
   // Handle visibility and scroll restoration when runbook changes
   useLayoutEffect(() => {
@@ -706,9 +592,8 @@ export default function Editor({
           }}
           onClick={(e) => {
             // Clear post-generation mode on any click
-            // Use hasGeneratedBlocks() to avoid stale closure issues
-            if (hasGeneratedBlocks()) {
-              clearPostGenerationMode();
+            if (aiRef.current?.hasGeneratedBlocks()) {
+              aiRef.current.clearPostGenerationMode();
             }
 
             // Don't interfere with AG-Grid clicks
@@ -752,13 +637,12 @@ export default function Editor({
             slashMenu={false}
             className="pb-[200px]"
             sideMenu={false}
-            onKeyDownCapture={handleEditorKeyDown}
+            onKeyDownCapture={(e) => aiRef.current?.handleKeyDown(e)}
             onChange={() => {
               runbookEditor.save(runbook, editor);
               // Clear post-generation mode when user edits anything (but not programmatic edits)
-              // Use hasGeneratedBlocks() to avoid stale closure issues
-              if (hasGeneratedBlocks() && !getIsProgrammaticEdit()) {
-                clearPostGenerationMode();
+              if (aiRef.current?.hasGeneratedBlocks() && !aiRef.current?.getIsProgrammaticEdit()) {
+                aiRef.current.clearPostGenerationMode();
               }
             }}
             theme={colorMode === "dark" ? "dark" : "light"}
@@ -812,7 +696,9 @@ export default function Editor({
 
                     ...getDefaultReactSlashMenuItems(editor),
                     // AI group (only if enabled)
-                    ...(aiEnabledState ? [insertAIGenerate(editor, showAIPopup)] : []),
+                    ...(aiEnabledState && aiRef.current?.showAIPopup
+                      ? [createAIGenerateMenuItem(editor, aiRef.current.showAIPopup)]
+                      : []),
                   ],
                   query,
                 )
@@ -834,38 +720,17 @@ export default function Editor({
             />
           </BlockNoteView>
 
-          {/* AI popup positioned relative to editor container (only if AI is enabled) */}
+          {/* AI features (popup, hints, overlays) */}
           {aiEnabledState && (
-            <AIGeneratePopup
-              isVisible={aiPopupVisible}
-              position={aiPopupPosition}
-              onSubmit={handlePopupSubmit}
-              onClose={closeAIPopup}
-            />
-          )}
-
-          {/* Subtle hint for AI generation */}
-          {aiEnabledState && showAiHint && generatedBlockIds.length === 0 && (
-            <AIHint editor={editor} isGenerating={isGenerating} aiEnabled={aiEnabledState} />
-          )}
-
-          {/* Inline generation loading overlay */}
-          {isGenerating && generatingBlockIds && (
-            <AILoadingOverlay blockIds={generatingBlockIds} editor={editor} status={loadingStatus} />
-          )}
-
-          {/* Post-generation focus overlay - shows after AI generates blocks */}
-          {generatedBlockIds.length > 0 && (
-            <AIFocusOverlay
-              hideAllHints={isGenerating}
-              showRunHint={generatedBlockIds.length === 1}
-              blockIds={generatedBlockIds}
+            <EditorAIFeatures
+              ref={aiRef}
               editor={editor}
-              isEditing={isEditing}
-              editValue={editPrompt}
-              onEditChange={setEditPrompt}
-              onEditSubmit={handleEditSubmit}
-              onEditCancel={cancelEditing}
+              runbookId={runbook?.id}
+              documentBridge={documentBridge}
+              aiShareContext={aiShareContext}
+              username={username}
+              chargeTarget={chargeTarget}
+              showHint={showAiHint}
             />
           )}
 
