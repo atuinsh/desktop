@@ -19,7 +19,6 @@ import { AIToolCall } from "@/rs-bindings/AIToolCall";
  * Components can override this via AIToolRunner.setAutoApproveTools().
  */
 export const DEFAULT_AUTO_APPROVE_TOOLS = [
-  "get_runbook_document",
   "get_block_docs",
   "get_default_shell",
 ];
