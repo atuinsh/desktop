@@ -70,6 +70,8 @@ jobs:
             args: "--target aarch64-apple-darwin"
           - platform: "ubuntu-22.04"
             args: ""
+          - platform: "depot-ubuntu-24.04-arm-4"
+            args: "--target aarch64-unknown-linux-gnu"
 
     runs-on: ${{ matrix.platform }}
 
@@ -81,7 +83,7 @@ jobs:
           ssh-private-key: ${{ secrets.TS_CLONE_DEPLOY_KEY }}
 
       - name: install dependencies (ubuntu only)
-        if: matrix.platform == 'ubuntu-22.04'
+        if: matrix.platform == 'ubuntu-22.04' || matrix.platform == 'depot-ubuntu-24.04-arm-4'
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libasound2-dev
@@ -102,7 +104,7 @@ jobs:
       - name: install Rust stable
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.platform == 'depot-macos-latest' && 'aarch64-apple-darwin' || '' }}
+          targets: ${{ matrix.platform == 'depot-macos-latest' && 'aarch64-apple-darwin' || (matrix.platform == 'depot-ubuntu-24.04-arm-4' && 'aarch64-unknown-linux-gnu' || '') }}
 
       - name: install frontend dependencies
         run: bun install
