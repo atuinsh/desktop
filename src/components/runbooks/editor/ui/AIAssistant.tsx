@@ -4,6 +4,7 @@ import React, {
   useEffect,
   useLayoutEffect,
   useCallback,
+  useMemo,
   memo,
   Component,
   ReactNode,
@@ -449,6 +450,12 @@ export default function AIAssistant({
     cancel,
   } = chat;
 
+  // Filter out system messages for display (keep them in messages array for dev tools)
+  const visibleMessages = useMemo(
+    () => messages.filter((m) => m.role !== "system"),
+    [messages],
+  );
+
   useEffect(() => {
     if (!sessionId) return;
     changeChargeTarget(sessionId, chargeTarget);
@@ -695,7 +702,7 @@ export default function AIAssistant({
               <Spinner size="lg" />
             </div>
           )}
-          {!isCreatingSession && messages.length === 0 && (
+          {!isCreatingSession && visibleMessages.length === 0 && (
             <div className="flex flex-col items-center justify-center h-full text-center text-gray-500 dark:text-gray-400">
               <BotIcon className="h-12 w-12 mb-4 opacity-50" />
               <p className="text-sm">Ask me to help edit your runbook.</p>
@@ -714,7 +721,7 @@ export default function AIAssistant({
               </div>
             </div>
           )}
-          {messages.map((message, idx) => (
+          {visibleMessages.map((message, idx) => (
             <MessageBubble
               key={idx}
               message={message}
@@ -755,7 +762,8 @@ export default function AIAssistant({
         </ScrollShadow>
 
         {/* Scroll to bottom button */}
-        {!lockedToBottom && (messages.length > 0 || streamingContent !== null) && (
+        {!lockedToBottom &&
+          (visibleMessages.length > 0 || streamingContent !== null) && (
           <Button
             isIconOnly
             size="sm"
@@ -837,7 +845,7 @@ export default function AIAssistant({
           <span className="text-xs text-gray-400">
             <kbd className="px-1 py-0.5 bg-gray-100 dark:bg-gray-800 rounded">Enter</kbd> to send
           </span>
-          {messages.length > 0 && (
+          {visibleMessages.length > 0 && (
             <Button
               size="sm"
               variant="light"

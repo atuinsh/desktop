@@ -96,16 +96,33 @@ export default function useAIChat(sessionId: string): AIChatAPI {
 
         case "toolsRequested":
           setPendingToolCalls(event.calls);
-          // Add assistant message with tool calls
+          // Add assistant message with tool calls (only if not already in messages from history)
           setStreamingContent((content) => {
-            const parts: AIMessage["content"]["parts"] = [];
-            if (content) {
-              parts.push({ type: "text", data: content });
-            }
-            event.calls.forEach((call) => {
-              parts.push({ type: "toolCall", data: call });
+            setMessages((prev) => {
+              // Check if these tool calls already exist in messages (e.g., from history restore)
+              const existingToolCallIds = new Set(
+                prev.flatMap((msg) =>
+                  msg.content.parts
+                    .filter((part): part is { type: "toolCall"; data: AIToolCall } => part.type === "toolCall")
+                    .map((part) => part.data.id),
+                ),
+              );
+              const newCalls = event.calls.filter((call) => !existingToolCallIds.has(call.id));
+
+              // If all tool calls already exist, don't add a duplicate message
+              if (newCalls.length === 0) {
+                return prev;
+              }
+
+              const parts: AIMessage["content"]["parts"] = [];
+              if (content) {
+                parts.push({ type: "text", data: content });
+              }
+              newCalls.forEach((call) => {
+                parts.push({ type: "toolCall", data: call });
+              });
+              return [...prev, { role: "assistant", content: { parts } }];
             });
-            setMessages((prev) => [...prev, { role: "assistant", content: { parts } }]);
             return null;
           });
           break;
