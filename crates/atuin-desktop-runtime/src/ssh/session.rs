@@ -1396,6 +1396,8 @@ impl Session {
                 let _ = output_stream_clone
                     .send(OutputLine::Stderr(e.to_string()))
                     .await;
+                tracing::debug!("Sending exec finished for channel {channel_id_clone}");
+                let _ = handle.exec_finished(&channel_id_clone).await;
                 return;
             }
 
