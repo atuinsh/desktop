@@ -1452,9 +1452,12 @@ impl Session {
                                     }
                                 }
                             }
+                            // ExitStatus signals the command's exit code but does NOT
+                            // guarantee all Data messages have been delivered (RFC 4254
+                            // §6.10). Only Eof guarantees no more data will follow.
+                            // Continue reading until Eof or Close.
                             ChannelMsg::ExitStatus { .. } => {
-                                tracing::trace!("Handling SSH ExitStatus message");
-                                break;
+                                tracing::trace!("Handling SSH ExitStatus message (continuing to read)");
                             }
                             ChannelMsg::Eof => {
                                 tracing::trace!("Handling SSH EOF message");
