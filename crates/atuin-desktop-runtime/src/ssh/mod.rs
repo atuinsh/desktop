@@ -22,6 +22,7 @@
 
 mod pool;
 mod session;
+mod ssh_env;
 mod ssh_pool;
 
 #[cfg(test)]
@@ -29,4 +30,5 @@ mod integration_tests;
 
 pub use pool::Pool;
 pub use session::{Authentication, CommandResult, OutputLine, Session, SshConfig, SshWarning};
+pub use ssh_env::build_env_exports;
 pub use ssh_pool::{SshPoolHandle, SshPty};

@@ -14,7 +14,7 @@ use crate::execution::{
     CancellationToken, ExecutionContext, ExecutionHandle, ExecutionStatus, StreamingBlockOutput,
 };
 use crate::pty::{Pty, PtyLike};
-use crate::ssh::{SshPty, SshWarning};
+use crate::ssh::{build_env_exports, SshPty, SshWarning};
 
 /// Output structure for Terminal blocks that implements BlockExecutionOutput
 /// for template access to terminal output.
@@ -490,6 +490,15 @@ impl Terminal {
         let _ = context
             .emit_gc_event(GCEvent::PtyOpened(metadata.clone()))
             .await;
+
+        if ssh_host.is_some() {
+            let env_exports = build_env_exports(context.context_resolver.env_vars());
+            if !env_exports.is_empty() {
+                if let Err(e) = pty_store.write_pty(self.id, env_exports.into()).await {
+                    tracing::warn!("Failed to write env exports to SSH PTY: {}", e);
+                }
+            }
+        }
 
         if let Some(ref remote_path) = remote_var_path {
             let export_cmd = format!("export ATUIN_OUTPUT_VARS='{}'\n", remote_path);

@@ -17,7 +17,7 @@ use crate::events::GCEvent;
 use crate::execution::{
     CancellationToken, ExecutionContext, ExecutionHandle, ExecutionStatus, StreamingBlockOutput,
 };
-use crate::ssh::{OutputLine as SessionOutputLine, SshWarning};
+use crate::ssh::{build_env_exports, OutputLine as SessionOutputLine, SshWarning};
 
 use super::FromDocument;
 
@@ -697,8 +697,15 @@ impl Script {
             None
         };
 
+        let env_exports = build_env_exports(context.context_resolver.env_vars());
+
         let code_to_run = if let Some(ref path) = remote_temp_path {
-            format!("export ATUIN_OUTPUT_VARS='{}'\n{}", path, code)
+            format!(
+                "{}export ATUIN_OUTPUT_VARS='{}'\n{}",
+                env_exports, path, code
+            )
+        } else if !env_exports.is_empty() {
+            format!("{}{}", env_exports, code)
         } else {
             code.to_string()
         };
