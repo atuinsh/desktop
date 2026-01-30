@@ -83,10 +83,7 @@ mod tests {
     fn test_build_env_exports_special_value() {
         let mut map = HashMap::new();
         map.insert("VAR".to_string(), "it's $complex".to_string());
-        assert_eq!(
-            build_env_exports(&map),
-            "export VAR='it'\\''s $complex'\n"
-        );
+        assert_eq!(build_env_exports(&map), "export VAR='it'\\''s $complex'\n");
     }
 
     #[test]
