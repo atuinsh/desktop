@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "atuin": {
+      "command": "bun",
+      "args": ["run", "/Users/dorado/Desktop/repos/desktop/mcp-server/src/index.ts"]
+    }
+  }
+}
