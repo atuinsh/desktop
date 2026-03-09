@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "atuin": {
+      "command": "bun",
+      "args": ["run", "/path/to/desktop/mcp-server/src/index.ts"]
+    }
+  }
+}
