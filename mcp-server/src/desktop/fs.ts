@@ -1,6 +1,6 @@
 import { readdir, readFile, writeFile, mkdir, unlink, stat } from "node:fs/promises";
 import { join, extname } from "node:path";
-import { homedir } from "node:os";
+import { homedir, platform } from "node:os";
 import { Database } from "bun:sqlite";
 import { parse as parseYAML, stringify as stringifyYAML } from "yaml";
 import type { RunbookFile, WorkspaceConfig, WorkspaceInfo, RunbookSummary } from "../types.js";
@@ -9,12 +9,18 @@ const RUNBOOK_EXT = ".atrb";
 
 // ── Database paths ─────────────────────────────────────────────────
 
-const APP_SUPPORT_DIR = join(
-  homedir(),
-  "Library",
-  "Application Support",
-  "sh.atuin.app"
-);
+const APP_BUNDLE_ID = "sh.atuin.app";
+
+function getAppSupportDir(): string {
+  const plat = platform();
+  if (plat === "darwin") {
+    return join(homedir(), "Library", "Application Support", APP_BUNDLE_ID);
+  }
+  if (plat === "win32") {
+    return join(process.env.APPDATA ?? homedir(), APP_BUNDLE_ID);
+  }
+  return join(homedir(), ".config", APP_BUNDLE_ID);
+}
 
 function getDbPath(): string {
   // Check if a custom path is set via env
@@ -23,7 +29,7 @@ function getDbPath(): string {
   }
   // Default: production DB. Set ATUIN_MCP_DEV=1 to use dev DB.
   const prefix = process.env.ATUIN_MCP_DEV ? "dev_" : "";
-  return join(APP_SUPPORT_DIR, `${prefix}runbooks.db`);
+  return join(getAppSupportDir(), `${prefix}runbooks.db`);
 }
 
 function openDb(readonly = false): Database {

@@ -55,6 +55,7 @@ export class DesktopApiClient {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ executionId }),
+      signal: AbortSignal.timeout(5_000),
     });
   }
 

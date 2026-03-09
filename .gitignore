@@ -30,3 +30,6 @@ target/
 
 # Sentry Config File
 .env.sentry-build-plugin
+
+# Local MCP config (may contain machine-specific paths)
+.mcp.json
