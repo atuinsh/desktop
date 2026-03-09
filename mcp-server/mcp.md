@@ -291,4 +291,4 @@ content:
     └── ops-playbook.atrb
 ```
 
-Workspaces are also registered in `~/Library/Application Support/sh.atuin.app/runbooks.db` (or `dev_runbooks.db` for dev) so the desktop app can discover them.
+Workspaces are also registered in `~/Library/Application Support/sh.atuin.app/runbooks.db` (or `dev_runbooks.db` for dev) so the desktop app can discover them
