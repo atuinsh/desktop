@@ -20,6 +20,15 @@ vi.mock("@/tracking", () => ({
   default: vi.fn(),
 }));
 
+vi.mock("@/state/store", () => ({
+  useStore: (selector: (state: { functionalColorMode: "light" | "dark" }) => unknown) =>
+    selector({ functionalColorMode: "light" }),
+}));
+
+vi.mock("@tauri-apps/plugin-shell", () => ({
+  open: vi.fn(),
+}));
+
 import { insertMarkdownRender } from "./index";
 
 describe("MarkdownRender", () => {

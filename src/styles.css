@@ -161,13 +161,310 @@ html:not([data-platform="macos"]) .sidebar-bg {
 }
 
 /* Reset all styles to browser default for the release notes so we don't have to implement them all */
-.markdown-content, .markdown-content * {
+.markdown-content {
     all: revert !important;
 }
 
 .markdown-content > *:first-child {
     padding-top: 0 !important;
     margin-top: 0 !important;
+}
+
+.markdown-content {
+    font-size: 16px !important;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif !important;
+    color: inherit !important;
+    line-height: 1.5 !important;
+    overflow-wrap: anywhere !important;
+    word-break: normal !important;
+}
+
+.markdown-content h1,
+.markdown-content h2,
+.markdown-content h3,
+.markdown-content h4,
+.markdown-content h5,
+.markdown-content h6 {
+    line-height: 1.25 !important;
+    font-weight: 600 !important;
+    margin: 1.5rem 0 1rem !important;
+}
+
+.markdown-content h1 {
+    border-bottom: 1px solid rgb(209 213 219) !important;
+    font-size: 2em !important;
+    padding-bottom: 0.3em !important;
+}
+
+.markdown-content h2 {
+    border-bottom: 1px solid rgb(209 213 219) !important;
+    font-size: 1.5em !important;
+    padding-bottom: 0.3em !important;
+}
+
+.markdown-content h3 {
+    font-size: 1.25em !important;
+}
+
+.markdown-content h4 {
+    font-size: 1em !important;
+}
+
+.markdown-content h5 {
+    font-size: 0.875em !important;
+}
+
+.markdown-content h6 {
+    color: rgb(87 96 106) !important;
+    font-size: 0.85em !important;
+}
+
+.dark .markdown-content h1,
+.dark .markdown-content h2 {
+    border-bottom-color: rgb(48 54 61) !important;
+}
+
+.dark .markdown-content h6 {
+    color: rgb(139 148 158) !important;
+}
+
+.markdown-content p,
+.markdown-content ul,
+.markdown-content ol,
+.markdown-content blockquote,
+.markdown-content pre,
+.markdown-content details,
+.markdown-content hr,
+.markdown-content section[data-footnotes] {
+    margin: 0 0 16px !important;
+}
+
+.markdown-content ul,
+.markdown-content ol {
+    padding-left: 2em !important;
+}
+
+.markdown-content li + li {
+    margin-top: 0.25em !important;
+}
+
+.markdown-content li > p {
+    margin-top: 16px !important;
+    margin-bottom: 16px !important;
+}
+
+.markdown-content a {
+    color: rgb(9 105 218) !important;
+    text-decoration: none !important;
+}
+
+.markdown-content a:hover {
+    text-decoration: underline !important;
+}
+
+.dark .markdown-content a {
+    color: rgb(88 166 255) !important;
+}
+
+.markdown-content blockquote {
+    border-left: 0.25em solid rgb(209 213 219) !important;
+    color: rgb(101 109 118) !important;
+    padding: 0 1em !important;
+}
+
+.dark .markdown-content blockquote {
+    border-left-color: rgb(63 70 77) !important;
+    color: rgb(139 148 158) !important;
+}
+
+.markdown-content pre {
+    background-color: rgb(246 248 250) !important;
+    border: 1px solid rgb(208 215 222) !important;
+    border-radius: 6px !important;
+    display: block !important;
+    overflow-x: auto !important;
+    font-family: ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, Liberation Mono, monospace !important;
+    font-size: 85% !important;
+    line-height: 1.45 !important;
+    padding: 16px !important;
+}
+
+.dark .markdown-content pre {
+    background-color: rgb(22 27 34) !important;
+    border-color: rgb(48 54 61) !important;
+}
+
+.markdown-content code {
+    background: rgb(175 184 193 / 0.2) !important;
+    border-radius: 6px !important;
+    font-family: ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, Liberation Mono, monospace !important;
+    font-size: 85% !important;
+    margin: 0 !important;
+    padding: 0.2em 0.4em !important;
+}
+
+.dark .markdown-content code {
+    background: rgb(110 118 129 / 0.4) !important;
+}
+
+.markdown-content pre code {
+    background-color: transparent !important;
+    border-radius: 0 !important;
+    color: inherit !important;
+    display: block !important;
+    font-size: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+.markdown-content pre.markdown-code-block > code,
+.markdown-content pre.markdown-code-block > code > div {
+    background-color: transparent !important;
+}
+
+.markdown-content table {
+    border-collapse: collapse !important;
+    display: block !important;
+    margin: 0 0 16px !important;
+    max-width: 100% !important;
+    overflow: auto !important;
+    width: max-content !important;
+}
+
+.markdown-content th,
+.markdown-content td {
+    border: 1px solid rgb(209 213 219) !important;
+    padding: 6px 13px !important;
+}
+
+.markdown-content th:not([align]),
+.markdown-content td:not([align]),
+.markdown-content th[align="left"],
+.markdown-content td[align="left"] {
+    text-align: left !important;
+}
+
+.markdown-content th[align="center"],
+.markdown-content td[align="center"] {
+    text-align: center !important;
+}
+
+.markdown-content th[align="right"],
+.markdown-content td[align="right"] {
+    text-align: right !important;
+}
+
+.markdown-content th {
+    font-weight: 600 !important;
+}
+
+.markdown-content tr {
+    background: transparent !important;
+    border-top: 1px solid rgb(209 213 219) !important;
+}
+
+.markdown-content tbody tr:nth-child(2n) {
+    background: rgb(246 248 250) !important;
+}
+
+.dark .markdown-content th,
+.dark .markdown-content td {
+    border-color: rgb(48 54 61) !important;
+}
+
+.dark .markdown-content tr {
+    border-top-color: rgb(48 54 61) !important;
+}
+
+.dark .markdown-content tbody tr:nth-child(2n) {
+    background: rgb(22 27 34) !important;
+}
+
+.markdown-content hr {
+    background-color: rgb(209 213 219) !important;
+    border: 0 !important;
+    height: 0.25em !important;
+    margin: 24px 0 !important;
+    padding: 0 !important;
+}
+
+.dark .markdown-content hr {
+    background-color: rgb(48 54 61) !important;
+}
+
+.markdown-content img {
+    background-color: transparent !important;
+    box-sizing: content-box !important;
+    height: auto !important;
+    max-width: 100% !important;
+}
+
+.markdown-content input[type="checkbox"] {
+    width: 1rem !important;
+    height: 1rem !important;
+    margin: 0 0.5em 0.15em 0 !important;
+    vertical-align: middle !important;
+}
+
+.markdown-content li:has(> input[type="checkbox"]) {
+    list-style: none !important;
+    margin-left: -1.5em !important;
+    padding-left: 0 !important;
+}
+
+.markdown-content kbd {
+    background-color: rgb(255 255 255) !important;
+    border: 1px solid rgb(209 217 224) !important;
+    border-bottom-color: rgb(175 184 193) !important;
+    border-radius: 6px !important;
+    box-shadow: inset 0 -1px 0 rgb(175 184 193) !important;
+    color: rgb(31 35 40) !important;
+    display: inline-block !important;
+    font-family: ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, Liberation Mono, monospace !important;
+    font-size: 11px !important;
+    line-height: 10px !important;
+    padding: 3px 5px !important;
+    vertical-align: middle !important;
+}
+
+.dark .markdown-content kbd {
+    background-color: rgb(22 27 34) !important;
+    border-color: rgb(48 54 61) !important;
+    border-bottom-color: rgb(110 118 129) !important;
+    box-shadow: inset 0 -1px 0 rgb(110 118 129) !important;
+    color: rgb(230 237 243) !important;
+}
+
+.markdown-content details {
+    padding: 0 !important;
+}
+
+.markdown-content summary {
+    cursor: pointer !important;
+    font-weight: 600 !important;
+}
+
+.markdown-content section[data-footnotes] {
+    border-top: 1px solid rgb(209 213 219) !important;
+    font-size: 0.875em !important;
+    margin-top: 24px !important;
+    padding-top: 16px !important;
+}
+
+.markdown-content .sr-only {
+    width: 1px !important;
+    height: 1px !important;
+    padding: 0 !important;
+    margin: -1px !important;
+    overflow: hidden !important;
+    clip: rect(0, 0, 0, 0) !important;
+    white-space: nowrap !important;
+    border: 0 !important;
+    position: absolute !important;
+}
+
+.dark .markdown-content section[data-footnotes] {
+    border-top-color: rgb(48 54 61) !important;
 }
 
 /* Pulsing glow animation for pause block continue button */

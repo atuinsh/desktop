@@ -261,7 +261,7 @@ impl BlockBehavior for Script {
                             .filter(|line| line.is_stdout)
                             .map(|line| line.text.clone())
                             .collect::<Vec<String>>()
-                            .join("\n");
+                            .join("");
 
                         let _ = context
                             .update_active_context(self.id, move |ctx| {
@@ -1137,6 +1137,27 @@ echo "Successfully wrote to $ATUIN_OUTPUT_VARS"
         // 1. ATUIN_OUTPUT_VARS was set
         // 2. The file was writable
         // 3. The fs_var integration is working
+    }
+
+    #[test]
+    fn test_stdout_preserves_markdown_table_formatting() {
+        let output = ScriptExecutionOutput {
+            exit_code: Some(0),
+            output: vec![
+                OutputLine::stdout("# Script output\n".to_string()),
+                OutputLine::stdout("\n".to_string()),
+                OutputLine::stdout("| Column 1 | Column 2 |\n".to_string()),
+                OutputLine::stdout("| --- | --- |\n".to_string()),
+                OutputLine::stdout("| Value 1 | Value 2 |\n".to_string()),
+            ],
+        };
+
+        assert_eq!(
+            output.stdout().as_deref(),
+            Some(
+                "# Script output\n\n| Column 1 | Column 2 |\n| --- | --- |\n| Value 1 | Value 2 |\n"
+            )
+        );
     }
 
     #[tokio::test]
