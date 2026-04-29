@@ -161,7 +161,7 @@ html:not([data-platform="macos"]) .sidebar-bg {
 }
 
 /* Reset all styles to browser default for the release notes so we don't have to implement them all */
-.markdown-content, .markdown-content * {
+.markdown-content {
     all: revert !important;
 }
 
@@ -315,6 +315,11 @@ html:not([data-platform="macos"]) .sidebar-bg {
     font-size: 100% !important;
     margin: 0 !important;
     padding: 0 !important;
+}
+
+.markdown-content pre.markdown-code-block > code,
+.markdown-content pre.markdown-code-block > code > div {
+    background-color: transparent !important;
 }
 
 .markdown-content table {

@@ -30,6 +30,10 @@ Open the rendered markdown in a fullscreen modal for easier reading of long cont
 
 All rendered content is fully selectable and copyable, making it easy to extract information from the output.
 
+### GitHub-like Presentation
+
+Rendered content uses GitHub-like markdown styling in both light and dark mode, including tables, task lists, blockquotes, and syntax-highlighted fenced code blocks.
+
 ## Example Workflow
 
 A common pattern is using a Script block to generate markdown content, then displaying it with a Markdown Render block:
@@ -48,16 +52,17 @@ Save the output to a variable (e.g., `release_notes`), then reference it in your
 
 ## Supported Markdown
 
-The block supports GitHub Flavored Markdown (GFM), including:
+The block supports GitHub Flavored Markdown (GFM) with GitHub-like styling, including:
 
-- Headers and paragraphs
-- **Bold**, *italic*, and ~~strikethrough~~ text
-- Ordered and unordered lists
-- Code blocks with syntax highlighting
-- Tables
+- Headings, paragraphs, and horizontal rules
+- **Bold**, *italic*, `inline code`, and ~~strikethrough~~ text
+- Ordered, unordered, and task lists
+- Fenced and indented code blocks
+- Syntax highlighting for common fenced code block languages
+- Tables, including column alignment
 - Links and images
 - Blockquotes
-- Task lists
+- Footnotes
 
 ## View Mode vs Edit Mode
 
